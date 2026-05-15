@@ -1,0 +1,108 @@
+/* ============================================================
+ * 主题系统 — 所有颜色用 CSS 变量
+ * 切换主题: document.documentElement.setAttribute('data-theme', 'dark' | 'paper')
+ * ============================================================ */
+:root, :root[data-theme="paper"] {
+  --paper:        oklch(0.945 0.018 75);
+  --paper-2:      oklch(0.918 0.022 72);
+  --paper-3:      oklch(0.885 0.026 70);
+  --paper-edge:   oklch(0.78  0.030 65);
+
+  --ink:          oklch(0.22  0.018 55);
+  --ink-2:        oklch(0.38  0.018 55);
+  --ink-3:        oklch(0.55  0.020 60);
+  --ink-4:        oklch(0.70  0.020 60);
+
+  --forest:       oklch(0.320 0.048 168);
+  --forest-1:     oklch(0.270 0.048 168);
+  --forest-2:     oklch(0.395 0.055 168);
+  --forest-3:     oklch(0.48  0.060 168);
+  --forest-line:  oklch(0.43  0.040 168);
+  --on-forest:    oklch(0.94  0.025 95);
+  --on-forest-2:  oklch(0.74  0.060 95);
+
+  --accent:       oklch(0.60  0.165 30);
+  --accent-2:     oklch(0.72  0.130 78);
+  --accent-3:     oklch(0.55  0.090 145);
+  --danger:       oklch(0.58  0.180 25);
+
+  --paper-grain-1: oklch(0.95 0.02 60 / 0.6);
+  --paper-grain-2: oklch(0.90 0.03 50 / 0.5);
+  --shadow-rgb-mix: oklch(0.30 0.04 60 / 0.18);
+}
+
+:root[data-theme="dark"] {
+  --paper:        oklch(0.165 0.012 60);
+  --paper-2:      oklch(0.205 0.014 60);
+  --paper-3:      oklch(0.245 0.016 60);
+  --paper-edge:   oklch(0.30  0.020 60);
+
+  --ink:          oklch(0.92  0.012 75);
+  --ink-2:        oklch(0.72  0.015 75);
+  --ink-3:        oklch(0.55  0.015 75);
+  --ink-4:        oklch(0.40  0.015 75);
+
+  --forest:       oklch(0.21  0.04 168);
+  --forest-1:     oklch(0.165 0.04 168);
+  --forest-2:     oklch(0.31  0.05 168);
+  --forest-3:     oklch(0.38  0.06 168);
+  --forest-line:  oklch(0.33  0.04 168);
+  --on-forest:    oklch(0.92  0.025 95);
+  --on-forest-2:  oklch(0.70  0.050 95);
+
+  --accent:       oklch(0.72  0.155 32);
+  --accent-2:     oklch(0.78  0.130 78);
+  --accent-3:     oklch(0.65  0.110 145);
+  --danger:       oklch(0.70  0.180 25);
+
+  --paper-grain-1: oklch(0.30 0.05 60 / 0.30);
+  --paper-grain-2: oklch(0.20 0.04 50 / 0.25);
+  --shadow-rgb-mix: oklch(0 0 0 / 0.55);
+}
+
+:root {
+  --font-serif: "EB Garamond","Noto Serif SC",Georgia,serif;
+  --font-sans:  "Inter","Noto Sans SC",system-ui,sans-serif;
+  --font-mono:  "JetBrains Mono","SF Mono",ui-monospace,monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0; padding: 0; height: 100%; overflow: hidden;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  transition: background 0.4s ease, color 0.4s ease;
+}
+
+body::before {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background:
+    radial-gradient(ellipse at 18% 12%, var(--paper-grain-1), transparent 50%),
+    radial-gradient(ellipse at 92% 88%, var(--paper-grain-2), transparent 55%);
+  mix-blend-mode: multiply;
+  transition: opacity 0.4s ease;
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--paper-edge); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--ink-4); }
+
+button { font-family: inherit; }
+input, textarea { font-family: inherit; }
+#root { position: relative; z-index: 1; height: 100vh; width: 100vw; }
+
+.serif  { font-family: var(--font-serif); }
+.mono   { font-family: var(--font-mono); }
+.smcaps {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 1.4px;
+  font-size: 10.5px;
+  font-weight: 500;
+}
+.hairline { height: 1px; background: var(--paper-edge); }
