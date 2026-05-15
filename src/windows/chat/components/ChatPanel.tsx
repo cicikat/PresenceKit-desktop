@@ -14,6 +14,8 @@ import { useState, useEffect, useRef } from 'react';
 import { Tag, Icon, Btn } from './UIKit';
 import { MOOD_HUE, MOOD_LABEL_EN, ACTIVITY_LABEL_EN } from './UIKit';
 import { MOOD_TABLE } from '../../../shared/state/store';
+import { sendChat } from '../../../shared/api/backend';
+import { wsClient } from '../../../shared/api/ws';
 
 function ChatAvatar({ hue, size = 40, scale = 1 }: any) {
   return (
@@ -118,6 +120,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true }: any) {
   const [messages, setMessages] = useState(SEED_MESSAGES);
   const [input, setInput] = useState('');
   const [typing, setTyping] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const rootRef  = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -161,6 +164,21 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true }: any) {
     }
   }, [state.wantToSpeak]);
 
+  /* WS 连接 + channel_message 订阅 */
+  useEffect(() => {
+    wsClient.connect('ws://127.0.0.1:8080/ws/desktop');
+    return wsClient.on('channel_message', (content) => {
+      const m = engine.get();
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        text: content,
+        moodHue: MOOD_HUE[m.mood],
+        moodLabel: MOOD_LABEL_EN[m.mood],
+        time: Date.now(),
+      }]);
+    });
+  }, [engine]);
+
   const inputTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onInputChange = (v: string) => {
     setInput(v);
@@ -170,14 +188,32 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true }: any) {
     inputTimer.current = setTimeout(() => engine.applyStateUpdate({ activity: '看你' }), 2500);
   };
 
-  /* send — Phase-1: 只加用户消息到本地列表，不触发回复 */
-  const send = () => {
+  const send = async () => {
     const t = input.trim();
-    if (!t) return;
+    if (!t || loading) return;
     setInput('');
     setMessages(m => [...m, { role: 'user', text: t, time: Date.now() }]);
     engine.applyStateUpdate({ activity: '想事情' });
-    // TODO: Phase-3 WebSocket — 在此发送消息到后端
+    setLoading(true);
+    try {
+      const { reply } = await sendChat(t);
+      const m = engine.get();
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        text: reply,
+        moodHue: MOOD_HUE[m.mood],
+        moodLabel: MOOD_LABEL_EN[m.mood],
+        time: Date.now(),
+      }]);
+    } catch (err: any) {
+      setMessages(prev => [...prev, {
+        role: 'system',
+        text: `（连接失败：${err.message}）`,
+        time: Date.now(),
+      }]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const currentHue = MOOD_HUE[state.mood];
@@ -225,7 +261,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true }: any) {
       <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '8px 28px 12px', background: 'var(--paper)' }}>
         <DayDivider label="EARLIER" />
         {messages.map((m: any, i: number) => <Bubble key={i} msg={m} currentHue={currentHue} breath={breathe} />)}
-        {typing && (
+        {(typing || loading) && (
           <div style={{ display: 'flex', gap: 10, padding: '8px 0', alignItems: 'flex-start' }}>
             <div style={{ paddingTop: 6 }}><ChatAvatar hue={currentHue} size={36} scale={breathe} /></div>
             <div style={{

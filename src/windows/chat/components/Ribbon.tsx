@@ -3,8 +3,10 @@
  * 迁移自: Emerald-desktopUI/ribbon.jsx
  * ============================================================ */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Icon } from './UIKit';
+import { wsClient } from '../../../shared/api/ws';
+import type { ConnectionState } from '../../../shared/api/types';
 
 function Sep() {
   return <div style={{ width: 24, height: 1, background: 'var(--forest-line)', margin: '6px 0' }} />;
@@ -57,6 +59,9 @@ export function Ribbon({
   theme, onThemeToggle,
   onOpenSpec, onOpenDebug, onOpenPrefs,
 }: any) {
+  const [connState, setConnState] = useState<ConnectionState>(wsClient.getState());
+  useEffect(() => wsClient.on('state', setConnState), []);
+
   return (
     <div style={{
       width: 52, flexShrink: 0, height: '100%',
@@ -66,14 +71,26 @@ export function Ribbon({
       alignItems: 'center', padding: '12px 0', gap: 4,
       zIndex: 10, position: 'relative',
     }}>
-      {/* logo */}
-      <div style={{
-        width: 32, height: 32, borderRadius: 6,
-        background: 'var(--on-forest)', color: 'var(--forest)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        marginBottom: 6,
-      }}>
-        <Icon name="logo" size={18} strokeWidth={1.8} />
+      {/* logo + 连接状态角标 */}
+      <div style={{ position: 'relative', marginBottom: 6 }}>
+        <div style={{
+          width: 32, height: 32, borderRadius: 6,
+          background: 'var(--on-forest)', color: 'var(--forest)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Icon name="logo" size={18} strokeWidth={1.8} />
+        </div>
+        {(connState === 'connecting' || connState === 'disconnected') && (
+          <div
+            title={connState === 'connecting' ? '连接中' : '已断开，正在重连'}
+            style={{
+              position: 'absolute', bottom: -2, right: -2,
+              width: 8, height: 8, borderRadius: '50%',
+              background: connState === 'connecting' ? '#f0b429' : '#e53e3e',
+              border: '1.5px solid var(--forest)',
+            }}
+          />
+        )}
       </div>
       <Sep />
       <RibBtn icon="pulse"  label="动向"
