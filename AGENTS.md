@@ -68,6 +68,11 @@ sensor-service/                   Python 感知服务(Phase 5 做)
 4. **WebSocket 连接走 src/shared/ws/**,不要把 WS 逻辑塞进组件
 5. **state 修改必须走 engine**(单一可信源),不要在组件里直接维护重复状态
 6. **桌宠窗口和聊天窗口共享同一份 engine 实例**——通过 Tauri IPC 或单一进程内的 Context
+7. **所有出站 HTTP/WS 请求必须显式禁用代理**。
+   - Rust 侧（plugin-http / 自写 command）：用 `reqwest::Client::builder().no_proxy()`
+   - 不要依赖 std::env::remove_var，reqwest 初始化时已读取环境变量
+   - 不要用浏览器原生 fetch（被 CORS 挡）
+   - WebSocket：浏览器原生 WebSocket API 不读环境变量，可以直接用
 
 ---
 

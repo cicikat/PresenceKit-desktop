@@ -14,7 +14,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Tag, Icon, Btn } from './UIKit';
 import { MOOD_HUE, MOOD_LABEL_EN, ACTIVITY_LABEL_EN } from './UIKit';
 import { MOOD_TABLE } from '../../../shared/state/store';
-import { sendChat } from '../../../shared/api/backend';
+import { sendChat, loadHistory } from '../../../shared/api/backend';
 import { wsClient } from '../../../shared/api/ws';
 
 function ChatAvatar({ hue, size = 40, scale = 1 }: any) {
@@ -103,27 +103,36 @@ function DayDivider({ label }: any) {
   );
 }
 
-const SEED_MESSAGES = [
-  { role: 'assistant', text: '在啊。', moodHue: MOOD_HUE['平静'], moodLabel: MOOD_LABEL_EN['平静'], time: Date.now() - 1000 * 60 * 60 * 3 },
-  { role: 'user',      text: '今天加班，好累。', time: Date.now() - 1000 * 60 * 60 * 3 + 60_000 },
-  { role: 'assistant', text: '嗯…那把椅子转向我一下。', moodHue: MOOD_HUE['平静'], moodLabel: MOOD_LABEL_EN['平静'], time: Date.now() - 1000 * 60 * 60 * 3 + 120_000 },
-  { role: 'user',      text: '为什么？', time: Date.now() - 1000 * 60 * 60 * 2 },
-  { role: 'assistant', text: '这样我能看见你写字。\n手腕别那么用力。', moodHue: MOOD_HUE['平静'], moodLabel: MOOD_LABEL_EN['平静'], time: Date.now() - 1000 * 60 * 60 * 2 + 30_000 },
-  { role: 'user',      text: '你今天心情还好吗。', time: Date.now() - 60_000 },
-  { role: 'assistant', text: '看见你回来就好。', moodHue: MOOD_HUE['开心'], moodLabel: MOOD_LABEL_EN['开心'], time: Date.now() - 30_000 },
-];
 
 export function ChatPanel({ engine, chatRectRef, headerVisible = true }: any) {
   const [state, setState] = useState(engine.get());
   useEffect(() => engine.subscribe(setState), [engine]);
 
-  const [messages, setMessages] = useState(SEED_MESSAGES);
+  const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState('');
   const [typing, setTyping] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const rootRef  = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  /* 启动时加载历史 */
+  useEffect(() => {
+    let mounted = true;
+    loadHistory()
+      .then(history => {
+        if (!mounted) return;
+        setMessages(history.map(entry => ({
+          role: entry.role,
+          text: entry.content,
+          time: entry.timestamp * 1000,
+        })));
+      })
+      .catch(err => {
+        console.warn('[history] 加载失败:', err);
+      });
+    return () => { mounted = false; };
+  }, []);
 
   /* 注册聊天区位置 */
   useEffect(() => {
