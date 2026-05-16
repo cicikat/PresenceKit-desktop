@@ -1,6 +1,6 @@
 /* ============================================================
  * Ribbon — 左侧固定功能图标条
- * 迁移自: Emerald-desktopUI/ribbon.jsx
+ * Phase 2d.0: 删除 book（对话信息）按钮、sparkle（控制台）按钮，规范→帮助
  * ============================================================ */
 
 import { useState, useEffect } from 'react';
@@ -54,10 +54,9 @@ function RibBtn({ icon, label, active, onClick }: any) {
 
 export function Ribbon({
   sidebarOpen, sidebarTab, onSidebarTab, onCloseSidebar,
-  chatHeaderVisible, onChatHeaderToggle,
   petVisible, onPetToggle,
   theme, onThemeToggle,
-  onOpenSpec, onOpenDebug, onOpenPrefs,
+  onOpenSpec, onOpenPrefs,
 }: any) {
   const [connState, setConnState] = useState<ConnectionState>(wsClient.getState());
   useEffect(() => wsClient.on('state', setConnState), []);
@@ -106,12 +105,10 @@ export function Ribbon({
         active={sidebarOpen && sidebarTab === 'garden'}
         onClick={() => { if (sidebarOpen && sidebarTab === 'garden') onCloseSidebar(); else onSidebarTab('garden'); }} />
       <Sep />
-      <RibBtn icon="book" label="对话信息" active={chatHeaderVisible} onClick={onChatHeaderToggle} />
-      <RibBtn icon="pet"  label="桌宠"     active={petVisible}         onClick={onPetToggle} />
+      <RibBtn icon="pet" label="桌宠" active={petVisible} onClick={onPetToggle} />
       <div style={{ flex: 1 }} />
-      <RibBtn icon="settings" label="偏好"   onClick={onOpenPrefs} />
-      <RibBtn icon="spec"     label="规范"   onClick={onOpenSpec} />
-      <RibBtn icon="sparkle"  label="控制台" onClick={onOpenDebug} />
+      <RibBtn icon="settings" label="偏好" onClick={onOpenPrefs} />
+      <RibBtn icon="spec"     label="帮助" onClick={onOpenSpec} />
       <Sep />
       <RibBtn
         icon={theme === 'dark' ? 'sparkle' : 'mood'}

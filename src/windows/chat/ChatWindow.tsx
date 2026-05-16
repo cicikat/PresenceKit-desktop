@@ -1,23 +1,17 @@
 /* ============================================================
  * ChatWindow — 主应用布局
- * 迁移自: Emerald-desktopUI/app.jsx  (App 组件)
- *
- * Phase-1 变更:
- *   - 删除 engine.startBehaviorLoop() / stopBehaviorLoop()
- *   - <Pet> 组件未迁移，已注释掉 (TODO: Phase-2)
- *   - PreferencesPanel / DebugPanel 保留在本文件
+ * Phase 2d.0: 删除 DebugPanel、清理 Ribbon/SidebarPanel props
  * ============================================================ */
 
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { Icon, Btn, Tag, MicroLabel } from './components/UIKit';
-import { MOOD_HUE, MOOD_LABEL_EN } from './components/UIKit';
-import { MOODS, ACTIVITIES, PRESENCES, StateEngine } from '../../shared/state/store';
+import { useState, useEffect, useRef } from 'react';
+import { Icon, MicroLabel } from './components/UIKit';
+import { StateEngine } from '../../shared/state/store';
 import { avatarStore } from '../../shared/avatars/store';
 import { AvatarCropper } from './components/AvatarCropper';
 import { Ribbon } from './components/Ribbon';
-import { SidebarPanel, DiaryDetailView } from './components/Sidebar';
+import { SidebarPanel } from './components/Sidebar';
 import { ChatPanel } from './components/ChatPanel';
-import { PaneHost, panesApi } from './components/Panes';
+import { PaneHost } from './components/Panes';
 import { SpecPanel } from './components/SpecPanel';
 
 const SIDEBAR_MIN     = 260;
@@ -226,90 +220,6 @@ function PrefSwitch({ active, onClick }: any) {
   );
 }
 
-/* ── 状态控制台 ── */
-function DebugPanel({ engine, open, onClose, logs }: any) {
-  const [state, setState] = useState(engine.get());
-  useEffect(() => engine.subscribe(setState), [engine]);
-  if (!open) return null;
-  const apply = (patch: any) => engine.applyStateUpdate(patch);
-  return (
-    <div style={{
-      position: 'fixed', right: 18, bottom: 18, width: 360,
-      background: 'var(--paper)', border: '1px solid var(--paper-edge)',
-      borderRadius: 8, boxShadow: '0 24px 60px var(--shadow-rgb-mix)',
-      zIndex: 90, overflow: 'hidden',
-    }}>
-      <div style={{
-        padding: '12px 16px', borderBottom: '1px solid var(--paper-edge)',
-        display: 'flex', alignItems: 'center', gap: 10, background: 'var(--paper-2)',
-      }}>
-        <Icon name="sparkle" size={15} />
-        <div className="serif" style={{ fontWeight: 600, fontSize: 14 }}>状态控制台</div>
-        <span className="mono" style={{ fontSize: 9, color: 'var(--ink-3)', letterSpacing: 1.4 }}>INJECT</span>
-        <div style={{ flex: 1 }} />
-        <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--ink-3)', cursor: 'pointer', fontSize: 18, padding: 0, lineHeight: 1 }}>×</button>
-      </div>
-      <div style={{ padding: '14px 16px', display: 'grid', gap: 14, maxHeight: 480, overflowY: 'auto' }}>
-        <Group title="MOOD"><Chips items={MOODS} active={state.mood} onPick={(v: any) => apply({ mood: v })} colorByMood /></Group>
-        <Group title="ACTIVITY"><Chips items={ACTIVITIES} active={state.activity} onPick={(v: any) => apply({ activity: v })} /></Group>
-        <Group title="PRESENCE"><Chips items={PRESENCES} active={state.presence} onPick={(v: any) => apply({ presence: v })} /></Group>
-        <Group title="SIGNAL">
-          <button style={chipStyle(state.wantToSpeak, undefined, true)} onClick={() => apply({ wantToSpeak: !state.wantToSpeak })}>
-            {state.wantToSpeak ? '✓ 想说但没说' : '想说但没说'}
-          </button>
-        </Group>
-        <Group title="BEHAVIOR LOG · LAST 8">
-          <div className="mono" style={{ fontSize: 10.5, lineHeight: 1.8, color: 'var(--ink-2)', maxHeight: 140, overflowY: 'auto' }}>
-            {logs.slice(-8).reverse().map((l: any, i: number) => (
-              <div key={i}><span style={{ color: 'var(--ink-4)' }}>{l.t}</span> · {l.msg}</div>
-            ))}
-            {logs.length === 0 && <div style={{ color: 'var(--ink-4)' }}>—</div>}
-          </div>
-        </Group>
-      </div>
-    </div>
-  );
-}
-
-function Group({ title, children }: any) {
-  return (
-    <div>
-      <div className="mono" style={{ fontSize: 9.5, color: 'var(--ink-3)', letterSpacing: 1.5, marginBottom: 6, fontWeight: 600 }}>{title}</div>
-      {children}
-    </div>
-  );
-}
-
-function Chips({ items, active, onPick, colorByMood }: any) {
-  return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-      {items.map((it: string) => {
-        const hue = colorByMood ? MOOD_HUE[it] : undefined;
-        return <button key={it} onClick={() => onPick(it)} style={chipStyle(active === it, hue, false)}>{it}</button>;
-      })}
-    </div>
-  );
-}
-
-function chipStyle(active: boolean, hue?: number, plain?: boolean): any {
-  if (active && hue !== undefined) {
-    return {
-      padding: '5px 10px', borderRadius: 4, fontSize: 11.5,
-      background: `oklch(0.42 0.13 ${hue})`,
-      color: `oklch(0.98 0.04 ${hue})`,
-      border: `1px solid oklch(0.55 0.14 ${hue})`,
-      cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600,
-    };
-  }
-  return {
-    padding: '5px 10px', borderRadius: 4, fontSize: 11.5,
-    background: active ? 'var(--ink)' : 'var(--paper-2)',
-    color: active ? 'var(--paper)' : 'var(--ink-2)',
-    border: '1px solid var(--paper-edge)',
-    cursor: 'pointer', fontFamily: 'inherit', fontWeight: active ? 600 : 500,
-  };
-}
-
 /* ── 分隔条 ── */
 function Divider({ onDrag }: any) {
   const draggingRef = useRef(false);
@@ -336,33 +246,24 @@ export function ChatWindow() {
   if (!engineRef.current) engineRef.current = new StateEngine();
   const engine = engineRef.current;
 
-  const [theme, setTheme]                     = useState('paper');
-  const [petVisible, setPetVisible]           = useState(false); // Pet not rendered in Phase-1
-  const [sidebarOpen, setSidebarOpen]         = useState(true);
-  const [sidebarTab, setSidebarTab]           = useState('flow');
-  const [sidebarWidth, setSidebarWidth]       = useState(SIDEBAR_DEFAULT);
+  const [theme, setTheme]                         = useState('paper');
+  const [petVisible, setPetVisible]               = useState(false);
+  const [sidebarOpen, setSidebarOpen]             = useState(true);
+  const [sidebarTab, setSidebarTab]               = useState('flow');
+  const [sidebarWidth, setSidebarWidth]           = useState(SIDEBAR_DEFAULT);
   const [chatHeaderVisible, setChatHeaderVisible] = useState(true);
-  const [specOpen, setSpecOpen]               = useState(false);
-  const [debugOpen, setDebugOpen]             = useState(false);
-  const [prefsOpen, setPrefsOpen]             = useState(false);
-  const [logs, setLogs]                       = useState<any[]>([]);
+  const [specOpen, setSpecOpen]                   = useState(false);
+  const [prefsOpen, setPrefsOpen]                 = useState(false);
 
-  /* 主题同步 */
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
-  const mouseRef      = useRef({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
-  const chatRectRef   = useRef<DOMRect | null>(null);
+  const mouseRef       = useRef({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+  const chatRectRef    = useRef<DOMRect | null>(null);
   const sidebarRectRef = useRef<DOMRect | null>(null);
-  const bodyRef       = useRef<HTMLDivElement>(null);
+  const bodyRef        = useRef<HTMLDivElement>(null);
 
-  const log = useCallback((msg: string) => {
-    const t = new Date().toLocaleTimeString('en-GB');
-    setLogs(prev => [...prev.slice(-30), { t, msg }]);
-  }, []);
-
-  /* 鼠标追踪 (供 Pet 用; Phase-1 保留以备 Phase-2) */
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
       mouseRef.current = { x: e.clientX, y: e.clientY };
@@ -376,7 +277,6 @@ export function ChatWindow() {
     const next = !petVisible;
     setPetVisible(next);
     engine.setMode(next ? 'companion' : 'chat-only');
-    log(`pet · ${next ? '出现' : '退出'}`);
   };
 
   const onSidebarTab = (tab: string) => { setSidebarTab(tab); setSidebarOpen(true); };
@@ -390,18 +290,6 @@ export function ChatWindow() {
     setSidebarWidth(Math.max(SIDEBAR_MIN, Math.min(max, w)));
   };
 
-  const onOpenDiaryDetail = (entry: any) => {
-    panesApi.openPane({
-      id: `diary-${entry.id}`,
-      title: entry.title,
-      hue: MOOD_HUE[entry.mood],
-      w: 540, h: 600,
-      replace: true,
-      render: () => <DiaryDetailView entry={entry} />,
-    });
-    log(`diary · 打开「${entry.title}」`);
-  };
-
   return (
     <div style={{ height: '100vh', display: 'flex', position: 'relative', background: 'var(--paper)' }}>
       <Ribbon
@@ -409,14 +297,11 @@ export function ChatWindow() {
         sidebarTab={sidebarTab}
         onSidebarTab={onSidebarTab}
         onCloseSidebar={onCloseSidebar}
-        chatHeaderVisible={chatHeaderVisible}
-        onChatHeaderToggle={() => setChatHeaderVisible(v => !v)}
         petVisible={petVisible}
         onPetToggle={onPetToggle}
         theme={theme}
         onThemeToggle={() => setTheme(t => t === 'dark' ? 'paper' : 'dark')}
         onOpenSpec={() => setSpecOpen(true)}
-        onOpenDebug={() => setDebugOpen(true)}
         onOpenPrefs={() => setPrefsOpen(true)}
       />
       <div ref={bodyRef} style={{ flex: 1, display: 'flex', minHeight: 0, position: 'relative' }}>
@@ -424,11 +309,9 @@ export function ChatWindow() {
           <>
             <div style={{ width: sidebarWidth, flexShrink: 0 }}>
               <SidebarPanel
-                engine={engine}
                 sidebarRectRef={sidebarRectRef}
                 tab={sidebarTab}
-                onClose={() => setSidebarOpen(false)}
-                onOpenDiaryDetail={onOpenDiaryDetail} />
+                onClose={() => setSidebarOpen(false)} />
             </div>
             <Divider onDrag={onDividerDrag} />
           </>
@@ -451,7 +334,6 @@ export function ChatWindow() {
         onSidebarWidthChange={setSidebarWidth}
         chatHeaderVisible={chatHeaderVisible}
         onChatHeaderToggle={() => setChatHeaderVisible(v => !v)} />
-      <DebugPanel engine={engine} open={debugOpen} onClose={() => setDebugOpen(false)} logs={logs} />
     </div>
   );
 }
