@@ -1,0 +1,224 @@
+# docs/known-issues.md — 已知问题与技术债
+
+> 修复前请先对照代码确认问题仍存在；修复后在本文件改状态或移到已修复区。
+
+---
+
+## P1：WebSocket action 会回成功 ack，但没有执行动作
+
+**位置**：`src/shared/api/ws.ts`
+
+当前收到 `action` 后：
+
+- `console.log("[ws] action:", msg.action)`
+- 立即 `_send({ type: "ack", msg_id, ok: true })`
+- `emit("action", msg.action)`
+
+但仓库内没有订阅 `action` 并执行 `open_url` / `minimize_window` / `notify` 等动作的代码。
+
+**影响**：后端会认为桌面动作执行成功，实际上什么都没发生；工具调用结果会被静默吞掉。
+
+**建议**：实现 action executor 后再回成功 ack；在实现前应回 `ok:false` 或不要声明 action 能力。
+
+---
+
+## P1：客户端和目标 v1 WS 协议不一致
+
+**位置**：`src/shared/api/ws.ts`、`src/shared/api/types.ts`、`D:\ai\qq-st-bot\channels\desktop_ws.py`
+
+当前实际协议是 legacy：
+
+- `hello` / `hello_ack`
+- `channel_message`
+- `action`
+- `ack`
+- `ping` / `pong`
+
+旧 v1 协议文档要求：
+
+- envelope：`v` / `ts` / `payload`
+- `assistant_message`
+- `state_update`
+- `user_message`
+- `client_event`
+- capabilities 声明
+
+**影响**：后续接手者容易误以为 Phase 2b 已完成；状态推送、用户输入 WS 化、模式切换都还没落地。
+
+**建议**：先决定是短期继续 legacy，还是直接推动后端和客户端一起升 v1。不要在客户端单边实现 v1。
+
+---
+
+## P1：用户发送仍走 HTTP `/desktop/chat`，不是 WS `user_message`
+
+**位置**：`src/windows/chat/components/ChatPanel.tsx`、`src/shared/api/backend.ts`、`src-tauri/src/lib.rs`
+
+当前 `send()` 调用 `sendChat()`，Tauri command 再 POST `/desktop/chat`。
+
+**影响**：与 v1 协议文档中“用户输入走 WS，回复走 assistant_message”的目标不一致；也导致 HTTP 返回回复和 WS 主动消息两条路径并存。
+
+**建议**：协议升级时把 `sendChat()` 改为 WS `user_message`，或明确文档标记 HTTP 为过渡路径。
+
+---
+
+## P1：短期历史 user id 和 admin token 硬编码
+
+**位置**：`src/shared/api/backend.ts`
+
+```ts
+const BOT_USER_ID = "1043484516";
+const ADMIN_TOKEN = "Emerald1231";
+```
+
+后端 `/memory/{user_id}/short-term` 需要 Bearer token。当前客户端把 token 和用户 id 写死。
+
+**影响**：
+
+- 后端 token 改动后历史加载失败。
+- `BOT_USER_ID` 可能和后端 `scheduler.owner_id` 不一致，导致聊天和历史不是同一用户数据。
+- token 出现在前端源码里，不适合长期保留。
+
+**建议**：改成 Tauri 配置、后端专用本机接口，或从后端提供当前 owner 的历史读取接口。
+
+---
+
+## P1：`state_update` 没有接入 StateEngine
+
+**位置**：`src/shared/state/store.ts`、`src/shared/api/ws.ts`
+
+`StateEngine.applyStateUpdate()` 已存在，但 WS 类型里没有 `state_update`，`wsClient` 也没有处理。
+
+**影响**：后端情绪、活动、presence 不能驱动 UI；当前 header 和视觉状态主要是本地推断。
+
+**建议**：协议对齐后，把后端状态变化统一转成 `engine.applyStateUpdate()`。
+
+---
+
+## P2：桌宠按钮没有真实桌宠窗口
+
+**位置**：`src/windows/chat/ChatWindow.tsx`
+
+`onPetToggle()` 只切换本地 `petVisible` 和 engine mode。当前没有 `src/windows/pet/`，也没有 Tauri 第二窗口。
+
+**影响**：用户点击 Ribbon 桌宠按钮会看到 active 状态变化，但没有桌宠出现。
+
+**建议**：在实现前 UI 上可弱化入口，或在迁移桌宠窗口时同步设计 shared engine。
+
+---
+
+## P2：`sensor-service/` 只有空目录骨架
+
+**位置**：`sensor-service/`
+
+目录存在，但没有 Python 实现文件。
+
+**影响**：项目结构看起来像已迁感知服务，但实际不可运行。
+
+**建议**：迁移旧 `Emerald-desktop` 感知层时，先写启动入口、数据路径和后端 `/sensor/*` 对接文档。
+
+---
+
+## P2：桌面协议文档路径漂移
+
+**位置**：文档路径
+
+旧入口说明曾写：
+
+```text
+D:\ai\qq-st-bot\docs\desktop-client-protocol.md
+D:\ai\qq-st-bot\docs\desktop-client-plan.md
+```
+
+当前实际同名文件在：
+
+```text
+D:\ai\Emerald-desktop\docs\
+```
+
+**影响**：后续协作者按旧路径找不到协议文档，容易重复设计或误判状态。
+
+**建议**：要么把协议文档复制/迁到本仓库或后端仓库，要么持续在 `docs/backend-integration.md` 标明权威位置。
+
+---
+
+## P3：Tauri 项目名和窗口标题仍是模板名
+
+**位置**：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`
+
+当前仍有：
+
+- package name: `tauri-app`
+- productName: `tauri-app`
+- window title: `tauri-app`
+- Rust package description: `A Tauri App`
+
+**影响**：开发和打包时显示不符合 Emerald-client。
+
+**建议**：在正式打包前统一改名。
+
+---
+
+## P3：ChatPanel header 的“偏好”按钮没有 onClick
+
+**位置**：`src/windows/chat/components/ChatPanel.tsx`
+
+Header 右侧渲染：
+
+```tsx
+<Btn icon="settings" dense>偏好</Btn>
+```
+
+没有传 `onClick`。实际可用的偏好入口在 Ribbon。
+
+**影响**：用户点击 header 偏好按钮没有反应。
+
+**建议**：传入 `onOpenPrefs`，或移除这个重复入口。
+
+---
+
+## P2：Garden daily lifecycle 仅数据层手测，scheduler 端到端未实测
+
+**位置**：`qq-st-bot/core/garden/manager.py daily_check()`、`qq-st-bot/core/scheduler/triggers/garden_daily.py`、`qq-st-bot/core/scheduler/loop.py` `garden_daily` cooldown
+
+Phase 2d.5e 完成时数据层在 REPL 单测全通过：
+
+- harvest 过期事件触发一次后不重复
+- harvest handle 通过 `handle_triggered` 标记防重
+- bloom 事件在 `water()` 返回值的 `events` 字段里正确生成
+
+**未实测**的部分：
+
+- `garden_daily` trigger 在 scheduler 真实主循环里是否按 24h cooldown 正确触发
+- `_pipeline_send` 在 garden 这条调用路径下 LLM 是否产出合理叶瑄发言
+- `harvest_handle` 中 `ask` / `gift` 必发、`dry` / `vase` 30% sample 的实际发言频率是否符合体感
+- 多事件同 tick 触发时叶瑄是否一次说太多（events 是循环逐条 `await _pipeline_send`，中间没有节流）
+
+**影响**：首次出现 harvest 过期 / handle / vase 枯萎之前完全无法暴露；日常体感问题（发言频率、口吻、上下文连贯性）只有长时间使用后才显现。
+
+**触发条件**：需要至少跑一株花从浇水到开花（约 3 天）+ 3 天 handle 阈值 + 偶尔 7 天 vase 枯萎，最早能观察到行为大约是 phase 完成后 1 周。
+
+**建议**：实际使用 1-2 周后按 Phase 2d.5e 验证步骤复检，根据体感调：发言频率、`SAMPLE_TALK_PROB` 数值、prompt 文本风格。
+
+---
+
+## P3：system 消息会按 HER 气泡渲染
+
+**位置**：`src/windows/chat/components/ChatPanel.tsx`
+
+发送失败时追加：
+
+```ts
+{ role: "system", text: `（连接失败：${msg}）` }
+```
+
+`Bubble` 只判断 `msg.role === "user"`，否则都走助手气泡。
+
+**影响**：连接失败提示看起来像叶瑄发言。
+
+**建议**：给 `system` 单独样式，或统一走 toast/status bar。
+
+---
+
+## 已修复
+
+暂无。后续修复后把条目移动到这里，保留简短修复说明和日期。
