@@ -205,10 +205,12 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true }: any) {
         moodLabel: MOOD_LABEL_EN[m.mood],
         time: Date.now(),
       }]);
-    } catch (err: any) {
+    } catch (err) {
+      console.error('[chat] send 失败:', err);
+      const msg = err instanceof Error ? err.message : String(err);
       setMessages(prev => [...prev, {
         role: 'system',
-        text: `（连接失败：${err.message}）`,
+        text: `（连接失败：${msg}）`,
         time: Date.now(),
       }]);
     } finally {
