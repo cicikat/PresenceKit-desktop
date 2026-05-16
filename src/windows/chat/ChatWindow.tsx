@@ -12,6 +12,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Icon, Btn, Tag, MicroLabel } from './components/UIKit';
 import { MOOD_HUE, MOOD_LABEL_EN } from './components/UIKit';
 import { MOODS, ACTIVITIES, PRESENCES, StateEngine } from '../../shared/state/store';
+import { avatarStore } from '../../shared/avatars/store';
+import { AvatarCropper } from './components/AvatarCropper';
 import { Ribbon } from './components/Ribbon';
 import { SidebarPanel, DiaryDetailView } from './components/Sidebar';
 import { ChatPanel } from './components/ChatPanel';
@@ -24,54 +26,161 @@ const SIDEBAR_DEFAULT = 340;
 
 /* ── 偏好面板 ── */
 function PreferencesPanel({ open, onClose, theme, onThemeChange, sidebarWidth, onSidebarWidthChange, chatHeaderVisible, onChatHeaderToggle }: any) {
+  const [avatars, setAvatars] = useState(avatarStore.get());
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
+  const [cropRole, setCropRole] = useState<'her' | 'you' | null>(null);
+  const herFileRef = useRef<HTMLInputElement>(null);
+  const youFileRef = useRef<HTMLInputElement>(null);
+  useEffect(() => avatarStore.subscribe(setAvatars), []);
+
   if (!open) return null;
+
+  const handleFileChange = (role: 'her' | 'you', file: File) => {
+    setCropSrc(URL.createObjectURL(file));
+    setCropRole(role);
+  };
+
+  const handleCropConfirm = async (blob: Blob) => {
+    await avatarStore.setAvatar(cropRole!, blob);
+    if (cropSrc) URL.revokeObjectURL(cropSrc);
+    setCropSrc(null);
+    setCropRole(null);
+  };
+
+  const handleCropCancel = () => {
+    if (cropSrc) URL.revokeObjectURL(cropSrc);
+    setCropSrc(null);
+    setCropRole(null);
+  };
+
   return (
-    <div onClick={onClose} style={{
-      position: 'fixed', inset: 0, background: 'oklch(0.20 0.04 60 / 0.45)',
-      backdropFilter: 'blur(6px)', zIndex: 110, display: 'flex',
-    }}>
-      <div onClick={e => e.stopPropagation()} style={{
-        margin: 'auto', width: 'min(540px, 92vw)',
-        background: 'var(--paper)', border: '1px solid var(--paper-edge)',
-        borderRadius: 10, overflow: 'hidden',
-        boxShadow: '0 30px 80px var(--shadow-rgb-mix)',
+    <>
+      {cropSrc && (
+        <AvatarCropper imageSrc={cropSrc} onConfirm={handleCropConfirm} onCancel={handleCropCancel} />
+      )}
+      <input ref={herFileRef} type="file" accept="image/jpeg,image/png" style={{ display: 'none' }}
+        onChange={e => { const f = e.target.files?.[0]; if (f) handleFileChange('her', f); e.target.value = ''; }} />
+      <input ref={youFileRef} type="file" accept="image/jpeg,image/png" style={{ display: 'none' }}
+        onChange={e => { const f = e.target.files?.[0]; if (f) handleFileChange('you', f); e.target.value = ''; }} />
+      <div onClick={onClose} style={{
+        position: 'fixed', inset: 0, background: 'oklch(0.20 0.04 60 / 0.45)',
+        backdropFilter: 'blur(6px)', zIndex: 110, display: 'flex',
       }}>
-        <div style={{
-          padding: '14px 20px', borderBottom: '1px solid var(--paper-edge)',
-          display: 'flex', alignItems: 'center', gap: 10, background: 'var(--paper-2)',
+        <div onClick={e => e.stopPropagation()} style={{
+          margin: 'auto', width: 'min(540px, 92vw)',
+          background: 'var(--paper)', border: '1px solid var(--paper-edge)',
+          borderRadius: 10, overflow: 'hidden',
+          boxShadow: '0 30px 80px var(--shadow-rgb-mix)',
         }}>
-          <Icon name="settings" size={16} />
-          <div className="serif" style={{ fontSize: 17, fontWeight: 600 }}>偏好</div>
-          <div className="mono" style={{ fontSize: 9.5, color: 'var(--ink-3)', letterSpacing: 1.4 }}>PREFERENCES</div>
-          <div style={{ flex: 1 }} />
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--ink-3)', cursor: 'pointer', fontSize: 18, padding: 0, lineHeight: 1 }}>×</button>
-        </div>
-        <div style={{ padding: '18px 22px', display: 'grid', gap: 18 }}>
-          <PrefRow label="外观主题" hint="paper · 复古信纸 / dark · 深色护眼">
-            <div style={{ display: 'flex', gap: 6 }}>
-              <PrefSeg active={theme === 'paper'} onClick={() => onThemeChange('paper')}>信纸</PrefSeg>
-              <PrefSeg active={theme === 'dark'}  onClick={() => onThemeChange('dark')}>夜间</PrefSeg>
+          <div style={{
+            padding: '14px 20px', borderBottom: '1px solid var(--paper-edge)',
+            display: 'flex', alignItems: 'center', gap: 10, background: 'var(--paper-2)',
+          }}>
+            <Icon name="settings" size={16} />
+            <div className="serif" style={{ fontSize: 17, fontWeight: 600 }}>偏好</div>
+            <div className="mono" style={{ fontSize: 9.5, color: 'var(--ink-3)', letterSpacing: 1.4 }}>PREFERENCES</div>
+            <div style={{ flex: 1 }} />
+            <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--ink-3)', cursor: 'pointer', fontSize: 18, padding: 0, lineHeight: 1 }}>×</button>
+          </div>
+          <div style={{ padding: '18px 22px', display: 'grid', gap: 18 }}>
+            <PrefRow label="外观主题" hint="paper · 复古信纸 / dark · 深色护眼">
+              <div style={{ display: 'flex', gap: 6 }}>
+                <PrefSeg active={theme === 'paper'} onClick={() => onThemeChange('paper')}>信纸</PrefSeg>
+                <PrefSeg active={theme === 'dark'}  onClick={() => onThemeChange('dark')}>夜间</PrefSeg>
+              </div>
+            </PrefRow>
+            <PrefRow label="对话信息栏" hint="顶部状态条 (mood / activity / 时段)">
+              <PrefSwitch active={chatHeaderVisible} onClick={onChatHeaderToggle} />
+            </PrefRow>
+            <PrefRow label="侧栏默认宽度" hint={`${sidebarWidth}px`}>
+              <input type="range" min={SIDEBAR_MIN} max={SIDEBAR_MAX} value={sidebarWidth}
+                onChange={e => onSidebarWidthChange(+e.target.value)} style={{ width: 180 }} />
+            </PrefRow>
+            <div style={{ height: 1, background: 'var(--paper-edge)' }} />
+            {/* 头像分区 */}
+            <div>
+              <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink)', marginBottom: 2 }}>头像</div>
+              <div className="mono" style={{ fontSize: 9.5, color: 'var(--ink-3)', letterSpacing: 1.1, marginBottom: 14 }}>管理对话里的 HER / YOU 头像</div>
+              <div style={{ display: 'grid', gap: 12 }}>
+                {/* HER 行 */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{
+                    width: 48, height: 48, borderRadius: '50%',
+                    border: '1px solid var(--paper-edge)', overflow: 'hidden',
+                    flexShrink: 0, background: 'var(--paper-2)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {avatars.her.dataUrl ? (
+                      <img src={avatars.her.dataUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <svg viewBox="0 0 40 40" width={40} height={40}>
+                        <defs>
+                          <radialGradient id="pref-av-her" cx="42%" cy="38%">
+                            <stop offset="0%" stopColor="oklch(0.95 0.04 72)" />
+                            <stop offset="100%" stopColor="oklch(0.75 0.07 72)" />
+                          </radialGradient>
+                        </defs>
+                        <circle cx="20" cy="20" r="18" fill="url(#pref-av-her)" stroke="oklch(0.50 0.06 72 / 0.3)" strokeWidth="0.8" />
+                        <circle cx="14.5" cy="19" r="2.2" fill="oklch(0.22 0.05 72)" />
+                        <circle cx="25.5" cy="19" r="2.2" fill="oklch(0.22 0.05 72)" />
+                        <path d="M 15 26 q 5 3 10 0" stroke="oklch(0.30 0.05 72)" strokeWidth="1.4" fill="none" strokeLinecap="round" />
+                      </svg>
+                    )}
+                  </div>
+                  <span className="mono" style={{ fontSize: 10, letterSpacing: 1.4, color: 'var(--ink-3)', flex: 1 }}>HER</span>
+                  <button onClick={() => herFileRef.current?.click()} style={{
+                    padding: '6px 14px', borderRadius: 4, fontSize: 12,
+                    background: 'var(--paper-2)', border: '1px solid var(--paper-edge)',
+                    color: 'var(--ink-2)', cursor: 'pointer', fontFamily: 'inherit',
+                  }}>更换</button>
+                </div>
+                {/* YOU 行 */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{
+                    width: 48, height: 48, borderRadius: '50%',
+                    border: '1px solid var(--paper-edge)', overflow: 'hidden',
+                    flexShrink: 0, background: 'var(--paper-3)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {avatars.you.dataUrl ? (
+                      <img src={avatars.you.dataUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <span style={{ fontSize: 18, fontWeight: 600, color: 'var(--ink-3)', fontFamily: 'var(--font-serif)' }}>Y</span>
+                    )}
+                  </div>
+                  <span className="mono" style={{ fontSize: 10, letterSpacing: 1.4, color: 'var(--ink-3)', flex: 1 }}>YOU</span>
+                  <button onClick={() => youFileRef.current?.click()} style={{
+                    padding: '6px 14px', borderRadius: 4, fontSize: 12,
+                    background: 'var(--paper-2)', border: '1px solid var(--paper-edge)',
+                    color: 'var(--ink-2)', cursor: 'pointer', fontFamily: 'inherit',
+                  }}>更换</button>
+                </div>
+                {/* 显示 YOU 头像 toggle */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 2 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink)' }}>显示 YOU 头像</div>
+                    <div className="mono" style={{ fontSize: 9.5, color: 'var(--ink-3)', letterSpacing: 1.1, marginTop: 2 }}>对话气泡右侧显示</div>
+                  </div>
+                  <PrefSwitch
+                    active={avatars.you.visible}
+                    onClick={() => avatarStore.setYouVisible(!avatars.you.visible)}
+                  />
+                </div>
+              </div>
             </div>
-          </PrefRow>
-          <PrefRow label="对话信息栏" hint="顶部状态条 (mood / activity / 时段)">
-            <PrefSwitch active={chatHeaderVisible} onClick={onChatHeaderToggle} />
-          </PrefRow>
-          <PrefRow label="侧栏默认宽度" hint={`${sidebarWidth}px`}>
-            <input type="range" min={SIDEBAR_MIN} max={SIDEBAR_MAX} value={sidebarWidth}
-              onChange={e => onSidebarWidthChange(+e.target.value)} style={{ width: 180 }} />
-          </PrefRow>
-          <div style={{ height: 1, background: 'var(--paper-edge)' }} />
-          <div>
-            <MicroLabel>未来主题接入接口</MicroLabel>
-            <div className="serif" style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6, marginTop: 6, fontStyle: 'italic' }}>
-              所有颜色都用 CSS 变量管理。要加新主题，复制{' '}
-              <code style={{ fontFamily: 'var(--font-mono)', background: 'var(--paper-3)', padding: '1px 5px', borderRadius: 3 }}>:root[data-theme="paper"]</code>{' '}
-              这块改值即可。
+            <div style={{ height: 1, background: 'var(--paper-edge)' }} />
+            <div>
+              <MicroLabel>未来主题接入接口</MicroLabel>
+              <div className="serif" style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6, marginTop: 6, fontStyle: 'italic' }}>
+                所有颜色都用 CSS 变量管理。要加新主题，复制{' '}
+                <code style={{ fontFamily: 'var(--font-mono)', background: 'var(--paper-3)', padding: '1px 5px', borderRadius: 3 }}>:root[data-theme="paper"]</code>{' '}
+                这块改值即可。
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
 

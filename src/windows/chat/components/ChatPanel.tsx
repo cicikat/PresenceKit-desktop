@@ -14,6 +14,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Tag, Icon, Btn } from './UIKit';
 import { MOOD_HUE, MOOD_LABEL_EN, ACTIVITY_LABEL_EN } from './UIKit';
 import { MOOD_TABLE } from '../../../shared/state/store';
+import { avatarStore } from '../../../shared/avatars/store';
 import { sendChat, loadHistory } from '../../../shared/api/backend';
 import { wsClient } from '../../../shared/api/ws';
 
@@ -35,14 +36,14 @@ function ChatAvatar({ hue, size = 40, scale = 1 }: any) {
   );
 }
 
-function Bubble({ msg, currentHue, breath }: any) {
+function Bubble({ msg, currentHue, breath, herDataUrl, youDataUrl, youVisible }: any) {
   const fromUser = msg.role === 'user';
   const hue = msg.moodHue ?? currentHue;
   const time = msg.time ? new Date(msg.time).toLocaleTimeString('zh', { hour: '2-digit', minute: '2-digit' }) : '';
 
   if (fromUser) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 0' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-end', gap: youVisible ? 8 : 0, padding: '8px 0' }}>
         <div style={{ maxWidth: '78%' }}>
           <div className="mono" style={{ fontSize: 9.5, letterSpacing: 1.4, color: 'var(--ink-3)', textAlign: 'right', marginBottom: 4 }}>
             YOU · {time}
@@ -55,14 +56,27 @@ function Bubble({ msg, currentHue, breath }: any) {
             boxShadow: '0 4px 12px oklch(0.30 0.04 60 / 0.18)',
           }}>{msg.text}</div>
         </div>
+        {youVisible && (
+          <div style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0, overflow: 'hidden', border: '1px solid var(--paper-edge)' }}>
+            {youDataUrl ? (
+              <img src={youDataUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              <div style={{ width: '100%', height: '100%', background: 'var(--paper-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 600, color: 'var(--ink-3)', fontFamily: 'var(--font-serif)' }}>Y</div>
+            )}
+          </div>
+        )}
       </div>
     );
   }
 
   return (
     <div style={{ display: 'flex', gap: 10, padding: '8px 0', alignItems: 'flex-start' }}>
-      <div style={{ paddingTop: 14 }}>
-        <ChatAvatar hue={hue} size={36} scale={breath} />
+      <div style={{ paddingTop: 14, flexShrink: 0 }}>
+        {herDataUrl ? (
+          <img src={herDataUrl} style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', transform: `scale(${breath})`, transition: 'transform 0.12s ease-out' }} />
+        ) : (
+          <ChatAvatar hue={hue} size={36} scale={breath} />
+        )}
       </div>
       <div style={{ flex: 1, maxWidth: 'calc(100% - 60px)' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
@@ -107,6 +121,9 @@ function DayDivider({ label }: any) {
 export function ChatPanel({ engine, chatRectRef, headerVisible = true }: any) {
   const [state, setState] = useState(engine.get());
   useEffect(() => engine.subscribe(setState), [engine]);
+
+  const [avatars, setAvatars] = useState(avatarStore.get());
+  useEffect(() => avatarStore.subscribe(setAvatars), []);
 
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState('');
@@ -228,6 +245,9 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true }: any) {
   };
 
   const currentHue = MOOD_HUE[state.mood];
+  const herDataUrl = avatars.her.dataUrl;
+  const youDataUrl = avatars.you.dataUrl;
+  const youVisible = avatars.you.visible;
 
   return (
     <div ref={rootRef} style={{
@@ -241,7 +261,11 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true }: any) {
           padding: '20px 28px 14px', borderBottom: '1px solid var(--paper-edge)',
           background: 'var(--paper)', display: 'flex', alignItems: 'flex-start', gap: 16,
         }}>
-          <ChatAvatar hue={currentHue} size={50} scale={breathe} />
+          {herDataUrl ? (
+            <img src={herDataUrl} style={{ width: 50, height: 50, borderRadius: '50%', objectFit: 'cover', transform: `scale(${breathe})`, transition: 'transform 0.12s ease-out', flexShrink: 0 }} />
+          ) : (
+            <ChatAvatar hue={currentHue} size={50} scale={breathe} />
+          )}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
               <h1 className="serif" style={{ margin: 0, fontSize: 28, fontWeight: 600, color: 'var(--ink)', letterSpacing: -0.4 }}>
@@ -269,12 +293,18 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true }: any) {
       )}
 
       {/* MESSAGES */}
-      <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '8px 28px 12px', background: 'var(--paper)' }}>
+      <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: `8px ${youVisible ? 56 : 28}px 12px 28px`, background: 'var(--paper)' }}>
         <DayDivider label="EARLIER" />
-        {messages.map((m: any, i: number) => <Bubble key={i} msg={m} currentHue={currentHue} breath={breathe} />)}
+        {messages.map((m: any, i: number) => <Bubble key={i} msg={m} currentHue={currentHue} breath={breathe} herDataUrl={herDataUrl} youDataUrl={youDataUrl} youVisible={youVisible} />)}
         {(typing || loading) && (
           <div style={{ display: 'flex', gap: 10, padding: '8px 0', alignItems: 'flex-start' }}>
-            <div style={{ paddingTop: 6 }}><ChatAvatar hue={currentHue} size={36} scale={breathe} /></div>
+            <div style={{ paddingTop: 6 }}>
+              {herDataUrl ? (
+                <img src={herDataUrl} style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', transform: `scale(${breathe})`, transition: 'transform 0.12s ease-out' }} />
+              ) : (
+                <ChatAvatar hue={currentHue} size={36} scale={breathe} />
+              )}
+            </div>
             <div style={{
               padding: '12px 16px', borderRadius: '2px 6px 6px 2px',
               background: 'var(--paper-2)',
