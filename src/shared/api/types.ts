@@ -35,3 +35,21 @@ export interface GardenState {
   harvest_count: number;
   vase_count: number;
 }
+
+export interface DiaryListItem {
+  date: string;
+  title: string;
+  emotion: string | null;
+}
+
+export interface DiaryListResponse {
+  entries: DiaryListItem[];
+  count: number;
+}
+
+export interface DiaryEntry {
+  date: string;
+  title: string;
+  emotion: string | null;
+  body: string;
+}

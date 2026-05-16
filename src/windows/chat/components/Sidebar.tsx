@@ -1,23 +1,21 @@
 /* ============================================================
- * Sidebar — 左副栏内容区（占位版）
- * Phase 2d.0: 4 个 tab 均替换为占位卡片，等待真实数据接入
+ * Sidebar — 左副栏内容区
  * ============================================================ */
 
 import { useEffect, useRef } from 'react';
 import { SubGarden } from './SubGarden';
+import { SubDiary } from './SubDiary';
 
 const SIDEBAR_HEADER: Record<string, { title: string; subtitle: string }> = {
-  flow:   { title: '动向',     subtitle: 'LIVE FEED · 她现在在做什么' },
-  diary:  { title: '她的日记', subtitle: 'DIARY · 来自她自己的笔' },
+  flow:   { title: '动向',     subtitle: 'LIVE FEED · 他现在在做什么' },
+  diary:  { title: '他的日记', subtitle: 'DIARY · 来自他自己的笔' },
   status: { title: '状态',     subtitle: 'TELEMETRY · 持续状态信号' },
   garden: { title: '陪伴花园', subtitle: 'GARDEN · 它在你不看的时候也在生长' },
 };
 
 const PLACEHOLDER_DESC: Record<string, string> = {
   flow:   '这里会显示叶瑄此刻的状态和近期动向。等待接入。',
-  diary:  '这里会展示叶瑄自己写的日记。等待接入。',
   status: '这里会显示叶瑄的心情、性格、活动等内部状态。等待接入。',
-  garden: '这里是叶瑄的花园。等待接入。',
 };
 
 export function SidebarPanel({ sidebarRectRef, tab, onClose }: any) {
@@ -65,6 +63,8 @@ export function SidebarPanel({ sidebarRectRef, tab, onClose }: any) {
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
         {tab === 'garden' ? (
           <SubGarden />
+        ) : tab === 'diary' ? (
+          <SubDiary />
         ) : (
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center',

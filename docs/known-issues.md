@@ -70,13 +70,14 @@ const BOT_USER_ID = "1043484516";
 const ADMIN_TOKEN = "Emerald1231";
 ```
 
-后端 `/memory/{user_id}/short-term` 需要 Bearer token。当前客户端把 token 和用户 id 写死。
+后端 `/memory/{user_id}/short-term` 和 `/garden/state` 需要 Bearer token。当前客户端把 token 和用户 id 写死。
 
 **影响**：
 
 - 后端 token 改动后历史加载失败。
 - `BOT_USER_ID` 可能和后端 `scheduler.owner_id` 不一致，导致聊天和历史不是同一用户数据。
 - token 出现在前端源码里，不适合长期保留。
+- 花园面板也复用这个 token，后端 token 改动会同时影响历史和花园。
 
 **建议**：改成 Tauri 配置、后端专用本机接口，或从后端提供当前 owner 的历史读取接口。
 
@@ -176,6 +177,18 @@ Header 右侧渲染：
 
 ---
 
+## P2：日记 emotion 字段后端未产出，客户端已预留 UI，等后端扩展
+
+**位置**：`qq-st-bot/admin/routers/diary.py`、`src/windows/chat/components/SubDiary.tsx`
+
+后端 `/diary/list` 和 `/diary/{date}` 的 `emotion` 字段当前统一返回 `null`。客户端的 filter tabs 和 entry 标签已按 `emotion !== null` 判空处理，不渲染空标签。
+
+**影响**：日记 tab 的 filter tabs 目前只显示"全部"一项，emotion 标签不出现。功能完整，只是 emotion 标注数据未来需要后端补充（如 LLM 客观判断后写入文件 frontmatter）。
+
+**建议**：后端扩展 emotion 后，客户端无需改代码，emotion 值会直接出现在 filter tabs 和标签里。
+
+---
+
 ## P2：Garden daily lifecycle 仅数据层手测，scheduler 端到端未实测
 
 **位置**：`qq-st-bot/core/garden/manager.py daily_check()`、`qq-st-bot/core/scheduler/triggers/garden_daily.py`、`qq-st-bot/core/scheduler/loop.py` `garden_daily` cooldown
@@ -198,6 +211,37 @@ Phase 2d.5e 完成时数据层在 REPL 单测全通过：
 **触发条件**：需要至少跑一株花从浇水到开花（约 3 天）+ 3 天 handle 阈值 + 偶尔 7 天 vase 枯萎，最早能观察到行为大约是 phase 完成后 1 周。
 
 **建议**：实际使用 1-2 周后按 Phase 2d.5e 验证步骤复检，根据体感调：发言频率、`SAMPLE_TALK_PROB` 数值、prompt 文本风格。
+
+---
+
+## P2：花园客户端目前是只读状态页，缺 harvest/vase 详情和操作入口
+
+**位置**：`src/windows/chat/components/SubGarden.tsx`、`src/shared/api/types.ts`
+
+当前 `SubGarden` 已能读 `/garden/state` 并展示五个花槽，但 UI 只消费 `slots`。`harvest_count` / `vase_count` 只在类型里存在，没有展示收获区、花瓶详情，也没有手动浇水、采收、送花等操作入口。
+
+**影响**：后端花园生命周期已经往 harvest/vase 方向推进，但客户端用户只能看到生长槽位，无法理解“开花后去了哪里”。
+
+**建议**：后端若继续只暴露 count，就在 UI 上至少展示计数；如果要完整闭环，需要扩展 `/garden/state` 返回 harvest/vase 列表，或新增只读详情接口和操作接口。
+
+---
+
+## P2：TypeScript noEmit 当前被 Panes cleanup 类型阻断
+
+**位置**：`src/windows/chat/components/Panes.tsx`
+
+运行 `.\node_modules\.bin\tsc.cmd --noEmit` 时失败：
+
+```text
+src/windows/chat/components/Panes.tsx(152,19): error TS2322:
+Type '() => boolean' is not assignable to type 'void | Destructor'.
+```
+
+原因是 `panesApi.subscribe(setList)` 的 cleanup 函数返回了 `Set.delete()` 的 boolean，而 React effect cleanup 需要返回 void。
+
+**影响**：这不是花园接入造成的，但会阻断 TypeScript 校验，容易掩盖后续新增模块的类型问题。
+
+**建议**：把 unsubscribe 包成 `{ panesApi.subscribe... }` 或让 `subscribe()` 返回的函数显式 `void`。
 
 ---
 

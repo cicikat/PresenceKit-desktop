@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { ChatResponse, GardenState } from './types';
+import type { ChatResponse, GardenState, DiaryListResponse, DiaryEntry } from './types';
 
 const BOT_USER_ID = '1043484516';
 const ADMIN_TOKEN = 'Emerald1231';
@@ -25,4 +25,12 @@ export async function loadHistory(): Promise<HistoryEntry[]> {
 
 export async function loadGardenState(): Promise<GardenState> {
   return invoke<GardenState>('load_garden_state', { token: ADMIN_TOKEN });
+}
+
+export async function loadDiaryList(): Promise<DiaryListResponse> {
+  return invoke<DiaryListResponse>('load_diary_list', { token: ADMIN_TOKEN });
+}
+
+export async function loadDiaryEntry(date: string): Promise<DiaryEntry> {
+  return invoke<DiaryEntry>('load_diary_entry', { date, token: ADMIN_TOKEN });
 }

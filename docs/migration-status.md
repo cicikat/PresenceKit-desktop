@@ -1,0 +1,171 @@
+# docs/migration-status.md — 迁移状态
+
+本文档记录从旧桌宠和 UI 原型迁移到 Emerald-client 的状态。它只描述 `Emerald-client` 当前仓库，不代表后端完成度。
+
+---
+
+## 相关项目
+
+| 项目 | 路径 | 角色 | 本仓库是否可改 |
+|---|---|---|---|
+| qq-st-bot | `D:\ai\qq-st-bot\` | 后端、核心数据、记忆、调度、工具、WS/HTTP 服务 | 默认不可改 |
+| Emerald-desktop | `D:\ai\Emerald-desktop\` | 旧 PyQt 桌宠和 Python 感知/行为层 | 默认不可改 |
+| Emerald-desktopUI | `D:\ai\Emerald-desktopUI\` | React/JSX UI 原型 | 只读参考 |
+| Emerald-client | `D:\ai\Emerald-client\` | 新 Tauri 客户端 | 当前工作区 |
+
+---
+
+## UI 原型迁移映射
+
+| 原型文件 | 当前 client 文件 | 状态 |
+|---|---|---|
+| `app.jsx` | `src/windows/chat/ChatWindow.tsx` | 已迁主布局；DebugPanel 和 Pet 挂载移除 |
+| `chat.jsx` | `src/windows/chat/components/ChatPanel.tsx` | 已迁视觉；已接 HTTP send 和 legacy WS 主动消息 |
+| `ribbon.jsx` | `src/windows/chat/components/Ribbon.tsx` | 已迁；新增 WS 连接状态角标 |
+| `sidebar.jsx` | `src/windows/chat/components/Sidebar.legacy.tsx` / `Sidebar.tsx` | legacy 骨架保留；当前运行版是占位面板 |
+| `panes.jsx` | `src/windows/chat/components/Panes.tsx` | 已迁浮动 pane 系统 |
+| `spec.jsx` | `SpecPanel.legacy.tsx` / `SpecPanel.tsx` | legacy 骨架保留；当前运行版是帮助/公告占位 |
+| `ui-kit.jsx` | `src/windows/chat/components/UIKit.tsx` | 已迁共享 UI 工具 |
+| `state-engine.js` | `src/shared/state/store.ts` | 状态表已迁；behavior loop 删除，等待后端状态 |
+| `sidebar.jsx` 中的花园视觉 | `src/windows/chat/components/SubGarden.tsx` | 已接后端只读状态，不再是纯 mock |
+| `sidebar.jsx` 中的日记视觉 | `src/windows/chat/components/SubDiary.tsx` | 已接后端只读日记，不再是占位 |
+| `pet.jsx` | 尚无 | 未迁 |
+| `companion.html` | `src/shared/theme/globals.css` 等 | 主题变量部分迁入 |
+
+---
+
+## 后端通信迁移状态
+
+| 能力 | 当前状态 | 目标 |
+|---|---|---|
+| HTTP 发消息 | 已实现：Tauri `send_chat` → `/desktop/chat` | 未来改 WS `user_message` |
+| 加载短期历史 | 已实现：Tauri `load_history` → `/memory/{uid}/short-term` | 去硬编码 uid/token |
+| 加载花园状态 | 已实现：Tauri `load_garden_state` → `/garden/state` | 去硬编码 token，补详情/操作入口 |
+| 加载日记列表 | 已实现：Tauri `load_diary_list` → `/diary/list` | emotion 字段后端未产出（返回 null） |
+| 加载单篇日记 | 已实现：Tauri `load_diary_entry` → `/diary/{date}` | 懒加载，点击 entry 时才拉正文 |
+| WS 连接 | 已实现 legacy 连接和重连 | 升级到 v1 envelope |
+| 后端主动消息 | 已实现 `channel_message` | 改 `assistant_message` |
+| 状态推送 | 未实现 | 接 `state_update` 到 `StateEngine.applyStateUpdate()` |
+| 用户输入 WS 化 | 未实现 | `user_message` |
+| 模式/窗口事件 | 未实现 | `client_event` |
+| 桌面 action 执行 | 未实现 | 收 action、执行、返回真实 ack |
+
+---
+
+## 桌宠迁移状态
+
+当前仓库没有 `src/windows/pet/` 实现。`ChatWindow` 里只有：
+
+```tsx
+{/* TODO: Phase-2 — 桌宠窗口 <PetWindow> */}
+```
+
+Ribbon 的桌宠按钮会：
+
+- 切换 `petVisible`。
+- 调 `engine.setMode("companion" | "chat-only")`。
+
+但不会创建透明置顶窗口，也不会渲染 `Emerald-desktopUI/pet.jsx` 里的形象与行为。
+
+后续迁移要解决：
+
+- Tauri 第二窗口配置。
+- 透明、无边框、置顶、点击穿透策略。
+- 聊天窗口与宠物窗口共享同一份 `StateEngine`。
+- 鼠标追随、呼吸、眨眼、蹭鼠标等原型行为。
+- 后端 `state_update` 如何驱动宠物表现。
+
+---
+
+## 花园迁移状态
+
+当前已完成：
+
+- 后端 `qq-st-bot` 提供 `GET /garden/state`。
+- Tauri command `load_garden_state` 已接入，HTTP client 使用 `no_proxy()`。
+- 前端 `loadGardenState()` 已封装。
+- Sidebar `garden` tab 已挂载 `SubGarden`。
+- `SubGarden` 展示五个花槽、阶段进度和 bloom 状态。
+
+当前未完成：
+
+- 花园仍只读，没有手动浇水、采收、送花、插花瓶等客户端操作。
+- `harvest_count` / `vase_count` 只有计数，没有详情列表。
+- 管理 token 仍硬编码在 `src/shared/api/backend.ts`。
+- 后端 garden daily lifecycle 需要真实 scheduler 长跑验证，见 `docs/known-issues.md`。
+
+---
+
+## Python 感知服务迁移状态
+
+`sensor-service/` 当前只有空目录：
+
+```text
+agent/
+behavior/
+bot_client/
+data/
+garden/
+sense/
+```
+
+尚未迁入旧 `Emerald-desktop` 的 Python 文件。
+
+目标上，Python 感知服务应是 headless：
+
+- 屏幕/进程/音频/活动感知保留 Python 实现。
+- UI 行为从 Python 中剥离，迁到 Tauri。
+- 感知数据通过后端 `/sensor/*` 接口进入 `qq-st-bot`。
+
+后端现有相关接口：
+
+- `POST /sensor/activity`
+- `POST /sensor/push`
+- `GET /sensor/status`
+- `GET /sensor/today`
+
+---
+
+## 文档迁移状态
+
+已在本仓库新增：
+
+- `AGENTS.md`
+- `ARCHITECTURE.md`
+- `docs/backend-integration.md`
+- `docs/frontend-structure.md`
+- `docs/migration-status.md`
+- `docs/known-issues.md`
+
+外部参考文档位置：
+
+- 旧桌面方案：`D:\ai\Emerald-desktop\docs\desktop-client-plan.md`
+- 旧桌面协议：`D:\ai\Emerald-desktop\docs\desktop-client-protocol.md`
+- 后端总览：`D:\ai\qq-st-bot\ARCHITECTURE.md`
+- 后端细节：`D:\ai\qq-st-bot\docs\`
+
+注意：旧入口文档曾指向 `D:\ai\qq-st-bot\docs\desktop-client-protocol.md`，但当前该文件不在后端 docs 目录。
+
+---
+
+## 建议迁移顺序
+
+1. 先对齐后端和客户端 WS 协议：明确是继续 legacy 过渡，还是直接实现 v1。
+2. 修 action ack：未实现动作前不要回成功。
+3. 把历史 user id / token 从硬编码迁到配置或后端专用无鉴权本机接口。
+4. 接 `state_update` 到 `StateEngine`。
+5. 补花园详情/操作入口，或明确它长期只是只读陪伴状态。
+6. 再做桌宠窗口，否则桌宠缺少后端权威状态。
+7. 最后迁 Python 感知服务。
+
+---
+
+## 判断一个迁移是否完成
+
+一个模块迁移完成至少要满足：
+
+- 有明确运行入口。
+- 不依赖旧项目文件运行。
+- 与后端真实接口对齐。
+- 文档更新到本仓库。
+- 已知缺口写入 `docs/known-issues.md`。
