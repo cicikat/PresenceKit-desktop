@@ -1,22 +1,75 @@
 /* ============================================================
  * ChatPanel — 聊天窗口
- * 迁移自: Emerald-desktopUI/chat.jsx
- *
- * Phase-1 变更:
- *   - 删除 pickReply() / pickDraft() / showMeta() (mock 回复逻辑)
- *   - send() 只把用户消息加到本地列表，不触发任何 AI 回复
- *   - 保留呼吸动画 (requestAnimationFrame)
- *   - 保留 wantToSpeak → typing 指示器
- * TODO: Phase-3 WebSocket — send() 里加后端调用
+ * Phase 2c+: 按日文件懒加载历史，滚顶继续往前拉
  * ============================================================ */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { format, subDays, parseISO } from 'date-fns';
 import { Tag, Icon, Btn } from './UIKit';
 import { MOOD_HUE, MOOD_LABEL_EN, ACTIVITY_LABEL_EN } from './UIKit';
 import { MOOD_TABLE } from '../../../shared/state/store';
 import { avatarStore } from '../../../shared/avatars/store';
-import { sendChat, loadHistory } from '../../../shared/api/backend';
+import { sendChat } from '../../../shared/api/backend';
+import { loadChatLogDates, loadChatLogDay } from '../../../shared/api/backend';
 import { wsClient } from '../../../shared/api/ws';
+import type { ChatLogEntry } from '../../../shared/api/types';
+
+// ── 日期工具 ────────────────────────────────────────────────────────────────
+
+function todayStr() {
+  return format(new Date(), 'yyyy-MM-dd');
+}
+
+function formatDateCN(dateStr: string): string {
+  const d = parseISO(dateStr);
+  return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
+}
+
+// ── 消息类型 ────────────────────────────────────────────────────────────────
+
+interface ChatMsg {
+  id: string;
+  role: 'user' | 'assistant' | 'system' | 'divider' | 'raw_fallback' | 'no_more';
+  text: string;
+  time: number;
+  moodHue?: number;
+  moodLabel?: string;
+  deleted?: string;
+  meta?: string;
+}
+
+let _msgIdCounter = 0;
+function newId() { return `m-${Date.now()}-${++_msgIdCounter}`; }
+
+// ── 把单日 entries 转成消息列表 ──────────────────────────────────────────────
+
+function entriesToMsgs(dateStr: string, entries: ChatLogEntry[], rawFallback: boolean): ChatMsg[] {
+  if (rawFallback) {
+    return [{
+      id: newId(), role: 'raw_fallback', text: `(${formatDateCN(dateStr)}：早期格式，无法显示)`, time: 0,
+    }];
+  }
+  const msgs: ChatMsg[] = [];
+  for (const entry of entries) {
+    const [h, min] = entry.time.split(':').map(Number);
+    const d = parseISO(dateStr);
+    const ts = new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, min).getTime();
+
+    if (entry.user) {
+      msgs.push({ id: newId(), role: 'user', text: entry.user, time: ts });
+    }
+    if (entry.assistant) {
+      msgs.push({ id: newId(), role: 'assistant', text: entry.assistant, time: ts + 1 });
+    }
+  }
+  return msgs;
+}
+
+function dividerMsg(dateStr: string): ChatMsg {
+  return { id: newId(), role: 'divider', text: `── ${formatDateCN(dateStr)} ──`, time: 0 };
+}
+
+// ── UI 组件 ─────────────────────────────────────────────────────────────────
 
 function ChatAvatar({ hue, size = 40, scale = 1 }: any) {
   return (
@@ -41,6 +94,32 @@ function Bubble({ msg, currentHue, breath, herDataUrl, youDataUrl, youVisible }:
   const hue = msg.moodHue ?? currentHue;
   const time = msg.time ? new Date(msg.time).toLocaleTimeString('zh', { hour: '2-digit', minute: '2-digit' }) : '';
 
+  if (msg.role === 'divider') {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 0 6px' }}>
+        <div style={{ flex: 1, height: 1, background: 'var(--paper-edge)' }} />
+        <div className="mono" style={{ fontSize: 10, color: 'var(--ink-3)', letterSpacing: 1.5 }}>{msg.text}</div>
+        <div style={{ flex: 1, height: 1, background: 'var(--paper-edge)' }} />
+      </div>
+    );
+  }
+
+  if (msg.role === 'raw_fallback' || msg.role === 'system') {
+    return (
+      <div style={{ textAlign: 'center', padding: '10px 0' }}>
+        <span className="mono" style={{ fontSize: 10.5, color: 'var(--ink-4)', letterSpacing: 0.8 }}>{msg.text}</span>
+      </div>
+    );
+  }
+
+  if (msg.role === 'no_more') {
+    return (
+      <div style={{ textAlign: 'center', padding: '12px 0 4px' }}>
+        <span className="mono" style={{ fontSize: 10, color: 'var(--ink-4)', letterSpacing: 0.8 }}>没有更早的对话了。</span>
+      </div>
+    );
+  }
+
   if (fromUser) {
     return (
       <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-end', gap: youVisible ? 8 : 0, padding: '8px 0' }}>
@@ -54,6 +133,7 @@ function Bubble({ msg, currentHue, breath, herDataUrl, youDataUrl, youVisible }:
             borderRadius: '6px 6px 1px 6px',
             fontSize: 13.5, lineHeight: 1.55,
             boxShadow: '0 4px 12px oklch(0.30 0.04 60 / 0.18)',
+            whiteSpace: 'pre-wrap',
           }}>{msg.text}</div>
         </div>
         {youVisible && (
@@ -80,7 +160,7 @@ function Bubble({ msg, currentHue, breath, herDataUrl, youDataUrl, youVisible }:
       </div>
       <div style={{ flex: 1, maxWidth: 'calc(100% - 60px)' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
-          <span className="mono" style={{ fontSize: 9.5, letterSpacing: 1.4, color: 'var(--ink-3)' }}>HER · {time}</span>
+          <span className="mono" style={{ fontSize: 9.5, letterSpacing: 1.4, color: 'var(--ink-3)' }}>HIM · {time}</span>
           {msg.moodLabel && <Tag hue={hue}>{msg.moodLabel}</Tag>}
         </div>
         <div style={{
@@ -93,6 +173,7 @@ function Bubble({ msg, currentHue, breath, herDataUrl, youDataUrl, youVisible }:
           borderRadius: '2px 6px 6px 2px',
           fontSize: 14, lineHeight: 1.65, color: 'var(--ink)',
           fontFamily: 'var(--font-serif)',
+          whiteSpace: 'pre-wrap',
         }}>
           {msg.deleted && (
             <div style={{ textDecoration: 'line-through', opacity: 0.45, fontSize: 12.5, marginBottom: 4 }}>{msg.deleted}</div>
@@ -107,16 +188,7 @@ function Bubble({ msg, currentHue, breath, herDataUrl, youDataUrl, youVisible }:
   );
 }
 
-function DayDivider({ label }: any) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 0 6px' }}>
-      <div style={{ flex: 1, height: 1, background: 'var(--paper-edge)' }} />
-      <div className="mono" style={{ fontSize: 10, color: 'var(--ink-3)', letterSpacing: 1.5 }}>{label}</div>
-      <div style={{ flex: 1, height: 1, background: 'var(--paper-edge)' }} />
-    </div>
-  );
-}
-
+// ── 主组件 ──────────────────────────────────────────────────────────────────
 
 export function ChatPanel({ engine, chatRectRef, headerVisible = true }: any) {
   const [state, setState] = useState(engine.get());
@@ -125,33 +197,181 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true }: any) {
   const [avatars, setAvatars] = useState(avatarStore.get());
   useEffect(() => avatarStore.subscribe(setAvatars), []);
 
-  const [messages, setMessages] = useState<any[]>([]);
+  const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState('');
   const [typing, setTyping] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
+
+  // 按日懒加载状态
+  const availableDatesRef = useRef<string[]>([]);
+  const loadedDatesRef = useRef<string[]>([]);
+  const isLoadingMoreRef = useRef(false);
+  const noMoreHistoryRef = useRef(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [noMoreHistory, setNoMoreHistory] = useState(false);
+
   const rootRef  = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  /* 启动时加载历史 */
+  // ── 启动加载 ─────────────────────────────────────────────────────────────
+
   useEffect(() => {
     let mounted = true;
-    loadHistory()
-      .then(history => {
+
+    async function init() {
+      try {
+        const datesResp = await loadChatLogDates();
         if (!mounted) return;
-        setMessages(history.map(entry => ({
-          role: entry.role,
-          text: entry.content,
-          time: entry.timestamp * 1000,
-        })));
-      })
-      .catch(err => {
-        console.warn('[history] 加载失败:', err);
-      });
+        availableDatesRef.current = datesResp.dates; // 倒序，最新在前
+
+        const today = todayStr();
+        const dates = availableDatesRef.current;
+
+        if (dates.length === 0) {
+          setMessages([]);
+          noMoreHistoryRef.current = true;
+          setNoMoreHistory(true);
+          return;
+        }
+
+        let msgs: ChatMsg[] = [];
+        let firstDate: string | null = null;
+
+        if (dates.includes(today)) {
+          // 拉今日
+          const day = await loadChatLogDay(today);
+          if (!mounted) return;
+          msgs = entriesToMsgs(today, day.entries, day.raw_fallback);
+          loadedDatesRef.current = [today];
+          firstDate = today;
+
+          // 不够 10 条，兜底拉前一天
+          if (msgs.filter(m => m.role === 'user' || m.role === 'assistant').length < 10) {
+            const todayIdx = dates.indexOf(today);
+            const prevDate = dates[todayIdx + 1];
+            if (prevDate) {
+              const prevDay = await loadChatLogDay(prevDate);
+              if (!mounted) return;
+              const prevMsgs = entriesToMsgs(prevDate, prevDay.entries, prevDay.raw_fallback);
+              msgs = [...prevMsgs, dividerMsg(today), ...msgs];
+              loadedDatesRef.current = [prevDate, today];
+              firstDate = prevDate;
+            }
+          }
+        } else {
+          // 今天没聊，直接拉最近一天
+          const recentDate = dates[0];
+          const day = await loadChatLogDay(recentDate);
+          if (!mounted) return;
+          msgs = entriesToMsgs(recentDate, day.entries, day.raw_fallback);
+          loadedDatesRef.current = [recentDate];
+          firstDate = recentDate;
+        }
+
+        // 检查是否还有更早的
+        if (firstDate) {
+          const firstIdx = availableDatesRef.current.indexOf(firstDate);
+          if (firstIdx >= availableDatesRef.current.length - 1) {
+            noMoreHistoryRef.current = true;
+            setNoMoreHistory(true);
+            msgs = [{ id: newId(), role: 'no_more', text: '', time: 0 }, ...msgs];
+          }
+        }
+
+        setMessages(msgs);
+      } catch (err) {
+        console.warn('[chat-log] 初始化失败:', err);
+      }
+    }
+
+    init();
     return () => { mounted = false; };
   }, []);
 
-  /* 注册聊天区位置 */
+  // ── 滚顶懒加载 ───────────────────────────────────────────────────────────
+
+  const loadMore = useCallback(async () => {
+    if (isLoadingMoreRef.current || noMoreHistoryRef.current) return;
+
+    const dates = availableDatesRef.current;
+    const loaded = loadedDatesRef.current;
+    if (loaded.length === 0 || dates.length === 0) return;
+
+    const earliestLoaded = loaded[0];
+    const earliestIdx = dates.indexOf(earliestLoaded);
+    const targetIdx = earliestIdx + 1;
+
+    if (targetIdx >= dates.length) {
+      noMoreHistoryRef.current = true;
+      setNoMoreHistory(true);
+      setMessages(prev => {
+        if (prev[0]?.role === 'no_more') return prev;
+        return [{ id: newId(), role: 'no_more', text: '', time: 0 }, ...prev];
+      });
+      return;
+    }
+
+    const targetDate = dates[targetIdx];
+
+    isLoadingMoreRef.current = true;
+    setIsLoadingMore(true);
+
+    try {
+      const day = await loadChatLogDay(targetDate);
+      const newMsgs = entriesToMsgs(targetDate, day.entries, day.raw_fallback);
+
+      loadedDatesRef.current = [targetDate, ...loaded];
+
+      // 找到当前最早的非 no_more 消息对应的日期，需要在前面插入分隔条
+      const insertMsgs: ChatMsg[] = [];
+      insertMsgs.push(...newMsgs);
+      // 在新旧之间加分隔条（显示旧的最早已加载日期）
+      insertMsgs.push(dividerMsg(earliestLoaded));
+
+      const scroll = scrollRef.current;
+      const oldScrollHeight = scroll ? scroll.scrollHeight : 0;
+
+      setMessages(prev => {
+        // 移除顶部可能存在的 no_more 占位
+        const withoutNoMore = prev[0]?.role === 'no_more' ? prev.slice(1) : prev;
+        return [...insertMsgs, ...withoutNoMore];
+      });
+
+      // 补偿滚动位置
+      requestAnimationFrame(() => {
+        if (scroll) {
+          const newScrollHeight = scroll.scrollHeight;
+          scroll.scrollTop = newScrollHeight - oldScrollHeight + scroll.scrollTop;
+        }
+      });
+
+      // 检查是否到头了
+      if (targetIdx >= dates.length - 1) {
+        noMoreHistoryRef.current = true;
+        setNoMoreHistory(true);
+        setMessages(prev => {
+          if (prev[0]?.role === 'no_more') return prev;
+          return [{ id: newId(), role: 'no_more', text: '', time: 0 }, ...prev];
+        });
+      }
+    } catch (err) {
+      console.warn('[chat-log] loadMore 失败:', err);
+    } finally {
+      isLoadingMoreRef.current = false;
+      setIsLoadingMore(false);
+    }
+  }, []);
+
+  const onScroll = useCallback(() => {
+    if (!scrollRef.current) return;
+    if (scrollRef.current.scrollTop < 200) {
+      loadMore();
+    }
+  }, [loadMore]);
+
+  // ── 注册聊天区位置 ────────────────────────────────────────────────────────
+
   useEffect(() => {
     const update = () => {
       if (rootRef.current && chatRectRef) chatRectRef.current = rootRef.current.getBoundingClientRect();
@@ -162,7 +382,8 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true }: any) {
     return () => { window.removeEventListener('resize', update); clearInterval(h); };
   }, []);
 
-  /* 头像呼吸动画 */
+  // ── 头像呼吸动画 ──────────────────────────────────────────────────────────
+
   const [breathe, setBreathe] = useState(1);
   useEffect(() => {
     let raf: number;
@@ -176,12 +397,26 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true }: any) {
     return () => cancelAnimationFrame(raf);
   }, [engine]);
 
-  /* 自动滚到底 */
+  // ── 自动滚到底（仅新消息 append 时）──────────────────────────────────────
+
+  const prevLengthRef = useRef(0);
   useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    const cur = messages.length;
+    const prev = prevLengthRef.current;
+    prevLengthRef.current = cur;
+    // 只有消息增加（append）才滚底，prepend 时不滚
+    if (cur > prev && scrollRef.current) {
+      const s = scrollRef.current;
+      // 只有当用户已在底部附近时才自动滚底
+      const nearBottom = s.scrollHeight - s.scrollTop - s.clientHeight < 150;
+      if (nearBottom || prev === 0) {
+        s.scrollTop = s.scrollHeight;
+      }
+    }
   }, [messages.length, typing]);
 
-  /* wantToSpeak → typing 闪现 */
+  // ── wantToSpeak → typing 闪现 ────────────────────────────────────────────
+
   useEffect(() => {
     if (state.wantToSpeak) {
       setTyping(true);
@@ -190,12 +425,14 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true }: any) {
     }
   }, [state.wantToSpeak]);
 
-  /* WS 连接 + channel_message 订阅 */
+  // ── WS 连接 + channel_message 订阅 ───────────────────────────────────────
+
   useEffect(() => {
     wsClient.connect('ws://127.0.0.1:8080/ws/desktop');
     return wsClient.on('channel_message', (content) => {
       const m = engine.get();
       setMessages(prev => [...prev, {
+        id: newId(),
         role: 'assistant',
         text: content,
         moodHue: MOOD_HUE[m.mood],
@@ -204,6 +441,8 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true }: any) {
       }]);
     });
   }, [engine]);
+
+  // ── 输入处理 ──────────────────────────────────────────────────────────────
 
   const inputTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onInputChange = (v: string) => {
@@ -218,13 +457,14 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true }: any) {
     const t = input.trim();
     if (!t || loading) return;
     setInput('');
-    setMessages(m => [...m, { role: 'user', text: t, time: Date.now() }]);
+    setMessages(m => [...m, { id: newId(), role: 'user', text: t, time: Date.now() }]);
     engine.applyStateUpdate({ activity: '想事情' });
     setLoading(true);
     try {
       const { reply } = await sendChat(t);
       const m = engine.get();
       setMessages(prev => [...prev, {
+        id: newId(),
         role: 'assistant',
         text: reply,
         moodHue: MOOD_HUE[m.mood],
@@ -235,6 +475,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true }: any) {
       console.error('[chat] send 失败:', err);
       const msg = err instanceof Error ? err.message : String(err);
       setMessages(prev => [...prev, {
+        id: newId(),
         role: 'system',
         text: `（连接失败：${msg}）`,
         time: Date.now(),
@@ -286,16 +527,37 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true }: any) {
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
             <Btn icon="settings" dense>偏好</Btn>
             <span className="mono" style={{ fontSize: 9.5, color: 'var(--ink-4)', letterSpacing: 1.4 }}>
-              {messages.length} ENTRIES
+              {messages.filter(m => m.role === 'user' || m.role === 'assistant').length} ENTRIES
             </span>
           </div>
         </div>
       )}
 
       {/* MESSAGES */}
-      <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: `8px ${youVisible ? 56 : 28}px 12px 28px`, background: 'var(--paper)' }}>
-        <DayDivider label="EARLIER" />
-        {messages.map((m: any, i: number) => <Bubble key={i} msg={m} currentHue={currentHue} breath={breathe} herDataUrl={herDataUrl} youDataUrl={youDataUrl} youVisible={youVisible} />)}
+      <div
+        ref={scrollRef}
+        onScroll={onScroll}
+        style={{ flex: 1, overflowY: 'auto', padding: `8px ${youVisible ? 56 : 28}px 12px 28px`, background: 'var(--paper)' }}
+      >
+        {/* 顶部加载中提示 */}
+        {isLoadingMore && (
+          <div style={{ textAlign: 'center', padding: '10px 0' }}>
+            <span className="mono" style={{ fontSize: 10, color: 'var(--ink-4)', letterSpacing: 0.8 }}>正在加载更早的对话…</span>
+          </div>
+        )}
+
+        {messages.map((m: ChatMsg) => (
+          <Bubble
+            key={m.id}
+            msg={m}
+            currentHue={currentHue}
+            breath={breathe}
+            herDataUrl={herDataUrl}
+            youDataUrl={youDataUrl}
+            youVisible={youVisible}
+          />
+        ))}
+
         {(typing || loading) && (
           <div style={{ display: 'flex', gap: 10, padding: '8px 0', alignItems: 'flex-start' }}>
             <div style={{ paddingTop: 6 }}>
@@ -398,7 +660,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true }: any) {
           </span>
           {state.wantToSpeak && (
             <span className="mono" style={{ fontSize: 9.5, color: `oklch(0.45 0.12 ${currentHue})`, letterSpacing: 1.2 }}>
-              · 她想说什么…
+              · 他想说什么…
             </span>
           )}
         </div>

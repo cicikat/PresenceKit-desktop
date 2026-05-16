@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { ChatResponse, GardenState, DiaryListResponse, DiaryEntry } from './types';
+import type { ChatResponse, GardenState, DiaryListResponse, DiaryEntry, ChatLogDatesResponse, ChatLogDay } from './types';
 
 const BOT_USER_ID = '1043484516';
 const ADMIN_TOKEN = 'Emerald1231';
@@ -33,4 +33,12 @@ export async function loadDiaryList(): Promise<DiaryListResponse> {
 
 export async function loadDiaryEntry(date: string): Promise<DiaryEntry> {
   return invoke<DiaryEntry>('load_diary_entry', { date, token: ADMIN_TOKEN });
+}
+
+export async function loadChatLogDates(): Promise<ChatLogDatesResponse> {
+  return invoke<ChatLogDatesResponse>('load_chat_log_dates', { token: ADMIN_TOKEN });
+}
+
+export async function loadChatLogDay(date: string): Promise<ChatLogDay> {
+  return invoke<ChatLogDay>('load_chat_log_day', { date, token: ADMIN_TOKEN });
 }

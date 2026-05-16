@@ -46,8 +46,8 @@
 
 职责：
 
-- 显示历史消息、用户消息、助手消息、typing/loading 状态。
-- 启动时调用 `loadHistory()`。
+- 按日文件懒加载历史对话（Phase 2c+），启动拉今日，不足 10 条兜底一次昨日。
+- 滚到顶时懒加载更早一天，保持滚动位置不跳。
 - 用户发送时调用 `sendChat()`。
 - 订阅 WS `channel_message`，显示后端主动消息。
 - 根据 engine mood/activity/presence 渲染 header 标签、头像呼吸和 typing 指示。
@@ -56,8 +56,21 @@
 
 | 来源 | 路径 | 说明 |
 |---|---|---|
-| 启动历史 | `loadHistory()` → Tauri `load_history` | 从后端 `/memory/{uid}/short-term` 读取 |
+| 启动历史 | `loadChatLogDates()` + `loadChatLogDay(date)` → Tauri `load_chat_log_dates` / `load_chat_log_day` | 按日文件从后端 `/chat-log/*` 读取 |
 | 用户发送 | `sendChat()` → Tauri `send_chat` | 当前走 HTTP `/desktop/chat` |
+
+**与 `/memory/{uid}/short-term` 的关系**：`loadHistory()` 客户端函数仍保留，`/memory/{uid}/short-term` 后端接口也未删除，但 ChatPanel 启动逻辑不再调用它。后续 mood 推断等模块如有需要仍可使用。
+
+**日期处理**：所有日期加减使用 `date-fns`（`format` / `subDays` / `parseISO`），不手算 month/day。
+
+**按日懒加载状态**（均用 ref 避免闭包陷阱）：
+
+| ref | 说明 |
+|---|---|
+| `availableDatesRef` | 后端返回的全部可用日期（倒序） |
+| `loadedDatesRef` | 已加载到前端的日期列表（从早到晚） |
+| `isLoadingMoreRef` | 防重复触发 |
+| `noMoreHistoryRef` | 到头后停止触发 |
 | 主动推送 | `wsClient.on("channel_message")` | legacy WS 消息 |
 
 注意：

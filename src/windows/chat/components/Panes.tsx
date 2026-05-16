@@ -149,7 +149,10 @@ function PaneWindow({ pane }: { pane: any }) {
 
 export function PaneHost() {
   const [list, setList] = useState<any[]>([]);
-  useEffect(() => panesApi.subscribe(setList), []);
+  useEffect(() => {
+    const unsub = panesApi.subscribe(setList);
+    return () => { unsub(); };
+  }, []);
   return (
     <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 60 }}>
       {list.map(p => <PaneWindow key={p.id} pane={p} />)}

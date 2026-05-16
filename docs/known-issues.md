@@ -61,7 +61,7 @@
 
 ---
 
-## P1：短期历史 user id 和 admin token 硬编码
+## P2：admin token 硬编码（QQ 号 ChatPanel 已绕过）
 
 **位置**：`src/shared/api/backend.ts`
 
@@ -70,16 +70,15 @@ const BOT_USER_ID = "1043484516";
 const ADMIN_TOKEN = "Emerald1231";
 ```
 
-后端 `/memory/{user_id}/short-term` 和 `/garden/state` 需要 Bearer token。当前客户端把 token 和用户 id 写死。
+Phase 2c+ 之后，ChatPanel 启动历史改走 `/chat-log/*` 接口，owner_qq 由后端从 `config.yaml` 读取，客户端不再直接使用 `BOT_USER_ID`。但 `BOT_USER_ID` 仍出现在 `loadHistory()`（现备用）及可能的 future 模块里。
 
-**影响**：
+**当前影响**：
 
-- 后端 token 改动后历史加载失败。
-- `BOT_USER_ID` 可能和后端 `scheduler.owner_id` 不一致，导致聊天和历史不是同一用户数据。
+- `ADMIN_TOKEN` 仍硬编码，后端 token 改动会影响花园、日记、聊天日志等所有接口。
+- `/memory/{uid}/short-term` 不再被 ChatPanel 调用，但其他模块未来可能仍用。
 - token 出现在前端源码里，不适合长期保留。
-- 花园面板也复用这个 token，后端 token 改动会同时影响历史和花园。
 
-**建议**：改成 Tauri 配置、后端专用本机接口，或从后端提供当前 owner 的历史读取接口。
+**建议**：改成 Tauri 配置或后端专用本机鉴权；`BOT_USER_ID` 遗留可在确认无其他调用者后清理。
 
 ---
 
@@ -226,22 +225,6 @@ Phase 2d.5e 完成时数据层在 REPL 单测全通过：
 
 ---
 
-## P2：TypeScript noEmit 当前被 Panes cleanup 类型阻断
-
-**位置**：`src/windows/chat/components/Panes.tsx`
-
-运行 `.\node_modules\.bin\tsc.cmd --noEmit` 时失败：
-
-```text
-src/windows/chat/components/Panes.tsx(152,19): error TS2322:
-Type '() => boolean' is not assignable to type 'void | Destructor'.
-```
-
-原因是 `panesApi.subscribe(setList)` 的 cleanup 函数返回了 `Set.delete()` 的 boolean，而 React effect cleanup 需要返回 void。
-
-**影响**：这不是花园接入造成的，但会阻断 TypeScript 校验，容易掩盖后续新增模块的类型问题。
-
-**建议**：把 unsubscribe 包成 `{ panesApi.subscribe... }` 或让 `subscribe()` 返回的函数显式 `void`。
 
 ---
 
@@ -265,4 +248,17 @@ Type '() => boolean' is not assignable to type 'void | Destructor'.
 
 ## 已修复
 
-暂无。后续修复后把条目移动到这里，保留简短修复说明和日期。
+### Panes.tsx cleanup 类型报错（2026-05-16，Phase 2c+）
+
+**原问题**：`useEffect(() => panesApi.subscribe(setList), [])` 返回 `Set.delete` 的 boolean，React 期望 `void | Destructor`，`tsc --noEmit` 报 TS2322。
+
+**修复**：改为显式 cleanup 函数：
+
+```tsx
+useEffect(() => {
+  const unsub = panesApi.subscribe(setList);
+  return () => { unsub(); };
+}, []);
+```
+
+修复后 `tsc --noEmit` 零报错。

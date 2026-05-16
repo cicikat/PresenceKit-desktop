@@ -53,3 +53,20 @@ export interface DiaryEntry {
   emotion: string | null;
   body: string;
 }
+
+export interface ChatLogEntry {
+  time: string;
+  user: string;
+  assistant: string;
+}
+
+export interface ChatLogDay {
+  date: string;
+  entries: ChatLogEntry[];
+  raw_fallback: boolean;
+}
+
+export interface ChatLogDatesResponse {
+  dates: string[];
+  count: number;
+}

@@ -19,6 +19,7 @@
 | 短期历史接口 | `admin/routers/memory.py` |
 | 花园状态接口 | `admin/routers/garden.py` |
 | 日记只读接口 | `admin/routers/diary.py` |
+| 聊天日志只读接口 | `admin/routers/chat_log.py` |
 | 感知接口 | `admin/routers/sensor.py` |
 
 默认服务地址：`http://127.0.0.1:8080`
@@ -252,6 +253,63 @@ SubDiary 点击 entry
 
 ---
 
+## HTTP：加载聊天日志日期列表
+
+当前真实路径：
+
+```text
+ChatPanel mount
+  → loadChatLogDates()
+  → invoke("load_chat_log_dates", { token })
+  → Rust reqwest GET http://127.0.0.1:8080/chat-log/dates
+  ← { dates: ["2026-05-16", "2026-05-15", ...], count: N }
+```
+
+后端要求 Bearer token。数据源目录：`qq-st-bot/data/event_log/{owner_qq}/`，文件名严格匹配 `^\d{4}-\d{2}-\d{2}\.md$`，`full_log.md` 忽略。
+
+**重要**：接口路径不含 QQ 号。`owner_qq` 由后端从 `config.yaml` 的 `scheduler.owner_id` 字段读取，客户端零 QQ 知识。
+
+返回结构：
+
+```json
+{
+  "dates": ["2026-05-16", "2026-05-15", "2026-05-14"],
+  "count": 3
+}
+```
+
+---
+
+## HTTP：加载单日聊天日志
+
+当前真实路径：
+
+```text
+ChatPanel 启动或滚顶触发
+  → loadChatLogDay(date)
+  → invoke("load_chat_log_day", { date, token })
+  → Rust reqwest GET http://127.0.0.1:8080/chat-log/{date}
+  ← { date, entries: [...], raw_fallback: bool }
+```
+
+`date` 格式 `YYYY-MM-DD`；文件不存在返回 404；格式错误返回 422；文件无法解析任何条目时 `raw_fallback: true`，entries 为空。
+
+返回结构：
+
+```json
+{
+  "date": "2026-05-16",
+  "entries": [
+    { "time": "20:19", "user": "叶瑄！", "assistant": "他听到你那声……" }
+  ],
+  "raw_fallback": false
+}
+```
+
+后端文件：`D:\ai\qq-st-bot\admin\routers\chat_log.py`
+
+---
+
 ## WebSocket：当前 legacy 协议
 
 端点：
@@ -389,6 +447,8 @@ v1 目标新增或替换：
 | `load_garden_state(token)` | 前端 → Rust → 后端 | GET `/garden/state` |
 | `load_diary_list(token)` | 前端 → Rust → 后端 | GET `/diary/list` |
 | `load_diary_entry(date, token)` | 前端 → Rust → 后端 | GET `/diary/{date}` |
+| `load_chat_log_dates(token)` | 前端 → Rust → 后端 | GET `/chat-log/dates`，路径不含 QQ |
+| `load_chat_log_day(date, token)` | 前端 → Rust → 后端 | GET `/chat-log/{date}`，路径不含 QQ |
 | `save_avatar(role, image_b64)` | 前端 → Rust | 保存 PNG 到 app data |
 | `load_avatar(path)` | 前端 → Rust | 读取头像并返回 data URL |
 | `read_avatars_json()` | 前端 → Rust | 读取头像配置 |
@@ -402,7 +462,7 @@ reqwest::Client::builder()
     .no_proxy()
 ```
 
-当前 `send_chat`、`load_history`、`load_garden_state`、`load_diary_list` 和 `load_diary_entry` 已符合这条规则。
+当前 `send_chat`、`load_history`、`load_garden_state`、`load_diary_list`、`load_diary_entry`、`load_chat_log_dates` 和 `load_chat_log_day` 已符合这条规则。
 
 ---
 
@@ -448,3 +508,4 @@ data/channel_queue.json
 - `qq-st-bot/admin/routers/memory.py`
 - `qq-st-bot/admin/routers/garden.py`
 - `qq-st-bot/admin/routers/diary.py`
+- `qq-st-bot/admin/routers/chat_log.py`

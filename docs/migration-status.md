@@ -39,7 +39,8 @@
 | 能力 | 当前状态 | 目标 |
 |---|---|---|
 | HTTP 发消息 | 已实现：Tauri `send_chat` → `/desktop/chat` | 未来改 WS `user_message` |
-| 加载短期历史 | 已实现：Tauri `load_history` → `/memory/{uid}/short-term` | 去硬编码 uid/token |
+| 加载聊天历史（按日懒加载） | 已实现（Phase 2c+）：`load_chat_log_dates` + `load_chat_log_day` → `/chat-log/*` | — |
+| 加载短期历史 | 已实现（备用）：Tauri `load_history` → `/memory/{uid}/short-term`，ChatPanel 不再调用 | 去硬编码 uid/token |
 | 加载花园状态 | 已实现：Tauri `load_garden_state` → `/garden/state` | 去硬编码 token，补详情/操作入口 |
 | 加载日记列表 | 已实现：Tauri `load_diary_list` → `/diary/list` | emotion 字段后端未产出（返回 null） |
 | 加载单篇日记 | 已实现：Tauri `load_diary_entry` → `/diary/{date}` | 懒加载，点击 entry 时才拉正文 |

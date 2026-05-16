@@ -143,6 +143,25 @@ qq-st-bot push_action_and_wait()
 
 当前客户端没有实际 action executor。这个风险已记录在 `docs/known-issues.md`。
 
+### 聊天历史按日懒加载（Phase 2c+）
+
+```text
+ChatPanel mount
+  → loadChatLogDates()
+  → invoke("load_chat_log_dates", { token })
+  → src-tauri/src/lib.rs reqwest GET /chat-log/dates
+  ← { dates: [...], count: N }   // 倒序，最新在前
+
+启动 / 滚顶触发
+  → loadChatLogDay(date)
+  → invoke("load_chat_log_day", { date, token })
+  → src-tauri/src/lib.rs reqwest GET /chat-log/{date}
+  ← { date, entries: [...], raw_fallback: bool }
+  → ChatPanel prepend / append 消息列表
+```
+
+数据源：`qq-st-bot/data/event_log/{owner_qq}/*.md`（owner_qq 由后端从 config 读，接口路径不暴露）。
+
 ### 日记列表和详情
 
 ```text
