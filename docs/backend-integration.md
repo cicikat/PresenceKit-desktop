@@ -308,6 +308,8 @@ ChatPanel 启动或滚顶触发
 
 后端文件：`D:\ai\qq-st-bot\admin\routers\chat_log.py`
 
+**meta 行格式**：`> emotion:xxx intensity:N turn_id:xxx [trigger:xxx]`（`>` 开头，parser 跳过整行）。`trigger:xxx` 字段仅在 scheduler 触发的回复中存在，语义为触发源名（如 `morning_greeting`、`diary_check`），客户端目前不消费该字段。
+
 ---
 
 ## WebSocket：当前 legacy 协议
