@@ -4,12 +4,13 @@
  * ============================================================ */
 
 import { useEffect, useRef } from 'react';
+import { SubGarden } from './SubGarden';
 
 const SIDEBAR_HEADER: Record<string, { title: string; subtitle: string }> = {
   flow:   { title: '动向',     subtitle: 'LIVE FEED · 她现在在做什么' },
   diary:  { title: '她的日记', subtitle: 'DIARY · 来自她自己的笔' },
   status: { title: '状态',     subtitle: 'TELEMETRY · 持续状态信号' },
-  garden: { title: '陪伴花园', subtitle: 'GARDEN · 她在你不看的时候也在生长' },
+  garden: { title: '陪伴花园', subtitle: 'GARDEN · 它在你不看的时候也在生长' },
 };
 
 const PLACEHOLDER_DESC: Record<string, string> = {
@@ -61,30 +62,35 @@ export function SidebarPanel({ sidebarRectRef, tab, onClose }: any) {
           fontSize: 14, lineHeight: 1, fontFamily: 'inherit',
         }}>×</button>
       </div>
-      <div style={{
-        flex: 1, minHeight: 0, overflow: 'hidden',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: '24px 20px',
-      }}>
-        <div style={{
-          padding: '22px 24px',
-          background: 'oklch(0.27 0.04 168)',
-          border: '1px solid var(--forest-line)',
-          borderRadius: 8, textAlign: 'center', maxWidth: 260,
-        }}>
-          <div className="mono" style={{
-            fontSize: 9.5, letterSpacing: 1.4,
-            color: 'var(--on-forest-2)', marginBottom: 12,
+      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+        {tab === 'garden' ? (
+          <SubGarden />
+        ) : (
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            height: '100%', padding: '24px 20px',
           }}>
-            此面板等待接入
+            <div style={{
+              padding: '22px 24px',
+              background: 'oklch(0.27 0.04 168)',
+              border: '1px solid var(--forest-line)',
+              borderRadius: 8, textAlign: 'center', maxWidth: 260,
+            }}>
+              <div className="mono" style={{
+                fontSize: 9.5, letterSpacing: 1.4,
+                color: 'var(--on-forest-2)', marginBottom: 12,
+              }}>
+                此面板等待接入
+              </div>
+              <div className="serif" style={{
+                fontSize: 14, color: 'var(--on-forest-2)',
+                lineHeight: 1.75, fontStyle: 'italic',
+              }}>
+                {desc}
+              </div>
+            </div>
           </div>
-          <div className="serif" style={{
-            fontSize: 14, color: 'var(--on-forest-2)',
-            lineHeight: 1.75, fontStyle: 'italic',
-          }}>
-            {desc}
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );

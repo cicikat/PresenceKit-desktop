@@ -101,6 +101,29 @@ async fn load_history(user_id: String, token: String) -> Result<serde_json::Valu
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+async fn load_garden_state(token: String) -> Result<serde_json::Value, String> {
+    let client = reqwest::Client::builder()
+        .no_proxy()
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let resp = client
+        .get("http://127.0.0.1:8080/garden/state")
+        .bearer_auth(token)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !resp.status().is_success() {
+        return Err(format!("HTTP {}", resp.status()));
+    }
+
+    resp.json::<serde_json::Value>()
+        .await
+        .map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -110,6 +133,7 @@ pub fn run() {
             greet,
             send_chat,
             load_history,
+            load_garden_state,
             save_avatar,
             load_avatar,
             read_avatars_json,

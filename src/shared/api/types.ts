@@ -15,3 +15,23 @@ export interface ChatResponse {
   reply: string;
   emotion: string;
 }
+
+export interface GardenSlot {
+  slot_key: string;
+  flower_id: string;
+  name: string;
+  en_name: string;
+  stage: string;
+  growth: number;
+  stage_min: number;
+  stage_max: number;
+  stage_progress: number;
+  mood_keys: string[];
+  last_watered: number | null;
+}
+
+export interface GardenState {
+  slots: GardenSlot[];
+  harvest_count: number;
+  vase_count: number;
+}
