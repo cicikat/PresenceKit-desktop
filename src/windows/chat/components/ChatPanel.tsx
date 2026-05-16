@@ -314,6 +314,12 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true }: any) {
 
     const targetDate = dates[targetIdx];
 
+    // 在 setIsLoadingMore(true) 之前读取高度：indicator 出现会增加高度，
+    // 而 setMessages + setIsLoadingMore(false) 在 React 18 里合批 render，
+    // RAF 触发时 indicator 已消失，所以 oldScrollHeight 必须在 indicator 出现前捕获。
+    const scroll = scrollRef.current;
+    const oldScrollHeight = scroll ? scroll.scrollHeight : 0;
+
     isLoadingMoreRef.current = true;
     setIsLoadingMore(true);
 
@@ -323,14 +329,9 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true }: any) {
 
       loadedDatesRef.current = [targetDate, ...loaded];
 
-      // 找到当前最早的非 no_more 消息对应的日期，需要在前面插入分隔条
       const insertMsgs: ChatMsg[] = [];
       insertMsgs.push(...newMsgs);
-      // 在新旧之间加分隔条（显示旧的最早已加载日期）
       insertMsgs.push(dividerMsg(earliestLoaded));
-
-      const scroll = scrollRef.current;
-      const oldScrollHeight = scroll ? scroll.scrollHeight : 0;
 
       setMessages(prev => {
         // 移除顶部可能存在的 no_more 占位
