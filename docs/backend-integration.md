@@ -18,6 +18,8 @@
 | HTTP 对话入口 | `admin/routers/chat.py` |
 | 短期历史接口 | `admin/routers/memory.py` |
 | 花园状态接口 | `admin/routers/garden.py` |
+| 情绪状态接口 | `admin/routers/mood.py` |
+| 活动状态接口 | `admin/routers/activity.py` |
 | 日记只读接口 | `admin/routers/diary.py` |
 | 聊天日志只读接口 | `admin/routers/chat_log.py` |
 | 感知接口 | `admin/routers/sensor.py` |
@@ -308,6 +310,215 @@ ChatPanel 启动或滚顶触发
 
 后端文件：`D:\ai\qq-st-bot\admin\routers\chat_log.py`
 
+---
+
+## HTTP：获取情绪状态
+
+当前真实路径：
+
+```text
+loadMoodState()
+  → invoke("load_mood_state", { token })
+  → Rust reqwest GET http://127.0.0.1:8080/mood/state
+```
+
+后端要求 Bearer token。数据源：`core/memory/mood_state.py load()`，返回持久化的情绪状态（两轮漂移才切换，非即时检测值）。
+
+后端文件：`D:\ai\qq-st-bot\admin\routers\mood.py`、`D:\ai\qq-st-bot\core\memory\mood_state.py`
+
+返回结构：
+
+```json
+{
+  "current": "neutral",
+  "intensity": 0.42,
+  "previous": "gentle",
+  "updated_at": 1748000000.0,
+  "pending": null
+}
+```
+
+前端映射：`src/shared/state/mood-mapping.ts` `backendMoodToFrontend(current)` 将后端 token 转成 7 个中文 Mood 之一。
+
+---
+
+## HTTP：获取活动状态
+
+当前真实路径：
+
+```text
+loadActivityState()
+  → invoke("load_activity_state", { token })
+  → Rust reqwest GET http://127.0.0.1:8080/activity/current
+```
+
+后端要求 Bearer token。调用 `core.activity_manager.get_current()`，必要时自动切换到新活动（15-45 分钟随机间隔）。
+
+后端文件：`D:\ai\qq-st-bot\admin\routers\activity.py`、`D:\ai\qq-st-bot\core\activity_manager.py`
+
+返回结构：
+
+```json
+{
+  "id": null,
+  "text": "在读书",
+  "arc": "evening",
+  "started_at": 1748000000.0,
+  "next_switch_at": 1748002700.0,
+  "thinking_about_eligible": false
+}
+```
+
+注：`id` 字段后端 state 文件中未存储，当前返回 `null`；`text` 是中文活动描述。
+
+---
+
+## HTTP：上传 sensor 实时快照
+
+调用方：**sensor-service**（Phase 2e 实施，不是 Emerald-client 主进程）。
+
+```text
+sensor-service
+  → POST http://127.0.0.1:8080/sensor/realtime
+```
+
+后端要求 Bearer token：
+
+```http
+Authorization: Bearer <admin_token>
+```
+
+请求体（嵌套 input / focus 结构，**不要展平**）：
+
+```json
+{
+  "window_seconds": 30,
+  "ts": 1748000000.0,
+  "sensor_version": "1.0.0",
+  "input": {
+    "keystrokes": 142,
+    "mouse_clicks": 8,
+    "mouse_distance_px": 3420,
+    "idle_seconds": 0
+  },
+  "focus": {
+    "app": "Code.exe",
+    "title_hint": "ChatPanel.tsx",
+    "switch_count": 3
+  }
+}
+```
+
+响应：
+
+```json
+{
+  "ok": true,
+  "received_at": 1748000001.23
+}
+```
+
+字段说明：
+
+| 字段 | 类型 | 含义 |
+|---|---|---|
+| `window_seconds` | int (1-300) | 客户端聚合窗口长度，固定推 30，字段保留是为未来调整不破协议 |
+| `ts` | float | 客户端推送时的 unix 秒 |
+| `sensor_version` | str | sensor-service 版本号，用于事后排查清洗规则/聚合算法 bug |
+| `input.keystrokes` | int ≥ 0 | 窗口内累计键击数 |
+| `input.mouse_clicks` | int ≥ 0 | 窗口内累计点击数 |
+| `input.mouse_distance_px` | int ≥ 0 | 窗口内累计鼠标移动像素 |
+| `input.idle_seconds` | int ≥ 0 | 窗口末尾连续 idle 秒数，驱动 presence |
+| `focus.app` | str | 进程名，允许空字符串 |
+| `focus.title_hint` | str | 已清洗的窗口标题，允许空字符串，server-side 兜底截断 >80 字符 |
+| `focus.switch_count` | int ≥ 0 | 窗口内焦点切换次数 |
+
+`title_hint` 清洗规则在 sensor-service 端实现，后端信任客户端清洗结果。约定：
+
+- 浏览器：只保留域名（`github.com`，不保留完整 URL）
+- 编辑器：只保留文件名（`ChatPanel.tsx`，不保留完整路径）
+- 聊天软件：直接置空字符串
+- 黑名单关键词（密码、银行、医疗等）整条置空
+
+后端文件：`D:\ai\qq-st-bot\admin\routers\sensor.py`、`D:\ai\qq-st-bot\core\memory\realtime_state.py`
+
+---
+
+## HTTP：读取 sensor 实时快照
+
+调用方：**Emerald-client 主进程**（SubStatus 轮询消费，本轮 Phase 2e 未实施）。
+
+```text
+Emerald-client SubStatus
+  → 未来 Rust load_sensor_realtime
+  → GET http://127.0.0.1:8080/sensor/realtime
+```
+
+后端要求 Bearer token。
+
+无数据时（sensor-service 未启动或刚重启）响应：
+
+```json
+{
+  "ts": null,
+  "stale_seconds": null,
+  "presence": "active",
+  "continuous_at_desk_seconds": null,
+  "sensor_version": null,
+  "window_seconds": null,
+  "input": null,
+  "focus": null
+}
+```
+
+有数据时响应：
+
+```json
+{
+  "ts": 1748000000.0,
+  "stale_seconds": 12,
+  "presence": "active",
+  "continuous_at_desk_seconds": 5400,
+  "sensor_version": "1.0.0",
+  "window_seconds": 30,
+  "input": {
+    "keystrokes": 142,
+    "mouse_clicks": 8,
+    "mouse_distance_px": 3420,
+    "idle_seconds": 0
+  },
+  "focus": {
+    "app": "Code.exe",
+    "title_hint": "ChatPanel.tsx",
+    "switch_count": 3
+  }
+}
+```
+
+`presence` 派生规则：
+
+| `idle_seconds` 区间 | `presence` |
+|---|---|
+| < 60 | `active` |
+| 60 ≤ idle < 300 | `idle` |
+| ≥ 300 | `away` |
+
+无数据时默认 `active`，与 StateEngine 默认值一致。
+
+`continuous_at_desk_seconds` 累积规则：
+
+- 由后端 `realtime_state` 在每次 POST 接收时维护，重启清零
+- 当 `idle_seconds < 300` 时累加本次 `window_seconds`
+- 当 `idle_seconds ≥ 300` 时清零（视为用户离开）
+- 当后端发现两次 POST 间隔 > 120s 时保守重置（视为 sensor-service 中断过）
+- sensor-service 重启或后端重启均清零，无持久化
+
+`stale_seconds` 是后端算的"距上次 POST 多少秒"，客户端用这个判断 sensor-service 是否还活着（比如 >120 视为掉线，UI 显示降级）。
+
+后端文件：`D:\ai\qq-st-bot\admin\routers\sensor.py`、`D:\ai\qq-st-bot\core\memory\realtime_state.py`
+
+---
+
 **meta 行格式**：`> emotion:xxx intensity:N turn_id:xxx [trigger:xxx]`（`>` 开头，parser 跳过整行）。`trigger:xxx` 字段仅在 scheduler 触发的回复中存在，语义为触发源名（如 `morning_greeting`、`diary_check`），客户端目前不消费该字段。
 
 ---
@@ -451,6 +662,8 @@ v1 目标新增或替换：
 | `load_diary_entry(date, token)` | 前端 → Rust → 后端 | GET `/diary/{date}` |
 | `load_chat_log_dates(token)` | 前端 → Rust → 后端 | GET `/chat-log/dates`，路径不含 QQ |
 | `load_chat_log_day(date, token)` | 前端 → Rust → 后端 | GET `/chat-log/{date}`，路径不含 QQ |
+| `load_mood_state(token)` | 前端 → Rust → 后端 | GET `/mood/state` |
+| `load_activity_state(token)` | 前端 → Rust → 后端 | GET `/activity/current` |
 | `save_avatar(role, image_b64)` | 前端 → Rust | 保存 PNG 到 app data |
 | `load_avatar(path)` | 前端 → Rust | 读取头像并返回 data URL |
 | `read_avatars_json()` | 前端 → Rust | 读取头像配置 |
@@ -465,6 +678,8 @@ reqwest::Client::builder()
 ```
 
 当前 `send_chat`、`load_history`、`load_garden_state`、`load_diary_list`、`load_diary_entry`、`load_chat_log_dates` 和 `load_chat_log_day` 已符合这条规则。
+
+未实施：`load_sensor_realtime`，Phase 2e sensor-service 拆分后由 Emerald-client 主进程轮询 GET `/sensor/realtime`，Rust 侧 reqwest client 必须 `.no_proxy()`。
 
 ---
 
@@ -511,3 +726,5 @@ data/channel_queue.json
 - `qq-st-bot/admin/routers/garden.py`
 - `qq-st-bot/admin/routers/diary.py`
 - `qq-st-bot/admin/routers/chat_log.py`
+- `qq-st-bot/admin/routers/sensor.py`
+- `qq-st-bot/core/memory/realtime_state.py`
