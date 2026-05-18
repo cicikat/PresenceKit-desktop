@@ -1,106 +1,162 @@
-# AGENTS.md — Emerald-client CC 工作入口
+# AGENTS.md — Emerald-client 工作入口
 
-> 每次开始任务前必读此文件。
+> 每次开始任务前必读。本文档描述 `D:\ai\Emerald-client\` 的真实边界、当前实现和文档入口。
 
 ---
 
 ## 项目定位
 
-Emerald-client 是 qq-st-bot 系统的桌面客户端,Tauri + React + TypeScript。
-**它是一个项目里的两个 view**:
-- 主聊天窗口(Obsidian 风,Ribbon + Sidebar + ChatPanel)
-- 桌宠模块(透明置顶圆形立绘 + 对话气泡)
+Emerald-client 是 `qq-st-bot` AI 陪伴系统的新桌面客户端，技术栈是 Tauri + React + TypeScript。
 
-不在本项目范围内的事:
-- 不动 D:\ai\qq-st-bot\(后端,独立项目)
-- 不动 D:\ai\Emerald-desktop\(老桌宠,迁移阶段不动)
-- D:\ai\Emerald-desktopUI\ 是迁移参考,不修改
+它目标上包含两个 view：
+
+- 主聊天窗口：Obsidian 风格布局，Ribbon + Sidebar + ChatPanel。
+- 桌宠窗口：透明、置顶、可交互的陪伴形象窗口。
+
+当前实际状态：
+
+- 主聊天窗口已经完成视觉迁移，并接入了部分后端通信。
+- Sidebar 的花园 tab 已接入后端 `GET /garden/state`，当前是只读展示。
+- WebSocket 目前是 legacy 协议订阅层，不是最终 v1 协议实现。
+- 桌宠 view 还没有在 `src/windows/pet/` 落地；Ribbon 的桌宠按钮目前只切本地状态。
+- sensor 感知功能将嵌入 Tauri Rust 侧(`src-tauri/src/sensor/`),
+  不再使用 `sensor-service/` Python 独立进程方案。该目录骨架
+  已废弃,后续清理。
+
+不在本项目范围内的事：
+
+- 不修改 `D:\ai\qq-st-bot\`，它是后端和核心数据项目。
+- 不修改 `D:\ai\Emerald-desktop\`，它是旧桌宠客户端。
+- 不修改 `D:\ai\Emerald-desktopUI\`，它是 UI 迁移参考原型，只读。
 
 ---
 
 ## 代码根目录
+
+```text
 D:\ai\Emerald-client\
+```
 
 ---
 
-## 目录结构
-src/
-├── main.tsx                      入口
-├── windows/
-│   ├── chat/                     聊天窗口(Phase 2a 已迁)
-│   │   ├── ChatWindow.tsx
-│   │   └── components/
-│   │       ├── ChatPanel.tsx     主对话区(send() 暂未连后端)
-│   │       ├── Ribbon.tsx
-│   │       ├── Sidebar.tsx
-│   │       ├── SpecPanel.tsx     (stub,内容待补)
-│   │       ├── UIKit.tsx
-│   │       └── Panes.tsx
-│   └── pet/                      桌宠窗口(Phase 4 做)
-├── shared/
-│   ├── state/store.ts            engine(原 state-engine.js)
-│   ├── ws/                       (Phase 2b 实现)
-│   ├── theme/globals.css         全局样式
-│   └── types/
-└── assets/
-src-tauri/                        Tauri Rust 主进程(Phase 4 之前不动)
-sensor-service/                   Python 感知服务(Phase 5 做)
+## 必读文档
 
----
-
-## 任务 → 重点关注
-
-| 任务类型 | 重点 |
+| 任务类型 | 必读文档 |
 |---|---|
-| 改 UI / 样式 | src/windows/chat/components/ + shared/theme/ |
-| 改状态管理 | src/shared/state/store.ts(engine 实例) |
-| 加 WebSocket / 后端通信 | src/shared/ws/ |
-| 改 Tauri 窗口 / 系统集成 | src-tauri/ |
-| 改感知层 / 行为层 | sensor-service/ |
+| 理解客户端全貌 | `ARCHITECTURE.md` |
+| 改聊天窗口、Ribbon、Sidebar、样式 | `docs/frontend-structure.md` |
+| 改后端通信、协议、Tauri IPC | `docs/backend-integration.md` |
+| 继续旧客户端迁移 | `docs/migration-status.md` |
+| 查 bug、技术债、迁移缺口 | `docs/known-issues.md` |
+
+后端系统本身的细节以 `D:\ai\qq-st-bot\AGENTS.md` 和它的 `ARCHITECTURE.md` / `docs/` 为准。
 
 ---
 
-## 改代码前的强制规则
+## 当前目录结构
 
-1. **TypeScript 类型问题用 any/unknown 糊过去**——本项目尚未做严格类型化,优先把功能跑通,加 `// TODO: type` 注释即可
-2. **不要简单改文件后缀**——.jsx → .tsx 必须真正改造代码,不能只 rename
-3. **不要修改 D:\ai\Emerald-desktopUI\**(原型,只读参考)
-4. **WebSocket 连接走 src/shared/ws/**,不要把 WS 逻辑塞进组件
-5. **state 修改必须走 engine**(单一可信源),不要在组件里直接维护重复状态
-6. **桌宠窗口和聊天窗口共享同一份 engine 实例**——通过 Tauri IPC 或单一进程内的 Context
-7. **所有出站 HTTP/WS 请求必须显式禁用代理**。
-   - Rust 侧（plugin-http / 自写 command）：用 `reqwest::Client::builder().no_proxy()`
-   - 不要依赖 std::env::remove_var，reqwest 初始化时已读取环境变量
-   - 不要用浏览器原生 fetch（被 CORS 挡）
-   - WebSocket：浏览器原生 WebSocket API 不读环境变量，可以直接用
+```text
+src/
+├── main.tsx
+├── windows/
+│   └── chat/
+│       ├── ChatWindow.tsx
+│       └── components/
+│           ├── AvatarCropper.tsx
+│           ├── ChatPanel.tsx
+│           ├── Panes.tsx
+│           ├── Ribbon.tsx
+│           ├── Sidebar.tsx
+│           ├── SubGarden.tsx
+│           ├── SpecPanel.tsx
+│           └── UIKit.tsx
+├── shared/
+│   ├── api/
+│   │   ├── backend.ts
+│   │   ├── types.ts
+│   │   └── ws.ts
+│   ├── avatars/store.ts
+│   ├── state/store.ts
+│   └── theme/globals.css
+src-tauri/
+├── src/lib.rs
+├── tauri.conf.json
+└── capabilities/default.json
+sensor-service/
+└── 已废弃(原 Python 方案),sensor 改为嵌入 src-tauri/src/sensor/
+```
+
+注意：旧入口说明里写过 `src/shared/ws/`，但当前实现实际在 `src/shared/api/ws.ts`。
+
+---
+
+## 任务关注点
+
+| 任务类型 | 重点位置 |
+|---|---|
+| UI / 样式 | `src/windows/chat/components/`、`src/shared/theme/globals.css` |
+| 前端状态 | `src/shared/state/store.ts` |
+| WebSocket / HTTP 包装 | `src/shared/api/` |
+| Tauri IPC / 后端 HTTP 桥 | `src-tauri/src/lib.rs` |
+| Tauri 权限 / 窗口配置 | `src-tauri/tauri.conf.json`、`src-tauri/capabilities/default.json` |
+| 头像本地存储 | `src/shared/avatars/store.ts` + `src-tauri/src/lib.rs` |
+| sensor 感知(键鼠/焦点窗口) | `src-tauri/src/sensor/`(规划中) |
+
+---
+
+## 强制规则
+
+1. TypeScript 当前不是严格类型化项目，功能迁移优先；必要时可以用 `any` / `unknown`，但要加 `// TODO: type`。
+2. 不要简单改文件后缀。`.jsx` 到 `.tsx` 必须真正改造类型、导入和运行方式。
+3. WebSocket / 后端通信必须集中在 `src/shared/api/` 或未来统一迁移到 `src/shared/ws/`，不要把协议细节散进组件。
+4. 本地状态修改必须走 `StateEngine`，不要在多个组件里复制一份 mood / activity / presence 真值。
+5. 桌宠窗口和聊天窗口未来必须共享同一份 engine 状态；如果拆成 Tauri 多窗口，需要明确 IPC / store 同步方案。
+6. 所有出站 HTTP 请求必须显式禁用代理。Rust 侧用 `reqwest::Client::builder().no_proxy()`。
+7. 不要用浏览器原生 `fetch` 直接打后端 HTTP；CORS 和代理规则都不稳定。HTTP 走 Tauri command。
+8. 浏览器原生 WebSocket API 不读系统代理环境变量，当前可以直接连 `ws://127.0.0.1:8080/ws/desktop`。
+9. 不要修改 `D:\ai\qq-st-bot\`、`D:\ai\Emerald-desktop\`、`D:\ai\Emerald-desktopUI\`，除非用户明确改范围。
 
 ---
 
 ## 后端连接信息
 
-- 后端项目:D:\ai\qq-st-bot\
-- WebSocket 端点:ws://127.0.0.1:8080/ws/desktop
-- 协议规范:D:\ai\qq-st-bot\docs\desktop-client-protocol.md
-- 客户端方案:D:\ai\qq-st-bot\docs\desktop-client-plan.md
+当前实际后端：
+
+- 后端项目：`D:\ai\qq-st-bot\`
+- 默认管理服务：`http://127.0.0.1:8080`
+- WebSocket：`ws://127.0.0.1:8080/ws/desktop`
+- HTTP 对话：`POST http://127.0.0.1:8080/desktop/chat`
+- 短期历史：`GET http://127.0.0.1:8080/memory/{user_id}/short-term`
+- 花园状态：`GET http://127.0.0.1:8080/garden/state`
+
+协议状态：
+
+- 后端当前实际 WS 协议仍是 legacy：`hello` / `hello_ack` / `channel_message` / `action` / `ack` / `ping` / `pong`。
+- v1 目标协议文档目前在旧项目：`D:\ai\Emerald-desktop\docs\desktop-client-protocol.md`。
+- `qq-st-bot/docs/` 目前没有 `desktop-client-protocol.md` 和 `desktop-client-plan.md`，不要按旧路径假定存在。
 
 ---
 
 ## 启动方式
 
 ```bash
-# 纯前端开发(无 Rust 需求)
-npm run dev          # → http://localhost:1420
+# 纯前端开发
+npm run dev
 
-# Tauri 桌面应用开发(需要 Rust)
-npm run tauri dev    # 第一次编译 5-10 分钟
+# Tauri 桌面应用开发
+npm run tauri dev
 
 # 生产构建
 npm run tauri build
 ```
 
+Vite 固定端口是 `1420`，见 `vite.config.ts`。
+
 ---
 
-## 当前阶段
+## 文档维护约定
 
-Phase 2a 已完成(前端视觉迁移)。下一步 Phase 2b:接 WebSocket。
-详细路线见 D:\ai\qq-st-bot\docs\desktop-client-plan.md。
+- 改接口、协议、IPC command 时，同步更新 `docs/backend-integration.md`。
+- 改窗口结构、状态流、组件职责时，同步更新 `ARCHITECTURE.md` 和 `docs/frontend-structure.md`。
+- 继续迁移旧桌宠或原型 UI 时，同步更新 `docs/migration-status.md`。
+- 发现未修问题，先记到 `docs/known-issues.md`，标明影响、证据和建议修复方向。

@@ -24,12 +24,13 @@ Emerald-client 是 `qq-st-bot` 的新桌面客户端。它不拥有角色记忆�
 │ future pet window         │
 └────────────┬─────────────┘
              │
-             │ future HTTP / sensor events
+             │ HTTP POST /sensor/realtime (本机或内网穿透)
              ▼
 ┌──────────────────────────┐
-│ sensor-service            │
-│ Python headless service   │
-│ 当前只有空目录骨架          │
+│ Emerald-client (Tauri)    │
+│ src-tauri/src/sensor/     │
+│ Rust 嵌入式键鼠/焦点采集    │
+│ 规划中,尚未实施            │
 └──────────────────────────┘
 ```
 
@@ -206,7 +207,8 @@ AvatarCropper
 | `src/shared/avatars/store.ts` | 头像配置和 data URL 缓存 |
 | `src/shared/theme/globals.css` | 全局主题变量 |
 | `src-tauri/src/lib.rs` | Tauri command 和 Rust HTTP 桥 |
-| `sensor-service/` | 未来 Python 感知服务迁入位置 |
+| `src-tauri/src/sensor/`(规划中) | sensor 感知模块,嵌入 Tauri Rust 进程 |
+| `sensor-service/` | 已废弃,原 Python 独立进程方案 |
 
 ---
 
@@ -231,7 +233,8 @@ AvatarCropper
 未迁或未完成：
 
 - `pet.jsx` 的桌宠渲染与行为。
-- 旧 PyQt 感知服务拆分。
+- sensor 感知模块嵌入 Tauri Rust(`src-tauri/src/sensor/`),
+  不再走原 PyQt / Python 独立进程方案。
 - v1 WebSocket 协议。
 - Sidebar flow/status tab 的真实数据接入。
 - 花园交互能力和 harvest/vase 详情展示。

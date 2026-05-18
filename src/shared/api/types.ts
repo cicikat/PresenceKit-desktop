@@ -70,3 +70,36 @@ export interface ChatLogDatesResponse {
   dates: string[];
   count: number;
 }
+
+export interface MoodState {
+  current: string;
+  intensity: number;
+  previous: string;
+  updated_at: number;
+  pending: string | null;
+}
+
+export interface ActivityState {
+  id: string | null;
+  text: string;
+  arc: string;
+  started_at: number | null;
+  next_switch_at: number | null;
+  thinking_about_eligible: boolean;
+}
+
+export interface UploadIngestResponse {
+  reply: string;
+  affection: number;
+  level: string;
+  emotion: string;
+  turn_id: string;
+  critical_written: boolean;
+  stored_path: string;
+}
+
+export interface UploadError {
+  status: number | null;
+  message: string;
+  kind: 'size_limit' | 'unsupported_type' | 'parse_failed' | 'network' | 'unknown';
+}

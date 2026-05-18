@@ -5,17 +5,17 @@
  * TODO: Phase-3 通过 WebSocket 接入后端 state_update 推送
  * ============================================================ */
 
-export const MOODS = ['平静', '开心', '低落', '病娇', '分心'] as const;
-export const ACTIVITIES = ['看你', '发呆', '想事情', '看屏幕', '看你打字', '偷看', '注意到了什么'] as const;
+export const MOODS = ['平静', '开心', '低落', '病娇', '分心', '生气', '惊讶'] as const;
+export const FOCUSES = ['看你', '发呆', '想事情', '看屏幕', '看你打字', '偷看', '注意到了什么'] as const;
 export const PRESENCES = ['active', 'idle', 'away'] as const;
 
 export type Mood     = typeof MOODS[number];
-export type Activity = typeof ACTIVITIES[number];
+export type Focus    = typeof FOCUSES[number];
 export type Presence = typeof PRESENCES[number];
 
 export interface EngineState {
   mood:              Mood;
-  activity:          Activity;
+  focus:             Focus;
   presence:          Presence;
   mode:              'companion' | 'chat-only';
   lastInteraction:   number;
@@ -23,6 +23,7 @@ export interface EngineState {
   behaviorId:        string | null;
   behaviorEndsAt:    number;
   bodyTiltOverride:  number;
+  activity:          { id: string | null; text: string; arc: string; thinkingAboutEligible: boolean } | null;
 }
 
 /* mood 持续可感知信号 — 用于视觉动画 */
@@ -42,9 +43,15 @@ export const MOOD_TABLE: Record<string, any> = {
   '分心': { breathePeriod: 4400, breatheDepth: 0.022, blinkInterval: 4200, blinkJitter: 0.5,
             eyeFollow: 0.18, eyeDamping: 0.42, microDrift: 1.6,
             auraHue: 280, auraIntensity: 0.22, reactionDelay: 260, irregularity: 0.20, lidDroop: 0.15 },
+  '生气': { breathePeriod: 2400, breatheDepth: 0.040, blinkInterval: 2800, blinkJitter: 0.3,
+            eyeFollow: 0.70, eyeDamping: 0.12, microDrift: 2.8,
+            auraHue: 8,   auraIntensity: 0.70, reactionDelay: 0,   irregularity: 0.45, lidDroop: 0.0  },
+  '惊讶': { breathePeriod: 3000, breatheDepth: 0.035, blinkInterval: 8000, blinkJitter: 0.7,
+            eyeFollow: 0.95, eyeDamping: 0.08, microDrift: 2.2,
+            auraHue: 52,  auraIntensity: 0.55, reactionDelay: 0,   irregularity: 0.40, lidDroop: 0.0  },
 };
 
-export const ACTIVITY_TABLE: Record<string, any> = {
+export const FOCUS_TABLE: Record<string, any> = {
   '看你':        { lookTarget: 'mouse',        bodyTilt: 0,  lidExtra: 0.0,  particleType: null,      duration: null  },
   '发呆':        { lookTarget: 'idle-drift',   bodyTilt: -2, lidExtra: 0.12, particleType: null,      duration: null  },
   '想事情':      { lookTarget: 'down',         bodyTilt: -4, lidExtra: 0.25, particleType: 'thought', duration: 4000  },
@@ -63,12 +70,12 @@ export const PRESENCE_TABLE: Record<string, any> = {
 export class StateEngine {
   private listeners: Set<(s: EngineState) => void> = new Set();
   state: EngineState;
-  private _activityTimer: ReturnType<typeof setTimeout> | null = null;
+  private _focusTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     this.state = {
       mood:             '平静',
-      activity:         '看你',
+      focus:            '看你',
       presence:         'active',
       mode:             'companion',
       lastInteraction:  Date.now(),
@@ -76,6 +83,7 @@ export class StateEngine {
       behaviorId:       null,
       behaviorEndsAt:   0,
       bodyTiltOverride: 0,
+      activity:         null,
     };
   }
 
@@ -97,21 +105,21 @@ export class StateEngine {
   applyStateUpdate(update: Partial<EngineState>) {
     const patch: Partial<EngineState> = {};
     if (update.mood       !== undefined) patch.mood       = update.mood;
-    if (update.activity   !== undefined) patch.activity   = update.activity;
+    if (update.focus      !== undefined) patch.focus      = update.focus;
     if (update.presence   !== undefined) patch.presence   = update.presence;
     if (update.wantToSpeak !== undefined) patch.wantToSpeak = update.wantToSpeak;
     this.set(patch);
 
-    const act = ACTIVITY_TABLE[this.state.activity];
-    if (act && act.duration) {
-      if (this._activityTimer) clearTimeout(this._activityTimer);
-      this._activityTimer = setTimeout(() => {
-        this.set({ activity: this._defaultActivityForMood() });
-      }, act.duration);
+    const foc = FOCUS_TABLE[this.state.focus];
+    if (foc && foc.duration) {
+      if (this._focusTimer) clearTimeout(this._focusTimer);
+      this._focusTimer = setTimeout(() => {
+        this.set({ focus: this._defaultFocusForMood() });
+      }, foc.duration);
     }
   }
 
-  private _defaultActivityForMood(): Activity {
+  private _defaultFocusForMood(): Focus {
     const m = this.state.mood;
     if (m === '分心') return '发呆';
     if (m === '低落') return '想事情';
@@ -125,6 +133,6 @@ export class StateEngine {
 
   setMode(mode: 'companion' | 'chat-only') {
     this.set({ mode });
-    if (mode === 'chat-only') this.set({ activity: '看你打字' });
+    if (mode === 'chat-only') this.set({ focus: '看你打字' });
   }
 }

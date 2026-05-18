@@ -3,16 +3,20 @@
  * Phase 2c+: 按日文件懒加载历史，滚顶继续往前拉
  * ============================================================ */
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { format, subDays, parseISO } from 'date-fns';
 import { Tag, Icon, Btn } from './UIKit';
-import { MOOD_HUE, MOOD_LABEL_EN, ACTIVITY_LABEL_EN } from './UIKit';
+import { MOOD_HUE, MOOD_LABEL_EN, FOCUS_LABEL_EN } from './UIKit';
 import { MOOD_TABLE } from '../../../shared/state/store';
 import { avatarStore } from '../../../shared/avatars/store';
 import { sendChat } from '../../../shared/api/backend';
 import { loadChatLogDates, loadChatLogDay } from '../../../shared/api/backend';
 import { wsClient } from '../../../shared/api/ws';
 import type { ChatLogEntry } from '../../../shared/api/types';
+
+function splitReply(text: string): string[] {
+  return text.split(/\n+/).map(s => s.trim()).filter(s => s.length > 0);
+}
 
 // ── 日期工具 ────────────────────────────────────────────────────────────────
 
@@ -71,10 +75,9 @@ function dividerMsg(dateStr: string): ChatMsg {
 
 // ── UI 组件 ─────────────────────────────────────────────────────────────────
 
-function ChatAvatar({ hue, size = 40, scale = 1 }: any) {
+function ChatAvatar({ hue, size = 40 }: any) {
   return (
-    <svg viewBox="0 0 40 40" width={size} height={size}
-      style={{ transform: `scale(${scale})`, transition: 'transform 0.12s ease-out' }}>
+    <svg viewBox="0 0 40 40" width={size} height={size}>
       <defs>
         <radialGradient id={`cv-${Math.floor(hue)}-${size}`} cx="42%" cy="38%">
           <stop offset="0%" stopColor={`oklch(0.95 0.04 ${hue})`} />
@@ -89,7 +92,52 @@ function ChatAvatar({ hue, size = 40, scale = 1 }: any) {
   );
 }
 
-function Bubble({ msg, currentHue, breath, herDataUrl, youDataUrl, youVisible }: any) {
+function BreathingAvatar({
+  engine,
+  hue,
+  size,
+  dataUrl,
+}: {
+  engine: any;
+  hue: number;
+  size: number;
+  dataUrl?: string | null;
+}) {
+  const elemRef = useRef<any>(null);
+
+  useEffect(() => {
+    let raf: number;
+    const loop = (t: number) => {
+      const mood = engine.get().mood;
+      const cfg = MOOD_TABLE[mood];
+      const scale = 1 + Math.sin(t / cfg.breathePeriod * Math.PI * 2) * cfg.breatheDepth * 0.7;
+      if (elemRef.current) {
+        elemRef.current.style.transform = `scale(${scale})`;
+      }
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [engine]);
+
+  if (dataUrl) {
+    return (
+      <img
+        ref={elemRef}
+        src={dataUrl}
+        style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', transition: 'transform 0.12s ease-out' }}
+      />
+    );
+  }
+
+  return (
+    <div ref={elemRef} style={{ display: 'inline-flex', transition: 'transform 0.12s ease-out' }}>
+      <ChatAvatar hue={hue} size={size} />
+    </div>
+  );
+}
+
+const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, youVisible, engine }: any) {
   const fromUser = msg.role === 'user';
   const hue = msg.moodHue ?? currentHue;
   const time = msg.time ? new Date(msg.time).toLocaleTimeString('zh', { hour: '2-digit', minute: '2-digit' }) : '';
@@ -152,11 +200,7 @@ function Bubble({ msg, currentHue, breath, herDataUrl, youDataUrl, youVisible }:
   return (
     <div style={{ display: 'flex', gap: 10, padding: '8px 0', alignItems: 'flex-start' }}>
       <div style={{ paddingTop: 14, flexShrink: 0 }}>
-        {herDataUrl ? (
-          <img src={herDataUrl} style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', transform: `scale(${breath})`, transition: 'transform 0.12s ease-out' }} />
-        ) : (
-          <ChatAvatar hue={hue} size={36} scale={breath} />
-        )}
+        <BreathingAvatar engine={engine} hue={hue} size={36} dataUrl={herDataUrl} />
       </div>
       <div style={{ flex: 1, maxWidth: 'calc(100% - 60px)' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
@@ -186,7 +230,7 @@ function Bubble({ msg, currentHue, breath, herDataUrl, youDataUrl, youVisible }:
       </div>
     </div>
   );
-}
+});
 
 // ── 主组件 ──────────────────────────────────────────────────────────────────
 
@@ -383,19 +427,48 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true }: any) {
     return () => { window.removeEventListener('resize', update); clearInterval(h); };
   }, []);
 
-  // ── 头像呼吸动画 ──────────────────────────────────────────────────────────
+  // ── 分段消息 timers ───────────────────────────────────────────────────────
 
-  const [breathe, setBreathe] = useState(1);
+  const pendingSegmentTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
   useEffect(() => {
-    let raf: number;
-    const loop = (t: number) => {
-      const m = engine.get().mood;
-      const cfg = MOOD_TABLE[m];
-      setBreathe(1 + Math.sin(t / cfg.breathePeriod * Math.PI * 2) * cfg.breatheDepth * 0.7);
-      raf = requestAnimationFrame(loop);
+    return () => {
+      pendingSegmentTimersRef.current.forEach(clearTimeout);
+      pendingSegmentTimersRef.current = [];
     };
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  const scheduleAssistantSegments = useCallback((fullText: string) => {
+    const segments = splitReply(fullText);
+    if (segments.length === 0) return;
+
+    const m = engine.get();
+    const moodHue = MOOD_HUE[m.mood];
+    const moodLabel = MOOD_LABEL_EN[m.mood];
+
+    const pushSeg = (text: string) => {
+      setMessages(prev => [...prev, {
+        id: newId(),
+        role: 'assistant',
+        text,
+        moodHue,
+        moodLabel,
+        time: Date.now(),
+      }]);
+    };
+
+    pushSeg(segments[0]);
+
+    let cumDelay = 0;
+    for (let i = 1; i < segments.length; i++) {
+      cumDelay += 100 + Math.random() * 900;
+      const seg = segments[i];
+      const timer = setTimeout(() => {
+        pushSeg(seg);
+        pendingSegmentTimersRef.current = pendingSegmentTimersRef.current.filter(t => t !== timer);
+      }, cumDelay);
+      pendingSegmentTimersRef.current.push(timer);
+    }
   }, [engine]);
 
   // ── 自动滚到底（仅新消息 append 时）──────────────────────────────────────
@@ -431,17 +504,9 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true }: any) {
   useEffect(() => {
     wsClient.connect('ws://127.0.0.1:8080/ws/desktop');
     return wsClient.on('channel_message', (content) => {
-      const m = engine.get();
-      setMessages(prev => [...prev, {
-        id: newId(),
-        role: 'assistant',
-        text: content,
-        moodHue: MOOD_HUE[m.mood],
-        moodLabel: MOOD_LABEL_EN[m.mood],
-        time: Date.now(),
-      }]);
+      scheduleAssistantSegments(content);
     });
-  }, [engine]);
+  }, [engine, scheduleAssistantSegments]);
 
   // ── 输入处理 ──────────────────────────────────────────────────────────────
 
@@ -449,9 +514,9 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true }: any) {
   const onInputChange = (v: string) => {
     setInput(v);
     engine.markInteraction();
-    if (state.activity !== '看你打字') engine.applyStateUpdate({ activity: '看你打字' });
+    if (state.focus !== '看你打字') engine.applyStateUpdate({ focus: '看你打字' });
     if (inputTimer.current) clearTimeout(inputTimer.current);
-    inputTimer.current = setTimeout(() => engine.applyStateUpdate({ activity: '看你' }), 2500);
+    inputTimer.current = setTimeout(() => engine.applyStateUpdate({ focus: '看你' }), 2500);
   };
 
   const send = async () => {
@@ -459,19 +524,11 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true }: any) {
     if (!t || loading) return;
     setInput('');
     setMessages(m => [...m, { id: newId(), role: 'user', text: t, time: Date.now() }]);
-    engine.applyStateUpdate({ activity: '想事情' });
+    engine.applyStateUpdate({ focus: '想事情' });
     setLoading(true);
     try {
       const { reply } = await sendChat(t);
-      const m = engine.get();
-      setMessages(prev => [...prev, {
-        id: newId(),
-        role: 'assistant',
-        text: reply,
-        moodHue: MOOD_HUE[m.mood],
-        moodLabel: MOOD_LABEL_EN[m.mood],
-        time: Date.now(),
-      }]);
+      scheduleAssistantSegments(reply);
     } catch (err) {
       console.error('[chat] send 失败:', err);
       const msg = err instanceof Error ? err.message : String(err);
@@ -495,6 +552,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true }: any) {
     <div ref={rootRef} style={{
       position: 'relative', height: '100%',
       display: 'flex', flexDirection: 'column',
+      minWidth: 0,
       background: 'var(--paper)', overflow: 'hidden',
     }}>
       {/* HEADER */}
@@ -503,11 +561,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true }: any) {
           padding: '20px 28px 14px', borderBottom: '1px solid var(--paper-edge)',
           background: 'var(--paper)', display: 'flex', alignItems: 'flex-start', gap: 16,
         }}>
-          {herDataUrl ? (
-            <img src={herDataUrl} style={{ width: 50, height: 50, borderRadius: '50%', objectFit: 'cover', transform: `scale(${breathe})`, transition: 'transform 0.12s ease-out', flexShrink: 0 }} />
-          ) : (
-            <ChatAvatar hue={currentHue} size={50} scale={breathe} />
-          )}
+          <BreathingAvatar engine={engine} hue={currentHue} size={50} dataUrl={herDataUrl} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
               <h1 className="serif" style={{ margin: 0, fontSize: 28, fontWeight: 600, color: 'var(--ink)', letterSpacing: -0.4 }}>
@@ -519,7 +573,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true }: any) {
             </div>
             <div style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center', flexWrap: 'wrap' }}>
               <Tag hue={currentHue}>{MOOD_LABEL_EN[state.mood]}</Tag>
-              <Tag variant="outline">{ACTIVITY_LABEL_EN[state.activity] || state.activity.toUpperCase()}</Tag>
+              <Tag variant="outline">{FOCUS_LABEL_EN[state.focus] || state.focus.toUpperCase()}</Tag>
               <Tag variant="outline" hue={state.presence === 'active' ? 145 : state.presence === 'idle' ? 80 : 30}>
                 {state.presence.toUpperCase()}
               </Tag>
@@ -552,7 +606,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true }: any) {
             key={m.id}
             msg={m}
             currentHue={currentHue}
-            breath={breathe}
+            engine={engine}
             herDataUrl={herDataUrl}
             youDataUrl={youDataUrl}
             youVisible={youVisible}
@@ -562,11 +616,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true }: any) {
         {(typing || loading) && (
           <div style={{ display: 'flex', gap: 10, padding: '8px 0', alignItems: 'flex-start' }}>
             <div style={{ paddingTop: 6 }}>
-              {herDataUrl ? (
-                <img src={herDataUrl} style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', transform: `scale(${breathe})`, transition: 'transform 0.12s ease-out' }} />
-              ) : (
-                <ChatAvatar hue={currentHue} size={36} scale={breathe} />
-              )}
+              <BreathingAvatar engine={engine} hue={currentHue} size={36} dataUrl={herDataUrl} />
             </div>
             <div style={{
               padding: '12px 16px', borderRadius: '2px 6px 6px 2px',
@@ -601,7 +651,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true }: any) {
           }}>
             {([
               ['attach', '附加文件',   '.pdf .png .jpg'],
-              ['book',   '插入日记片段', '从她的日记中'],
+              ['book',   '插入日记片段', '从他的日记中'],
               ['leaf',   '从花园中取',  '已养成的物品'],
               ['sparkle','设置心情',   '手动注入状态'],
             ] as [string, string, string][]).map(([icon, label, sub]) => (
@@ -639,7 +689,8 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true }: any) {
             placeholder="写点什么…"
             rows={1}
             style={{
-              flex: 1, resize: 'none', padding: '11px 14px', borderRadius: 6,
+              flex: 1, resize: 'none', width: '100%', minWidth: 0,
+              padding: '11px 14px', borderRadius: 6,
               background: 'var(--paper)', border: '1px solid var(--paper-edge)',
               color: 'var(--ink)', fontSize: 14, fontFamily: 'var(--font-serif)',
               outline: 'none', minHeight: 40, maxHeight: 120, lineHeight: 1.5,

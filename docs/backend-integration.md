@@ -375,10 +375,11 @@ loadActivityState()
 
 ## HTTP：上传 sensor 实时快照
 
-调用方：**sensor-service**（Phase 2e 实施，不是 Emerald-client 主进程）。
+调用方:**Emerald-client 内嵌 sensor 模块**(Tauri Rust 侧
+`src-tauri/src/sensor/`,Phase 2f 实施)。
 
 ```text
-sensor-service
+Emerald-client (Tauri Rust sensor 模块)
   → POST http://127.0.0.1:8080/sensor/realtime
 ```
 
@@ -424,7 +425,7 @@ Authorization: Bearer <admin_token>
 |---|---|---|
 | `window_seconds` | int (1-300) | 客户端聚合窗口长度，固定推 30，字段保留是为未来调整不破协议 |
 | `ts` | float | 客户端推送时的 unix 秒 |
-| `sensor_version` | str | sensor-service 版本号，用于事后排查清洗规则/聚合算法 bug |
+| `sensor_version` | str | sensor 模块版本号(Tauri Rust 侧),用于事后排查清洗规则/聚合算法 bug |
 | `input.keystrokes` | int ≥ 0 | 窗口内累计键击数 |
 | `input.mouse_clicks` | int ≥ 0 | 窗口内累计点击数 |
 | `input.mouse_distance_px` | int ≥ 0 | 窗口内累计鼠标移动像素 |
@@ -433,7 +434,7 @@ Authorization: Bearer <admin_token>
 | `focus.title_hint` | str | 已清洗的窗口标题，允许空字符串，server-side 兜底截断 >80 字符 |
 | `focus.switch_count` | int ≥ 0 | 窗口内焦点切换次数 |
 
-`title_hint` 清洗规则在 sensor-service 端实现，后端信任客户端清洗结果。约定：
+`title_hint` 清洗规则在 Tauri Rust sensor 模块的 `title_sanitizer` 内实现,后端信任客户端清洗结果。约定:
 
 - 浏览器：只保留域名（`github.com`，不保留完整 URL）
 - 编辑器：只保留文件名（`ChatPanel.tsx`，不保留完整路径）
@@ -456,7 +457,7 @@ Emerald-client SubStatus
 
 后端要求 Bearer token。
 
-无数据时（sensor-service 未启动或刚重启）响应：
+无数据时(sensor 模块未启动或刚重启,例如 Emerald-client 还在启动中)响应:
 
 ```json
 {
@@ -510,12 +511,15 @@ Emerald-client SubStatus
 - 由后端 `realtime_state` 在每次 POST 接收时维护，重启清零
 - 当 `idle_seconds < 300` 时累加本次 `window_seconds`
 - 当 `idle_seconds ≥ 300` 时清零（视为用户离开）
-- 当后端发现两次 POST 间隔 > 120s 时保守重置（视为 sensor-service 中断过）
-- sensor-service 重启或后端重启均清零，无持久化
+- 当后端发现两次 POST 间隔 > 120s 时保守重置(视为 sensor 模块中断过,例如 Emerald-client 被关闭)
+- Emerald-client 重启或后端重启均清零,无持久化
 
-`stale_seconds` 是后端算的"距上次 POST 多少秒"，客户端用这个判断 sensor-service 是否还活着（比如 >120 视为掉线，UI 显示降级）。
+`stale_seconds` 是后端算的"距上次 POST 多少秒",SubStatus 用这个判断 sensor 模块是否还在采集(比如 >120 视为掉线,UI 显示降级)。
 
 后端文件：`D:\ai\qq-st-bot\admin\routers\sensor.py`、`D:\ai\qq-st-bot\core\memory\realtime_state.py`
+
+> `sensor_aware` 触发器默认关闭，后端 `config.yaml` 设置
+> `scheduler.sensor_aware.enabled: true` 才生效，重启服务后 scheduler 启动日志会打出 `ENABLED` 确认。
 
 ---
 
@@ -606,6 +610,16 @@ ws://127.0.0.1:8080/ws/desktop
 }
 ```
 
+`sensor_aware` trigger 产出的 action 类型：
+
+| `action_type` | 触发条件 | `params` |
+|---|---|---|
+| `pet_emote` | score ≥ 50，soft_hint 级 | `{"behavior_id": "<语义标签>"}` |
+| `notify` | score ≥ 65，attention_grab 级 | `{"text": "<发言内容>", "bring_to_front": true}` |
+| `execute` | score ≥ 80，direct_act 级 | `{"behavior_id": "<语义标签>"}` |
+
+`behavior_id` 示例：`late_night_lock_hint`、`sit_long_force`、`long_focus_remind`。客户端按 `behavior_id` 决定执行什么，当前全部 console.log + ack（无执行器）。
+
 心跳：
 
 ```json
@@ -679,7 +693,7 @@ reqwest::Client::builder()
 
 当前 `send_chat`、`load_history`、`load_garden_state`、`load_diary_list`、`load_diary_entry`、`load_chat_log_dates` 和 `load_chat_log_day` 已符合这条规则。
 
-未实施：`load_sensor_realtime`，Phase 2e sensor-service 拆分后由 Emerald-client 主进程轮询 GET `/sensor/realtime`，Rust 侧 reqwest client 必须 `.no_proxy()`。
+未实施:`load_sensor_realtime`,SubStatus 通过 Tauri command 消费 GET `/sensor/realtime`,Rust 侧 reqwest client 必须 `.no_proxy()`。即使 sensor 采集(POST)与消费(GET)同在 Tauri Rust 进程内,数据仍绕后端,保持后端作为 single source of truth。
 
 ---
 

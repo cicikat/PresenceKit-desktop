@@ -80,6 +80,74 @@
 
 ---
 
+## SubFlow
+
+文件：`src/windows/chat/components/SubFlow.tsx`
+
+职责：
+
+- 在 Sidebar 的 `flow` tab 中展示叶瑄此刻的动向（Live Feed）。
+- 自己启动 mood（60s）和 activity（90s）的后台轮询，写入 engine。若 SubStatus 同时挂载，两份轮询并存是可接受代价，不做去重协调。
+- 从 engine `activity / focus / presence` 派生叙事文本（`buildNarrative`），不发起新网络请求。
+- 维护组件内 ring buffer（最多 10 条），追踪 activity/focus 变化历史。
+
+`buildNarrative(activity, focus, presence)` 模板（优先级从高到低）：
+
+| 条件 | 输出 |
+|---|---|
+| `presence === 'away'` | `他不在。` |
+| `activity.id === 'watching_you'` | `他坐在那儿，看着你。` |
+| 通用 | `{activityPhrase}{focusPhrase}{idleTrailing}` |
+
+- `activityPhrase`：`他{activity.text}`（`{book}` 占位符替换为 `读着书`）；activity 为 null 时用 `他坐在那儿`
+- `focusPhrase`：7 个固定映射，均以 `，` 开头、`。` 结尾；无匹配时降级为 `。`
+- `idleTrailing`：`presence === 'idle'` 时追加 `（他安静了一会儿。）`
+
+Ring buffer：`useState<FlowEntry[]>` 长度上限 10；按 `text|mood` 联合键去重（连续相同不 push）；显示文本 = `activity.text`，activity 为 null 时用 `state.focus` 中文名兜底；30s 定时器驱动时间标签重渲染。
+
+数据源：
+
+| 来源 | 路径 | 轮询 |
+|---|---|---|
+| mood | `loadMoodState()` → `engine.applyStateUpdate({mood})` | 60s |
+| activity | `loadActivityState()` → `engine.set({activity})` | 90s |
+| focus / presence | engine 现有值（由 ChatPanel 交互驱动） | — |
+
+---
+
+## SubStatus
+
+文件：`src/windows/chat/components/SubStatus.tsx`
+
+职责：
+
+- 在 Sidebar 的 `status` tab 展示叶瑄持续状态信号。
+- 启动时拉 mood/activity 真实数据并写入 engine，之后定期轮询。
+- 从 engine state 派生 4 个可感知信号（前端 derived，不进 engine state）。
+- 维护 60 格 ring buffer，2 秒采样一次，呈现近 2 分钟 mood 轨迹。
+
+数据源：
+
+| 来源 | 路径 | 轮询 |
+|---|---|---|
+| mood 后端持久值 | `loadMoodState()` → `/mood/state` → `engine.applyStateUpdate({mood})` | 30s |
+| activity 身体动作 | `loadActivityState()` → `/activity/current` → `engine.set({activity})` | 60s |
+| presence | engine 现有值（默认 active，未接 sensor） | — |
+| focus | ChatPanel 输入驱动，SubStatus 不动 | — |
+
+持续可感知信号公式（均为前端 derived，0-100）：
+
+| 信号 | 来源 | CSS transition |
+|---|---|---|
+| 呼吸频率 `breath` | 基准 50，按 mood/presence 偏移，clamp 30-100 | 2s ease |
+| 视线锁定度 `gaze_lock` | 由 focus 映射固定值，idle×0.7 / away×0.3 | 0.1s ease |
+| 情绪光晕 `mood_aura` | 按 mood 映射固定值（平静→20…病娇→90） | 3s ease |
+| 节奏不规则 `rhythm` | mood 基准 + 每次 focus/activity 切换时 +15 短期叠加，5s 线性衰减 | 0.5s ease |
+
+Ring buffer：`useState<{mood, aura}[]>` 长度 60；2s 采样；mood 轨迹柱状图，每格高度 = aura %，颜色 = MOOD_HUE。
+
+后端连接失败：顶部显示小型警告条 + 重试按钮，UI 继续显示 engine 当前值，不 crash。
+
 ## SubGarden
 
 文件：`src/windows/chat/components/SubGarden.tsx`
@@ -149,11 +217,11 @@ WS 连接状态来自 `wsClient.getState()` 和 `wsClient.on("state")`。
 
 文件：`src/windows/chat/components/Sidebar.tsx`
 
-当前 `garden` 和 `diary` tab 已接入真实数据，其余 tab 仍是占位版：
+所有四个 tab 已接入真实数据：
 
-- `flow`：动向（占位）
+- `flow`：动向，挂 `SubFlow`，从 engine 读 mood/activity/focus/presence
 - `diary`：他的日记，读取后端日记列表和正文
-- `status`：状态（占位）
+- `status`：状态，挂 `SubStatus`，持续轮询 mood/activity
 - `garden`：陪伴花园，读取后端花园状态
 
 `Sidebar.legacy.tsx` 存着原副栏 UI 骨架，供后续真实数据接入时参考，不是当前运行入口。
@@ -202,12 +270,27 @@ WS 连接状态来自 `wsClient.getState()` 和 `wsClient.on("state")`。
 
 当前 engine 是轻量前端状态机：
 
-- 保存 mood/activity/presence/mode。
+- 保存 mood / focus / presence / mode / activity。
 - 提供 subscribe/emit/get/set。
 - `applyStateUpdate()` 可接受后端状态补丁，但尚未接入 WS `state_update`。
-- activity 有 duration 时会自动回到默认 activity。
+- focus 有 duration 时会自动回到默认 focus。
+
+字段说明：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `mood` | `Mood`（7 个中文状态） | 情绪，对应 MOOD_TABLE 视觉参数 |
+| `focus` | `Focus`（7 个中文状态） | 注意力指向（原 `activity` 字段，已重命名）；前端本地推断 |
+| `presence` | `Presence` | active / idle / away |
+| `activity` | `{ id, text, arc, thinkingAboutEligible } \| null` | 后端身体动作（来自 activity_manager）；初始 null，接口可调但暂未挂组件 |
+
+`MOODS` 已扩展为 7 个：`['平静', '开心', '低落', '病娇', '分心', '生气', '惊讶']`。
+
+`FOCUS_TABLE`（原 `ACTIVITY_TABLE`）仍保持 7 条注意力指向配置，与后端 16 条身体动作无关。
 
 旧原型的 behavior loop 已删除。不要在组件里重新造一套行为状态；未来接后端 `state_update` 时应调用 `engine.applyStateUpdate()`。
+
+情绪映射：`src/shared/state/mood-mapping.ts` 提供 `backendMoodToFrontend(token)` 将后端英文 token 转换为前端 7 个中文 Mood 之一。
 
 ---
 

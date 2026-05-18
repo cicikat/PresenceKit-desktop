@@ -11,6 +11,8 @@ export const MOOD_HUE: Record<string, number> = {
   '低落': 232,
   '病娇': 16,
   '分心': 295,
+  '生气': 8,
+  '惊讶': 52,
 };
 
 export const MOOD_LABEL_EN: Record<string, string> = {
@@ -19,9 +21,11 @@ export const MOOD_LABEL_EN: Record<string, string> = {
   '低落': 'LOW',
   '病娇': 'YANDERE',
   '分心': 'ADRIFT',
+  '生气': 'ANGRY',
+  '惊讶': 'SURPRISED',
 };
 
-export const ACTIVITY_LABEL_EN: Record<string, string> = {
+export const FOCUS_LABEL_EN: Record<string, string> = {
   '看你':        'WATCHING YOU',
   '发呆':        'DAZING',
   '想事情':      'THINKING',

@@ -246,6 +246,67 @@ Phase 2d.5e 完成时数据层在 REPL 单测全通过：
 
 ---
 
+## P2：SubStatus 4 个持续可感知信号是前端 derived，非真实生理数据
+
+**位置**：`src/windows/chat/components/SubStatus.tsx` `useTelemetrySignals()`
+
+`呼吸频率`、`视线锁定度`、`情绪光晕`、`节奏不规则` 四个信号均由前端根据 engine 的 mood / focus / presence 字段实时计算，是视觉近似值，不来自真实传感器或后端推断。
+
+**影响**：数值变化规律可预测（mood 切换即跳变），不反映真实生理节律。
+
+**建议**：后续接入 sensor-service 真实感知数据（屏幕活动、音频、进程）后，可用真实信号替换；在此之前这些是视觉装饰，不应用于逻辑判断。
+
+---
+
+## P2：Panes.tsx 存在历史 TS 类型错误
+
+**位置**：`src/windows/chat/components/Panes.tsx`
+
+tsc --noEmit 存在来自 Panes.tsx 的历史报错，不属于本次重构范围，不影响运行时行为。
+
+**建议**：下一轮清理时修复。
+
+---
+
+## P2：title_sanitizer 进程名词表覆盖大陆常用软件不足
+
+**位置**：`src-tauri/src/sensor/title_sanitizer.rs` `classify_app`
+
+当前 Chat 类只包含 WeChat / QQ / Telegram / Discord / Slack / Feishu / Dingtalk，未覆盖：
+
+- 大陆 AI 桌面客户端（Claude / ChatGPT 桌面版等），归 Other 透出 title
+- 大陆 IM 桌面版（企业微信 WeChatWork、钉钉 DingTalk 大陆版、网易云邮箱大师等）的实际进程名可能跟国际版不同
+- Bilibili 桌面端、各种小众聊天/直播软件
+
+**影响**：这些应用窗口标题可能泄漏敏感内容（对话片段、邮件主题）到 sensor 数据。当前 `BLACKLIST_KEYWORDS` 兜底了“密码”/“银行”/“医疗”等关键词，但聊天内容本身不会命中黑名单。
+
+**建议**：owner 在 `title_sanitizer.rs` 的 `classify_app` 函数 match 分支增加自己实际用到的 Chat 类进程名（全部小写带 `.exe`）。跑一遍 `cargo run --bin sensor_probe` 切换到目标应用，看 title 是否被清空。需要扩 `BLACKLIST_KEYWORDS` 也在同文件加，无需重启服务。
+
+---
+
+## P2：终端类(WindowsTerminal / cmd / powershell)清洗策略未定
+
+**位置**：`src-tauri/src/sensor/title_sanitizer.rs` `classify_app`
+
+`WindowsTerminal.exe` / `cmd.exe` / `powershell.exe` / `wt.exe` 当前归 `AppCategory::Other`，只做 trim，原文透出。
+
+**风险**：终端窗口标题在以下情况泄漏：
+
+- 当前工作目录（`PS D:\projects\private-repo>`）
+- 当前命令（`ssh user@host`、`docker exec` 等）
+- ssh 远程连接标题（暴露 hostname）
+- 部分 shell 主题会把 git branch 名也写进 title
+
+**影响**：开发者跑命令时窗口标题经常无意暴露敏感路径/远程 host。
+
+**建议**：后期统一做安全检修时决定：
+
+- 选项 A：终端类归 Chat 直接置空（最安全，但 sensor 失去“用户在终端干活”信号）
+- 选项 B：新建 Terminal 类只透 shell 名（PowerShell / cmd），保留语义但去内容
+- 选项 C：维持 Other 不动（信任开发者自己注意）
+
+---
+
 ## 已修复
 
 ### Panes.tsx cleanup 类型报错（2026-05-16，Phase 2c+）

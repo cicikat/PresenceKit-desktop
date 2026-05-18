@@ -304,11 +304,12 @@ export function ChatWindow() {
         onOpenSpec={() => setSpecOpen(true)}
         onOpenPrefs={() => setPrefsOpen(true)}
       />
-      <div ref={bodyRef} style={{ flex: 1, display: 'flex', minHeight: 0, position: 'relative' }}>
+      <div ref={bodyRef} style={{ flex: 1, display: 'flex', minHeight: 0, minWidth: 0, position: 'relative' }}>
         {sidebarOpen && (
           <>
             <div style={{ width: sidebarWidth, flexShrink: 0 }}>
               <SidebarPanel
+                engine={engine}
                 sidebarRectRef={sidebarRectRef}
                 tab={sidebarTab}
                 onClose={() => setSidebarOpen(false)} />

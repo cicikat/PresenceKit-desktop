@@ -8,14 +8,14 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Tag, MicroLabel, Meter } from './UIKit';
-import { MOOD_HUE, MOOD_LABEL_EN, ACTIVITY_LABEL_EN } from './UIKit';
+import { MOOD_HUE, MOOD_LABEL_EN, FOCUS_LABEL_EN } from './UIKit';
 import { MOODS, MOOD_TABLE } from '../../../shared/state/store';
 
 const SIDEBAR_HEADER: Record<string, { title: string; subtitle: string }> = {
-  flow:   { title: '动向',     subtitle: 'LIVE FEED · 她现在在做什么' },
-  diary:  { title: '她的日记', subtitle: 'DIARY · 来自她自己的笔' },
+  flow:   { title: '动向',     subtitle: 'LIVE FEED · 他现在在做什么' },
+  diary:  { title: '他的日记', subtitle: 'DIARY · 来自他自己的笔' },
   status: { title: '状态',     subtitle: 'TELEMETRY · 持续状态信号' },
-  garden: { title: '陪伴花园', subtitle: 'GARDEN · 她在你不看的时候也在生长' },
+  garden: { title: '陪伴花园', subtitle: 'GARDEN · 他在你不看的时候也在生长' },
 };
 
 export function SidebarPanel({ engine, sidebarRectRef, tab, onClose, onOpenDiaryDetail }: any) {
@@ -75,20 +75,20 @@ export function SidebarPanel({ engine, sidebarRectRef, tab, onClose, onOpenDiary
 function SubFlow({ engine, state }: any) {
   const hue = MOOD_HUE[state.mood];
   const moodCfg = MOOD_TABLE[state.mood];
-  const description = useMemo(() => describeFlow(state.mood, state.activity), [state.mood, state.activity]);
+  const description = useMemo(() => describeFlow(state.mood, state.focus), [state.mood, state.focus]);
   const [timeline, setTimeline] = useState(() => seedTimeline(state));
-  const lastKey = useRef(`${state.mood}|${state.activity}`);
+  const lastKey = useRef(`${state.mood}|${state.focus}`);
 
   useEffect(() => {
-    const key = `${state.mood}|${state.activity}`;
+    const key = `${state.mood}|${state.focus}`;
     if (key !== lastKey.current) {
       lastKey.current = key;
       setTimeline(prev => [
-        { mood: state.mood, activity: state.activity, t: Date.now() },
+        { mood: state.mood, focus: state.focus, t: Date.now() },
         ...prev.slice(0, 11),
       ]);
     }
-  }, [state.mood, state.activity]);
+  }, [state.mood, state.focus]);
 
   return (
     <div style={{ padding: '12px 14px 18px', overflowY: 'auto', height: '100%' }}>
@@ -104,7 +104,7 @@ function SubFlow({ engine, state }: any) {
         </div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           <Tag hue={hue}>{MOOD_LABEL_EN[state.mood]}</Tag>
-          <Tag variant="outline" hue={hue}>{ACTIVITY_LABEL_EN[state.activity] || state.activity}</Tag>
+          <Tag variant="outline" hue={hue}>{FOCUS_LABEL_EN[state.focus] || state.focus}</Tag>
           <Tag variant="outline">{state.presence.toUpperCase()}</Tag>
         </div>
         <span style={{
@@ -136,7 +136,7 @@ function SubFlow({ engine, state }: any) {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                   <div className="serif" style={{ fontSize: 13.5, color: 'var(--on-forest)', fontWeight: i === 0 ? 600 : 500 }}>
-                    {e.activity}
+                    {e.focus}
                   </div>
                   <Tag hue={ehue} size="sm">{MOOD_LABEL_EN[e.mood]}</Tag>
                 </div>
@@ -166,7 +166,7 @@ function relTime(t: number) {
 
 function seedTimeline(state: any) {
   // TODO Phase 2d.x: 接入真实时间线数据
-  return [{ mood: state.mood, activity: state.activity, t: Date.now() }];
+  return [{ mood: state.mood, focus: state.focus, t: Date.now() }];
 }
 
 /* ── SubDiary ── */
@@ -314,7 +314,7 @@ function SubStatus({ engine, state }: any) {
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
         <ForestCard label="ACTIVITY">
-          <div className="serif" style={{ fontSize: 15, color: 'var(--on-forest)', fontWeight: 600 }}>{state.activity}</div>
+          <div className="serif" style={{ fontSize: 15, color: 'var(--on-forest)', fontWeight: 600 }}>{state.focus}</div>
         </ForestCard>
         <ForestCard label="PRESENCE">
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -374,7 +374,7 @@ function SubGarden({ state }: any) {
   return (
     <div style={{ padding: '12px 14px 18px', overflowY: 'auto', height: '100%' }}>
       <div className="serif" style={{ fontSize: 12.5, color: 'var(--on-forest-2)', marginBottom: 12, lineHeight: 1.6, fontStyle: 'italic' }}>
-        每种心情都让对应的植物多长出一点。她在你不看的时候，也在生长。
+        每种心情都让对应的植物多长出一点。他在你不看的时候，也在生长。
       </div>
       <div style={{ display: 'grid', gap: 10 }}>
         {MOODS.map(m => {

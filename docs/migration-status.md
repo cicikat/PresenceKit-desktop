@@ -22,11 +22,12 @@
 | `app.jsx` | `src/windows/chat/ChatWindow.tsx` | 已迁主布局；DebugPanel 和 Pet 挂载移除 |
 | `chat.jsx` | `src/windows/chat/components/ChatPanel.tsx` | 已迁视觉；已接 HTTP send 和 legacy WS 主动消息 |
 | `ribbon.jsx` | `src/windows/chat/components/Ribbon.tsx` | 已迁；新增 WS 连接状态角标 |
-| `sidebar.jsx` | `src/windows/chat/components/Sidebar.legacy.tsx` / `Sidebar.tsx` | legacy 骨架保留；当前运行版是占位面板 |
+| `sidebar.jsx` | `src/windows/chat/components/Sidebar.legacy.tsx` / `Sidebar.tsx` | legacy 骨架保留；所有四个 tab 均已接真实数据 |
 | `panes.jsx` | `src/windows/chat/components/Panes.tsx` | 已迁浮动 pane 系统 |
 | `spec.jsx` | `SpecPanel.legacy.tsx` / `SpecPanel.tsx` | legacy 骨架保留；当前运行版是帮助/公告占位 |
 | `ui-kit.jsx` | `src/windows/chat/components/UIKit.tsx` | 已迁共享 UI 工具 |
 | `state-engine.js` | `src/shared/state/store.ts` | 状态表已迁；behavior loop 删除，等待后端状态 |
+| `sidebar.jsx` 中的 SubFlow 视觉 | `src/windows/chat/components/SubFlow.tsx` | 已接真实 mood/activity，叙事文本 + ring buffer 时间轴 |
 | `sidebar.jsx` 中的花园视觉 | `src/windows/chat/components/SubGarden.tsx` | 已接后端只读状态，不再是纯 mock |
 | `sidebar.jsx` 中的日记视觉 | `src/windows/chat/components/SubDiary.tsx` | 已接后端只读日记，不再是占位 |
 | `pet.jsx` | 尚无 | 未迁 |
@@ -46,6 +47,8 @@
 | 加载单篇日记 | 已实现：Tauri `load_diary_entry` → `/diary/{date}` | 懒加载，点击 entry 时才拉正文 |
 | WS 连接 | 已实现 legacy 连接和重连 | 升级到 v1 envelope |
 | 后端主动消息 | 已实现 `channel_message` | 改 `assistant_message` |
+| 情绪状态（持久值） | 已实现并接入 UI：`load_mood_state` → `/mood/state` → SubStatus（Phase 2d.3） | — |
+| 活动状态（身体动作） | 已实现并接入 UI：`load_activity_state` → `/activity/current` → SubStatus（Phase 2d.3） | — |
 | 状态推送 | 未实现 | 接 `state_update` 到 `StateEngine.applyStateUpdate()` |
 | 用户输入 WS 化 | 未实现 | `user_message` |
 | 模式/窗口事件 | 未实现 | `client_event` |
@@ -97,31 +100,44 @@ Ribbon 的桌宠按钮会：
 
 ---
 
-## Python 感知服务迁移状态
+## sensor 感知模块迁移状态
 
-`sensor-service/` 当前只有空目录：
+原计划走 Python 独立进程(`sensor-service/`),已改为
+**嵌入 Tauri Rust 侧**(`src-tauri/src/sensor/`)。
+
+决策原因:
+
+- 数据通路更短,Rust 抓取后直接 POST,不经过 IPC
+- 隐私清洗在同一进程内完成,原始键鼠/窗口标题不离开
+  `title_sanitizer` 函数
+- 单进程模型,无需 daemon 管理
+- Rust 跨平台键鼠/窗口 API 比 Python 更稳定
+
+当前 `sensor-service/` 目录已废弃,保留目录是为后续物理清理
+时统一处理,不再有新代码进入。
+
+规划目录:
 
 ```text
-agent/
-behavior/
-bot_client/
-data/
-garden/
-sense/
+src-tauri/src/sensor/
+├── mod.rs
+├── aggregator.rs       # 30s 窗口聚合
+├── publisher.rs        # POST /sensor/realtime
+├── input_hook.rs       # 键鼠 hook 抽象
+├── focus_window.rs     # 焦点窗口抓取抽象
+├── title_sanitizer.rs  # title_hint 清洗
+└── platform/
+    ├── windows.rs      # Windows 实现(本期)
+    ├── macos.rs        # 占位,后期补
+    └── linux.rs        # 占位,后期补
 ```
 
-尚未迁入旧 `Emerald-desktop` 的 Python 文件。
+后端相关接口已就绪(Phase 2e):
 
-目标上，Python 感知服务应是 headless：
-
-- 屏幕/进程/音频/活动感知保留 Python 实现。
-- UI 行为从 Python 中剥离，迁到 Tauri。
-- 感知数据通过后端 `/sensor/*` 接口进入 `qq-st-bot`。
-
-后端现有相关接口：
-
-- `POST /sensor/activity`
-- `POST /sensor/push`
+- `POST /sensor/realtime`(主要消费方,本规划目标)
+- `GET /sensor/realtime`
+- `POST /sensor/activity`(屏幕识别用,Phase 2f 之后另规划)
+- `POST /sensor/push`(手机端 APP 用,与本规划无关)
 - `GET /sensor/status`
 - `GET /sensor/today`
 
@@ -157,7 +173,8 @@ sense/
 4. 接 `state_update` 到 `StateEngine`。
 5. 补花园详情/操作入口，或明确它长期只是只读陪伴状态。
 6. 再做桌宠窗口，否则桌宠缺少后端权威状态。
-7. 最后迁 Python 感知服务。
+7. 最后实施 sensor 感知模块(嵌入 Tauri Rust,
+   见"sensor 感知模块迁移状态")。
 
 ---
 
