@@ -9,10 +9,12 @@ import { Tag, Icon, Btn } from './UIKit';
 import { MOOD_HUE, MOOD_LABEL_EN, FOCUS_LABEL_EN } from './UIKit';
 import { MOOD_TABLE } from '../../../shared/state/store';
 import { avatarStore } from '../../../shared/avatars/store';
-import { sendChat } from '../../../shared/api/backend';
+import { open } from '@tauri-apps/plugin-dialog';
+import { getCurrentWebview } from '@tauri-apps/api/webview';
+import { sendChat, uploadDocument } from '../../../shared/api/backend';
 import { loadChatLogDates, loadChatLogDay } from '../../../shared/api/backend';
 import { wsClient } from '../../../shared/api/ws';
-import type { ChatLogEntry } from '../../../shared/api/types';
+import type { ChatLogEntry, UploadError } from '../../../shared/api/types';
 
 const BUBBLE_FONT_SIZES = {
   small:  { assistant: 13,   user: 12.5 },
@@ -83,6 +85,13 @@ function dividerMsg(dateStr: string): ChatMsg {
 }
 
 // ── UI 组件 ─────────────────────────────────────────────────────────────────
+
+function iconForFilename(name: string): string {
+  const lower = name.toLowerCase();
+  if (/\.(png|jpg|jpeg|gif|webp|bmp)$/.test(lower)) return 'attach';
+  if (/\.(txt|md|docx|doc|pdf)$/.test(lower)) return 'attach';
+  return 'attach';
+}
 
 function ChatAvatar({ hue, size = 40 }: any) {
   return (
@@ -178,6 +187,11 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
   }
 
   if (fromUser) {
+    const attachmentMatch = msg.text.match(/^📎 (.+?)(?:\n([\s\S]*))?$/);
+    const isAttachment = attachmentMatch !== null;
+    const attachFilename = isAttachment ? attachmentMatch![1] : null;
+    const attachNote = isAttachment ? (attachmentMatch![2] ?? '') : '';
+
     return (
       <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-end', gap: youVisible ? 8 : 0, padding: '8px 0' }}>
         <div style={{ maxWidth: '78%' }}>
@@ -191,7 +205,23 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
             fontSize: userFontSize, lineHeight: 1.55,
             boxShadow: '0 4px 12px oklch(0.30 0.04 60 / 0.18)',
             whiteSpace: 'pre-wrap',
-          }}>{msg.text}</div>
+          }}>
+            {isAttachment ? (
+              <div>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '6px 10px',
+                  background: 'oklch(0.95 0.02 60 / 0.25)',
+                  borderRadius: 4,
+                  marginBottom: attachNote ? 6 : 0,
+                }}>
+                  <Icon name={iconForFilename(attachFilename!)} size={16} />
+                  <span style={{ fontSize: userFontSize - 1, fontWeight: 500, opacity: 0.9 }}>{attachFilename}</span>
+                </div>
+                {attachNote && <div style={{ fontSize: userFontSize }}>{attachNote}</div>}
+              </div>
+            ) : msg.text}
+          </div>
         </div>
         {youVisible && (
           <div style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0, overflow: 'hidden', border: '1px solid var(--paper-edge)' }}>
@@ -259,6 +289,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, bubbleFon
   const [typing, setTyping] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
 
   // 按日懒加载状态
   const availableDatesRef = useRef<string[]>([]);
@@ -270,6 +301,9 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, bubbleFon
 
   const rootRef  = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // 已渲染的 turn_id,用于 WS 去重
+  const processedTurnIdsRef = useRef<Set<string>>(new Set());
 
   // ── 启动加载 ─────────────────────────────────────────────────────────────
 
@@ -517,6 +551,8 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, bubbleFon
   useEffect(() => {
     wsClient.connect('ws://127.0.0.1:8080/ws/desktop');
     return wsClient.on('channel_message', (content) => {
+      // TODO: 接入 turn_id 去重(需要先扩展 ws.ts 透传 turn_id)
+      // 当前 /upload/ingest 后端 broadcast 会导致同一 reply 在 HTTP + WS 双路径渲染两次
       scheduleAssistantSegments(content);
     });
   }, [engine, scheduleAssistantSegments]);
@@ -555,6 +591,139 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, bubbleFon
       setLoading(false);
     }
   };
+
+  const doUpload = useCallback(async (filePath: string, filename: string) => {
+    const userMessage = input.trim();
+    const placeholderText = userMessage
+      ? `📎 ${filename}\n${userMessage}`
+      : `📎 ${filename}`;
+    setMessages(prev => [...prev, {
+      id: newId(), role: 'user', text: placeholderText, time: Date.now(),
+    }]);
+    setInput('');
+    setLoading(true);
+    try {
+      const resp = await uploadDocument(filePath, userMessage);
+      if (resp.turn_id) processedTurnIdsRef.current.add(resp.turn_id);
+      scheduleAssistantSegments(resp.reply);
+    } catch (err: any) {
+      let msg = '上传失败';
+      if (err && typeof err === 'object' && 'kind' in err) {
+        const e = err as UploadError;
+        switch (e.kind) {
+          case 'size_limit':       msg = '文件超过 5MB 限制'; break;
+          case 'unsupported_type': msg = '仅支持 .txt / .md / .docx / .png / .jpg / .gif / .webp'; break;
+          case 'parse_failed':     msg = '文件解析失败，请检查内容'; break;
+          case 'network':          msg = `网络错误：${e.message}`; break;
+          default:                 msg = `上传失败：${e.message}`;
+        }
+      } else {
+        msg = `上传失败：${String(err)}`;
+      }
+      setMessages(prev => [...prev, {
+        id: newId(), role: 'system', text: `(${msg})`, time: Date.now(),
+      }]);
+    } finally {
+      setLoading(false);
+    }
+  }, [input, scheduleAssistantSegments]);
+
+  const onClickAttach = useCallback(async () => {
+    setShowAttachMenu(false);
+    let picked: string | null = null;
+    try {
+      const res = await open({
+        multiple: false,
+        filters: [{ name: '文档', extensions: ['txt', 'md', 'docx'] }],
+      });
+      if (typeof res === 'string') picked = res;
+    } catch (err) {
+      console.warn('[upload] 选择文件失败:', err);
+      return;
+    }
+    if (!picked) return;
+    const lower = picked.toLowerCase();
+    if (!['.txt', '.md', '.docx'].some(ext => lower.endsWith(ext))) {
+      setMessages(prev => [...prev, {
+        id: newId(), role: 'system', text: '(仅支持 .txt / .md / .docx)', time: Date.now(),
+      }]);
+      return;
+    }
+    const filename = picked.split(/[\\/]/).pop() || picked;
+    doUpload(picked, filename);
+  }, [doUpload]);
+
+  const onClickImage = useCallback(async () => {
+    setShowAttachMenu(false);
+    let picked: string | null = null;
+    try {
+      const res = await open({
+        multiple: false,
+        filters: [{ name: '图片', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'] }],
+      });
+      if (typeof res === 'string') picked = res;
+    } catch (err) {
+      console.warn('[upload] 选择图片失败:', err);
+      return;
+    }
+    if (!picked) return;
+    const lower = picked.toLowerCase();
+    if (!['.png', '.jpg', '.jpeg', '.gif', '.webp'].some(ext => lower.endsWith(ext))) {
+      setMessages(prev => [...prev, {
+        id: newId(), role: 'system', text: '(仅支持 .png / .jpg / .jpeg / .gif / .webp)', time: Date.now(),
+      }]);
+      return;
+    }
+    const filename = picked.split(/[\\/]/).pop() || picked;
+    doUpload(picked, filename);
+  }, [doUpload]);
+
+  const handleDropPaths = useCallback((paths: string[]) => {
+    if (paths.length === 0) return;
+    const path = paths[0];
+    const filename = path.split(/[\\/]/).pop() || path;
+    const lower = filename.toLowerCase();
+    const isDoc = /\.(txt|md|docx)$/.test(lower);
+    const isImg = /\.(png|jpg|jpeg|gif|webp)$/.test(lower);
+    if (!isDoc && !isImg) {
+      const ext = filename.match(/\.[^.]+$/)?.[0] ?? '(无后缀)';
+      setMessages(prev => [...prev, {
+        id: newId(), role: 'system',
+        text: `（不支持的文件类型：${ext}）`,
+        time: Date.now(),
+      }]);
+      return;
+    }
+    if (paths.length > 1) {
+      setMessages(prev => [...prev, {
+        id: newId(), role: 'system',
+        text: `（只发送了第一个文件，其余 ${paths.length - 1} 个忽略）`,
+        time: Date.now(),
+      }]);
+    }
+    doUpload(path, filename);
+  }, [doUpload]);
+
+  const handleDropPathsRef = useRef(handleDropPaths);
+  useEffect(() => { handleDropPathsRef.current = handleDropPaths; }, [handleDropPaths]);
+
+  useEffect(() => {
+    let unlistenFn: (() => void) | null = null;
+    (async () => {
+      unlistenFn = await getCurrentWebview().onDragDropEvent((event) => {
+        const payload = event.payload;
+        if (payload.type === 'enter' || payload.type === 'over') {
+          setIsDraggingOver(true);
+        } else if (payload.type === 'leave') {
+          setIsDraggingOver(false);
+        } else if (payload.type === 'drop') {
+          setIsDraggingOver(false);
+          handleDropPathsRef.current(payload.paths);
+        }
+      });
+    })();
+    return () => { if (unlistenFn) unlistenFn(); };
+  }, []);
 
   const currentHue = MOOD_HUE[state.mood];
   const herDataUrl = avatars.her.dataUrl;
@@ -665,12 +834,16 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, bubbleFon
             boxShadow: '0 12px 32px oklch(0.30 0.04 60 / 0.20)', zIndex: 10,
           }}>
             {([
-              ['attach', '附加文件',   '.pdf .png .jpg'],
-              ['book',   '插入日记片段', '从他的日记中'],
-              ['leaf',   '从花园中取',  '已养成的物品'],
-              ['sparkle','设置心情',   '手动注入状态'],
-            ] as [string, string, string][]).map(([icon, label, sub]) => (
-              <button key={label} onClick={() => setShowAttachMenu(false)} style={{
+              ['attach', '附加文件',   '.txt .md .docx',       'doc'],
+              ['book',   '插入日记片段', '从他的日记中',          'close'],
+              ['attach', '插入图片',    '.png .jpg .gif .webp', 'img'],
+              ['leaf',   '从花园中取',  '已养成的物品',          'close'],
+            ] as [string, string, string, string][]).map(([icon, label, sub, action]) => (
+              <button key={label} onClick={
+                action === 'doc' ? onClickAttach :
+                action === 'img' ? onClickImage :
+                () => setShowAttachMenu(false)
+              } style={{
                 display: 'flex', alignItems: 'center', gap: 10, width: '100%',
                 padding: '8px 10px', background: 'transparent', border: 'none', cursor: 'pointer',
                 color: 'var(--ink)', textAlign: 'left', borderRadius: 4, fontFamily: 'inherit',
@@ -732,6 +905,24 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, bubbleFon
           )}
         </div>
       </div>
+
+      {isDraggingOver && (
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: 'oklch(0.95 0.04 60 / 0.85)',
+          border: '3px dashed oklch(0.55 0.13 60)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 100, pointerEvents: 'none',
+          borderRadius: 'inherit',
+        }}>
+          <div className="serif" style={{
+            fontSize: 18, fontWeight: 600, color: 'var(--ink)',
+            letterSpacing: 0.5,
+          }}>
+            松开发送文件
+          </div>
+        </div>
+      )}
     </div>
   );
 }
