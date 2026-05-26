@@ -4,7 +4,6 @@
 
 ---
 
-
 ## P1：客户端和目标 v1 WS 协议不一致
 
 **位置**：`src/shared/api/ws.ts`、`src/shared/api/types.ts`、`D:\ai\qq-st-bot\channels\desktop_ws.py`
