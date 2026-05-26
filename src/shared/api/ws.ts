@@ -125,10 +125,23 @@ class WSClient {
 
     ws.onerror = () => { /* onclose always follows */ };
 
-    ws.onclose = () => {
+    ws.onclose = (e: CloseEvent) => {
+      if (this.ws !== ws) return; // stale socket closed after a newer connection took over
+
+      const replacedByNewConnection =
+        e.code === 1000 && e.reason.includes('replaced by new connection');
+
       this._clearTimers();
       this.ws = null;
-      if (!this.url) return; // disconnect() was called, don't reconnect
+      if (replacedByNewConnection) {
+        this.url = '';
+        this._setState('idle');
+        console.log('[ws] 连接被新 desktop websocket 替换，停止自动重连');
+        return;
+      }
+      if (!this.url) {
+        return;
+      }
       this._setState('disconnected');
       const delay = this.backoff;
       this.backoff = Math.min(this.backoff * 2, 30_000);
