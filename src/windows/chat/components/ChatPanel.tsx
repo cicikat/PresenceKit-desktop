@@ -60,18 +60,22 @@ type HistoryStatus =
   | { kind: 'loading' }
   | { kind: 'ok' }
   | { kind: 'empty' }
-  | { kind: 'error'; category: 'network' | 'unauthorized' | 'malformed'; detail: string };
+  | { kind: 'error'; category: 'network' | 'unauthorized' | 'malformed'; statusCode: number | null; detail: string };
 
-function classifyHistoryError(err: unknown): { category: 'network' | 'unauthorized' | 'malformed'; detail: string } {
+// Rust returns "HTTP 401 Unauthorized" / "HTTP 403 Forbidden" via format!("HTTP {}", resp.status())
+function classifyHistoryError(err: unknown): { category: 'network' | 'unauthorized' | 'malformed'; statusCode: number | null; detail: string } {
   const msg = err instanceof Error ? err.message : String(err);
   const lower = msg.toLowerCase();
-  if (lower.includes('401') || lower.includes('unauthorized') || lower.includes('unauthenticated')) {
-    return { category: 'unauthorized', detail: msg };
+  const codeMatch = msg.match(/\bHTTP (\d{3})\b/);
+  const statusCode = codeMatch ? parseInt(codeMatch[1], 10) : null;
+  if (statusCode === 401 || statusCode === 403
+    || lower.includes('unauthorized') || lower.includes('unauthenticated') || lower.includes('forbidden')) {
+    return { category: 'unauthorized', statusCode, detail: msg };
   }
   if (lower.includes('json') || lower.includes('parse') || lower.includes('serde') || lower.includes('invalid')) {
-    return { category: 'malformed', detail: msg };
+    return { category: 'malformed', statusCode, detail: msg };
   }
-  return { category: 'network', detail: msg };
+  return { category: 'network', statusCode, detail: msg };
 }
 
 // ── 把单日 entries 转成消息列表 ──────────────────────────────────────────────
@@ -807,7 +811,9 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, bubbleFon
             )}
             {historyStatus.kind === 'error' && (
               <span className="mono" title={historyStatus.detail} style={{ fontSize: 9, color: 'oklch(0.52 0.14 20)', letterSpacing: 1, cursor: 'default' }}>
-                历史 · {historyStatus.category === 'network' ? '网络错误' : historyStatus.category === 'unauthorized' ? '401' : '格式异常'}
+                历史 · {historyStatus.category === 'network' ? '网络错误'
+                  : historyStatus.category === 'unauthorized' ? (historyStatus.statusCode != null ? String(historyStatus.statusCode) : '401')
+                  : '格式异常'}
               </span>
             )}
           </div>
