@@ -122,7 +122,7 @@ interface ChatResponse {
 ```text
 ChatPanel mount
   → loadHistory()
-  → invoke("load_history", { userId, token })
+  → invoke("load_history", { userId })
   → Rust reqwest GET http://127.0.0.1:8080/memory/{user_id}/short-term
 ```
 
@@ -132,7 +132,7 @@ ChatPanel mount
 Authorization: Bearer <admin_token>
 ```
 
-当前客户端仍保留备用 `loadHistory()` 的 `BOT_USER_ID` 默认值；`ADMIN_TOKEN` 已迁移到 Rust 侧本地配置读取，不再写在前端源码中。配置说明见“客户端本地配置”。
+前端不再传 admin token。当前客户端仍保留备用 `loadHistory()` 的 `BOT_USER_ID` 默认值；`ADMIN_TOKEN` 已迁移到 Rust 侧本地配置读取，再由 Rust/Tauri command 作为 Bearer token 调后端。配置说明见“客户端本地配置”。
 
 后端返回：
 
@@ -166,7 +166,7 @@ Authorization: Bearer <admin_token>
 Sidebar garden tab
   → SubGarden mount
   → loadGardenState()
-  → invoke("load_garden_state", { token })
+  → invoke("load_garden_state")
   → Rust reqwest GET http://127.0.0.1:8080/garden/state
 ```
 
@@ -176,7 +176,7 @@ Sidebar garden tab
 Authorization: Bearer <admin_token>
 ```
 
-当前 token 由 Rust 侧 `src-tauri/src/client_config.rs` 从本地配置读取；前端 `src/shared/api/backend.ts` 不再保存或传递 `ADMIN_TOKEN`。
+当前 token 由 Rust 侧 `src-tauri/src/client_config.rs` 从本地配置读取；前端 `src/shared/api/backend.ts` 不再保存或传递 `ADMIN_TOKEN`。后端协议未变，仍要求 Bearer token。
 
 后端文件：
 
@@ -225,7 +225,7 @@ Authorization: Bearer <admin_token>
 Sidebar diary tab
   → SubDiary mount
   → loadDiaryList()
-  → invoke("load_diary_list", { token })
+  → invoke("load_diary_list")
   → Rust reqwest GET http://127.0.0.1:8080/diary/list
 ```
 
@@ -253,7 +253,7 @@ Sidebar diary tab
 ```text
 SubDiary 点击 entry
   → loadDiaryEntry(date)
-  → invoke("load_diary_entry", { date, token })
+  → invoke("load_diary_entry", { date })
   → Rust reqwest GET http://127.0.0.1:8080/diary/{date}
 ```
 
@@ -283,7 +283,7 @@ SubDiary 点击 entry
 ```text
 ChatPanel mount
   → loadChatLogDates()
-  → invoke("load_chat_log_dates", { token })
+  → invoke("load_chat_log_dates")
   → Rust reqwest GET http://127.0.0.1:8080/chat-log/dates
   ← { dates: ["2026-05-16", "2026-05-15", ...], count: N }
 ```
@@ -310,7 +310,7 @@ ChatPanel mount
 ```text
 ChatPanel 启动或滚顶触发
   → loadChatLogDay(date)
-  → invoke("load_chat_log_day", { date, token })
+  → invoke("load_chat_log_day", { date })
   → Rust reqwest GET http://127.0.0.1:8080/chat-log/{date}
   ← { date, entries: [...], raw_fallback: bool }
 ```
@@ -339,7 +339,7 @@ ChatPanel 启动或滚顶触发
 
 ```text
 loadMoodState()
-  → invoke("load_mood_state", { token })
+  → invoke("load_mood_state")
   → Rust reqwest GET http://127.0.0.1:8080/mood/state
 ```
 
@@ -369,7 +369,7 @@ loadMoodState()
 
 ```text
 loadActivityState()
-  → invoke("load_activity_state", { token })
+  → invoke("load_activity_state")
   → Rust reqwest GET http://127.0.0.1:8080/activity/current
 ```
 
@@ -740,15 +740,15 @@ v1 目标新增或替换：
 | Command | 方向 | 说明 |
 |---|---|---|
 | `send_chat(message)` | 前端 → Rust → 后端 | POST `/desktop/chat` |
-| `load_history(user_id, token)` | 前端 → Rust → 后端 | GET `/memory/{user_id}/short-term` |
-| `load_garden_state(token)` | 前端 → Rust → 后端 | GET `/garden/state` |
-| `load_diary_list(token)` | 前端 → Rust → 后端 | GET `/diary/list` |
-| `load_diary_entry(date, token)` | 前端 → Rust → 后端 | GET `/diary/{date}` |
-| `load_chat_log_dates(token)` | 前端 → Rust → 后端 | GET `/chat-log/dates`，路径不含 QQ |
-| `load_chat_log_day(date, token)` | 前端 → Rust → 后端 | GET `/chat-log/{date}`，路径不含 QQ |
-| `load_mood_state(token)` | 前端 → Rust → 后端 | GET `/mood/state` |
-| `load_activity_state(token)` | 前端 → Rust → 后端 | GET `/activity/current` |
-| `load_sensor_realtime(token)` | 前端 → Rust → 后端 | GET `/sensor/realtime`；无数据统一返回 `_no_data` |
+| `load_history(user_id)` | 前端 → Rust → 后端 | GET `/memory/{user_id}/short-term`；Rust 侧读取 admin token |
+| `load_garden_state()` | 前端 → Rust → 后端 | GET `/garden/state`；Rust 侧读取 admin token |
+| `load_diary_list()` | 前端 → Rust → 后端 | GET `/diary/list`；Rust 侧读取 admin token |
+| `load_diary_entry(date)` | 前端 → Rust → 后端 | GET `/diary/{date}`；Rust 侧读取 admin token |
+| `load_chat_log_dates()` | 前端 → Rust → 后端 | GET `/chat-log/dates`，路径不含 QQ；Rust 侧读取 admin token |
+| `load_chat_log_day(date)` | 前端 → Rust → 后端 | GET `/chat-log/{date}`，路径不含 QQ；Rust 侧读取 admin token |
+| `load_mood_state()` | 前端 → Rust → 后端 | GET `/mood/state`；Rust 侧读取 admin token |
+| `load_activity_state()` | 前端 → Rust → 后端 | GET `/activity/current`；Rust 侧读取 admin token |
+| `load_sensor_realtime()` | 前端 → Rust → 后端 | GET `/sensor/realtime`；Rust 侧读取 admin token，无数据统一返回 `_no_data` |
 | `action_minimize_window()` | 前端 → Rust | 执行 `minimize_window`，最小化当前 Tauri 窗口 |
 | `action_open_url(url)` | 前端 → Rust | 执行 `open_url`，使用 `tauri-plugin-opener` 打开 URL |
 | `action_show_notify(title, text)` | 前端 → Rust | 执行 `show_notify`，当前用 dialog fallback 展示 |

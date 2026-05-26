@@ -41,8 +41,8 @@
 |---|---|---|
 | HTTP 发消息 | 已实现：Tauri `send_chat` → `/desktop/chat` | 未来改 WS `user_message` |
 | 加载聊天历史（按日懒加载） | 已实现（Phase 2c+）：`load_chat_log_dates` + `load_chat_log_day` → `/chat-log/*` | — |
-| 加载短期历史 | 已实现（备用）：Tauri `load_history` → `/memory/{uid}/short-term`，ChatPanel 不再调用 | 去硬编码 uid/token |
-| 加载花园状态 | 已实现：Tauri `load_garden_state` → `/garden/state` | 去硬编码 token，补详情/操作入口 |
+| 加载短期历史 | 已实现（备用）：Tauri `load_history` → `/memory/{uid}/short-term`，ChatPanel 不再调用；P-02 已将 admin token 来源迁到 client config | 后续确认是否清理备用 uid |
+| 加载花园状态 | 已实现：Tauri `load_garden_state` → `/garden/state`；P-02 已将 admin token 来源迁到 client config | 补详情/操作入口 |
 | 加载日记列表 | 已实现：Tauri `load_diary_list` → `/diary/list` | emotion 字段后端未产出（返回 null） |
 | 加载单篇日记 | 已实现：Tauri `load_diary_entry` → `/diary/{date}` | 懒加载，点击 entry 时才拉正文 |
 | WS 连接 | 已实现 legacy 连接和重连 | 升级到 v1 envelope |
@@ -95,7 +95,7 @@ Ribbon 的桌宠按钮会：
 
 - 花园仍只读，没有手动浇水、采收、送花、插花瓶等客户端操作。
 - `harvest_count` / `vase_count` 只有计数，没有详情列表。
-- 管理 token 仍硬编码在 `src/shared/api/backend.ts`。
+- P-02 已将 backend base、WebSocket base、admin token 和 sensor config 迁到 client config；`config/client.local.json` 不提交。默认开发 token 仍作为无本地配置时的兼容 fallback，未来可替换为首次启动引导或本机鉴权。
 - 后端 garden daily lifecycle 需要真实 scheduler 长跑验证，见 `docs/known-issues.md`。
 
 ---
@@ -169,7 +169,7 @@ src-tauri/src/sensor/
 
 1. 先对齐后端和客户端 WS 协议：明确是继续 legacy 过渡，还是直接实现 v1。
 2. 修 action ack：未实现动作前不要回成功。
-3. 把历史 user id / token 从硬编码迁到配置或后端专用无鉴权本机接口。
+3. 评估是否清理备用历史 user id；长期把默认开发 token fallback 替换为首次启动引导或本机鉴权。
 4. 接 `state_update` 到 `StateEngine`。
 5. 补花园详情/操作入口，或明确它长期只是只读陪伴状态。
 6. 再做桌宠窗口，否则桌宠缺少后端权威状态。

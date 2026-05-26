@@ -266,6 +266,6 @@ AvatarCropper
 - 客户端和后端实际仍在 legacy WS 协议。
 - v1 文档目标要求 `assistant_message` / `state_update` / `user_message` / `client_event`，当前未实现。
 - action executor 只覆盖四类基础动作，尚未接入桌宠行为或 v1 capabilities。
-- `loadHistory()` 里 user id 和 admin token 硬编码。
+- P-02 已将 backend base、WebSocket base、admin token 和 sensor config 外化到 client config；`config/client.local.json` 不提交。`loadHistory()` 仍保留备用 user id 默认值，默认开发 token 仅作为无本地配置时的兼容 fallback，不代表生产鉴权方案。
 
 完整列表见 `docs/known-issues.md`。
