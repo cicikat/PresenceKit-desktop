@@ -19,7 +19,7 @@ const SIDEBAR_MAX     = 540;
 const SIDEBAR_DEFAULT = 340;
 
 /* ── 偏好面板 ── */
-function PreferencesPanel({ open, onClose, theme, onThemeChange, sidebarWidth, onSidebarWidthChange, chatHeaderVisible, onChatHeaderToggle }: any) {
+function PreferencesPanel({ open, onClose, theme, onThemeChange, sidebarWidth, onSidebarWidthChange, chatHeaderVisible, onChatHeaderToggle, bubbleFontSize, onBubbleFontSizeChange }: any) {
   const [avatars, setAvatars] = useState(avatarStore.get());
   const [cropSrc, setCropSrc] = useState<string | null>(null);
   const [cropRole, setCropRole] = useState<'her' | 'you' | null>(null);
@@ -85,6 +85,13 @@ function PreferencesPanel({ open, onClose, theme, onThemeChange, sidebarWidth, o
             </PrefRow>
             <PrefRow label="对话信息栏" hint="顶部状态条 (mood / activity / 时段)">
               <PrefSwitch active={chatHeaderVisible} onClick={onChatHeaderToggle} />
+            </PrefRow>
+            <PrefRow label="聊天气泡字体大小" hint="小 / 中 / 大">
+              <div style={{ display: 'flex', gap: 6 }}>
+                <PrefSeg active={bubbleFontSize === 'small'}  onClick={() => onBubbleFontSizeChange('small')}>小</PrefSeg>
+                <PrefSeg active={bubbleFontSize === 'medium'} onClick={() => onBubbleFontSizeChange('medium')}>中</PrefSeg>
+                <PrefSeg active={bubbleFontSize === 'large'}  onClick={() => onBubbleFontSizeChange('large')}>大</PrefSeg>
+              </div>
             </PrefRow>
             <PrefRow label="侧栏默认宽度" hint={`${sidebarWidth}px`}>
               <input type="range" min={SIDEBAR_MIN} max={SIDEBAR_MAX} value={sidebarWidth}
@@ -252,6 +259,7 @@ export function ChatWindow() {
   const [sidebarTab, setSidebarTab]               = useState('flow');
   const [sidebarWidth, setSidebarWidth]           = useState(SIDEBAR_DEFAULT);
   const [chatHeaderVisible, setChatHeaderVisible] = useState(true);
+  const [bubbleFontSize, setBubbleFontSize]       = useState<'small' | 'medium' | 'large'>('medium');
   const [specOpen, setSpecOpen]                   = useState(false);
   const [prefsOpen, setPrefsOpen]                 = useState(false);
 
@@ -318,7 +326,7 @@ export function ChatWindow() {
           </>
         )}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <ChatPanel engine={engine} chatRectRef={chatRectRef} headerVisible={chatHeaderVisible} />
+          <ChatPanel engine={engine} chatRectRef={chatRectRef} headerVisible={chatHeaderVisible} bubbleFontSize={bubbleFontSize} />
         </div>
       </div>
 
@@ -334,7 +342,9 @@ export function ChatWindow() {
         sidebarWidth={sidebarWidth}
         onSidebarWidthChange={setSidebarWidth}
         chatHeaderVisible={chatHeaderVisible}
-        onChatHeaderToggle={() => setChatHeaderVisible(v => !v)} />
+        onChatHeaderToggle={() => setChatHeaderVisible(v => !v)}
+        bubbleFontSize={bubbleFontSize}
+        onBubbleFontSizeChange={setBubbleFontSize} />
     </div>
   );
 }

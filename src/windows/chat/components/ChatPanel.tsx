@@ -14,6 +14,12 @@ import { loadChatLogDates, loadChatLogDay } from '../../../shared/api/backend';
 import { wsClient } from '../../../shared/api/ws';
 import type { ChatLogEntry } from '../../../shared/api/types';
 
+const BUBBLE_FONT_SIZES = {
+  small:  { assistant: 13,   user: 12.5 },
+  medium: { assistant: 14,   user: 13.5 },
+  large:  { assistant: 16,   user: 15.5 },
+} as const;
+
 function splitReply(text: string): string[] {
   return text.split(/\n+/).map(s => s.trim()).filter(s => s.length > 0);
 }
@@ -140,7 +146,7 @@ function BreathingAvatar({
   );
 }
 
-const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, youVisible }: any) {
+const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, youVisible, assistantFontSize, userFontSize }: any) {
   const fromUser = msg.role === 'user';
   const hue = msg.moodHue ?? currentHue;
   const time = msg.time ? new Date(msg.time).toLocaleTimeString('zh', { hour: '2-digit', minute: '2-digit' }) : '';
@@ -182,7 +188,7 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
             padding: '10px 14px',
             background: 'var(--ink)', color: 'var(--paper)',
             borderRadius: '6px 6px 1px 6px',
-            fontSize: 13.5, lineHeight: 1.55,
+            fontSize: userFontSize, lineHeight: 1.55,
             boxShadow: '0 4px 12px oklch(0.30 0.04 60 / 0.18)',
             whiteSpace: 'pre-wrap',
           }}>{msg.text}</div>
@@ -222,7 +228,7 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
           borderRight: '1px solid var(--paper-edge)',
           borderBottom: '1px solid var(--paper-edge)',
           borderRadius: '2px 6px 6px 2px',
-          fontSize: 14, lineHeight: 1.65, color: 'var(--ink)',
+          fontSize: assistantFontSize, lineHeight: 1.65, color: 'var(--ink)',
           fontFamily: 'var(--font-serif)',
           whiteSpace: 'pre-wrap',
         }}>
@@ -241,7 +247,7 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
 
 // ── 主组件 ──────────────────────────────────────────────────────────────────
 
-export function ChatPanel({ engine, chatRectRef, headerVisible = true }: any) {
+export function ChatPanel({ engine, chatRectRef, headerVisible = true, bubbleFontSize = 'medium' }: any) {
   const [state, setState] = useState(engine.get());
   useEffect(() => engine.subscribe(setState), [engine]);
 
@@ -554,6 +560,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true }: any) {
   const herDataUrl = avatars.her.dataUrl;
   const youDataUrl = avatars.you.dataUrl;
   const youVisible = avatars.you.visible;
+  const fontSizes  = BUBBLE_FONT_SIZES[bubbleFontSize as keyof typeof BUBBLE_FONT_SIZES] ?? BUBBLE_FONT_SIZES.medium;
 
   return (
     <div ref={rootRef} style={{
@@ -616,6 +623,8 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true }: any) {
             herDataUrl={herDataUrl}
             youDataUrl={youDataUrl}
             youVisible={youVisible}
+            assistantFontSize={fontSizes.assistant}
+            userFontSize={fontSizes.user}
           />
         ))}
 
