@@ -13,6 +13,7 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { sendChat, uploadDocument } from '../../../shared/api/backend';
 import { loadChatLogDates, loadChatLogDay } from '../../../shared/api/backend';
+import { getClientConfig } from '../../../shared/api/config';
 import { wsClient } from '../../../shared/api/ws';
 import type { ChatLogEntry, UploadError } from '../../../shared/api/types';
 
@@ -549,12 +550,19 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, bubbleFon
   // ── WS 连接 + channel_message 订阅 ───────────────────────────────────────
 
   useEffect(() => {
-    wsClient.connect('ws://127.0.0.1:8080/ws/desktop');
-    return wsClient.on('channel_message', (content) => {
+    let mounted = true;
+    getClientConfig().then(cfg => {
+      if (mounted) wsClient.connect(cfg.websocketBase);
+    });
+    const unsubscribe = wsClient.on('channel_message', (content) => {
       // TODO: 接入 turn_id 去重(需要先扩展 ws.ts 透传 turn_id)
       // 当前 /upload/ingest 后端 broadcast 会导致同一 reply 在 HTTP + WS 双路径渲染两次
       scheduleAssistantSegments(content);
     });
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
   }, [engine, scheduleAssistantSegments]);
 
   // ── 输入处理 ──────────────────────────────────────────────────────────────

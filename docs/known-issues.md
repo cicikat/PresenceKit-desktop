@@ -43,24 +43,19 @@
 
 ---
 
-## P2：admin token 硬编码（QQ 号 ChatPanel 已绕过）
+## P2：admin token 已从前端源码迁出（QQ 号 ChatPanel 已绕过）
 
-**位置**：`src/shared/api/backend.ts`
-
-```ts
-const BOT_USER_ID = "1043484516";
-const ADMIN_TOKEN = "Emerald1231";
-```
+**位置**：`src-tauri/src/client_config.rs`、`config/client.local.json`
 
 Phase 2c+ 之后，ChatPanel 启动历史改走 `/chat-log/*` 接口，owner_qq 由后端从 `config.yaml` 读取，客户端不再直接使用 `BOT_USER_ID`。但 `BOT_USER_ID` 仍出现在 `loadHistory()`（现备用）及可能的 future 模块里。
 
-**当前影响**：
+**当前状态**：
 
-- `ADMIN_TOKEN` 仍硬编码，后端 token 改动会影响花园、日记、聊天日志等所有接口。
+- `ADMIN_TOKEN` 已迁移到 Rust 侧本地配置读取，前端不再保存或传递 token。
+- `config/client.local.json` 已加入 `.gitignore`，真实 token 不应提交。
 - `/memory/{uid}/short-term` 不再被 ChatPanel 调用，但其他模块未来可能仍用。
-- token 出现在前端源码里，不适合长期保留。
 
-**建议**：改成 Tauri 配置或后端专用本机鉴权；`BOT_USER_ID` 遗留可在确认无其他调用者后清理。
+**剩余建议**：`BOT_USER_ID` 遗留可在确认无其他调用者后清理；长期仍可考虑后端专用本机鉴权替代静态 token。
 
 ---
 

@@ -26,6 +26,34 @@
 
 默认服务地址：`http://127.0.0.1:8080`
 
+## 客户端本地配置
+
+P-02 之后，Emerald-client 的后端连接配置从本地配置文件读取。仓库提供模板：
+
+```text
+config/client.example.json
+```
+
+本机覆盖文件为：
+
+```text
+config/client.local.json
+```
+
+`config/client.local.json` 已加入 `.gitignore`，不要提交真实 admin token。文件不存在或字段缺失时，客户端使用当前兼容默认值：
+
+| 字段 | 默认值 | 说明 |
+|---|---|---|
+| `backendBase` | `http://127.0.0.1:8080` | Rust Tauri command 访问后端 HTTP 的 base URL，不包含末尾 `/` |
+| `websocketBase` | `ws://127.0.0.1:8080/ws/desktop` | 前端原生 WebSocket 连接地址 |
+| `adminToken` | 当前本地开发默认 token | 仅 Rust 侧读取和使用，不透传给前端日志 |
+| `sensorConfig.enabled` | `true` | 是否启动 Tauri 内嵌 sensor runner |
+| `sensorConfig.windowSeconds` | `30` | sensor 聚合窗口长度 |
+| `sensorConfig.tickSeconds` | `5` | sensor 采样/推送 tick |
+| `sensorConfig.sensorVersion` | `emerald-client-rust-1.0` | sensor 版本标识 |
+
+兼容说明：旧的 AppData `sensor_config.json` 仍可作为 sensor 兼容配置来源；新的 `config/client.local.json` 优先级更高，并同时覆盖 HTTP base、WS base、admin token 和 sensor 配置。
+
 ---
 
 ## 当前客户端调用点
@@ -104,14 +132,7 @@ ChatPanel mount
 Authorization: Bearer <admin_token>
 ```
 
-当前客户端在 `src/shared/api/backend.ts` 硬编码：
-
-```ts
-const BOT_USER_ID = "1043484516";
-const ADMIN_TOKEN = "Emerald1231";
-```
-
-这只是当前实现，不应视为长期设计。风险见 `docs/known-issues.md`。
+当前客户端仍保留备用 `loadHistory()` 的 `BOT_USER_ID` 默认值；`ADMIN_TOKEN` 已迁移到 Rust 侧本地配置读取，不再写在前端源码中。配置说明见“客户端本地配置”。
 
 后端返回：
 
@@ -155,7 +176,7 @@ Sidebar garden tab
 Authorization: Bearer <admin_token>
 ```
 
-当前复用 `src/shared/api/backend.ts` 里的硬编码 `ADMIN_TOKEN`。
+当前 token 由 Rust 侧 `src-tauri/src/client_config.rs` 从本地配置读取；前端 `src/shared/api/backend.ts` 不再保存或传递 `ADMIN_TOKEN`。
 
 后端文件：
 

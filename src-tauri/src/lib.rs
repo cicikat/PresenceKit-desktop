@@ -1,11 +1,12 @@
 mod actions;
+mod client_config;
 pub mod sensor;
-mod sensor_config;
 
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use base64::Engine;
+use crate::client_config::{backend_url, load_client_config};
 use crate::sensor::runner::{spawn_sensor_runner, SensorRunnerConfig, SensorRunnerHandle};
 use tauri::Manager;
 
@@ -24,14 +25,15 @@ fn greet(name: &str) -> String {
 }
 
 #[tauri::command]
-async fn send_chat(message: String) -> Result<serde_json::Value, String> {
+async fn send_chat(app: tauri::AppHandle, message: String) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
     let client = reqwest::Client::builder()
         .no_proxy()
         .build()
         .map_err(|e| e.to_string())?;
 
     let resp = client
-        .post("http://127.0.0.1:8080/desktop/chat")
+        .post(backend_url(&cfg, "/desktop/chat"))
         .json(&serde_json::json!({ "message": message }))
         .send()
         .await
@@ -41,16 +43,17 @@ async fn send_chat(message: String) -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
-async fn load_history(user_id: String, token: String) -> Result<serde_json::Value, String> {
+async fn load_history(app: tauri::AppHandle, user_id: String) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
     let client = reqwest::Client::builder()
         .no_proxy()
         .build()
         .map_err(|e| e.to_string())?;
 
-    let url = format!("http://127.0.0.1:8080/memory/{}/short-term", user_id);
+    let url = backend_url(&cfg, &format!("/memory/{}/short-term", user_id));
     let resp = client
         .get(&url)
-        .header("Authorization", format!("Bearer {}", token))
+        .bearer_auth(cfg.admin_token)
         .send()
         .await
         .map_err(|e| e.to_string())?;
@@ -63,15 +66,16 @@ async fn load_history(user_id: String, token: String) -> Result<serde_json::Valu
 }
 
 #[tauri::command]
-async fn load_garden_state(token: String) -> Result<serde_json::Value, String> {
+async fn load_garden_state(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
     let client = reqwest::Client::builder()
         .no_proxy()
         .build()
         .map_err(|e| e.to_string())?;
 
     let resp = client
-        .get("http://127.0.0.1:8080/garden/state")
-        .bearer_auth(token)
+        .get(backend_url(&cfg, "/garden/state"))
+        .bearer_auth(cfg.admin_token)
         .send()
         .await
         .map_err(|e| e.to_string())?;
@@ -86,15 +90,16 @@ async fn load_garden_state(token: String) -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
-async fn load_diary_list(token: String) -> Result<serde_json::Value, String> {
+async fn load_diary_list(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
     let client = reqwest::Client::builder()
         .no_proxy()
         .build()
         .map_err(|e| e.to_string())?;
 
     let resp = client
-        .get("http://127.0.0.1:8080/diary/list")
-        .bearer_auth(token)
+        .get(backend_url(&cfg, "/diary/list"))
+        .bearer_auth(cfg.admin_token)
         .send()
         .await
         .map_err(|e| e.to_string())?;
@@ -109,16 +114,17 @@ async fn load_diary_list(token: String) -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
-async fn load_diary_entry(date: String, token: String) -> Result<serde_json::Value, String> {
+async fn load_diary_entry(app: tauri::AppHandle, date: String) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
     let client = reqwest::Client::builder()
         .no_proxy()
         .build()
         .map_err(|e| e.to_string())?;
 
-    let url = format!("http://127.0.0.1:8080/diary/{}", date);
+    let url = backend_url(&cfg, &format!("/diary/{}", date));
     let resp = client
         .get(&url)
-        .bearer_auth(token)
+        .bearer_auth(cfg.admin_token)
         .send()
         .await
         .map_err(|e| e.to_string())?;
@@ -133,15 +139,16 @@ async fn load_diary_entry(date: String, token: String) -> Result<serde_json::Val
 }
 
 #[tauri::command]
-async fn load_chat_log_dates(token: String) -> Result<serde_json::Value, String> {
+async fn load_chat_log_dates(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
     let client = reqwest::Client::builder()
         .no_proxy()
         .build()
         .map_err(|e| e.to_string())?;
 
     let resp = client
-        .get("http://127.0.0.1:8080/chat-log/dates")
-        .bearer_auth(token)
+        .get(backend_url(&cfg, "/chat-log/dates"))
+        .bearer_auth(cfg.admin_token)
         .send()
         .await
         .map_err(|e| e.to_string())?;
@@ -156,16 +163,17 @@ async fn load_chat_log_dates(token: String) -> Result<serde_json::Value, String>
 }
 
 #[tauri::command]
-async fn load_chat_log_day(date: String, token: String) -> Result<serde_json::Value, String> {
+async fn load_chat_log_day(app: tauri::AppHandle, date: String) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
     let client = reqwest::Client::builder()
         .no_proxy()
         .build()
         .map_err(|e| e.to_string())?;
 
-    let url = format!("http://127.0.0.1:8080/chat-log/{}", date);
+    let url = backend_url(&cfg, &format!("/chat-log/{}", date));
     let resp = client
         .get(&url)
-        .bearer_auth(token)
+        .bearer_auth(cfg.admin_token)
         .send()
         .await
         .map_err(|e| e.to_string())?;
@@ -180,15 +188,16 @@ async fn load_chat_log_day(date: String, token: String) -> Result<serde_json::Va
 }
 
 #[tauri::command]
-async fn load_mood_state(token: String) -> Result<serde_json::Value, String> {
+async fn load_mood_state(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
     let client = reqwest::Client::builder()
         .no_proxy()
         .build()
         .map_err(|e| e.to_string())?;
 
     let resp = client
-        .get("http://127.0.0.1:8080/mood/state")
-        .bearer_auth(token)
+        .get(backend_url(&cfg, "/mood/state"))
+        .bearer_auth(cfg.admin_token)
         .send()
         .await
         .map_err(|e| e.to_string())?;
@@ -203,15 +212,16 @@ async fn load_mood_state(token: String) -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
-async fn load_activity_state(token: String) -> Result<serde_json::Value, String> {
+async fn load_activity_state(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
     let client = reqwest::Client::builder()
         .no_proxy()
         .build()
         .map_err(|e| e.to_string())?;
 
     let resp = client
-        .get("http://127.0.0.1:8080/activity/current")
-        .bearer_auth(token)
+        .get(backend_url(&cfg, "/activity/current"))
+        .bearer_auth(cfg.admin_token)
         .send()
         .await
         .map_err(|e| e.to_string())?;
@@ -226,15 +236,16 @@ async fn load_activity_state(token: String) -> Result<serde_json::Value, String>
 }
 
 #[tauri::command]
-async fn load_sensor_realtime(token: String) -> Result<serde_json::Value, String> {
+async fn load_sensor_realtime(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
     let client = reqwest::Client::builder()
         .no_proxy()
         .build()
         .map_err(|e| e.to_string())?;
 
     let resp = client
-        .get("http://127.0.0.1:8080/sensor/realtime")
-        .bearer_auth(token)
+        .get(backend_url(&cfg, "/sensor/realtime"))
+        .bearer_auth(cfg.admin_token)
         .send()
         .await
         .map_err(|e| e.to_string())?;
@@ -265,10 +276,11 @@ async fn load_sensor_realtime(token: String) -> Result<serde_json::Value, String
 
 #[tauri::command]
 async fn upload_document(
+    app: tauri::AppHandle,
     file_path: String,
     message: String,
-    token: String,
 ) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
     // 1. 读文件 bytes
     let bytes = std::fs::read(&file_path).map_err(|e| format!("读文件失败: {}", e))?;
 
@@ -295,8 +307,8 @@ async fn upload_document(
         .map_err(|e| e.to_string())?;
 
     let resp = client
-        .post("http://127.0.0.1:8080/upload/ingest")
-        .bearer_auth(token)
+        .post(backend_url(&cfg, "/upload/ingest"))
+        .bearer_auth(cfg.admin_token)
         .multipart(form)
         .send()
         .await
@@ -366,14 +378,14 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
-            let sensor_cfg = crate::sensor_config::load_sensor_config(app.handle());
-            if sensor_cfg.enabled {
+            let cfg = load_client_config(app.handle());
+            if cfg.sensor_config.enabled {
                 match spawn_sensor_runner(SensorRunnerConfig {
-                    backend_base_url: sensor_cfg.backend_base_url,
-                    admin_token: sensor_cfg.admin_token,
-                    window_seconds: sensor_cfg.window_seconds,
-                    tick_seconds: sensor_cfg.tick_seconds,
-                    sensor_version: sensor_cfg.sensor_version,
+                    backend_base_url: cfg.backend_base,
+                    admin_token: cfg.admin_token,
+                    window_seconds: cfg.sensor_config.window_seconds,
+                    tick_seconds: cfg.sensor_config.tick_seconds,
+                    sensor_version: cfg.sensor_config.sensor_version,
                 }) {
                     Ok(handle) => {
                         app.manage(Mutex::<Option<SensorRunnerHandle>>::new(Some(handle)));
@@ -394,6 +406,7 @@ pub fn run() {
             actions::action_open_url,
             actions::action_show_notify,
             actions::action_media_play_pause,
+            client_config::load_public_client_config,
             greet,
             send_chat,
             load_history,

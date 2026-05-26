@@ -1,0 +1,11 @@
+{
+  "backendBase": "http://127.0.0.1:8080",
+  "websocketBase": "ws://127.0.0.1:8080/ws/desktop",
+  "adminToken": "replace-with-local-admin-token",
+  "sensorConfig": {
+    "enabled": true,
+    "windowSeconds": 30,
+    "tickSeconds": 5,
+    "sensorVersion": "emerald-client-rust-1.0"
+  }
+}
