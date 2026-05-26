@@ -1,3 +1,4 @@
+mod actions;
 pub mod sensor;
 mod sensor_config;
 
@@ -351,6 +352,10 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            actions::action_minimize_window,
+            actions::action_open_url,
+            actions::action_show_notify,
+            actions::action_media_play_pause,
             greet,
             send_chat,
             load_history,

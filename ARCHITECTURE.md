@@ -79,6 +79,7 @@ WebSocket 在 `src/shared/api/ws.ts`：
 
 - 浏览器原生 `WebSocket` 连接 `ws://127.0.0.1:8080/ws/desktop`。
 - 支持 legacy `hello_ack`、`channel_message`、`action`、`ping`。
+- `action` 保持 legacy envelope，不改协议；收到后异步 dispatch 到 Tauri action commands，并按执行结果回 `ack`。
 - 自动重连，指数退避最大 30 秒。
 - 当前没有实现 v1 envelope，也没有发送 `user_message` / `client_event`。
 
@@ -87,6 +88,7 @@ Tauri Rust 在 `src-tauri/src/lib.rs`：
 - `send_chat`：POST `/desktop/chat`，使用 `reqwest.no_proxy()`。
 - `load_history`：GET `/memory/{user_id}/short-term`，使用 Bearer token。
 - `load_garden_state`：GET `/garden/state`，使用 Bearer token。
+- `src-tauri/src/actions.rs`：执行 `minimize_window` / `open_url` / `show_notify` / `media_play_pause` 四类 desktop action。
 - `save_avatar` / `load_avatar` / `read_avatars_json` / `write_avatars_json`：本地头像持久化。
 
 ---
@@ -139,10 +141,12 @@ qq-st-bot DesktopChannel
 qq-st-bot push_action_and_wait()
   → WS { type: "action", action, msg_id }
   → src/shared/api/ws.ts
-  → 当前只 emit("action") 并回 ack
+  → 根据 action_type/type 调 Tauri command
+  → src-tauri/src/actions.rs 执行动作
+  → 成功/失败后回 ack
 ```
 
-当前客户端没有实际 action executor。这个风险已记录在 `docs/known-issues.md`。
+当前只接入四类基础 desktop action：`minimize_window`、`open_url`、`show_notify`、`media_play_pause`。未知 action 不执行，并回 `ok:false`。
 
 ### 聊天历史按日懒加载（Phase 2c+）
 
@@ -260,7 +264,7 @@ AvatarCropper
 
 - 客户端和后端实际仍在 legacy WS 协议。
 - v1 文档目标要求 `assistant_message` / `state_update` / `user_message` / `client_event`，当前未实现。
-- 客户端收到 `action` 后会回成功 ack，但没有执行动作。
+- action executor 只覆盖四类基础动作，尚未接入桌宠行为或 v1 capabilities。
 - `loadHistory()` 里 user id 和 admin token 硬编码。
 
 完整列表见 `docs/known-issues.md`。

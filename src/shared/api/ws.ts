@@ -1,10 +1,35 @@
-import type { ServerMessage, ClientMessage, ConnectionState } from './types';
+import { invoke } from '@tauri-apps/api/core';
+import type { ServerMessage, ClientMessage, ConnectionState, DesktopActionPayload, DesktopActionType } from './types';
 
 type EventMap = {
   state: ConnectionState;
   channel_message: string;
-  action: Record<string, unknown>;
+  action: DesktopActionPayload;
 };
+
+function actionType(action: DesktopActionPayload): string | null {
+  const raw = action.action_type ?? action.type;
+  return typeof raw === 'string' && raw.trim() ? raw.trim() : null;
+}
+
+function actionParams(action: DesktopActionPayload): Record<string, unknown> {
+  return action.params && typeof action.params === 'object' && !Array.isArray(action.params)
+    ? action.params
+    : {};
+}
+
+function stringParam(
+  action: DesktopActionPayload,
+  keys: string[],
+  fallback = '',
+): string {
+  const params = actionParams(action);
+  for (const key of keys) {
+    const value = params[key] ?? action[key];
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return fallback;
+}
 
 class WSClient {
   private ws: WebSocket | null = null;
@@ -89,9 +114,8 @@ class WSClient {
           this._send({ type: 'ack', msg_id: msg.msg_id, ok: true });
           break;
         case 'action':
-          console.log('[ws] action:', msg.action);
-          this._send({ type: 'ack', msg_id: msg.msg_id, ok: true });
           this.emit('action', msg.action);
+          void this._handleAction(msg.msg_id, msg.action);
           break;
         case 'ping':
           this._send({ type: 'pong' });
@@ -116,6 +140,54 @@ class WSClient {
   private _send(msg: ClientMessage) {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(msg));
+    }
+  }
+
+  private async _handleAction(msgId: string, action: DesktopActionPayload) {
+    const type = actionType(action);
+    console.log('[ws] action received:', action);
+
+    if (!type) {
+      const error = 'action 缺少 type/action_type';
+      console.warn('[ws] action dispatch failed:', error, action);
+      this._send({ type: 'ack', msg_id: msgId, ok: false, error });
+      return;
+    }
+
+    try {
+      await this._dispatchAction(type as DesktopActionType, action);
+      console.log('[ws] action executed:', type);
+      this._send({ type: 'ack', msg_id: msgId, ok: true });
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      console.warn('[ws] action execute failed:', type, error);
+      this._send({ type: 'ack', msg_id: msgId, ok: false, error });
+    }
+  }
+
+  private async _dispatchAction(type: DesktopActionType, action: DesktopActionPayload) {
+    switch (type) {
+      case 'minimize_window':
+        await invoke('action_minimize_window');
+        return;
+      case 'open_url': {
+        const url = stringParam(action, ['url']);
+        if (!url) throw new Error('open_url 缺少 params.url');
+        await invoke('action_open_url', { url });
+        return;
+      }
+      case 'show_notify': {
+        const text = stringParam(action, ['text', 'message', 'body']);
+        if (!text) throw new Error('show_notify 缺少 params.text');
+        const title = stringParam(action, ['title'], 'Emerald');
+        await invoke('action_show_notify', { title, text });
+        return;
+      }
+      case 'media_play_pause':
+        await invoke('action_media_play_pause');
+        return;
+      default:
+        throw new Error(`unsupported action type: ${type}`);
     }
   }
 }

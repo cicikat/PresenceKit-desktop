@@ -1,7 +1,7 @@
 export type ServerMessage =
   | { type: 'hello_ack'; server_version: string }
   | { type: 'channel_message'; content: string; msg_id: string }
-  | { type: 'action'; action: Record<string, unknown>; msg_id: string }
+  | { type: 'action'; action: DesktopActionPayload; msg_id: string }
   | { type: 'ping' };
 
 export type ClientMessage =
@@ -10,6 +10,19 @@ export type ClientMessage =
   | { type: 'pong' };
 
 export type ConnectionState = 'idle' | 'connecting' | 'connected' | 'disconnected';
+
+export type DesktopActionType =
+  | 'minimize_window'
+  | 'open_url'
+  | 'show_notify'
+  | 'media_play_pause';
+
+export type DesktopActionPayload = {
+  type?: string;
+  action_type?: string;
+  params?: Record<string, unknown>;
+  [key: string]: unknown;
+};
 
 export interface ChatResponse {
   reply: string;

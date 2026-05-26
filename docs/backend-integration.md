@@ -610,6 +610,17 @@ ws://127.0.0.1:8080/ws/desktop
 }
 ```
 
+Emerald-client 当前保持该 legacy action envelope，不引入 v1 协议字段。前端同时兼容 `action.action_type` 和 `action.type` 作为动作名，参数仍优先从 `action.params` 读取。
+
+P-01 已接入的最小执行动作：
+
+| `action_type` / `type` | `params` | 客户端执行 |
+|---|---|---|
+| `minimize_window` | `{}` | Tauri 当前窗口 `minimize()` |
+| `open_url` | `{"url": "https://example.com"}` | `tauri-plugin-opener` 打开 http/https/mailto/tel URL |
+| `show_notify` | `{"text": "...", "title": "..."}` | `tauri-plugin-dialog` 信息对话框 fallback，并记录 log |
+| `media_play_pause` | `{}` | Windows 发送媒体播放/暂停键；非 Windows 记录 stub log |
+
 `sensor_aware` trigger 产出的 action 类型：
 
 | `action_type` | 触发条件 | `params` |
@@ -632,10 +643,10 @@ ws://127.0.0.1:8080/ws/desktop
 |---|---|
 | `hello_ack` | 设置连接状态为 `connected` |
 | `channel_message` | emit 给 ChatPanel，并立即 ack |
-| `action` | console.log，立即 ack，emit 给订阅者 |
+| `action` | emit 给订阅者，异步 dispatch 到 Tauri action command，按执行结果 ack |
 | `ping` | 回 `pong` |
 
-注意：当前没有 action 订阅者和执行器，因此 `action` 会被“确认成功但未执行”。这是高优先级问题。
+注意：未知 action 不执行，并回 `ok:false`；这不改变后端协议，也不影响旧桌宠或 file fallback。
 
 ---
 
@@ -678,6 +689,10 @@ v1 目标新增或替换：
 | `load_chat_log_day(date, token)` | 前端 → Rust → 后端 | GET `/chat-log/{date}`，路径不含 QQ |
 | `load_mood_state(token)` | 前端 → Rust → 后端 | GET `/mood/state` |
 | `load_activity_state(token)` | 前端 → Rust → 后端 | GET `/activity/current` |
+| `action_minimize_window()` | 前端 → Rust | 执行 `minimize_window`，最小化当前 Tauri 窗口 |
+| `action_open_url(url)` | 前端 → Rust | 执行 `open_url`，使用 `tauri-plugin-opener` 打开 URL |
+| `action_show_notify(title, text)` | 前端 → Rust | 执行 `show_notify`，当前用 dialog fallback 展示 |
+| `action_media_play_pause()` | 前端 → Rust | 执行 `media_play_pause`，Windows 发送媒体键，非 Windows stub log |
 | `save_avatar(role, image_b64)` | 前端 → Rust | 保存 PNG 到 app data |
 | `load_avatar(path)` | 前端 → Rust | 读取头像并返回 data URL |
 | `read_avatars_json()` | 前端 → Rust | 读取头像配置 |

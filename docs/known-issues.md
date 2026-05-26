@@ -4,23 +4,6 @@
 
 ---
 
-## P1：WebSocket action 会回成功 ack，但没有执行动作
-
-**位置**：`src/shared/api/ws.ts`
-
-当前收到 `action` 后：
-
-- `console.log("[ws] action:", msg.action)`
-- 立即 `_send({ type: "ack", msg_id, ok: true })`
-- `emit("action", msg.action)`
-
-但仓库内没有订阅 `action` 并执行 `open_url` / `minimize_window` / `notify` 等动作的代码。
-
-**影响**：后端会认为桌面动作执行成功，实际上什么都没发生；工具调用结果会被静默吞掉。
-
-**建议**：实现 action executor 后再回成功 ack；在实现前应回 `ok:false` 或不要声明 action 能力。
-
----
 
 ## P1：客户端和目标 v1 WS 协议不一致
 
@@ -308,6 +291,12 @@ tsc --noEmit 存在来自 Panes.tsx 的历史报错，不属于本次重构范�
 ---
 
 ## 已修复
+
+### WebSocket action 基础执行器已接入（2026-05-26，P-01）
+
+**原问题**：`src/shared/api/ws.ts` 收到 `action` 后立即回成功 ack，但没有执行动作。
+
+**修复**：新增 `src-tauri/src/actions.rs` 并在 `src-tauri/src/lib.rs` 注册四个 action commands；`ws.ts` 收到 action 后异步 dispatch，执行成功回 `ok:true`，失败或未知 action 回 `ok:false`。当前只覆盖 `minimize_window`、`open_url`、`show_notify`、`media_play_pause`，不改 legacy WS 协议，不删除旧桌宠或 file fallback。
 
 ### Panes.tsx cleanup 类型报错（2026-05-16，Phase 2c+）
 
