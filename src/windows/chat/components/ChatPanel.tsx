@@ -140,7 +140,7 @@ function BreathingAvatar({
   );
 }
 
-const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, youVisible, engine }: any) {
+const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, youVisible }: any) {
   const fromUser = msg.role === 'user';
   const hue = msg.moodHue ?? currentHue;
   const time = msg.time ? new Date(msg.time).toLocaleTimeString('zh', { hour: '2-digit', minute: '2-digit' }) : '';
@@ -203,7 +203,11 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
   return (
     <div style={{ display: 'flex', gap: 10, padding: '8px 0', alignItems: 'flex-start' }}>
       <div style={{ paddingTop: 14, flexShrink: 0 }}>
-        <BreathingAvatar engine={engine} hue={hue} size={36} dataUrl={herDataUrl} />
+        {herDataUrl ? (
+          <img src={herDataUrl} style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover' }} />
+        ) : (
+          <ChatAvatar hue={hue} size={36} />
+        )}
       </div>
       <div style={{ flex: 1, maxWidth: 'calc(100% - 60px)' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
@@ -609,7 +613,6 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true }: any) {
             key={m.id}
             msg={m}
             currentHue={currentHue}
-            engine={engine}
             herDataUrl={herDataUrl}
             youDataUrl={youDataUrl}
             youVisible={youVisible}
