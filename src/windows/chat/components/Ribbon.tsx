@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react';
 import { Icon } from './UIKit';
 import { wsClient } from '../../../shared/api/ws';
 import type { ConnectionState } from '../../../shared/api/types';
+import { DreamEntryButton } from '../../../features/dream';
 
 function Sep() {
   return <div style={{ width: 24, height: 1, background: 'var(--forest-line)', margin: '6px 0' }} />;
@@ -57,6 +58,7 @@ export function Ribbon({
   petVisible, onPetToggle,
   theme, onThemeToggle,
   onOpenSpec, onOpenPrefs,
+  dreamPreviewActive, onDreamPreviewToggle,
 }: any) {
   const [connState, setConnState] = useState<ConnectionState>(wsClient.getState());
   useEffect(() => wsClient.on('state', setConnState), []);
@@ -105,6 +107,7 @@ export function Ribbon({
         active={sidebarOpen && sidebarTab === 'garden'}
         onClick={() => { if (sidebarOpen && sidebarTab === 'garden') onCloseSidebar(); else onSidebarTab('garden'); }} />
       <Sep />
+      <DreamEntryButton active={dreamPreviewActive} onToggle={onDreamPreviewToggle} />
       <RibBtn icon="pet" label="桌宠" active={petVisible} onClick={onPetToggle} />
       <div style={{ flex: 1 }} />
       <RibBtn icon="settings" label="偏好" onClick={onOpenPrefs} />

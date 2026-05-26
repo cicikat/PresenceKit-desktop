@@ -51,6 +51,7 @@ Emerald-client 是 `qq-st-bot` 的新桌面客户端。它不拥有角色记忆�
 - 创建单个 `StateEngine` 实例。
 - 管理主题、Sidebar、偏好面板、帮助面板、桌宠开关等 UI 状态。
 - 把 engine 传给 `ChatPanel`。
+- 管理 Dream UI v2 preview 的本地开关；它只渲染视觉 overlay，不接 Dream backend / memory / scheduler / hardware。
 - 当前没有实际 `PetWindow` 渲染。
 
 聊天区是 `src/windows/chat/components/ChatPanel.tsx`：
@@ -207,6 +208,7 @@ AvatarCropper
 | `src/main.tsx` | React 入口 |
 | `src/windows/chat/` | 主聊天窗口 |
 | `src/windows/chat/components/` | Ribbon、Sidebar、ChatPanel、浮动 pane、偏好/帮助等 UI |
+| `src/features/dream/` | Dream UI v2 纯前端 preview：tokens、overlay、入口按钮、afterglow |
 | `src/shared/state/store.ts` | 客户端状态 engine |
 | `src/shared/api/` | 后端 HTTP/WS 包装 |
 | `src/shared/avatars/store.ts` | 头像配置和 data URL 缓存 |

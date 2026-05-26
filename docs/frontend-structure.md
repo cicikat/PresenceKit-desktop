@@ -24,6 +24,7 @@
 
 - 创建并持有单个 `StateEngine`。
 - 管理 UI 状态：主题、侧栏开关、侧栏 tab、侧栏宽度、帮助面板、偏好面板、桌宠开关。
+- 管理 Dream UI v2 preview 的本地状态：Ribbon 入口打开 overlay，Esc / WAKE 关闭并显示 afterglow。
 - 布局三列：Ribbon、Sidebar、ChatPanel。
 - 负责偏好面板内的头像上传/裁剪入口。
 
@@ -37,6 +38,25 @@
 | `sidebarWidth` | 可拖拽调整，范围 260-540 |
 | `chatHeaderVisible` | 控制 ChatPanel 顶部状态栏 |
 | `specOpen` / `prefsOpen` | 帮助/偏好浮层 |
+| `dreamPreviewOpen` / `dreamAfterglow` | 纯前端 Dream v2 preview overlay 和醒后余韵提示 |
+
+## Dream UI v2 Preview
+
+文件：`src/features/dream/`
+
+职责：
+
+- 从 `dream-v2-spec.html` 提取 DreamTheme v2 的 token 和组件语义。
+- `DreamEntryButton` 挂在 Ribbon，控制 ChatWindow 内的本地 preview 开关。
+- `DreamTheme` 渲染 fixed overlay、限量花瓣/花粉、mock 聊天结构和 WAKE 按钮。
+- `DreamAfterglowBanner` 在关闭 preview 后显示 12 秒，可点击关闭。
+
+边界：
+
+- 不接 Dream backend、`dream_state`、memory、scheduler、hardware。
+- 不修改真实聊天消息数据，不改变 ChatPanel 发送、上传、WebSocket、字体大小偏好。
+- Esc 和 WAKE 只关闭本地 preview overlay。
+- CSS 支持 `prefers-reduced-motion`，OKLCH token 有 sRGB fallback。
 
 ---
 
@@ -207,6 +227,7 @@ Ring buffer：`useState<{mood, aura}[]>` 长度 60；2s 采样；mood 轨迹柱�
 - 左侧固定 52px 功能条。
 - 切换 Sidebar tab：动向、日记、状态、花园。
 - 切换本地 `petVisible`。
+- 切换本地 Dream UI v2 preview。
 - 打开偏好和帮助面板。
 - 显示 WS 连接状态角标。
 

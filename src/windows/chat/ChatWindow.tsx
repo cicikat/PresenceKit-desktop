@@ -3,7 +3,7 @@
  * Phase 2d.0: 删除 DebugPanel、清理 Ribbon/SidebarPanel props
  * ============================================================ */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Icon, MicroLabel } from './components/UIKit';
 import { StateEngine } from '../../shared/state/store';
 import { avatarStore } from '../../shared/avatars/store';
@@ -13,6 +13,7 @@ import { SidebarPanel } from './components/Sidebar';
 import { ChatPanel } from './components/ChatPanel';
 import { PaneHost } from './components/Panes';
 import { SpecPanel } from './components/SpecPanel';
+import { DreamAfterglowBanner, DreamTheme } from '../../features/dream';
 
 const SIDEBAR_MIN     = 260;
 const SIDEBAR_MAX     = 540;
@@ -262,6 +263,8 @@ export function ChatWindow() {
   const [bubbleFontSize, setBubbleFontSize]       = useState<'small' | 'medium' | 'large'>('medium');
   const [specOpen, setSpecOpen]                   = useState(false);
   const [prefsOpen, setPrefsOpen]                 = useState(false);
+  const [dreamPreviewOpen, setDreamPreviewOpen]   = useState(false);
+  const [dreamAfterglow, setDreamAfterglow]       = useState(false);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -287,6 +290,25 @@ export function ChatWindow() {
     engine.setMode(next ? 'companion' : 'chat-only');
   };
 
+  const openDreamPreview = useCallback(() => {
+    setDreamAfterglow(false);
+    setDreamPreviewOpen(true);
+  }, []);
+
+  const closeDreamPreview = useCallback(() => {
+    setDreamPreviewOpen(false);
+    setDreamAfterglow(true);
+  }, []);
+
+  const closeDreamAfterglow = useCallback(() => {
+    setDreamAfterglow(false);
+  }, []);
+
+  const toggleDreamPreview = useCallback(() => {
+    if (dreamPreviewOpen) closeDreamPreview();
+    else openDreamPreview();
+  }, [dreamPreviewOpen, closeDreamPreview, openDreamPreview]);
+
   const onSidebarTab = (tab: string) => { setSidebarTab(tab); setSidebarOpen(true); };
   const onCloseSidebar = () => setSidebarOpen(false);
 
@@ -311,6 +333,8 @@ export function ChatWindow() {
         onThemeToggle={() => setTheme(t => t === 'dark' ? 'paper' : 'dark')}
         onOpenSpec={() => setSpecOpen(true)}
         onOpenPrefs={() => setPrefsOpen(true)}
+        dreamPreviewActive={dreamPreviewOpen}
+        onDreamPreviewToggle={toggleDreamPreview}
       />
       <div ref={bodyRef} style={{ flex: 1, display: 'flex', minHeight: 0, minWidth: 0, position: 'relative' }}>
         {sidebarOpen && (
@@ -332,6 +356,11 @@ export function ChatWindow() {
 
       {/* TODO: Phase-2 — 桌宠窗口 <PetWindow> */}
 
+      <DreamTheme active={dreamPreviewOpen} onWake={closeDreamPreview} />
+      <DreamAfterglowBanner
+        visible={dreamAfterglow}
+        onClose={closeDreamAfterglow}
+      />
       <PaneHost />
       <SpecPanel open={specOpen} onClose={() => setSpecOpen(false)} />
       <PreferencesPanel
