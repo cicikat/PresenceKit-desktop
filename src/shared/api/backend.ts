@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { ChatResponse, GardenState, DiaryListResponse, DiaryEntry, ChatLogDatesResponse, ChatLogDay, MoodState, ActivityState, UploadIngestResponse, UploadError } from './types';
+import type { ChatResponse, GardenState, DiaryListResponse, DiaryEntry, ChatLogDatesResponse, ChatLogDay, MoodState, ActivityState, SensorRealtimeResponse, UploadIngestResponse, UploadError } from './types';
 
 const BOT_USER_ID = '1043484516';
 const ADMIN_TOKEN = 'Emerald1231';
@@ -49,6 +49,10 @@ export async function loadMoodState(): Promise<MoodState> {
 
 export async function loadActivityState(): Promise<ActivityState> {
   return invoke<ActivityState>('load_activity_state', { token: ADMIN_TOKEN });
+}
+
+export async function loadSensorRealtime(): Promise<SensorRealtimeResponse> {
+  return invoke<SensorRealtimeResponse>('load_sensor_realtime', { token: ADMIN_TOKEN });
 }
 
 export const UPLOAD_MAX_BYTES = 5 * 1024 * 1024;

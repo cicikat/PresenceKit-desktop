@@ -88,6 +88,7 @@ Tauri Rust 在 `src-tauri/src/lib.rs`：
 - `send_chat`：POST `/desktop/chat`，使用 `reqwest.no_proxy()`。
 - `load_history`：GET `/memory/{user_id}/short-term`，使用 Bearer token。
 - `load_garden_state`：GET `/garden/state`，使用 Bearer token。
+- `load_sensor_realtime`：GET `/sensor/realtime`，使用 Bearer token；无数据响应归一为 `_no_data`。
 - `src-tauri/src/actions.rs`：执行 `minimize_window` / `open_url` / `show_notify` / `media_play_pause` 四类 desktop action。
 - `save_avatar` / `load_avatar` / `read_avatars_json` / `write_avatars_json`：本地头像持久化。
 

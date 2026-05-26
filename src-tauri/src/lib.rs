@@ -226,6 +226,44 @@ async fn load_activity_state(token: String) -> Result<serde_json::Value, String>
 }
 
 #[tauri::command]
+async fn load_sensor_realtime(token: String) -> Result<serde_json::Value, String> {
+    let client = reqwest::Client::builder()
+        .no_proxy()
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let resp = client
+        .get("http://127.0.0.1:8080/sensor/realtime")
+        .bearer_auth(token)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let status = resp.status();
+
+    if status.as_u16() == 404 {
+        return Ok(serde_json::json!({ "_no_data": true }));
+    }
+
+    if !status.is_success() {
+        return Err(format!("HTTP {}", status));
+    }
+
+    let val = resp.json::<serde_json::Value>()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if val.is_null() {
+        return Ok(serde_json::json!({ "_no_data": true }));
+    }
+    if matches!(val.as_object(), Some(map) if map.is_empty()) {
+        return Ok(serde_json::json!({ "_no_data": true }));
+    }
+
+    Ok(val)
+}
+
+#[tauri::command]
 async fn upload_document(
     file_path: String,
     message: String,
@@ -366,6 +404,7 @@ pub fn run() {
             load_chat_log_day,
             load_mood_state,
             load_activity_state,
+            load_sensor_realtime,
             upload_document,
             save_avatar,
             load_avatar,

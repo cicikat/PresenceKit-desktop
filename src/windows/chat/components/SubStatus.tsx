@@ -3,9 +3,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { MicroLabel } from './UIKit';
 import { MOOD_HUE, MOOD_LABEL_EN } from './UIKit';
-import { loadMoodState, loadActivityState } from '../../../shared/api/backend';
+import { loadMoodState, loadActivityState, loadSensorRealtime } from '../../../shared/api/backend';
 import { backendMoodToFrontend } from '../../../shared/state/mood-mapping';
-import type { ActivityState } from '../../../shared/api/types';
+import type { ActivityState, SensorRealtimeResponse, SensorRealtimeData } from '../../../shared/api/types';
+import { isSensorNoData } from '../../../shared/api/types';
 
 // ── mood_aura 基准值（与 useTelemetrySignals 共享）────────────────────────────
 const MOOD_AURA_BASE: Record<string, number> = {
@@ -13,7 +14,11 @@ const MOOD_AURA_BASE: Record<string, number> = {
 };
 
 // ── 持续可感知信号 hook ────────────────────────────────────────────────────────
-function useTelemetrySignals(engine: any) {
+function useTelemetrySignals(
+  engine: any,
+  sensorData: SensorRealtimeData | null,
+  sensorAvailable: boolean,
+) {
   const spikeStartRef = useRef(0);
   const prevKeyRef = useRef('');
   const spikeTickRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -40,26 +45,54 @@ function useTelemetrySignals(engine: any) {
       }
       prevKeyRef.current = key;
 
-      // breath (30-100)
-      let breath = 50;
-      breath += ({ '开心': 15, '平静': 10, '病娇': 25, '低落': -10, '分心': -5, '生气': 20, '惊讶': 15 } as any)[mood] ?? 0;
-      breath += ({ active: 20, idle: 0, away: -20 } as any)[presence] ?? 0;
-      breath = Math.max(30, Math.min(100, breath));
+      let breath: number;
+      let gaze: number;
+      let rhythm: number;
 
-      // gaze_lock (0-100)
-      let gaze = ({ '看你打字': 95, '看你': 90, '偷看': 70, '注意到了什么': 60, '看屏幕': 30, '想事情': 15, '发呆': 10 } as any)[focus] ?? 50;
-      if (presence === 'idle') gaze *= 0.7;
-      else if (presence === 'away') gaze *= 0.3;
-      gaze = Math.max(0, Math.min(100, gaze));
+      if (sensorAvailable && sensorData) {
+        const keysPerSec = sensorData.input.keystrokes / Math.max(sensorData.window_seconds, 1);
+        let b = 30 + Math.min(70, keysPerSec * 70 / 20);
+        if (sensorData.presence === 'idle') b *= 0.7;
+        else if (sensorData.presence === 'away') b *= 0.4;
+        breath = Math.max(20, Math.min(100, b));
+
+        const staleScore = Math.max(0, 100 - sensorData.stale_seconds * (100 / 90));
+        const switchPenalty = Math.min(50, sensorData.focus.switch_count * 10);
+        let g = staleScore - switchPenalty;
+        if (sensorData.presence === 'idle') g *= 0.6;
+        else if (sensorData.presence === 'away') g *= 0.2;
+        gaze = Math.max(0, Math.min(100, g));
+
+        const ks = sensorData.input.keystrokes;
+        const mc = sensorData.input.mouse_clicks;
+        let irregular = 0;
+        if (ks + mc > 0) {
+          const ratio = Math.abs(ks - mc) / (ks + mc);
+          irregular = ratio * 50;
+        }
+        const base = ({ '病娇': 30, '低落': 15, '分心': 10, '生气': 25, '惊讶': 20, '开心': 5, '平静': 0 } as any)[mood] ?? 0;
+        const elapsed = spikeStartRef.current > 0 ? Date.now() - spikeStartRef.current : 6000;
+        const spike = Math.max(0, 15 * (1 - elapsed / 5000));
+        rhythm = Math.max(0, Math.min(100, base + irregular + spike));
+      } else {
+        let b = 50;
+        b += ({ '开心': 15, '平静': 10, '病娇': 25, '低落': -10, '分心': -5, '生气': 20, '惊讶': 15 } as any)[mood] ?? 0;
+        b += ({ active: 20, idle: 0, away: -20 } as any)[presence] ?? 0;
+        breath = Math.max(30, Math.min(100, b));
+
+        let g = ({ '看你打字': 95, '看你': 90, '偷看': 70, '注意到了什么': 60, '看屏幕': 30, '想事情': 15, '发呆': 10 } as any)[focus] ?? 50;
+        if (presence === 'idle') g *= 0.7;
+        else if (presence === 'away') g *= 0.3;
+        gaze = Math.max(0, Math.min(100, g));
+
+        const base = ({ '病娇': 60, '低落': 30, '分心': 20, '生气': 50, '惊讶': 40, '开心': 5, '平静': 0 } as any)[mood] ?? 0;
+        const elapsed = spikeStartRef.current > 0 ? Date.now() - spikeStartRef.current : 6000;
+        const spike = Math.max(0, 15 * (1 - elapsed / 5000));
+        rhythm = Math.max(0, Math.min(100, base + spike));
+      }
 
       // mood_aura (0-100)
       const aura = MOOD_AURA_BASE[mood] ?? 20;
-
-      // rhythm: base + 5s linear spike decay
-      const base = ({ '病娇': 60, '低落': 30, '分心': 20, '生气': 50, '惊讶': 40, '开心': 5, '平静': 0 } as any)[mood] ?? 0;
-      const elapsed = spikeStartRef.current > 0 ? Date.now() - spikeStartRef.current : 6000;
-      const spike = Math.max(0, 15 * (1 - elapsed / 5000));
-      const rhythm = Math.max(0, Math.min(100, base + spike));
 
       setSigs({
         breath: Math.round(breath),
@@ -72,7 +105,7 @@ function useTelemetrySignals(engine: any) {
     calc();
     const unsub = engine.subscribe(calc);
     return () => { unsub(); if (spikeTickRef.current) { clearInterval(spikeTickRef.current); spikeTickRef.current = null; } };
-  }, [engine]);
+  }, [engine, sensorData, sensorAvailable]);
 
   return sigs;
 }
@@ -85,6 +118,8 @@ export function SubStatus({ engine }: { engine: any }) {
 
   const [moodError, setMoodError] = useState<string | null>(null);
   const [actError, setActError] = useState<string | null>(null);
+  const [sensorData, setSensorData] = useState<SensorRealtimeData | null>(null);
+  const [sensorAvailable, setSensorAvailable] = useState(false);
 
   // ── 每 30s 拉 mood ──────────────────────────────────────────────────────────
   const fetchMood = async () => {
@@ -127,7 +162,35 @@ export function SubStatus({ engine }: { engine: any }) {
     return () => clearInterval(h);
   }, [engine]);
 
-  const signals = useTelemetrySignals(engine);
+  // ── 每 10s 拉 sensor realtime ─────────────────────────────────────────────
+  const fetchSensor = async () => {
+    try {
+      const raw: SensorRealtimeResponse = await loadSensorRealtime();
+      if (isSensorNoData(raw)) {
+        setSensorData(null);
+        setSensorAvailable(false);
+        return;
+      }
+      if (raw.stale_seconds > 90) {
+        setSensorData(raw);
+        setSensorAvailable(false);
+        return;
+      }
+      setSensorData(raw);
+      setSensorAvailable(true);
+    } catch (e) {
+      setSensorData(null);
+      setSensorAvailable(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSensor();
+    const h = setInterval(fetchSensor, 10_000);
+    return () => clearInterval(h);
+  }, []);
+
+  const signals = useTelemetrySignals(engine, sensorData, sensorAvailable);
   const hue = MOOD_HUE[state.mood] ?? 70;
   const aura = signals.mood_aura;
 

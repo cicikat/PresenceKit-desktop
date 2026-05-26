@@ -116,3 +116,46 @@ export interface UploadError {
   message: string;
   kind: 'size_limit' | 'unsupported_type' | 'parse_failed' | 'network' | 'unknown';
 }
+
+export interface SensorRealtimeInput {
+  keystrokes: number;
+  mouse_clicks: number;
+  mouse_distance_px: number;
+  idle_seconds: number;
+}
+
+export interface SensorRealtimeFocus {
+  app: string;
+  title_hint: string;
+  switch_count: number;
+}
+
+export interface SensorRealtimeScreen {
+  package_name: string;
+  app_label: string;
+  window_title: string;
+  visible_text: string[];
+  clickable_text: string[];
+}
+
+export interface SensorRealtimeData {
+  ts: number;
+  stale_seconds: number;
+  presence: 'active' | 'idle' | 'away';
+  continuous_at_desk_seconds: number;
+  sensor_version: string;
+  window_seconds: number;
+  input: SensorRealtimeInput;
+  focus: SensorRealtimeFocus;
+  screen: SensorRealtimeScreen | null;
+}
+
+export interface SensorNoData {
+  _no_data: true;
+}
+
+export type SensorRealtimeResponse = SensorRealtimeData | SensorNoData;
+
+export function isSensorNoData(r: SensorRealtimeResponse): r is SensorNoData {
+  return (r as SensorNoData)._no_data === true;
+}

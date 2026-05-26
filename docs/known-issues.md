@@ -229,16 +229,6 @@ Phase 2d.5e 完成时数据层在 REPL 单测全通过：
 
 ---
 
-## P2：SubStatus 4 个持续可感知信号是前端 derived，非真实生理数据
-
-**位置**：`src/windows/chat/components/SubStatus.tsx` `useTelemetrySignals()`
-
-`呼吸频率`、`视线锁定度`、`情绪光晕`、`节奏不规则` 四个信号均由前端根据 engine 的 mood / focus / presence 字段实时计算，是视觉近似值，不来自真实传感器或后端推断。
-
-**影响**：数值变化规律可预测（mood 切换即跳变），不反映真实生理节律。
-
-**建议**：后续接入 sensor-service 真实感知数据（屏幕活动、音频、进程）后，可用真实信号替换；在此之前这些是视觉装饰，不应用于逻辑判断。
-
 ---
 
 ## P2：Panes.tsx 存在历史 TS 类型错误
@@ -297,6 +287,14 @@ tsc --noEmit 存在来自 Panes.tsx 的历史报错，不属于本次重构范�
 **原问题**：`src/shared/api/ws.ts` 收到 `action` 后立即回成功 ack，但没有执行动作。
 
 **修复**：新增 `src-tauri/src/actions.rs` 并在 `src-tauri/src/lib.rs` 注册四个 action commands；`ws.ts` 收到 action 后异步 dispatch，执行成功回 `ok:true`，失败或未知 action 回 `ok:false`。当前只覆盖 `minimize_window`、`open_url`、`show_notify`、`media_play_pause`，不改 legacy WS 协议，不删除旧桌宠或 file fallback。
+
+### SubStatus 4 个持续可感知信号已接入 sensor（2026-05-19，Phase 2f+）
+
+**原问题**：呼吸频率、视线锁定度、节奏不规则三个 signal 由 mood 派生，是视觉装饰，不反映真实生理节律。
+
+**修复**：接入 `/sensor/realtime` 后端接口，breath / gaze_lock / rhythm 改由真实键鼠、stale_seconds、switch_count 派生。sensor 不可用（stale > 90s 或 _no_data）时降级回 mood 派生算法。mood_aura 保留 mood 派生，因为它是 mood 的视觉投影。
+
+---
 
 ### Panes.tsx cleanup 类型报错（2026-05-16，Phase 2c+）
 

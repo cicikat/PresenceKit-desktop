@@ -132,17 +132,18 @@ Ring buffer：`useState<FlowEntry[]>` 长度上限 10；按 `text|mood` 联合�
 |---|---|---|
 | mood 后端持久值 | `loadMoodState()` → `/mood/state` → `engine.applyStateUpdate({mood})` | 30s |
 | activity 身体动作 | `loadActivityState()` → `/activity/current` → `engine.set({activity})` | 60s |
-| presence | engine 现有值（默认 active，未接 sensor） | — |
+| sensor 实时快照 | `loadSensorRealtime()` → `/sensor/realtime` → 真实键鼠/焦点数据 | 10s |
+| presence | engine 现有值（默认 active）；sensor 可用时仅参与 4 个信号派生，不写入 engine | — |
 | focus | ChatPanel 输入驱动，SubStatus 不动 | — |
 
 持续可感知信号公式（均为前端 derived，0-100）：
 
 | 信号 | 来源 | CSS transition |
 |---|---|---|
-| 呼吸频率 `breath` | 基准 50，按 mood/presence 偏移，clamp 30-100 | 2s ease |
-| 视线锁定度 `gaze_lock` | 由 focus 映射固定值，idle×0.7 / away×0.3 | 0.1s ease |
+| 呼吸频率 `breath` | sensor 可用时按键击/秒与 sensor presence 派生；不可用时回退 mood/presence 偏移 | 2s ease |
+| 视线锁定度 `gaze_lock` | sensor 可用时按 stale_seconds 与 switch_count 派生；不可用时回退 focus 映射 | 0.1s ease |
 | 情绪光晕 `mood_aura` | 按 mood 映射固定值（平静→20…病娇→90） | 3s ease |
-| 节奏不规则 `rhythm` | mood 基准 + 每次 focus/activity 切换时 +15 短期叠加，5s 线性衰减 | 0.5s ease |
+| 节奏不规则 `rhythm` | sensor 可用时按键鼠比例偏离 + mood 基线 + spike 派生；不可用时回退原 mood 基准 + spike | 0.5s ease |
 
 Ring buffer：`useState<{mood, aura}[]>` 长度 60；2s 采样；mood 轨迹柱状图，每格高度 = aura %，颜色 = MOOD_HUE。
 

@@ -32,7 +32,7 @@
 
 | 客户端文件 | 调用 |
 |---|---|
-| `src/shared/api/backend.ts` | `sendChat()`、`loadHistory()`、`loadGardenState()`、`loadDiaryList()`、`loadDiaryEntry()` |
+| `src/shared/api/backend.ts` | `sendChat()`、`loadHistory()`、`loadGardenState()`、`loadDiaryList()`、`loadDiaryEntry()`、`loadSensorRealtime()` |
 | `src/shared/api/ws.ts` | `wsClient.connect()`、legacy WS 收发 |
 | `src-tauri/src/lib.rs` | `send_chat`、`load_history`、`load_garden_state`、`load_diary_list`、`load_diary_entry`、头像文件 commands |
 | `src/windows/chat/components/ChatPanel.tsx` | 启动历史、发送消息、订阅 WS 主动消息 |
@@ -447,15 +447,16 @@ Authorization: Bearer <admin_token>
 
 ## HTTP：读取 sensor 实时快照
 
-调用方：**Emerald-client 主进程**（SubStatus 轮询消费，本轮 Phase 2e 未实施）。
+调用方：**Emerald-client 主进程**（SubStatus 轮询消费）。
 
 ```text
 Emerald-client SubStatus
-  → 未来 Rust load_sensor_realtime
+  → loadSensorRealtime()
+  → Rust load_sensor_realtime
   → GET http://127.0.0.1:8080/sensor/realtime
 ```
 
-后端要求 Bearer token。
+后端要求 Bearer token。客户端 Rust command 使用 `reqwest.no_proxy()`；404、JSON `null`、空对象 `{}` 统一映射为 `{ "_no_data": true }`，前端静默降级为 mood 派生信号。
 
 无数据时(sensor 模块未启动或刚重启,例如 Emerald-client 还在启动中)响应:
 
@@ -520,6 +521,43 @@ Emerald-client SubStatus
 
 > `sensor_aware` 触发器默认关闭，后端 `config.yaml` 设置
 > `scheduler.sensor_aware.enabled: true` 才生效，重启服务后 scheduler 启动日志会打出 `ENABLED` 确认。
+
+---
+
+## /sensor/realtime（GET）
+
+读取最新一份 sensor 快照。后端 `D:\ai\qq-st-bot\admin\routers\sensor.py:213`。
+
+### 响应 schema
+
+200 OK，返回最新一份合并后的快照：
+- `ts`: float（采集端时间戳）
+- `stale_seconds`: int（服务端附加，`now - received_at`）
+- `presence`: `"active" | "idle" | "away"`
+- `continuous_at_desk_seconds`: int
+- `sensor_version`: string
+- `window_seconds`: int
+- `input`: { keystrokes, mouse_clicks, mouse_distance_px, idle_seconds }
+- `focus`: { app, title_hint, switch_count }
+- `screen`: null 或 { package_name, app_label, window_title, visible_text[], clickable_text[] }
+
+无数据时后端可能返回 200 + null body 或 404，客户端 Rust command 统一映射为 `{ _no_data: true }`。
+
+### sensor_version 已知取值
+
+- PC 端（src-tauri/src/sensor/）：`emerald-client-rust-1.0`
+- 安卓端（accessibility service）：`android_accessibility_1.0`
+
+### 存储语义
+
+- POST /sensor/realtime 是**单字典内存覆盖**，无 source 分桶，最后写入者赢
+- 多个 source 同时写入：GET 拿到的是最后完成写入的那一份
+- 重启后端清零，无持久化
+
+### stale 阈值
+
+- 后端 sensor_aware 触发器（`core/scheduler/sensor_events.py:190`）硬编码 **90 秒**，超过则返回空事件列表
+- 客户端 SubStatus 跟齐：stale_seconds > 90 时切回 mood 派生算法
 
 ---
 
@@ -689,6 +727,7 @@ v1 目标新增或替换：
 | `load_chat_log_day(date, token)` | 前端 → Rust → 后端 | GET `/chat-log/{date}`，路径不含 QQ |
 | `load_mood_state(token)` | 前端 → Rust → 后端 | GET `/mood/state` |
 | `load_activity_state(token)` | 前端 → Rust → 后端 | GET `/activity/current` |
+| `load_sensor_realtime(token)` | 前端 → Rust → 后端 | GET `/sensor/realtime`；无数据统一返回 `_no_data` |
 | `action_minimize_window()` | 前端 → Rust | 执行 `minimize_window`，最小化当前 Tauri 窗口 |
 | `action_open_url(url)` | 前端 → Rust | 执行 `open_url`，使用 `tauri-plugin-opener` 打开 URL |
 | `action_show_notify(title, text)` | 前端 → Rust | 执行 `show_notify`，当前用 dialog fallback 展示 |
@@ -708,7 +747,7 @@ reqwest::Client::builder()
 
 当前 `send_chat`、`load_history`、`load_garden_state`、`load_diary_list`、`load_diary_entry`、`load_chat_log_dates` 和 `load_chat_log_day` 已符合这条规则。
 
-未实施:`load_sensor_realtime`,SubStatus 通过 Tauri command 消费 GET `/sensor/realtime`,Rust 侧 reqwest client 必须 `.no_proxy()`。即使 sensor 采集(POST)与消费(GET)同在 Tauri Rust 进程内,数据仍绕后端,保持后端作为 single source of truth。
+已实施:`load_sensor_realtime`,SubStatus 通过 Tauri command 消费 GET `/sensor/realtime`,Rust 侧 reqwest client 使用 `.no_proxy()`。即使 sensor 采集(POST)与消费(GET)同在 Tauri Rust 进程内,数据仍绕后端,保持后端作为 single source of truth。
 
 ---
 
