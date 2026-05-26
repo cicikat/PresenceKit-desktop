@@ -63,7 +63,10 @@ function entriesToMsgs(dateStr: string, entries: ChatLogEntry[], rawFallback: bo
       msgs.push({ id: newId(), role: 'user', text: entry.user, time: ts });
     }
     if (entry.assistant) {
-      msgs.push({ id: newId(), role: 'assistant', text: entry.assistant, time: ts + 1 });
+      const segments = splitReply(entry.assistant);
+      segments.forEach((seg, idx) => {
+        msgs.push({ id: newId(), role: 'assistant', text: seg, time: ts + 1 + idx });
+      });
     }
   }
   return msgs;
