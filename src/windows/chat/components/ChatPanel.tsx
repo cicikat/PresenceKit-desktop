@@ -54,6 +54,26 @@ interface ChatMsg {
 let _msgIdCounter = 0;
 function newId() { return `m-${Date.now()}-${++_msgIdCounter}`; }
 
+// ── 历史加载状态 ─────────────────────────────────────────────────────────────
+
+type HistoryStatus =
+  | { kind: 'loading' }
+  | { kind: 'ok' }
+  | { kind: 'empty' }
+  | { kind: 'error'; category: 'network' | 'unauthorized' | 'malformed'; detail: string };
+
+function classifyHistoryError(err: unknown): { category: 'network' | 'unauthorized' | 'malformed'; detail: string } {
+  const msg = err instanceof Error ? err.message : String(err);
+  const lower = msg.toLowerCase();
+  if (lower.includes('401') || lower.includes('unauthorized') || lower.includes('unauthenticated')) {
+    return { category: 'unauthorized', detail: msg };
+  }
+  if (lower.includes('json') || lower.includes('parse') || lower.includes('serde') || lower.includes('invalid')) {
+    return { category: 'malformed', detail: msg };
+  }
+  return { category: 'network', detail: msg };
+}
+
 // ── 把单日 entries 转成消息列表 ──────────────────────────────────────────────
 
 function entriesToMsgs(dateStr: string, entries: ChatLogEntry[], rawFallback: boolean): ChatMsg[] {
@@ -299,6 +319,8 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, bubbleFon
   const noMoreHistoryRef = useRef(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [noMoreHistory, setNoMoreHistory] = useState(false);
+  const [historyStatus, setHistoryStatus] = useState<HistoryStatus>({ kind: 'loading' });
+  const [loadMoreError, setLoadMoreError] = useState<'network' | 'unauthorized' | 'malformed' | null>(null);
 
   const rootRef  = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -322,6 +344,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, bubbleFon
 
         if (dates.length === 0) {
           setMessages([]);
+          setHistoryStatus({ kind: 'empty' });
           noMoreHistoryRef.current = true;
           setNoMoreHistory(true);
           return;
@@ -372,8 +395,10 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, bubbleFon
         }
 
         setMessages(msgs);
+        setHistoryStatus({ kind: 'ok' });
       } catch (err) {
         console.warn('[chat-log] 初始化失败:', err);
+        if (mounted) setHistoryStatus({ kind: 'error', ...classifyHistoryError(err) });
       }
     }
 
@@ -412,6 +437,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, bubbleFon
     const scroll = scrollRef.current;
     const oldScrollHeight = scroll ? scroll.scrollHeight : 0;
 
+    setLoadMoreError(null);
     isLoadingMoreRef.current = true;
     setIsLoadingMore(true);
 
@@ -450,6 +476,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, bubbleFon
       }
     } catch (err) {
       console.warn('[chat-log] loadMore 失败:', err);
+      setLoadMoreError(classifyHistoryError(err).category);
     } finally {
       isLoadingMoreRef.current = false;
       setIsLoadingMore(false);
@@ -775,6 +802,14 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, bubbleFon
             <span className="mono" style={{ fontSize: 9.5, color: 'var(--ink-4)', letterSpacing: 1.4 }}>
               {messages.filter(m => m.role === 'user' || m.role === 'assistant').length} ENTRIES
             </span>
+            {historyStatus.kind === 'loading' && (
+              <span className="mono" style={{ fontSize: 9, color: 'var(--ink-4)', letterSpacing: 1 }}>载入中…</span>
+            )}
+            {historyStatus.kind === 'error' && (
+              <span className="mono" title={historyStatus.detail} style={{ fontSize: 9, color: 'oklch(0.52 0.14 20)', letterSpacing: 1, cursor: 'default' }}>
+                历史 · {historyStatus.category === 'network' ? '网络错误' : historyStatus.category === 'unauthorized' ? '401' : '格式异常'}
+              </span>
+            )}
           </div>
         </div>
       )}
@@ -785,10 +820,26 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, bubbleFon
         onScroll={onScroll}
         style={{ flex: 1, overflowY: 'auto', padding: `8px ${youVisible ? 56 : 28}px 12px 28px`, background: 'var(--paper)' }}
       >
+        {/* 初始加载中占位 */}
+        {historyStatus.kind === 'loading' && messages.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '60px 0 20px' }}>
+            <span className="mono" style={{ fontSize: 10, color: 'var(--ink-4)', letterSpacing: 0.8 }}>正在加载历史记录…</span>
+          </div>
+        )}
+
         {/* 顶部加载中提示 */}
         {isLoadingMore && (
           <div style={{ textAlign: 'center', padding: '10px 0' }}>
             <span className="mono" style={{ fontSize: 10, color: 'var(--ink-4)', letterSpacing: 0.8 }}>正在加载更早的对话…</span>
+          </div>
+        )}
+
+        {/* loadMore 错误提示 */}
+        {loadMoreError && !isLoadingMore && (
+          <div style={{ textAlign: 'center', padding: '8px 0' }}>
+            <span className="mono" style={{ fontSize: 10, color: 'oklch(0.52 0.14 20)', letterSpacing: 0.8 }}>
+              {loadMoreError === 'network' ? '网络错误，历史未能继续加载' : loadMoreError === 'unauthorized' ? '401 · 无权读取历史' : '历史格式异常，已跳过'}
+            </span>
           </div>
         )}
 
