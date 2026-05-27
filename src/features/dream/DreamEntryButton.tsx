@@ -7,7 +7,7 @@ interface DreamEntryButtonProps {
 
 export function DreamEntryButton({ active, onToggle }: DreamEntryButtonProps) {
   const [hover, setHover] = useState(false);
-  const label = active ? 'WAKE · 关闭梦境预览' : '进入梦境预览';
+  const label = active ? 'WAKE · 关闭梦境' : '进入梦境';
 
   return (
     <div
