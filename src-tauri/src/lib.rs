@@ -371,6 +371,103 @@ async fn write_avatars_json(app: tauri::AppHandle, json: String) -> Result<(), S
     fs::write(&json_path, json).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+async fn dream_get_state(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = reqwest::Client::builder().no_proxy().build().map_err(|e| e.to_string())?;
+    let resp = client
+        .get(backend_url(&cfg, "/dream/state"))
+        .bearer_auth(&cfg.admin_token)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(format!("HTTP {}", resp.status().as_u16()));
+    }
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn dream_enter(app: tauri::AppHandle, entry_reason: Option<String>) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = reqwest::Client::builder().no_proxy().build().map_err(|e| e.to_string())?;
+    let body = match entry_reason {
+        Some(r) => serde_json::json!({ "entry_reason": r }),
+        None    => serde_json::json!({}),
+    };
+    let resp = client
+        .post(backend_url(&cfg, "/dream/enter"))
+        .bearer_auth(&cfg.admin_token)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(format!("HTTP {}", resp.status().as_u16()));
+    }
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn dream_chat(app: tauri::AppHandle, message: String) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = reqwest::Client::builder().no_proxy().build().map_err(|e| e.to_string())?;
+    let resp = client
+        .post(backend_url(&cfg, "/dream/chat"))
+        .bearer_auth(&cfg.admin_token)
+        .json(&serde_json::json!({ "message": message }))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(format!("HTTP {}", resp.status().as_u16()));
+    }
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn dream_exit(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = reqwest::Client::builder().no_proxy().build().map_err(|e| e.to_string())?;
+    let resp = client
+        .post(backend_url(&cfg, "/dream/exit"))
+        .bearer_auth(&cfg.admin_token)
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(format!("HTTP {}", resp.status().as_u16()));
+    }
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn dream_update_settings(
+    app: tauri::AppHandle,
+    enable_dream_lorebook: Option<bool>,
+    amnesia: Option<bool>,
+    keep_impression: Option<bool>,
+) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = reqwest::Client::builder().no_proxy().build().map_err(|e| e.to_string())?;
+    let mut body = serde_json::Map::new();
+    if let Some(v) = enable_dream_lorebook { body.insert("enable_dream_lorebook".into(), v.into()); }
+    if let Some(v) = amnesia            { body.insert("amnesia".into(), v.into()); }
+    if let Some(v) = keep_impression    { body.insert("keep_impression".into(), v.into()); }
+    let resp = client
+        .post(backend_url(&cfg, "/dream/settings"))
+        .bearer_auth(&cfg.admin_token)
+        .json(&serde_json::Value::Object(body))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(format!("HTTP {}", resp.status().as_u16()));
+    }
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -423,6 +520,11 @@ pub fn run() {
             load_avatar,
             read_avatars_json,
             write_avatars_json,
+            dream_get_state,
+            dream_enter,
+            dream_chat,
+            dream_exit,
+            dream_update_settings,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
