@@ -38,25 +38,56 @@
 | `sidebarWidth` | 可拖拽调整，范围 260-540 |
 | `chatHeaderVisible` | 控制 ChatPanel 顶部状态栏 |
 | `specOpen` / `prefsOpen` | 帮助/偏好浮层 |
-| `dreamPreviewOpen` / `dreamAfterglow` | 纯前端 Dream v2 preview overlay 和醒后余韵提示 |
+| `dreamWindowOpen` / `dreamAfterglow` | 控制 DreamWindow 显示和醒后余韵横幅 |
 
-## Dream UI v2 Preview
+## DreamWindow（正式 Dream 入口）
 
-文件：`src/features/dream/`
+文件：`src/windows/dream/`
+
+```
+src/windows/dream/
+├── DreamWindow.tsx          状态机编排（loading → ready → entering → active → ended）
+├── components/
+│   ├── DreamChatPanel.tsx   消息区 + 输入框（append-only，无历史分页）
+│   ├── DreamSidebar.tsx     status / emotional_tension / scene_state / symbolic_anchors
+│   └── DreamControlBar.tsx  WAKE 按钮 + 场景状态标题
+└── hooks/
+    ├── useDreamState.ts     轮询 GET /dream/state（8s 间隔）
+    └── useDreamChat.ts      POST /dream/chat + 管理本地 buffer
+```
 
 职责：
 
-- 从 `dream-v2-spec.html` 提取 DreamTheme v2 的 token 和组件语义。
-- `DreamEntryButton` 挂在 Ribbon，控制 ChatWindow 内的本地 preview 开关。
-- `DreamTheme` 渲染 fixed overlay、限量花瓣/花粉、mock 聊天结构和 WAKE 按钮。
-- `DreamAfterglowBanner` 在关闭 preview 后显示 12 秒，可点击关闭。
+- `DreamWindow` 是唯一接入后端 Dream API 的正式入口，由 `ChatWindow` 在 Ribbon 月亮按钮触发后以 fixed overlay 形式渲染。
+- 状态机：初始获取 `/dream/state` → 若已在 DREAM_ACTIVE 直接进入 active；否则展示「进入梦境」按钮 → POST `/dream/enter` → active 模式。
+- 消息 buffer 为 append-only，不读历史 log，不接 WebSocket。
+- `/dream/chat` 返回 `exit_accepted` 或 `force_exited` 时，禁用输入框，刷新状态，进入 ended 阶段。
+- 409 / 503 做可见错误提示，不 crash。
+- WAKE 按钮 / ESC：调用 `/dream/exit`，然后关闭窗口并触发 `DreamAfterglowBanner`（位于 `components/DreamAfterglowBanner.tsx`）。
+- 仅复用 `features/dream/DreamTokens.css` 的视觉 token。
 
-边界：
+共享 API 层：
 
-- 不接 Dream backend、`dream_state`、memory、scheduler、hardware。
-- 不修改真实聊天消息数据，不改变 ChatPanel 发送、上传、WebSocket、字体大小偏好。
-- Esc 和 WAKE 只关闭本地 preview overlay。
-- CSS 支持 `prefers-reduced-motion`，OKLCH token 有 sRGB fallback。
+- `src/shared/api/dream.ts`：`dreamGetState / dreamEnter / dreamChat / dreamExit / dreamUpdateSettings`（均用 `fetch` + `getClientConfig().backendBase`）
+- `src/shared/api/dream-types.ts`：`DreamStatus / DreamState / DreamMessage / DreamChatResponse` 等
+
+---
+
+## features/dream（视觉 token 库，已停止扩展）
+
+文件：`src/features/dream/`
+
+当前状态：**只保留视觉 token 和 Ribbon 入口按钮，不再接受新组件**。
+
+- `DreamTokens.css`：梦境 CSS 变量（`--dt-*`）和动画关键帧，由 `DreamWindow.tsx` import。
+- `DreamEntryButton`：Ribbon 里的月亮入口按钮，仍在使用。
+- `README.md`：标注此目录已 deprecated，禁止在此添加新状态逻辑。
+
+已清理：
+- `DreamTheme`（原 mock preview overlay）和 `DreamMessage`（原 mock 消息组件）已删除。
+- `DreamAfterglowBanner` 已迁移至 `src/windows/dream/components/DreamAfterglowBanner.tsx`。
+
+**不要** 把新的 Dream 功能加在 `features/dream/` 里，改 `windows/dream/` 和 `shared/api/dream*`。
 
 ---
 
