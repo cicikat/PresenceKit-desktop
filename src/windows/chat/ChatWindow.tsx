@@ -7,6 +7,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Icon, MicroLabel } from './components/UIKit';
 import { StateEngine } from '../../shared/state/store';
 import { avatarStore } from '../../shared/avatars/store';
+import { getUIPref, setUIPref } from '../../shared/uiPreferences';
 import { AvatarCropper } from './components/AvatarCropper';
 import { Ribbon } from './components/Ribbon';
 import { SidebarPanel } from './components/Sidebar';
@@ -16,7 +17,7 @@ import { SpecPanel } from './components/SpecPanel';
 import { DreamAfterglowBanner } from '../dream/components/DreamAfterglowBanner';
 import { DreamWindow } from '../dream/DreamWindow';
 
-const SIDEBAR_MIN     = 260;
+const SIDEBAR_MIN     = 250;
 const SIDEBAR_MAX     = 540;
 const SIDEBAR_DEFAULT = 340;
 
@@ -255,13 +256,13 @@ export function ChatWindow() {
   if (!engineRef.current) engineRef.current = new StateEngine();
   const engine = engineRef.current;
 
-  const [theme, setTheme]                         = useState('paper');
+  const [theme, setTheme]                         = useState(() => getUIPref('chat.theme', 'paper'));
   const [petVisible, setPetVisible]               = useState(false);
   const [sidebarOpen, setSidebarOpen]             = useState(true);
   const [sidebarTab, setSidebarTab]               = useState('flow');
-  const [sidebarWidth, setSidebarWidth]           = useState(SIDEBAR_DEFAULT);
-  const [chatHeaderVisible, setChatHeaderVisible] = useState(true);
-  const [bubbleFontSize, setBubbleFontSize]       = useState<'small' | 'medium' | 'large'>('medium');
+  const [sidebarWidth, setSidebarWidth]           = useState(() => getUIPref('chat.sidebarWidth', SIDEBAR_DEFAULT));
+  const [chatHeaderVisible, setChatHeaderVisible] = useState(() => getUIPref('chat.headerVisible', true));
+  const [bubbleFontSize, setBubbleFontSize]       = useState<'small' | 'medium' | 'large'>(() => getUIPref('chat.bubbleFontSize', 'medium'));
   const [specOpen, setSpecOpen]                   = useState(false);
   const [prefsOpen, setPrefsOpen]                 = useState(false);
   const [dreamWindowOpen, setDreamWindowOpen]     = useState(false);
@@ -269,6 +270,7 @@ export function ChatWindow() {
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
+    setUIPref('chat.theme', theme);
   }, [theme]);
 
   const mouseRef       = useRef({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
@@ -312,7 +314,9 @@ export function ChatWindow() {
     const left = bodyRef.current.getBoundingClientRect().left + 52;
     const w    = clientX - left;
     const max  = Math.min(SIDEBAR_MAX, bodyRef.current.clientWidth - 360 - 52);
-    setSidebarWidth(Math.max(SIDEBAR_MIN, Math.min(max, w)));
+    const next = Math.max(SIDEBAR_MIN, Math.min(max, w));
+    setSidebarWidth(next);
+    setUIPref('chat.sidebarWidth', next);
   };
 
   return (
@@ -371,11 +375,11 @@ export function ChatWindow() {
         theme={theme}
         onThemeChange={setTheme}
         sidebarWidth={sidebarWidth}
-        onSidebarWidthChange={setSidebarWidth}
+        onSidebarWidthChange={(w: number) => { setSidebarWidth(w); setUIPref('chat.sidebarWidth', w); }}
         chatHeaderVisible={chatHeaderVisible}
-        onChatHeaderToggle={() => setChatHeaderVisible(v => !v)}
+        onChatHeaderToggle={() => setChatHeaderVisible(v => { const next = !v; setUIPref('chat.headerVisible', next); return next; })}
         bubbleFontSize={bubbleFontSize}
-        onBubbleFontSizeChange={setBubbleFontSize} />
+        onBubbleFontSizeChange={(s: string) => { setBubbleFontSize(s as 'small' | 'medium' | 'large'); setUIPref('chat.bubbleFontSize', s); }} />
     </div>
   );
 }
