@@ -1,4 +1,4 @@
-import type { DreamState, DreamMessage } from '../../../shared/api/dream-types';
+import type { BodyState, DreamState, DreamMessage } from '../../../shared/api/dream-types';
 
 const STATUS_LABEL: Record<string, string> = {
   DREAM_ACTIVE: '梦境进行中',
@@ -16,11 +16,75 @@ interface DreamSidebarProps {
   onClose: () => void;
 }
 
+function BodyAxisBar({ label, value, cap, color }: {
+  label: string;
+  value: number;
+  cap: number;
+  color: string;
+}) {
+  const pct = Math.min(100, Math.round((value / Math.max(cap, 1)) * 100));
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+        <span className="mono" style={{ fontSize: 9.5, color: 'var(--dt-ink-3)', letterSpacing: 1 }}>
+          {label}
+        </span>
+        <span className="mono" style={{ fontSize: 9.5, color: 'var(--dt-ink-4)', letterSpacing: 0.8 }}>
+          {Math.round(value)}/{Math.round(cap)}
+        </span>
+      </div>
+      <div style={{ height: 3, borderRadius: 2, background: 'var(--dt-surface-2)', overflow: 'hidden' }}>
+        <div style={{
+          height: '100%', borderRadius: 2,
+          width: `${pct}%`,
+          background: color,
+          transition: 'width 0.6s ease',
+        }} />
+      </div>
+    </div>
+  );
+}
+
+function HerBodyPanel({ body }: { body: BodyState }) {
+  return (
+    <div style={{
+      padding: '12px 14px', borderRadius: 14,
+      background: 'var(--dt-surface-deep)',
+      border: '1px solid var(--dt-border-soft)',
+    }}>
+      <div className="mono" style={{
+        fontSize: 9.5, letterSpacing: 1.5, color: 'var(--dt-ink-3)', marginBottom: 10,
+      }}>
+        HER · 赛博感知
+      </div>
+      <BodyAxisBar
+        label="温度 HEAT"
+        value={body.heat}
+        cap={body.heat_cap}
+        color="linear-gradient(90deg, var(--dt-flower-bluebell), #e96c6c)"
+      />
+      <BodyAxisBar
+        label="感知 SENS"
+        value={body.sensitivity}
+        cap={body.sensitivity_cap}
+        color="linear-gradient(90deg, var(--dt-flower-dandelion), #b97fe8)"
+      />
+      <BodyAxisBar
+        label="张力 TENS"
+        value={body.tension}
+        cap={body.tension_cap}
+        color="linear-gradient(90deg, var(--dt-surface-2), #7fbfe8)"
+      />
+    </div>
+  );
+}
+
 export function DreamSidebar({ dreamState, messages, onClose }: DreamSidebarProps) {
   const status = dreamState?.status;
   const tension = dreamState?.emotional_tension;
   const scene = dreamState?.scene_state;
   const anchors = dreamState?.symbolic_anchors ?? [];
+  const bodyState = dreamState?.body_state;
   const recentHer = messages.filter(m => m.role === 'her').slice(-3);
   const entryCount = messages.filter(m => m.role !== 'system').length;
 
@@ -94,11 +158,11 @@ export function DreamSidebar({ dreamState, messages, onClose }: DreamSidebarProp
         )}
       </div>
 
-      {/* Emotional tension */}
+      {/* Emotional tension (叶瑄 tension) */}
       {tension !== undefined && (
         <div>
           <div className="mono" style={{ fontSize: 9.5, letterSpacing: 1.5, color: 'var(--dt-ink-3)', marginBottom: 8 }}>
-            情绪张力
+            叶瑄·情绪张力
           </div>
           <div style={{ height: 4, borderRadius: 2, background: 'var(--dt-surface-2)', overflow: 'hidden' }}>
             <div style={{
@@ -112,6 +176,11 @@ export function DreamSidebar({ dreamState, messages, onClose }: DreamSidebarProp
             {Math.round(tension * 100)}%
           </div>
         </div>
+      )}
+
+      {/* Her cyber body panel — user_sees_own_numbers always true */}
+      {bodyState && (bodyState.heat > 0 || bodyState.sensitivity > 0 || bodyState.tension > 0) && (
+        <HerBodyPanel body={bodyState} />
       )}
 
       {/* Scene state */}
