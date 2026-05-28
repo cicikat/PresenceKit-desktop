@@ -4,6 +4,7 @@ import type {
   DreamEnterResponse,
   DreamChatResponse,
   DreamExitResponse,
+  DreamSettings,
   DreamSettingsResponse,
   DreamSettingsUpdateRequest,
 } from './dream-types';
@@ -26,10 +27,16 @@ export async function dreamExit(): Promise<DreamExitResponse> {
   return invoke<DreamExitResponse>('dream_exit');
 }
 
+export async function dreamGetSettings(): Promise<DreamSettings> {
+  return invoke<DreamSettings>('dream_get_settings');
+}
+
 export async function dreamUpdateSettings(update: DreamSettingsUpdateRequest): Promise<DreamSettingsResponse> {
   return invoke<DreamSettingsResponse>('dream_update_settings', {
     enableDreamLorebook: update.enable_dream_lorebook ?? null,
-    amnesia: update.amnesia ?? null,
-    keepImpression: update.keep_impression ?? null,
+    memoryAccess: update.memory_access ?? null,
+    boundaryLevel: update.boundary_level ?? null,
+    worldLayer: update.world_layer ?? null,
+    lucidMode: update.lucid_mode ?? null,
   });
 }

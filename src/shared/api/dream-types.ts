@@ -7,28 +7,22 @@ export type DreamStatus =
   | 'DREAM_CLOSING'
   | 'REALITY_AFTERGLOW';
 
-/** Her cyber body state — dream-local, cleared at dream close. */
-export interface BodyState {
-  heat: number;         // 0–100
-  sensitivity: number;  // 0–100
-  tension: number;      // 0–100
-  heat_cap: number;
-  sensitivity_cap: number;
-  tension_cap: number;
-}
-
+/** Projected dream state from GET /dream/state — UI panel fields only. */
 export interface DreamState {
-  user_id: string;
   status: DreamStatus;
   dream_id?: string;
-  context_snapshot?: Record<string, unknown>;
-  emotional_tension?: number;
+  frozen_world?: string;
+  lucid_mode?: string;
+  /** Her cyber body numbers — user sees own numbers always (orthogonal to boundary_level). */
+  body: {
+    heat: number;       // 0–100
+    sensitivity: number;
+    tension: number;
+  };
+  /** 叶瑄's dream-local emotional tension, 0.0–1.0. */
+  yexuan_tension: number;
   scene_state?: string;
   symbolic_anchors?: string[];
-  last_dream_id?: string;
-  last_exit_type?: 'soft' | 'hard_exit';
-  /** Her cyber body state — user sees own numbers (orthogonal to boundary_level). */
-  body_state?: BodyState;
 }
 
 export interface DreamEnterResponse {
@@ -51,18 +45,23 @@ export interface DreamExitResponse {
 
 export type MemoryAccess = 'card_only' | 'relationship_summary' | 'full_snapshot';
 export type BoundaryLevel = 'vague' | 'body_perceptible' | 'numbers_visible' | 'threshold_break';
+export type WorldLayer = 'reality_derived' | 'abo' | 'vampire' | 'cat' | 'flower_bud' | 'custom';
+export type LucidMode = 'lucid_shared' | 'non_lucid';
 
 export interface DreamSettings {
   enable_dream_lorebook: boolean;
   memory_access: MemoryAccess;
   boundary_level: BoundaryLevel;
-  lucid_mode: string;
+  world_layer: WorldLayer;
+  lucid_mode: LucidMode;
 }
 
 export interface DreamSettingsUpdateRequest {
   enable_dream_lorebook?: boolean;
   memory_access?: MemoryAccess;
   boundary_level?: BoundaryLevel;
+  world_layer?: WorldLayer;
+  lucid_mode?: LucidMode;
 }
 
 export interface DreamSettingsResponse {

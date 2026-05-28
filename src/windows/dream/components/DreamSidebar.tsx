@@ -1,4 +1,4 @@
-import type { BodyState, DreamState, DreamMessage } from '../../../shared/api/dream-types';
+import type { DreamState, DreamMessage } from '../../../shared/api/dream-types';
 
 const STATUS_LABEL: Record<string, string> = {
   DREAM_ACTIVE: '梦境进行中',
@@ -16,13 +16,12 @@ interface DreamSidebarProps {
   onClose: () => void;
 }
 
-function BodyAxisBar({ label, value, cap, color }: {
+function BodyAxisBar({ label, value, color }: {
   label: string;
   value: number;
-  cap: number;
   color: string;
 }) {
-  const pct = Math.min(100, Math.round((value / Math.max(cap, 1)) * 100));
+  const pct = Math.min(100, Math.max(0, Math.round(value)));
   return (
     <div style={{ marginBottom: 8 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
@@ -30,7 +29,7 @@ function BodyAxisBar({ label, value, cap, color }: {
           {label}
         </span>
         <span className="mono" style={{ fontSize: 9.5, color: 'var(--dt-ink-4)', letterSpacing: 0.8 }}>
-          {Math.round(value)}/{Math.round(cap)}
+          {Math.round(value)}
         </span>
       </div>
       <div style={{ height: 3, borderRadius: 2, background: 'var(--dt-surface-2)', overflow: 'hidden' }}>
@@ -45,7 +44,7 @@ function BodyAxisBar({ label, value, cap, color }: {
   );
 }
 
-function HerBodyPanel({ body }: { body: BodyState }) {
+function HerBodyPanel({ body }: { body: { heat: number; sensitivity: number; tension: number } }) {
   return (
     <div style={{
       padding: '12px 14px', borderRadius: 14,
@@ -60,19 +59,16 @@ function HerBodyPanel({ body }: { body: BodyState }) {
       <BodyAxisBar
         label="温度 HEAT"
         value={body.heat}
-        cap={body.heat_cap}
         color="linear-gradient(90deg, var(--dt-flower-bluebell), #e96c6c)"
       />
       <BodyAxisBar
         label="感知 SENS"
         value={body.sensitivity}
-        cap={body.sensitivity_cap}
         color="linear-gradient(90deg, var(--dt-flower-dandelion), #b97fe8)"
       />
       <BodyAxisBar
         label="张力 TENS"
         value={body.tension}
-        cap={body.tension_cap}
         color="linear-gradient(90deg, var(--dt-surface-2), #7fbfe8)"
       />
     </div>
@@ -81,10 +77,10 @@ function HerBodyPanel({ body }: { body: BodyState }) {
 
 export function DreamSidebar({ dreamState, messages, onClose }: DreamSidebarProps) {
   const status = dreamState?.status;
-  const tension = dreamState?.emotional_tension;
+  const tension = dreamState?.yexuan_tension;
   const scene = dreamState?.scene_state;
   const anchors = dreamState?.symbolic_anchors ?? [];
-  const bodyState = dreamState?.body_state;
+  const body = dreamState?.body;
   const recentHer = messages.filter(m => m.role === 'her').slice(-3);
   const entryCount = messages.filter(m => m.role !== 'system').length;
 
@@ -159,7 +155,7 @@ export function DreamSidebar({ dreamState, messages, onClose }: DreamSidebarProp
       </div>
 
       {/* Emotional tension (叶瑄 tension) */}
-      {tension !== undefined && (
+      {tension !== undefined && tension > 0 && (
         <div>
           <div className="mono" style={{ fontSize: 9.5, letterSpacing: 1.5, color: 'var(--dt-ink-3)', marginBottom: 8 }}>
             叶瑄·情绪张力
@@ -179,8 +175,8 @@ export function DreamSidebar({ dreamState, messages, onClose }: DreamSidebarProp
       )}
 
       {/* Her cyber body panel — user_sees_own_numbers always true */}
-      {bodyState && (bodyState.heat > 0 || bodyState.sensitivity > 0 || bodyState.tension > 0) && (
-        <HerBodyPanel body={bodyState} />
+      {body && (body.heat > 0 || body.sensitivity > 0 || body.tension > 0) && (
+        <HerBodyPanel body={body} />
       )}
 
       {/* Scene state */}

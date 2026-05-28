@@ -443,20 +443,40 @@ async fn dream_exit(app: tauri::AppHandle) -> Result<serde_json::Value, String> 
 }
 
 #[tauri::command]
+async fn dream_get_settings(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = reqwest::Client::builder().no_proxy().build().map_err(|e| e.to_string())?;
+    let resp = client
+        .get(backend_url(&cfg, "/dream/settings"))
+        .bearer_auth(&cfg.admin_token)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(format!("HTTP {}", resp.status().as_u16()));
+    }
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 async fn dream_update_settings(
     app: tauri::AppHandle,
     enable_dream_lorebook: Option<bool>,
-    amnesia: Option<bool>,
-    keep_impression: Option<bool>,
+    memory_access: Option<String>,
+    boundary_level: Option<String>,
+    world_layer: Option<String>,
+    lucid_mode: Option<String>,
 ) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
     let client = reqwest::Client::builder().no_proxy().build().map_err(|e| e.to_string())?;
     let mut body = serde_json::Map::new();
     if let Some(v) = enable_dream_lorebook { body.insert("enable_dream_lorebook".into(), v.into()); }
-    if let Some(v) = amnesia            { body.insert("amnesia".into(), v.into()); }
-    if let Some(v) = keep_impression    { body.insert("keep_impression".into(), v.into()); }
+    if let Some(v) = memory_access   { body.insert("memory_access".into(), v.into()); }
+    if let Some(v) = boundary_level  { body.insert("boundary_level".into(), v.into()); }
+    if let Some(v) = world_layer     { body.insert("world_layer".into(), v.into()); }
+    if let Some(v) = lucid_mode      { body.insert("lucid_mode".into(), v.into()); }
     let resp = client
-        .post(backend_url(&cfg, "/dream/settings"))
+        .patch(backend_url(&cfg, "/dream/settings"))
         .bearer_auth(&cfg.admin_token)
         .json(&serde_json::Value::Object(body))
         .send()
@@ -524,6 +544,7 @@ pub fn run() {
             dream_enter,
             dream_chat,
             dream_exit,
+            dream_get_settings,
             dream_update_settings,
         ])
         .run(tauri::generate_context!())
