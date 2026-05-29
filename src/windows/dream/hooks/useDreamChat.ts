@@ -15,8 +15,11 @@ export function useDreamChat(onExited: () => void) {
     setMessages(prev => [...prev, { id: newId(), role: 'system', text }]);
   }, []);
 
+  const normalizeDreamText = (text: string): string =>
+  text.replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n");
+
   const send = useCallback(async (text: string) => {
-    const trimmed = text.trim();
+    const trimmed = normalizeDreamText(text.trim());
     if (!trimmed) return;
 
     setMessages(prev => [...prev, { id: newId(), role: 'user', text: trimmed }]);
@@ -26,7 +29,7 @@ export function useDreamChat(onExited: () => void) {
       if (resp.error) {
         setMessages(prev => [...prev, { id: newId(), role: 'system', text: `（${resp.error}）` }]);
       } else {
-        setMessages(prev => [...prev, { id: newId(), role: 'her', text: resp.reply }]);
+        setMessages(prev => [...prev, { id: newId(), role: 'her', text: normalizeDreamText(resp.reply) }]);
         if (resp.exit_accepted || resp.force_exited) {
           onExitedRef.current();
         }

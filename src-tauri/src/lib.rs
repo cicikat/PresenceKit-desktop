@@ -445,15 +445,21 @@ async fn dream_exit(app: tauri::AppHandle) -> Result<serde_json::Value, String> 
 #[tauri::command]
 async fn dream_get_settings(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
+    let url = backend_url(&cfg, "/dream/settings");
+    eprintln!("[dream_get_settings] GET {url}");
     let client = reqwest::Client::builder().no_proxy().build().map_err(|e| e.to_string())?;
     let resp = client
-        .get(backend_url(&cfg, "/dream/settings"))
+        .get(&url)
         .bearer_auth(&cfg.admin_token)
         .send()
         .await
         .map_err(|e| e.to_string())?;
-    if !resp.status().is_success() {
-        return Err(format!("HTTP {}", resp.status().as_u16()));
+    let status = resp.status();
+    eprintln!("[dream_get_settings] status={}", status.as_u16());
+    if !status.is_success() {
+        let body = resp.text().await.unwrap_or_default();
+        eprintln!("[dream_get_settings] error body: {body}");
+        return Err(format!("HTTP {} — {}", status.as_u16(), body));
     }
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
@@ -468,6 +474,7 @@ async fn dream_update_settings(
     lucid_mode: Option<String>,
 ) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
+    let url = backend_url(&cfg, "/dream/settings");
     let client = reqwest::Client::builder().no_proxy().build().map_err(|e| e.to_string())?;
     let mut body = serde_json::Map::new();
     if let Some(v) = enable_dream_lorebook { body.insert("enable_dream_lorebook".into(), v.into()); }
@@ -475,15 +482,21 @@ async fn dream_update_settings(
     if let Some(v) = boundary_level  { body.insert("boundary_level".into(), v.into()); }
     if let Some(v) = world_layer     { body.insert("world_layer".into(), v.into()); }
     if let Some(v) = lucid_mode      { body.insert("lucid_mode".into(), v.into()); }
+    let body_json = serde_json::Value::Object(body);
+    eprintln!("[dream_update_settings] PATCH {url}  body={body_json}");
     let resp = client
-        .patch(backend_url(&cfg, "/dream/settings"))
+        .patch(&url)
         .bearer_auth(&cfg.admin_token)
-        .json(&serde_json::Value::Object(body))
+        .json(&body_json)
         .send()
         .await
         .map_err(|e| e.to_string())?;
-    if !resp.status().is_success() {
-        return Err(format!("HTTP {}", resp.status().as_u16()));
+    let status = resp.status();
+    eprintln!("[dream_update_settings] status={}", status.as_u16());
+    if !status.is_success() {
+        let body = resp.text().await.unwrap_or_default();
+        eprintln!("[dream_update_settings] error body: {body}");
+        return Err(format!("HTTP {} — {}", status.as_u16(), body));
     }
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }

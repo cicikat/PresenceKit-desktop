@@ -1,4 +1,6 @@
+import { useState, useEffect } from 'react';
 import type { DreamState } from '../../../shared/api/dream-types';
+import { avatarStore } from '../../../shared/avatars/store';
 
 interface DreamControlBarProps {
   dreamState: DreamState | null;
@@ -7,6 +9,9 @@ interface DreamControlBarProps {
 }
 
 export function DreamControlBar({ dreamState, phase, onWake }: DreamControlBarProps) {
+  const [herDataUrl, setHerDataUrl] = useState<string | null>(avatarStore.get().her.dataUrl);
+  useEffect(() => avatarStore.subscribe(a => setHerDataUrl(a.her.dataUrl)), []);
+
   const scene = dreamState?.scene_state;
   const tension = dreamState?.yexuan_tension;
 
@@ -22,7 +27,11 @@ export function DreamControlBar({ dreamState, phase, onWake }: DreamControlBarPr
 
   return (
     <header className="dream-theme__head">
-      <div className="dream-theme__avatar" style={{ flexShrink: 0 }} />
+      {herDataUrl ? (
+        <img src={herDataUrl} style={{ width: 42, height: 42, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+      ) : (
+        <div className="dream-theme__avatar" style={{ flexShrink: 0 }} />
+      )}
 
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>

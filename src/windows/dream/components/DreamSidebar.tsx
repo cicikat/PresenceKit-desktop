@@ -1,4 +1,6 @@
+import { useState, useEffect } from 'react';
 import type { DreamState, DreamMessage } from '../../../shared/api/dream-types';
+import { avatarStore } from '../../../shared/avatars/store';
 
 const STATUS_LABEL: Record<string, string> = {
   DREAM_ACTIVE: '梦境进行中',
@@ -76,6 +78,9 @@ function HerBodyPanel({ body }: { body: { heat: number; sensitivity: number; ten
 }
 
 export function DreamSidebar({ dreamState, messages, onClose }: DreamSidebarProps) {
+  const [herDataUrl, setHerDataUrl] = useState<string | null>(avatarStore.get().her.dataUrl);
+  useEffect(() => avatarStore.subscribe(a => setHerDataUrl(a.her.dataUrl)), []);
+
   const status = dreamState?.status;
   const tension = dreamState?.yexuan_tension;
   const scene = dreamState?.scene_state;
@@ -92,10 +97,11 @@ export function DreamSidebar({ dreamState, messages, onClose }: DreamSidebarProp
     >
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-        <div
-          className="dream-theme__avatar"
-          style={{ width: 38, height: 38, flexShrink: 0, animation: 'none' }}
-        />
+        {herDataUrl ? (
+          <img src={herDataUrl} style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+        ) : (
+          <div className="dream-theme__avatar" style={{ width: 38, height: 38, flexShrink: 0, animation: 'none' }} />
+        )}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="mono" style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1.8, color: 'var(--dt-ink)' }}>动向</div>
           <div className="mono" style={{ fontSize: 9, letterSpacing: 1.5, color: 'var(--dt-ink-3)' }}>DREAM FLOW</div>
@@ -148,6 +154,26 @@ export function DreamSidebar({ dreamState, messages, onClose }: DreamSidebarProp
                 fontFamily: 'var(--font-mono)', letterSpacing: 0.8,
               }}>
                 ACTIVE
+              </span>
+            )}
+            {dreamState?.frozen_world && (
+              <span style={{
+                padding: '3px 8px', borderRadius: 6, fontSize: 10,
+                background: 'var(--dt-surface-2)', color: 'var(--dt-ink-2)',
+                fontFamily: 'var(--font-mono)', letterSpacing: 0.8,
+              }}>
+                {dreamState.frozen_world.replace(/_/g, ' ')}
+              </span>
+            )}
+            {dreamState?.lucid_mode && (
+              <span style={{
+                padding: '3px 8px', borderRadius: 6, fontSize: 10,
+                background: dreamState.lucid_mode === 'lucid_shared'
+                  ? 'var(--dt-flower-bluebell)' : 'var(--dt-surface-2)',
+                color: 'var(--dt-ink)',
+                fontFamily: 'var(--font-mono)', letterSpacing: 0.8,
+              }}>
+                {dreamState.lucid_mode === 'lucid_shared' ? 'LUCID' : 'NON LUCID'}
               </span>
             )}
           </div>

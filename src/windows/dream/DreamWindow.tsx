@@ -3,6 +3,7 @@ import { dreamEnter, dreamExit } from '../../shared/api/dream';
 import { useDreamState } from './hooks/useDreamState';
 import { useDreamChat } from './hooks/useDreamChat';
 import { DreamSidebar } from './components/DreamSidebar';
+import { DreamPrefsPane } from './components/DreamPrefsPane';
 import { DreamControlBar } from './components/DreamControlBar';
 import { DreamChatPanel } from './components/DreamChatPanel';
 import { Icon } from '../chat/components/UIKit';
@@ -322,6 +323,10 @@ function DreamSidePane({
         onClose={onClose}
       />
     );
+  }
+
+  if (tab === 'prefs') {
+    return <DreamPrefsPane dreamState={dreamState} onClose={onClose} />;
   }
 
   const titleMap: Record<DreamSideTab, string> = {

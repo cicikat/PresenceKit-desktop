@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, memo } from 'react';
 import type { DreamMessage } from '../../../shared/api/dream-types';
 import { DreamSceneBlock } from './DreamSceneBlock';
+import { avatarStore } from '../../../shared/avatars/store';
 
 interface DreamChatPanelProps {
   messages: DreamMessage[];
@@ -10,19 +11,61 @@ interface DreamChatPanelProps {
   endedMessage?: string;
 }
 
-const DreamMsgRow = memo(function DreamMsgRow({ msg }: { msg: DreamMessage }) {
+type Paragraph = { kind: 'action' | 'text'; content: string };
+
+function splitDreamText(text: string): Paragraph[] {
+  return text
+    .replace(/\\r\\n/g, '\n')
+    .replace(/\\n/g, '\n')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .split(/\r?\n|\\n/)
+    .map(line => line.trim())
+    .filter(line => line.length > 0)
+    .map(line => {
+      const isAction = /^[（(].+[）)]$/.test(line);
+      return { kind: isAction ? 'action' : 'text', content: line } as Paragraph;
+    });
+}
+
+function DreamHerAvatar({ herDataUrl }: { herDataUrl: string | null }) {
+  if (herDataUrl) {
+    return <img src={herDataUrl} className="dream-msg__avatar" alt="" />;
+  }
+  return <div className="dream-msg__avatar-dot" />;
+}
+
+const DreamMsgRow = memo(function DreamMsgRow({
+  msg,
+  herDataUrl,
+}: {
+  msg: DreamMessage;
+  herDataUrl: string | null;
+}) {
   if (msg.role === 'system') {
     return <DreamSceneBlock text={msg.text} />;
   }
 
   const fromUser = msg.role === 'user';
+  const paragraphs = fromUser ? null : splitDreamText(msg.text);
+  console.log('DREAM TEXT RAW:', JSON.stringify(msg.text));
+  console.log('DREAM PARAGRAPHS:', paragraphs);
+
 
   return (
     <div className={`dream-msg${fromUser ? ' dream-msg--user' : ' dream-msg--her'}`}>
-      {!fromUser && <div className="dream-msg__avatar-dot" />}
+      {!fromUser && <DreamHerAvatar herDataUrl={herDataUrl} />}
       <div className="dream-msg__content">
-        <div className="dream-msg__meta">{fromUser ? 'YOU' : 'HER'}</div>
-        <div className="dream-msg__bubble">{msg.text}</div>
+        <div className="dream-msg__meta">{fromUser ? 'YOU' : 'HIM'}</div>
+        <div className="dream-msg__bubble">
+          {paragraphs
+            ? paragraphs.map((p, i) => (
+                <p key={i} className={p.kind === 'action' ? 'dream-bubble__action' : undefined}>
+                  {p.content}
+                </p>
+              ))
+            : msg.text}
+        </div>
       </div>
     </div>
   );
@@ -36,7 +79,10 @@ export function DreamChatPanel({
   endedMessage,
 }: DreamChatPanelProps) {
   const [input, setInput] = useState('');
+  const [herDataUrl, setHerDataUrl] = useState<string | null>(avatarStore.get().her.dataUrl);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => avatarStore.subscribe(a => setHerDataUrl(a.her.dataUrl)), []);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -62,14 +108,14 @@ export function DreamChatPanel({
         )}
 
         {messages.map(m => (
-          <DreamMsgRow key={m.id} msg={m} />
+          <DreamMsgRow key={m.id} msg={m} herDataUrl={herDataUrl} />
         ))}
 
         {loading && (
           <div className="dream-msg dream-msg--her">
-            <div className="dream-msg__avatar-dot" />
+            <DreamHerAvatar herDataUrl={herDataUrl} />
             <div className="dream-msg__content">
-              <div className="dream-msg__meta">HER</div>
+              <div className="dream-msg__meta">HIM</div>
               <div className="dream-msg__bubble dream-msg__bubble--typing">
                 <span className="dream-typing-dots"><i /><i /><i /></span>
               </div>
