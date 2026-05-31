@@ -15,6 +15,20 @@
         "title": "tauri-app",
         "width": 800,
         "height": 600
+      },
+      {
+        "label": "pet",
+        "title": "Emerald Pet",
+        "url": "index.html?window=pet",
+        "width": 340,
+        "height": 400,
+        "resizable": false,
+        "transparent": true,
+        "visible": false,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "shadow": false
       }
     ],
     "security": {
