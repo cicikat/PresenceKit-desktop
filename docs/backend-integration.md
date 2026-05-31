@@ -62,7 +62,7 @@ config/client.local.json
 |---|---|
 | `src/shared/api/backend.ts` | `sendChat()`、`loadHistory()`、`loadGardenState()`、`loadDiaryList()`、`loadDiaryEntry()`、`loadSensorRealtime()` |
 | `src/shared/api/ws.ts` | `wsClient.connect()`、legacy WS 收发 |
-| `src-tauri/src/lib.rs` | `send_chat`、`load_history`、`load_garden_state`、`load_diary_list`、`load_diary_entry`、头像文件 commands |
+| `src-tauri/src/lib.rs` | `send_chat`、`load_history`、`load_garden_state`、`load_diary_list`、`load_diary_entry`、头像 / Dream 背景文件 commands、Dream 字体目录扫描 |
 | `src/windows/chat/components/ChatPanel.tsx` | 启动历史、发送消息、订阅 WS 主动消息 |
 | `src/windows/chat/components/Ribbon.tsx` | 读取 WS 连接状态 |
 | `src/windows/chat/components/SubGarden.tsx` | 读取并展示花园状态 |
@@ -753,10 +753,11 @@ v1 目标新增或替换：
 | `action_open_url(url)` | 前端 → Rust | 执行 `open_url`，使用 `tauri-plugin-opener` 打开 URL |
 | `action_show_notify(title, text)` | 前端 → Rust | 执行 `show_notify`，当前用 dialog fallback 展示 |
 | `action_media_play_pause()` | 前端 → Rust | 执行 `media_play_pause`，Windows 发送媒体键，非 Windows stub log |
-| `save_avatar(role, image_b64)` | 前端 → Rust | 保存 PNG 到 app data |
-| `load_avatar(path)` | 前端 → Rust | 读取头像并返回 data URL |
-| `read_avatars_json()` | 前端 → Rust | 读取头像配置 |
-| `write_avatars_json(json)` | 前端 → Rust | 写头像配置 |
+| `save_avatar(role, image_b64)` | 前端 → Rust | 保存 PNG 到 `app_data_dir()/avatars/`；头像和 Dream 日间 / 夜间背景共用 |
+| `load_avatar(path)` | 前端 → Rust | 读取头像或 Dream 背景并返回 data URL |
+| `read_avatars_json()` | 前端 → Rust | 读取头像和 Dream 日间 / 夜间背景配置；旧 `dream_background` 字段由前端兼容为夜间背景 |
+| `write_avatars_json(json)` | 前端 → Rust | 写头像和 Dream 日间 / 夜间背景配置 |
+| `list_dream_fonts()` | 前端 → Rust | 扫描 `public/fonts/`，返回 `ttf / otf / woff / woff2` 字体清单 |
 | `greet(name)` | 前端 → Rust | Tauri 模板遗留，当前未使用 |
 
 HTTP command 必须使用：

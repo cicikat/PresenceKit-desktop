@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { DreamState, DreamMessage } from '../../../shared/api/dream-types';
 import { avatarStore } from '../../../shared/avatars/store';
+import { DreamGlowPanel, type DreamGlowTag } from './DreamGlowPanel';
 
 const STATUS_LABEL: Record<string, string> = {
   DREAM_ACTIVE: '梦境进行中',
@@ -27,10 +28,10 @@ function BodyAxisBar({ label, value, color }: {
   return (
     <div style={{ marginBottom: 8 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-        <span className="mono" style={{ fontSize: 9.5, color: 'var(--dt-ink-3)', letterSpacing: 1 }}>
+        <span className="mono" style={{ fontSize: 'calc(9.5px * var(--dream-theme-font-scale, 1))', color: 'var(--dt-ink-3)', letterSpacing: 1 }}>
           {label}
         </span>
-        <span className="mono" style={{ fontSize: 9.5, color: 'var(--dt-ink-4)', letterSpacing: 0.8 }}>
+        <span className="mono" style={{ fontSize: 'calc(9.5px * var(--dream-theme-font-scale, 1))', color: 'var(--dt-ink-4)', letterSpacing: 0.8 }}>
           {Math.round(value)}
         </span>
       </div>
@@ -54,7 +55,7 @@ function HerBodyPanel({ body }: { body: { heat: number; sensitivity: number; ten
       border: '1px solid var(--dt-border-soft)',
     }}>
       <div className="mono" style={{
-        fontSize: 9.5, letterSpacing: 1.5, color: 'var(--dt-ink-3)', marginBottom: 10,
+        fontSize: 'calc(9.5px * var(--dream-theme-font-scale, 1))', letterSpacing: 1.5, color: 'var(--dt-ink-3)', marginBottom: 10,
       }}>
         HER · 赛博感知
       </div>
@@ -88,13 +89,24 @@ export function DreamSidebar({ dreamState, messages, onClose }: DreamSidebarProp
   const body = dreamState?.body;
   const recentHer = messages.filter(m => m.role === 'her').slice(-3);
   const entryCount = messages.filter(m => m.role !== 'system').length;
+  const statusTags: DreamGlowTag[] = status ? [
+    { content: status.replace(/_/g, ' '), tone: 'accent' },
+    ...(dreamState?.dream_id ? [{ content: 'ACTIVE', tone: 'muted' as const }] : []),
+    ...(dreamState?.frozen_world ? [{ content: dreamState.frozen_world.replace(/_/g, ' '), tone: 'muted' as const }] : []),
+    ...(dreamState?.lucid_mode ? [{
+      content: dreamState.lucid_mode === 'lucid_shared' ? 'LUCID' : 'NON LUCID',
+      tone: dreamState.lucid_mode === 'lucid_shared' ? 'cool' as const : 'muted' as const,
+    }] : []),
+  ] : [];
 
   return (
     <aside
-      className="dream-theme__sidebar"
+      className="dream-theme__sidebar dream-flow-sidebar"
       aria-label="梦境状态"
       style={{ display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto' }}
     >
+      <div className="dream-flow-sidebar__stardust" aria-hidden="true" />
+
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
         {herDataUrl ? (
@@ -103,8 +115,8 @@ export function DreamSidebar({ dreamState, messages, onClose }: DreamSidebarProp
           <div className="dream-theme__avatar" style={{ width: 38, height: 38, flexShrink: 0, animation: 'none' }} />
         )}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="mono" style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1.8, color: 'var(--dt-ink)' }}>动向</div>
-          <div className="mono" style={{ fontSize: 9, letterSpacing: 1.5, color: 'var(--dt-ink-3)' }}>DREAM FLOW</div>
+          <div className="mono" style={{ fontSize: 'calc(12px * var(--dream-theme-font-scale, 1))', fontWeight: 700, letterSpacing: 1.8, color: 'var(--dt-ink)' }}>动向</div>
+          <div className="mono" style={{ fontSize: 'calc(9px * var(--dream-theme-font-scale, 1))', letterSpacing: 1.5, color: 'var(--dt-ink-3)' }}>DREAM FLOW</div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
           <button
@@ -114,76 +126,28 @@ export function DreamSidebar({ dreamState, messages, onClose }: DreamSidebarProp
             style={{
               background: 'transparent', border: 'none',
               color: 'var(--dt-ink-3)', cursor: 'pointer',
-              fontSize: 18, lineHeight: 1, padding: 4,
+              fontSize: 'calc(18px * var(--dream-theme-font-scale, 1))', lineHeight: 1, padding: 4,
             }}
           >
             ×
           </button>
-          <span className="mono" style={{ fontSize: 9, color: 'var(--dt-ink-4)', letterSpacing: 1.2 }}>
+          <span className="mono" style={{ fontSize: 'calc(9px * var(--dream-theme-font-scale, 1))', color: 'var(--dt-ink-4)', letterSpacing: 1.2 }}>
             {entryCount} ENTRIES
           </span>
         </div>
       </div>
 
       {/* Status card */}
-      <div style={{
-        padding: '14px 16px', borderRadius: 16,
-        background: 'var(--dt-surface-deep)',
-        border: '1px solid var(--dt-border-soft)',
-      }}>
-        <div className="mono" style={{ fontSize: 9.5, letterSpacing: 1.5, color: 'var(--dt-ink-3)', marginBottom: 6 }}>NOW · 状态</div>
-        <div
-          className="serif"
-          style={{ fontStyle: 'italic', fontSize: 14, color: 'var(--dt-ink)', lineHeight: 1.5, marginBottom: 10 }}
-        >
-          {status ? (STATUS_LABEL[status] ?? status) : '—'}
-        </div>
-        {status && (
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            <span style={{
-              padding: '3px 8px', borderRadius: 6, fontSize: 10,
-              background: 'var(--dt-flower-dandelion)', color: 'var(--dt-ink)',
-              fontFamily: 'var(--font-mono)', letterSpacing: 1,
-            }}>
-              {status.replace(/_/g, ' ')}
-            </span>
-            {dreamState?.dream_id && (
-              <span style={{
-                padding: '3px 8px', borderRadius: 6, fontSize: 10,
-                background: 'var(--dt-surface-2)', color: 'var(--dt-ink-3)',
-                fontFamily: 'var(--font-mono)', letterSpacing: 0.8,
-              }}>
-                ACTIVE
-              </span>
-            )}
-            {dreamState?.frozen_world && (
-              <span style={{
-                padding: '3px 8px', borderRadius: 6, fontSize: 10,
-                background: 'var(--dt-surface-2)', color: 'var(--dt-ink-2)',
-                fontFamily: 'var(--font-mono)', letterSpacing: 0.8,
-              }}>
-                {dreamState.frozen_world.replace(/_/g, ' ')}
-              </span>
-            )}
-            {dreamState?.lucid_mode && (
-              <span style={{
-                padding: '3px 8px', borderRadius: 6, fontSize: 10,
-                background: dreamState.lucid_mode === 'lucid_shared'
-                  ? 'var(--dt-flower-bluebell)' : 'var(--dt-surface-2)',
-                color: 'var(--dt-ink)',
-                fontFamily: 'var(--font-mono)', letterSpacing: 0.8,
-              }}>
-                {dreamState.lucid_mode === 'lucid_shared' ? 'LUCID' : 'NON LUCID'}
-              </span>
-            )}
-          </div>
-        )}
-      </div>
+      <DreamGlowPanel
+        title="NOW · 状态"
+        status={status ? (STATUS_LABEL[status] ?? status) : '—'}
+        tags={statusTags}
+      />
 
       {/* Emotional tension (叶瑄 tension) */}
       {tension !== undefined && tension > 0 && (
         <div>
-          <div className="mono" style={{ fontSize: 9.5, letterSpacing: 1.5, color: 'var(--dt-ink-3)', marginBottom: 8 }}>
+          <div className="mono" style={{ fontSize: 'calc(9.5px * var(--dream-theme-font-scale, 1))', letterSpacing: 1.5, color: 'var(--dt-ink-3)', marginBottom: 8 }}>
             叶瑄·情绪张力
           </div>
           <div style={{ height: 4, borderRadius: 2, background: 'var(--dt-surface-2)', overflow: 'hidden' }}>
@@ -194,7 +158,7 @@ export function DreamSidebar({ dreamState, messages, onClose }: DreamSidebarProp
               transition: 'width 0.8s ease',
             }} />
           </div>
-          <div className="mono" style={{ fontSize: 9, color: 'var(--dt-ink-4)', marginTop: 4, letterSpacing: 0.8 }}>
+          <div className="mono" style={{ fontSize: 'calc(9px * var(--dream-theme-font-scale, 1))', color: 'var(--dt-ink-4)', marginTop: 4, letterSpacing: 0.8 }}>
             {Math.round(tension * 100)}%
           </div>
         </div>
@@ -208,8 +172,8 @@ export function DreamSidebar({ dreamState, messages, onClose }: DreamSidebarProp
       {/* Scene state */}
       {scene && (
         <div>
-          <div className="mono" style={{ fontSize: 9.5, letterSpacing: 1.5, color: 'var(--dt-ink-3)', marginBottom: 6 }}>场景</div>
-          <div className="serif" style={{ fontStyle: 'italic', fontSize: 13, color: 'var(--dt-ink-2)', lineHeight: 1.5 }}>
+          <div className="mono" style={{ fontSize: 'calc(9.5px * var(--dream-theme-font-scale, 1))', letterSpacing: 1.5, color: 'var(--dt-ink-3)', marginBottom: 6 }}>场景</div>
+          <div className="serif" style={{ fontStyle: 'italic', fontSize: 'calc(13px * var(--dream-theme-font-scale, 1))', color: 'var(--dt-ink-2)', lineHeight: 1.5 }}>
             {scene}
           </div>
         </div>
@@ -218,14 +182,14 @@ export function DreamSidebar({ dreamState, messages, onClose }: DreamSidebarProp
       {/* Symbolic anchors */}
       {anchors.length > 0 && (
         <div>
-          <div className="mono" style={{ fontSize: 9.5, letterSpacing: 1.5, color: 'var(--dt-ink-3)', marginBottom: 6 }}>象征锚</div>
+          <div className="mono" style={{ fontSize: 'calc(9.5px * var(--dream-theme-font-scale, 1))', letterSpacing: 1.5, color: 'var(--dt-ink-3)', marginBottom: 6 }}>象征锚</div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {anchors.map(a => (
               <span key={a} style={{
                 padding: '3px 10px', borderRadius: 999,
                 background: 'var(--dt-surface-2)',
                 border: '1px solid var(--dt-border-soft)',
-                fontSize: 11, color: 'var(--dt-ink-2)',
+                fontSize: 'calc(11px * var(--dream-theme-font-scale, 1))', color: 'var(--dt-ink-2)',
                 fontFamily: 'var(--font-serif)', fontStyle: 'italic',
               }}>
                 {a}
@@ -238,11 +202,11 @@ export function DreamSidebar({ dreamState, messages, onClose }: DreamSidebarProp
       {/* Recent messages from her */}
       {recentHer.length > 0 && (
         <div>
-          <div className="mono" style={{ fontSize: 9.5, letterSpacing: 1.5, color: 'var(--dt-ink-3)', marginBottom: 8 }}>近期动向</div>
+          <div className="mono" style={{ fontSize: 'calc(9.5px * var(--dream-theme-font-scale, 1))', letterSpacing: 1.5, color: 'var(--dt-ink-3)', marginBottom: 8 }}>近期动向</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {recentHer.map(m => (
               <div key={m.id} className="dream-theme__garden-item" style={{
-                fontSize: 12, lineHeight: 1.5, fontStyle: 'italic',
+                fontSize: 'calc(12px * var(--dream-theme-font-scale, 1))', lineHeight: 1.5, fontStyle: 'italic',
                 overflow: 'hidden', display: '-webkit-box',
                 WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
               }}>

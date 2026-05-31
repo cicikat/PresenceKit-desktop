@@ -42,7 +42,7 @@ Emerald-client 是 `qq-st-bot` 的新桌面客户端。它不拥有角色记忆�
 
 入口是 `src/main.tsx`：
 
-- 初始化头像 store：`avatarStore.init()`。
+- 初始化头像 / Dream 背景 store：`avatarStore.init()`。
 - 挂载全局样式：`src/shared/theme/globals.css`。
 - 渲染唯一主 view：`<ChatWindow />`。
 
@@ -50,9 +50,17 @@ Emerald-client 是 `qq-st-bot` 的新桌面客户端。它不拥有角色记忆�
 
 - 创建单个 `StateEngine` 实例。
 - 管理主题、Sidebar、偏好面板、帮助面板、桌宠开关等 UI 状态。
+- 使用 `src/shared/chatAppearance.ts` 保存 Chat 聊天字号、主题字号和字体包；Sidebar 宽度仅通过界面分隔条拖拽调整。
 - 把 engine 传给 `ChatPanel`。
-- 管理 Dream UI v2 preview 的本地开关；它只渲染视觉 overlay，不接 Dream backend / memory / scheduler / hardware。
+- 管理正式 Dream overlay 的本地开关；DreamWindow 自己接入 Dream API 和窗口状态机。
 - 当前没有实际 `PetWindow` 渲染。
+
+Dream 窗口是 `src/windows/dream/DreamWindow.tsx`：
+
+- 管理 Dream overlay、左侧 Ribbon、信息 Sidebar 和对话区域。
+- 动向 / 状态 / 潜意识使用左侧 Sidebar；偏好 / 帮助使用独立居中 modal，避免设置项挤在窄侧栏中。
+- 偏好窗口通过 `src/shared/api/dream.ts` 读写 `/dream/settings`，顶部横栏分为当前状态、梦境上下文、系统设置和其他。系统设置额外使用 `src/shared/dreamAppearance.ts` 持久化本地字体、配色和模糊度，并通过 `avatarStore` 分别保存日间 / 夜间聊天背景；帮助窗口只展示本地说明。
+- `DreamGlowPanel` / `DreamGlowBubble` 复用 `features/dream/DreamTokens.css` 的玻璃发光 token，分别承载 Sidebar 状态卡和 Dream 对话气泡。
 
 聊天区是 `src/windows/chat/components/ChatPanel.tsx`：
 
@@ -91,7 +99,8 @@ Tauri Rust 在 `src-tauri/src/lib.rs`：
 - `load_garden_state`：GET `/garden/state`，使用 Bearer token。
 - `load_sensor_realtime`：GET `/sensor/realtime`，使用 Bearer token；无数据响应归一为 `_no_data`。
 - `src-tauri/src/actions.rs`：执行 `minimize_window` / `open_url` / `show_notify` / `media_play_pause` 四类 desktop action。
-- `save_avatar` / `load_avatar` / `read_avatars_json` / `write_avatars_json`：本地头像持久化。
+- `save_avatar` / `load_avatar` / `read_avatars_json` / `write_avatars_json`：本地头像和 Dream 背景持久化。
+- `list_dream_fonts`：扫描 `public/fonts/`，返回可供 Chat / Dream 使用的字体包。
 
 ---
 
@@ -189,15 +198,17 @@ Sidebar diary tab → SubDiary mount
 
 数据源：`qq-st-bot/data/yexuan_inner/diary/*.md`（只读，严格匹配 `YYYY-MM-DD.md`）。
 
-### 头像存储
+### 头像和 Dream 背景存储
 
 ```text
-AvatarCropper
-  → avatarStore.setAvatar()
+AvatarCropper / DreamBackgroundCropper
+  → avatarStore.setAvatar() / setDreamBackground(tone)
   → Tauri save_avatar()
   → app_data_dir()/avatars/*.png
   → app_data_dir()/avatars.json
 ```
+
+Dream 背景按 `day` / `night` 分开记录。旧版单字段 `dream_background` 读取时兼容迁移为夜间背景。
 
 ---
 
@@ -212,6 +223,8 @@ AvatarCropper
 | `src/shared/state/store.ts` | 客户端状态 engine |
 | `src/shared/api/` | 后端 HTTP/WS 包装 |
 | `src/shared/avatars/store.ts` | 头像配置和 data URL 缓存 |
+| `src/shared/chatAppearance.ts` | Chat 本地字号、字体包偏好和动态字体清单 |
+| `src/shared/dreamAppearance.ts` | Dream 本地外观偏好、动态字体清单 |
 | `src/shared/theme/globals.css` | 全局主题变量 |
 | `src-tauri/src/lib.rs` | Tauri command 和 Rust HTTP 桥 |
 | `src-tauri/src/sensor/`(规划中) | sensor 感知模块,嵌入 Tauri Rust 进程 |

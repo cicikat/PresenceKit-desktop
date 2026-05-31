@@ -27,6 +27,7 @@
 - 管理 Dream UI v2 preview 的本地状态：Ribbon 入口打开 overlay，Esc / WAKE 关闭并显示 afterglow。
 - 布局三列：Ribbon、Sidebar、ChatPanel。
 - 负责偏好面板内的头像上传/裁剪入口。
+- Chat 偏好浮层使用顶部横栏分类：外观、其他。外观提供主题、信息栏、聊天字号、主题字号、`public/fonts/` 动态字体包和头像设置；Sidebar 宽度只保留界面拖拽，不再在偏好里重复提供控制项。其他暂留导入占位。
 
 关键状态：
 
@@ -35,8 +36,9 @@
 | `theme` | `paper` / `dark`，写入 `document.documentElement[data-theme]` |
 | `petVisible` | 当前只影响 Ribbon active 和 engine mode，没有真实桌宠窗口 |
 | `sidebarOpen` / `sidebarTab` | 控制左侧副栏 |
-| `sidebarWidth` | 可拖拽调整，范围 260-540 |
+| `sidebarWidth` | 可拖拽调整，范围 250-540 |
 | `chatHeaderVisible` | 控制 ChatPanel 顶部状态栏 |
+| `appearance` | Chat 本地外观设置：聊天字号、主题字号、字体包 |
 | `specOpen` / `prefsOpen` | 帮助/偏好浮层 |
 | `dreamWindowOpen` / `dreamAfterglow` | 控制 DreamWindow 显示和醒后余韵横幅 |
 
@@ -50,6 +52,10 @@ src/windows/dream/
 ├── components/
 │   ├── DreamChatPanel.tsx   消息区 + 输入框（append-only，无历史分页）
 │   ├── DreamSidebar.tsx     status / emotional_tension / scene_state / symbolic_anchors
+│   ├── DreamGlowPanel.tsx   发光状态卡，支持 title / status / tags / children
+│   ├── DreamGlowBubble.tsx  发光聊天气泡，支持 left / right 与可选消息元信息
+│   ├── DreamPrefsPane.tsx   窗口式梦境偏好设置，读取并保存 /dream/settings
+│   ├── DreamHelpPanel.tsx   窗口式梦境帮助说明
 │   └── DreamControlBar.tsx  WAKE 按钮 + 场景状态标题
 └── hooks/
     ├── useDreamState.ts     轮询 GET /dream/state（8s 间隔）
@@ -64,6 +70,9 @@ src/windows/dream/
 - `/dream/chat` 返回 `exit_accepted` 或 `force_exited` 时，禁用输入框，刷新状态，进入 ended 阶段。
 - 409 / 503 做可见错误提示，不 crash。
 - WAKE 按钮 / ESC：调用 `/dream/exit`，然后关闭窗口并触发 `DreamAfterglowBanner`（位于 `components/DreamAfterglowBanner.tsx`）。
+- Dream Ribbon 顶部聊天图标是固定选中的装饰入口，以短分隔线与功能区隔开；动向 / 状态 / 潜意识打开左侧副栏；偏好 / 帮助打开居中 modal，交互层级与 Chat 的偏好 / 帮助窗口一致。
+- Dream 偏好窗口使用顶部横栏分类：当前状态、梦境上下文、系统设置、其他。当前状态只读汇总可信快照；梦境上下文承接原有上下文、世界与清明度、附加设定；系统设置提供聊天字号、主题字号、`public/fonts/` 动态字体包、RGB 自定义配色、日间 / 夜间 Dream 聊天背景分别导入裁切和背景模糊度；其他暂留导入占位。梦境上下文通过 `/dream/settings` 读取和保存，梦境进行中修改时明确提示下次入梦生效；外观设置本地即时生效。
+- Sidebar 状态卡与消息气泡分别通过 `DreamGlowPanel` / `DreamGlowBubble` 统一玻璃底、冷色亮边、内外辉光和可选顶部扫光；视觉参数集中在 `features/dream/DreamTokens.css`。
 - 仅复用 `features/dream/DreamTokens.css` 的视觉 token。
 
 共享 API 层：
@@ -258,7 +267,7 @@ Ring buffer：`useState<{mood, aura}[]>` 长度 60；2s 采样；mood 轨迹柱�
 - 左侧固定 52px 功能条。
 - 切换 Sidebar tab：动向、日记、状态、花园。
 - 切换本地 `petVisible`。
-- 切换本地 Dream UI v2 preview。
+- 通过与其他 Ribbon 图标同色的空心圆入口打开 Dream overlay。
 - 打开偏好和帮助面板。
 - 显示 WS 连接状态角标。
 
@@ -354,6 +363,7 @@ WS 连接状态来自 `wsClient.getState()` 和 `wsClient.on("state")`。
 职责：
 
 - 保存 HER/YOU 头像路径和 data URL。
+- 分别保存日间 / 夜间 Dream 聊天背景路径和 data URL；背景与头像同样写入 `app_data_dir()/avatars/`，路径记录在同一个 `avatars.json`。旧版单字段 `dream_background` 读取时兼容为夜间背景。
 - 控制 YOU 头像是否显示。
 - 通过 Tauri command 读写本地文件。
 
@@ -364,7 +374,31 @@ Tauri 命令：
 - `save_avatar`
 - `load_avatar`
 
+## DreamAppearance
+
+文件：`src/shared/dreamAppearance.ts`
+
+职责：
+
+- 使用 `localStorage` 保存 Dream 聊天字号、主题字号、所选字体包、RGB 自定义配色和背景模糊度。
+- 调 Tauri `list_dream_fonts` 动态扫描 `public/fonts/` 中的 `ttf / otf / woff / woff2` 文件。
+- DreamWindow 通过 `FontFace` 加载所选字体，并只在 Dream 根节点覆盖字体变量。
+- 日间 / 夜间导入背景按当前 tone 分别渲染在 `.dream-theme__chat` 内；模糊度控制该背景图层，不影响 Ribbon 和 Sidebar。日间使用浅色 overlay，夜间使用深色 overlay。
+
 本地路径在 Tauri `app_data_dir()` 下。
+
+---
+
+## ChatAppearance
+
+文件：`src/shared/chatAppearance.ts`
+
+职责：
+
+- 使用 `localStorage` 保存 Chat 聊天字号、主题字号和所选字体包；旧版 `chat.bubbleFontSize` 会作为首次读取时的字号迁移来源。
+- 复用 Tauri `list_dream_fonts` 扫描 `public/fonts/` 中的 `ttf / otf / woff / woff2` 文件。
+- ChatWindow 通过 `FontFace` 加载所选字体，并只在 `.chat-ui` 主布局容器覆盖字体变量，不影响 Dream。
+- 主题字号通过 `--chat-theme-font-scale` 应用于当前运行中的 Ribbon、Sidebar tabs 和 ChatPanel；聊天字号单独控制聊天气泡与输入框。
 
 ---
 
@@ -376,6 +410,7 @@ Tauri 命令：
 
 - `:root[data-theme="paper"]`
 - `:root[data-theme="dark"]`
+- Dream 夜间模式在 `features/dream/DreamTokens.css` 的 `.dream-theme--night` 下使用独立深蓝紫色板，并为面板、气泡和输入框保留半透明毛玻璃表面。
 
 切换由 `ChatWindow` 设置 `document.documentElement.setAttribute("data-theme", theme)`。
 

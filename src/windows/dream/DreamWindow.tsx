@@ -4,14 +4,24 @@ import { useDreamState } from './hooks/useDreamState';
 import { useDreamChat } from './hooks/useDreamChat';
 import { DreamSidebar } from './components/DreamSidebar';
 import { DreamPrefsPane } from './components/DreamPrefsPane';
+import { DreamHelpPanel } from './components/DreamHelpPanel';
 import { DreamControlBar } from './components/DreamControlBar';
 import { DreamChatPanel } from './components/DreamChatPanel';
 import { Icon } from '../chat/components/UIKit';
 import { getUIPref, setUIPref } from '../../shared/uiPreferences';
+import { avatarStore } from '../../shared/avatars/store';
+import {
+  dreamFontFamily,
+  dreamFontUrl,
+  loadDreamAppearance,
+  saveDreamAppearance,
+  type DreamAppearance,
+} from '../../shared/dreamAppearance';
 import '../../features/dream/DreamTokens.css';
 
 type WindowPhase = 'loading' | 'ready' | 'entering' | 'active' | 'ended';
-type DreamSideTab = 'flow' | 'status' | 'subconscious' | 'prefs' | 'help';
+type DreamSideTab = 'flow' | 'status' | 'subconscious';
+type DreamModal = 'prefs' | 'help' | null;
 type DreamTone = 'day' | 'night';
 
 const SIDEBAR_MIN = 250;
@@ -28,10 +38,46 @@ export function DreamWindow({ onClose }: DreamWindowProps) {
   const [phaseError, setPhaseError] = useState<string | null>(null);
   const [sideOpen, setSideOpen] = useState(true);
   const [sideTab, setSideTab] = useState<DreamSideTab>('flow');
+  const [openModal, setOpenModal] = useState<DreamModal>(null);
   const [sidebarWidth, setSidebarWidth] = useState(() => getUIPref('dream.sidebarWidth', SIDEBAR_DEFAULT));
   const [tone, setTone] = useState<DreamTone>(() => getUIPref('dream.tone', 'day'));
+  const [appearance, setAppearance] = useState<DreamAppearance>(() => loadDreamAppearance());
+  const [backgrounds, setBackgrounds] = useState(() => avatarStore.get().dreamBackgrounds);
+  const [loadedFontFamily, setLoadedFontFamily] = useState<string | null>(null);
   const shellRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef(false);
+
+  const updateAppearance = useCallback((patch: Partial<DreamAppearance>) => {
+    setAppearance(current => {
+      const next = { ...current, ...patch };
+      saveDreamAppearance(next);
+      return next;
+    });
+  }, []);
+
+  useEffect(() => avatarStore.subscribe(config => {
+    setBackgrounds(config.dreamBackgrounds);
+  }), []);
+
+  useEffect(() => {
+    if (!appearance.fontFile) {
+      setLoadedFontFamily(null);
+      return;
+    }
+    const family = dreamFontFamily(appearance.fontFile)!;
+    const font = new FontFace(family, `url("${dreamFontUrl(appearance.fontFile)}")`);
+    let disposed = false;
+    font.load()
+      .then(loaded => {
+        if (disposed) return;
+        document.fonts.add(loaded);
+        setLoadedFontFamily(family);
+      })
+      .catch(() => {
+        if (!disposed) setLoadedFontFamily(null);
+      });
+    return () => { disposed = true; };
+  }, [appearance.fontFile]);
 
   const handleExited = useCallback(() => {
     refreshState();
@@ -95,10 +141,17 @@ export function DreamWindow({ onClose }: DreamWindowProps) {
   }, [onClose]);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') handleWake(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (openModal) {
+        setOpenModal(null);
+        return;
+      }
+      handleWake();
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [handleWake]);
+  }, [handleWake, openModal]);
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
@@ -139,6 +192,7 @@ export function DreamWindow({ onClose }: DreamWindowProps) {
 
   const inputDisabled = phase !== 'active' || chatLoading;
   const sidebarPixels = sideOpen ? sidebarWidth : 0;
+  const backgroundDataUrl = backgrounds[tone].dataUrl;
 
   return (
     <div
@@ -147,6 +201,18 @@ export function DreamWindow({ onClose }: DreamWindowProps) {
       role="dialog"
       aria-modal="true"
       aria-label="梦境"
+      style={{
+        '--dream-chat-font-size': `${appearance.chatFontSize}px`,
+        '--dream-theme-font-size': `${appearance.themeFontSize}px`,
+        '--dream-theme-font-scale': appearance.themeFontSize / 14,
+        '--dream-background-blur': `${appearance.backgroundBlur}px`,
+        '--dt-flower-dandelion': appearance.accentColor,
+        '--dream-accent': appearance.accentColor,
+        ...(loadedFontFamily ? {
+          '--font-serif': loadedFontFamily,
+          '--font-mono': loadedFontFamily,
+        } : {}),
+      } as CSSProperties}
     >
       <div className="dream-theme__canvas" />
       <div className="dream-theme__mist" />
@@ -162,9 +228,10 @@ export function DreamWindow({ onClose }: DreamWindowProps) {
         <DreamRibbon
           sideOpen={sideOpen}
           sideTab={sideTab}
+          openModal={openModal}
           tone={tone}
-          onChat={() => setSideOpen(false)}
           onTab={toggleSideTab}
+          onModal={setOpenModal}
           onToneToggle={() => setTone(t => { const next = t === 'day' ? 'night' : 'day'; setUIPref('dream.tone', next); return next; })}
         />
 
@@ -190,17 +257,24 @@ export function DreamWindow({ onClose }: DreamWindowProps) {
           className="dream-theme__chat"
           aria-label="梦境对话"
         >
+          {backgroundDataUrl && (
+            <div
+              className="dream-theme__chat-background"
+              style={{ backgroundImage: `url("${backgroundDataUrl}")` }}
+              aria-hidden="true"
+            />
+          )}
           <DreamControlBar dreamState={dreamState} phase={phase} onWake={handleWake} />
 
           {/* State-specific content */}
           {phase === 'loading' && (
             <div className="dream-theme__stage">
               {stateError ? (
-                <div className="mono" style={{ fontSize: 11, color: 'oklch(0.52 0.14 20)', letterSpacing: 1 }}>
+                <div className="mono" style={{ fontSize: 'calc(11px * var(--dream-theme-font-scale, 1))', color: 'oklch(0.52 0.14 20)', letterSpacing: 1 }}>
                   连接失败：{stateError}
                 </div>
               ) : (
-                <span className="mono" style={{ fontSize: 11, color: 'var(--dt-ink-3)', letterSpacing: 1.5 }}>
+                <span className="mono" style={{ fontSize: 'calc(11px * var(--dream-theme-font-scale, 1))', color: 'var(--dt-ink-3)', letterSpacing: 1.5 }}>
                   载入中…
                 </span>
               )}
@@ -215,7 +289,7 @@ export function DreamWindow({ onClose }: DreamWindowProps) {
                 <div className="dream-theme__ready-text">进入后，对话会暂时停在更轻、更慢的地方。</div>
               </div>
               {phaseError && (
-                <div className="mono" style={{ fontSize: 11, color: 'oklch(0.52 0.14 20)', letterSpacing: 1 }}>
+                <div className="mono" style={{ fontSize: 'calc(11px * var(--dream-theme-font-scale, 1))', color: 'oklch(0.52 0.14 20)', letterSpacing: 1 }}>
                   {phaseError}
                 </div>
               )}
@@ -231,7 +305,7 @@ export function DreamWindow({ onClose }: DreamWindowProps) {
 
           {phase === 'entering' && (
             <div className="dream-theme__stage">
-              <span className="mono" style={{ fontSize: 11, color: 'var(--dt-ink-3)', letterSpacing: 1.5 }}>
+              <span className="mono" style={{ fontSize: 'calc(11px * var(--dream-theme-font-scale, 1))', color: 'var(--dt-ink-3)', letterSpacing: 1.5 }}>
                 坠入中…
               </span>
             </div>
@@ -248,6 +322,18 @@ export function DreamWindow({ onClose }: DreamWindowProps) {
           )}
         </section>
       </div>
+
+      <DreamPrefsPane
+        open={openModal === 'prefs'}
+        dreamState={dreamState}
+        appearance={appearance}
+        onAppearanceChange={updateAppearance}
+        onClose={() => setOpenModal(null)}
+      />
+      <DreamHelpPanel
+        open={openModal === 'help'}
+        onClose={() => setOpenModal(null)}
+      />
     </div>
   );
 }
@@ -255,21 +341,24 @@ export function DreamWindow({ onClose }: DreamWindowProps) {
 function DreamRibbon({
   sideOpen,
   sideTab,
+  openModal,
   tone,
-  onChat,
   onTab,
+  onModal,
   onToneToggle,
 }: {
   sideOpen: boolean;
   sideTab: DreamSideTab;
+  openModal: DreamModal;
   tone: DreamTone;
-  onChat: () => void;
   onTab: (tab: DreamSideTab) => void;
+  onModal: (modal: DreamModal) => void;
   onToneToggle: () => void;
 }) {
   return (
     <nav className="dream-ribbon" aria-label="梦境导航">
-      <RibbonButton label="聊天" icon="chat" active={!sideOpen} onClick={onChat} />
+      <RibbonButton label="聊天" icon="chat" iconSize={16} active decorative compact />
+      <div className="dream-ribbon__separator" />
       <div className="dream-ribbon__group">
         <RibbonButton label="动向" icon="wind" active={sideOpen && sideTab === 'flow'} onClick={() => onTab('flow')} />
         <RibbonButton label="状态" icon="pulse" active={sideOpen && sideTab === 'status'} onClick={() => onTab('status')} />
@@ -277,29 +366,33 @@ function DreamRibbon({
       </div>
       <div className="dream-ribbon__spacer" />
       <div className="dream-ribbon__group">
-        <RibbonButton label="偏好" icon="settings" active={sideOpen && sideTab === 'prefs'} onClick={() => onTab('prefs')} />
-        <RibbonButton label="帮助" icon="spec" active={sideOpen && sideTab === 'help'} onClick={() => onTab('help')} />
+        <RibbonButton label="偏好" icon="settings" active={openModal === 'prefs'} onClick={() => onModal(openModal === 'prefs' ? null : 'prefs')} />
+        <RibbonButton label="帮助" icon="spec" active={openModal === 'help'} onClick={() => onModal(openModal === 'help' ? null : 'help')} />
         <RibbonButton label={tone === 'day' ? '夜间' : '日间'} icon={tone === 'day' ? 'mood' : 'sparkle'} active={false} onClick={onToneToggle} />
       </div>
     </nav>
   );
 }
 
-function RibbonButton({ label, icon, active, onClick }: {
+function RibbonButton({ label, icon, iconSize = 18, active, decorative = false, compact = false, onClick }: {
   label: string;
   icon: string;
+  iconSize?: number;
   active: boolean;
-  onClick: () => void;
+  decorative?: boolean;
+  compact?: boolean;
+  onClick?: () => void;
 }) {
   return (
     <button
       type="button"
-      className={`dream-ribbon__button${active ? ' is-active' : ''}`}
+      className={`dream-ribbon__button${active ? ' is-active' : ''}${compact ? ' is-compact' : ''}`}
       aria-label={label}
       title={label}
+      aria-disabled={decorative || undefined}
       onClick={onClick}
     >
-      <Icon name={icon} size={18} />
+      <Icon name={icon} size={iconSize} />
     </button>
   );
 }
@@ -325,23 +418,15 @@ function DreamSidePane({
     );
   }
 
-  if (tab === 'prefs') {
-    return <DreamPrefsPane dreamState={dreamState} onClose={onClose} />;
-  }
-
   const titleMap: Record<DreamSideTab, string> = {
     flow: '动向',
     status: '状态',
     subconscious: '潜意识',
-    prefs: '偏好',
-    help: '帮助',
   };
 
   const bodyMap: Record<Exclude<DreamSideTab, 'flow'>, string> = {
     status: '这里会接入梦境状态的更细指标，例如情绪张力、场景稳定度、退出倾向和最近一次状态变化。',
     subconscious: '这里会接入 symbolic_anchors、scene_state 的长期聚合，以及未来梦境记忆/潜意识线索。',
-    prefs: '这里会接入梦境偏好，例如 lorebook、遗忘策略、保留印象、日夜外观等本地设置。',
-    help: '这里会放梦境模式说明、状态含义、快捷键和后续调试入口。',
   };
 
   const key = tab as Exclude<DreamSideTab, 'flow'>;

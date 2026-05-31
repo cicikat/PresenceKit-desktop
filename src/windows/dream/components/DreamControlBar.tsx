@@ -36,7 +36,7 @@ export function DreamControlBar({ dreamState, phase, onWake }: DreamControlBarPr
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
           <div className="dream-theme__title">梦</div>
-          <span className="mono" style={{ fontSize: 9.5, letterSpacing: 1.3, color: 'var(--dt-ink-3)' }}>
+          <span className="mono" style={{ fontSize: 'calc(9.5px * var(--dream-theme-font-scale, 1))', letterSpacing: 1.3, color: 'var(--dt-ink-3)' }}>
             DREAM · {phase.toUpperCase()}
           </span>
         </div>
@@ -54,7 +54,7 @@ export function DreamControlBar({ dreamState, phase, onWake }: DreamControlBarPr
 
       {tension !== undefined && (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, marginRight: 12 }}>
-          <span className="mono" style={{ fontSize: 9, color: 'var(--dt-ink-4)', letterSpacing: 1 }}>张力</span>
+          <span className="mono" style={{ fontSize: 'calc(9px * var(--dream-theme-font-scale, 1))', color: 'var(--dt-ink-4)', letterSpacing: 1 }}>张力</span>
           <div style={{ width: 52, height: 3, borderRadius: 2, background: 'var(--dt-surface-2)', overflow: 'hidden' }}>
             <div style={{
               height: '100%',

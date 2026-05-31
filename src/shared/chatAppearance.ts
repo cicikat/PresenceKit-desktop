@@ -1,0 +1,63 @@
+import { invoke } from '@tauri-apps/api/core';
+import { getUIPref, setUIPref } from './uiPreferences';
+
+export interface ChatFontOption {
+  fileName: string;
+  label: string;
+  url: string;
+}
+
+export interface ChatAppearance {
+  chatFontSize: number;
+  themeFontSize: number;
+  fontFile: string | null;
+}
+
+const LEGACY_BUBBLE_FONT_SIZE: Record<string, number> = {
+  small: 13,
+  medium: 14,
+  large: 16,
+};
+
+const DEFAULT_APPEARANCE: ChatAppearance = {
+  chatFontSize: 14,
+  themeFontSize: 14,
+  fontFile: null,
+};
+
+function clamp(value: unknown, fallback: number, min: number, max: number): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(min, Math.min(max, value))
+    : fallback;
+}
+
+export function loadChatAppearance(): ChatAppearance {
+  const legacySize = getUIPref('chat.bubbleFontSize', 'medium');
+  const saved = getUIPref<Partial<ChatAppearance>>('chat.appearance', {});
+  return {
+    chatFontSize: clamp(saved.chatFontSize, LEGACY_BUBBLE_FONT_SIZE[legacySize] ?? DEFAULT_APPEARANCE.chatFontSize, 11, 24),
+    themeFontSize: clamp(saved.themeFontSize, DEFAULT_APPEARANCE.themeFontSize, 11, 22),
+    fontFile: typeof saved.fontFile === 'string' ? saved.fontFile : null,
+  };
+}
+
+export function saveChatAppearance(appearance: ChatAppearance): void {
+  setUIPref('chat.appearance', appearance);
+}
+
+export async function listChatFonts(): Promise<ChatFontOption[]> {
+  return invoke<ChatFontOption[]>('list_dream_fonts');
+}
+
+export function chatFontFamily(fileName: string | null): string | null {
+  if (!fileName) return null;
+  return `ChatUserFont-${fileName.replace(/[^a-z0-9]+/gi, '-')}`;
+}
+
+export function chatFontUrl(fileName: string): string {
+  return `/fonts/${encodeURIComponent(fileName)}`;
+}
+
+export function chatThemeFontSize(size: number): string {
+  return `calc(${size}px * var(--chat-theme-font-scale, 1))`;
+}
