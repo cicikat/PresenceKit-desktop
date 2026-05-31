@@ -6,6 +6,7 @@ import { MOOD_HUE, MOOD_LABEL_EN, FOCUS_LABEL_EN } from './UIKit';
 import { loadMoodState, loadActivityState } from '../../../shared/api/backend';
 import { backendMoodToFrontend } from '../../../shared/state/mood-mapping';
 import { MOOD_TABLE } from '../../../shared/state/store';
+import { chatThemeFontSize } from '../../../shared/chatAppearance';
 import type { Mood } from '../../../shared/state/store';
 import type { ActivityState } from '../../../shared/api/types';
 
@@ -135,12 +136,12 @@ export function SubFlow({ engine }: { engine: any }) {
         transition: 'border-color 3s ease',
       }}>
         <div className="mono" style={{
-          fontSize: 9.5, color: 'var(--on-forest-2)', letterSpacing: 1.4, marginBottom: 6,
+          fontSize: chatThemeFontSize(9.5), color: 'var(--on-forest-2)', letterSpacing: 1.4, marginBottom: 6,
         }}>
           NOW · 此刻
         </div>
         <div className="serif" style={{
-          fontSize: 19, lineHeight: 1.6,
+          fontSize: chatThemeFontSize(19), lineHeight: 1.6,
           color: 'var(--on-forest)',
           fontStyle: 'italic',
           marginBottom: 12,
@@ -173,7 +174,7 @@ export function SubFlow({ engine }: { engine: any }) {
       <div style={{ display: 'grid', gap: 0 }}>
         {timeline.length === 0 && (
           <div className="serif" style={{
-            fontSize: 13, color: 'var(--on-forest-2)',
+            fontSize: chatThemeFontSize(13), color: 'var(--on-forest-2)',
             fontStyle: 'italic', padding: '6px 4px',
           }}>
             暂无记录
@@ -201,7 +202,7 @@ export function SubFlow({ engine }: { engine: any }) {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                   <div className="serif" style={{
-                    fontSize: 13.5,
+                    fontSize: chatThemeFontSize(13.5),
                     color: 'var(--on-forest)',
                     fontWeight: i === 0 ? 600 : 500,
                   }}>
@@ -210,7 +211,7 @@ export function SubFlow({ engine }: { engine: any }) {
                   <Tag hue={ehue} size="sm">{MOOD_LABEL_EN[e.mood] ?? e.mood}</Tag>
                 </div>
                 <div className="mono" style={{
-                  fontSize: 9.5, color: 'var(--on-forest-2)', letterSpacing: 1.2, marginTop: 2,
+                  fontSize: chatThemeFontSize(9.5), color: 'var(--on-forest-2)', letterSpacing: 1.2, marginTop: 2,
                 }}>
                   {formatAgo(e.timestamp)}
                 </div>

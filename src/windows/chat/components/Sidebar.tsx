@@ -7,6 +7,7 @@ import { SubGarden } from './SubGarden';
 import { SubDiary } from './SubDiary';
 import { SubStatus } from './SubStatus';
 import { SubFlow } from './SubFlow';
+import { chatThemeFontSize } from '../../../shared/chatAppearance';
 
 const SIDEBAR_HEADER: Record<string, { title: string; subtitle: string }> = {
   flow:   { title: '动向',     subtitle: 'LIVE FEED · 他现在在做什么' },
@@ -41,10 +42,10 @@ export function SidebarPanel({ engine, sidebarRectRef, tab, onClose }: any) {
         display: 'flex', alignItems: 'flex-start', gap: 8,
       }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="serif" style={{ fontSize: 19, fontWeight: 600, color: 'var(--on-forest)', letterSpacing: -0.3 }}>
+          <div className="serif" style={{ fontSize: chatThemeFontSize(19), fontWeight: 600, color: 'var(--on-forest)', letterSpacing: -0.3 }}>
             {meta.title}
           </div>
-          <div className="mono" style={{ fontSize: 9.5, color: 'var(--on-forest-2)', letterSpacing: 1.3, marginTop: 2 }}>
+          <div className="mono" style={{ fontSize: chatThemeFontSize(9.5), color: 'var(--on-forest-2)', letterSpacing: 1.3, marginTop: 2 }}>
             {meta.subtitle}
           </div>
         </div>
@@ -53,7 +54,7 @@ export function SidebarPanel({ engine, sidebarRectRef, tab, onClose }: any) {
           background: 'transparent', border: '1px solid var(--forest-line)',
           color: 'var(--on-forest-2)', cursor: 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 14, lineHeight: 1, fontFamily: 'inherit',
+          fontSize: chatThemeFontSize(14), lineHeight: 1, fontFamily: 'inherit',
         }}>×</button>
       </div>
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>

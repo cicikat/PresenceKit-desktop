@@ -1,8 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { ChatResponse, GardenState, DiaryListResponse, DiaryEntry, ChatLogDatesResponse, ChatLogDay, MoodState, ActivityState, SensorRealtimeResponse, UploadIngestResponse, UploadError } from './types';
 
-const BOT_USER_ID = '1043484516';
-
 export async function sendChat(message: string): Promise<ChatResponse> {
   return invoke<ChatResponse>('send_chat', { message });
 }
@@ -16,7 +14,6 @@ export interface HistoryEntry {
 export async function loadHistory(): Promise<HistoryEntry[]> {
   const result = await invoke<{ user_id: string; history: HistoryEntry[]; count: number }>(
     'load_history',
-    { userId: BOT_USER_ID }
   );
   return result.history;
 }

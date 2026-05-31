@@ -7,6 +7,7 @@ import { loadMoodState, loadActivityState, loadSensorRealtime } from '../../../s
 import { backendMoodToFrontend } from '../../../shared/state/mood-mapping';
 import type { ActivityState, SensorRealtimeResponse, SensorRealtimeData } from '../../../shared/api/types';
 import { isSensorNoData } from '../../../shared/api/types';
+import { chatThemeFontSize } from '../../../shared/chatAppearance';
 
 // ── mood_aura 基准值（与 useTelemetrySignals 共享）────────────────────────────
 const MOOD_AURA_BASE: Record<string, number> = {
@@ -224,13 +225,13 @@ export function SubStatus({ engine }: { engine: any }) {
           borderRadius: 5,
           display: 'flex', alignItems: 'center', gap: 10,
         }}>
-          <span className="mono" style={{ flex: 1, fontSize: 9.5, color: 'var(--on-forest-2)', letterSpacing: 1.1 }}>
+          <span className="mono" style={{ flex: 1, fontSize: chatThemeFontSize(9.5), color: 'var(--on-forest-2)', letterSpacing: 1.1 }}>
             {moodError ? 'mood' : ''}{moodError && actError ? ' · ' : ''}{actError ? 'activity' : ''} 无法连接
           </span>
           <button
             onClick={() => { if (moodError) fetchMood(); if (actError) fetchActivity(); }}
             style={{
-              fontSize: 10, padding: '2px 8px', borderRadius: 3, cursor: 'pointer',
+              fontSize: chatThemeFontSize(10), padding: '2px 8px', borderRadius: 3, cursor: 'pointer',
               background: 'transparent', border: '1px solid var(--forest-line)',
               color: 'var(--on-forest-2)', fontFamily: 'inherit',
             }}>
@@ -249,16 +250,16 @@ export function SubStatus({ engine }: { engine: any }) {
         position: 'relative', overflow: 'hidden',
         transition: 'background 3s ease, border-color 3s ease',
       }}>
-        <div className="mono" style={{ fontSize: 9.5, color: 'var(--on-forest-2)', letterSpacing: 1.4, marginBottom: 6 }}>
+        <div className="mono" style={{ fontSize: chatThemeFontSize(9.5), color: 'var(--on-forest-2)', letterSpacing: 1.4, marginBottom: 6 }}>
           MOOD
         </div>
         <div className="serif" style={{
-          fontSize: 26, fontWeight: 600, color: 'var(--on-forest)', letterSpacing: -0.3, lineHeight: 1.1,
+          fontSize: chatThemeFontSize(26), fontWeight: 600, color: 'var(--on-forest)', letterSpacing: -0.3, lineHeight: 1.1,
         }}>
           {state.mood}
         </div>
         <div className="mono" style={{
-          fontSize: 10.5, color: `oklch(0.85 0.10 ${hue})`, letterSpacing: 1.3, marginTop: 5,
+          fontSize: chatThemeFontSize(10.5), color: `oklch(0.85 0.10 ${hue})`, letterSpacing: 1.3, marginTop: 5,
         }}>
           {MOOD_LABEL_EN[state.mood] ?? state.mood}
         </div>
@@ -274,11 +275,11 @@ export function SubStatus({ engine }: { engine: any }) {
       {/* ── ACTIVITY / PRESENCE 双卡 ────────────────────────────────────────── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
         <ForestCard label="ACTIVITY">
-          <div className="serif" style={{ fontSize: 14, color: 'var(--on-forest)', fontWeight: 600, lineHeight: 1.3 }}>
+          <div className="serif" style={{ fontSize: chatThemeFontSize(14), color: 'var(--on-forest)', fontWeight: 600, lineHeight: 1.3 }}>
             {state.activity?.text ?? '——'}
           </div>
           {state.activity?.arc && (
-            <div className="mono" style={{ fontSize: 9, color: 'var(--on-forest-2)', letterSpacing: 1.2, marginTop: 3 }}>
+            <div className="mono" style={{ fontSize: chatThemeFontSize(9), color: 'var(--on-forest-2)', letterSpacing: 1.2, marginTop: 3 }}>
               {state.activity.arc.toUpperCase()}
             </div>
           )}
@@ -294,7 +295,7 @@ export function SubStatus({ engine }: { engine: any }) {
                   : 'oklch(0.65 0.10 30)',
               boxShadow: state.presence === 'active' ? '0 0 7px oklch(0.72 0.16 145)' : 'none',
             }} />
-            <div className="serif" style={{ fontSize: 14, color: 'var(--on-forest)', fontWeight: 600, textTransform: 'capitalize' }}>
+            <div className="serif" style={{ fontSize: chatThemeFontSize(14), color: 'var(--on-forest)', fontWeight: 600, textTransform: 'capitalize' }}>
               {state.presence}
             </div>
           </div>
@@ -350,7 +351,7 @@ function ForestCard({ label, children }: { label: string; children: React.ReactN
       border: '1px solid var(--forest-line)',
       borderRadius: 5,
     }}>
-      <div className="mono" style={{ fontSize: 9, letterSpacing: 1.4, color: 'var(--on-forest-2)', marginBottom: 5 }}>
+      <div className="mono" style={{ fontSize: chatThemeFontSize(9), letterSpacing: 1.4, color: 'var(--on-forest-2)', marginBottom: 5 }}>
         {label}
       </div>
       {children}
@@ -364,8 +365,8 @@ function SignalBar({ label, value, hue, transition }: {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-        <span className="mono" style={{ fontSize: 9.5, color: 'var(--on-forest-2)', letterSpacing: 1.2 }}>{label}</span>
-        <span className="mono" style={{ fontSize: 9.5, color: 'var(--on-forest-2)' }}>{value}%</span>
+        <span className="mono" style={{ fontSize: chatThemeFontSize(9.5), color: 'var(--on-forest-2)', letterSpacing: 1.2 }}>{label}</span>
+        <span className="mono" style={{ fontSize: chatThemeFontSize(9.5), color: 'var(--on-forest-2)' }}>{value}%</span>
       </div>
       <div style={{
         position: 'relative', height: 5,

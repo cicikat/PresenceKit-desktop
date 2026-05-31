@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Tag, Btn, MicroLabel } from './UIKit';
 import { loadGardenState } from '../../../shared/api/backend';
 import type { GardenState, GardenSlot } from '../../../shared/api/types';
+import { chatThemeFontSize } from '../../../shared/chatAppearance';
 
 const FLOWER_COLOR: Record<string, string> = {
   calm:    '#d4a958',
@@ -48,7 +49,7 @@ export function SubGarden() {
   if (loading) {
     return (
       <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <span className="mono" style={{ fontSize: 11, color: 'var(--on-forest-2)', letterSpacing: 1.2 }}>加载中…</span>
+        <span className="mono" style={{ fontSize: chatThemeFontSize(11), color: 'var(--on-forest-2)', letterSpacing: 1.2 }}>加载中…</span>
       </div>
     );
   }
@@ -59,7 +60,7 @@ export function SubGarden() {
         height: '100%', display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24,
       }}>
-        <span className="mono" style={{ fontSize: 11, color: 'var(--on-forest-2)', letterSpacing: 1.2, textAlign: 'center' }}>
+        <span className="mono" style={{ fontSize: chatThemeFontSize(11), color: 'var(--on-forest-2)', letterSpacing: 1.2, textAlign: 'center' }}>
           {error || '无数据'}
         </span>
         <Btn onClick={() => { setLoading(true); fetchData(); }}>重试</Btn>
@@ -70,7 +71,7 @@ export function SubGarden() {
   return (
     <div style={{ padding: '12px 14px 18px', overflowY: 'auto', height: '100%' }}>
       <div className="serif" style={{
-        fontSize: 12.5, color: 'var(--on-forest-2)',
+        fontSize: chatThemeFontSize(12.5), color: 'var(--on-forest-2)',
         marginBottom: 12, lineHeight: 1.6, fontStyle: 'italic',
       }}>
         每种心情都让对应的植物多长出一点。它在你不看的时候，也在生长。
@@ -102,16 +103,16 @@ function SlotCard({ slot }: { slot: GardenSlot }) {
         <FlowerSVG flowerId={slot.flower_id} stage={slot.stage} color={color} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 5, flexWrap: 'wrap' }}>
-            <span className="serif" style={{ fontSize: 15, fontWeight: 600, color: 'var(--on-forest)' }}>
+            <span className="serif" style={{ fontSize: chatThemeFontSize(15), fontWeight: 600, color: 'var(--on-forest)' }}>
               {slot.name}
             </span>
-            <span className="serif" style={{ fontSize: 12, color: 'var(--on-forest-2)', fontStyle: 'italic' }}>
+            <span className="serif" style={{ fontSize: chatThemeFontSize(12), color: 'var(--on-forest-2)', fontStyle: 'italic' }}>
               · {slot.en_name}
             </span>
             {isBloom && <Tag hue={hue} size="sm">盛开</Tag>}
           </div>
           <GrowthBar progress={slot.stage_progress} color={color} />
-          <MicroLabel style={{ color: 'var(--on-forest-2)', marginTop: 4, fontSize: 9.5, letterSpacing: 1.2 }}>
+          <MicroLabel style={{ color: 'var(--on-forest-2)', marginTop: 4, fontSize: chatThemeFontSize(9.5), letterSpacing: 1.2 }}>
             {slot.slot_key.toUpperCase()} · {slot.stage.toUpperCase()}
           </MicroLabel>
         </div>

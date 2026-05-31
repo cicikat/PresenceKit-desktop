@@ -80,6 +80,5 @@ fn media_play_pause() -> Result<(), String> {
 
 #[cfg(not(target_os = "windows"))]
 fn media_play_pause() -> Result<(), String> {
-    eprintln!("[actions] media_play_pause: stub on this platform");
-    Ok(())
+    Err("media_key_not_supported_on_this_platform".into())
 }

@@ -4,6 +4,7 @@
  * ============================================================ */
 
 export { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { chatThemeFontSize } from '../../../shared/chatAppearance';
 
 export const MOOD_HUE: Record<string, number> = {
   '平静': 72,
@@ -36,7 +37,7 @@ export const FOCUS_LABEL_EN: Record<string, string> = {
 };
 
 export function Tag({ children, hue, variant = 'solid', size = 'sm' }: any) {
-  const fontSize = size === 'sm' ? 9.5 : 10.5;
+  const fontSize = chatThemeFontSize(size === 'sm' ? 9.5 : 10.5);
   const pad = size === 'sm' ? '2px 6px' : '3px 8px';
   if (variant === 'outline') {
     return (
@@ -94,7 +95,7 @@ export function HRule({ color }: any) {
 export function Numeric({ children, size = 28, color }: any) {
   return (
     <span className="serif" style={{
-      fontSize: size, fontWeight: 600, letterSpacing: -0.5,
+      fontSize: chatThemeFontSize(size), fontWeight: 600, letterSpacing: -0.5,
       color: color || 'var(--ink)', fontVariantNumeric: 'tabular-nums', lineHeight: 1.1,
     }}>{children}</span>
   );
@@ -134,7 +135,7 @@ export function Icon({ name, size = 18, stroke = 'currentColor', strokeWidth = 1
 
 export function Btn({ children, onClick, variant = 'ghost', icon, dense, hue, active }: any) {
   const base: any = {
-    fontFamily: 'inherit', fontSize: dense ? 11.5 : 12.5,
+    fontFamily: 'inherit', fontSize: chatThemeFontSize(dense ? 11.5 : 12.5),
     padding: dense ? '5px 10px' : '7px 14px',
     borderRadius: 5,
     display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -166,7 +167,7 @@ export function Meter({ value, max = 1, hue, label, ticks = true }: any) {
       {label && (
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
           <MicroLabel>{label}</MicroLabel>
-          <span className="mono" style={{ fontSize: 10.5, color: 'var(--ink-2)' }}>{(pct * 100).toFixed(0)}%</span>
+          <span className="mono" style={{ fontSize: chatThemeFontSize(10.5), color: 'var(--ink-2)' }}>{(pct * 100).toFixed(0)}%</span>
         </div>
       )}
       <div style={{
@@ -192,5 +193,5 @@ export function Meter({ value, max = 1, hue, label, ticks = true }: any) {
 }
 
 export function Body({ children, dim, style }: any) {
-  return <div style={{ fontSize: 13, lineHeight: 1.65, color: dim ? 'var(--ink-2)' : 'var(--ink)', ...style }}>{children}</div>;
+  return <div style={{ fontSize: chatThemeFontSize(13), lineHeight: 1.65, color: dim ? 'var(--ink-2)' : 'var(--ink)', ...style }}>{children}</div>;
 }

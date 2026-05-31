@@ -5,6 +5,7 @@ import { Tag, Btn } from './UIKit';
 import { loadDiaryList, loadDiaryEntry } from '../../../shared/api/backend';
 import type { DiaryListResponse, DiaryListItem, DiaryEntry } from '../../../shared/api/types';
 import { panesApi } from './Panes';
+import { chatThemeFontSize } from '../../../shared/chatAppearance';
 
 /* emotion → hue 映射，emotion 为 null 时整个标签不渲染 */
 const EMOTION_HUE: Record<string, number> = {
@@ -33,7 +34,7 @@ function renderBody(body: string): React.ReactNode[] {
     if (trimmed.startsWith('## ')) {
       nodes.push(
         <h3 key={i} style={{
-          fontSize: 15, fontWeight: 600, margin: '1.2em 0 0.4em',
+          fontSize: chatThemeFontSize(15), fontWeight: 600, margin: '1.2em 0 0.4em',
           color: 'var(--ink)', letterSpacing: -0.1,
         }}>
           {trimmed.slice(3)}
@@ -69,14 +70,14 @@ function DiaryDetailPane({ date }: { date: string }) {
 
   if (error) {
     return (
-      <div style={{ padding: 32, color: 'var(--ink-2)', fontSize: 13, fontFamily: 'var(--font-serif)', fontStyle: 'italic' }}>
+      <div style={{ padding: 32, color: 'var(--ink-2)', fontSize: chatThemeFontSize(13), fontFamily: 'var(--font-serif)', fontStyle: 'italic' }}>
         加载失败：{error}
       </div>
     );
   }
   if (!entry) {
     return (
-      <div style={{ padding: 32, color: 'var(--ink-2)', fontSize: 12, fontFamily: 'var(--font-mono)', letterSpacing: 1.2 }}>
+      <div style={{ padding: 32, color: 'var(--ink-2)', fontSize: chatThemeFontSize(12), fontFamily: 'var(--font-mono)', letterSpacing: 1.2 }}>
         加载中…
       </div>
     );
@@ -88,18 +89,18 @@ function DiaryDetailPane({ date }: { date: string }) {
         {entry.emotion !== null && (
           <Tag hue={emotionHue(entry.emotion)}>{entry.emotion}</Tag>
         )}
-        <span className="mono" style={{ fontSize: 10, color: 'var(--ink-3)', letterSpacing: 1.2 }}>
+        <span className="mono" style={{ fontSize: chatThemeFontSize(10), color: 'var(--ink-3)', letterSpacing: 1.2 }}>
           {formatDate(entry.date)}
         </span>
       </div>
       <h1 className="serif" style={{
-        fontSize: 28, fontWeight: 600, letterSpacing: -0.5,
+        fontSize: chatThemeFontSize(28), fontWeight: 600, letterSpacing: -0.5,
         margin: '4px 0 20px', color: 'var(--ink)',
       }}>
         {entry.title}
       </h1>
       <div style={{ height: 1, background: 'var(--paper-edge)', marginBottom: 20 }} />
-      <div className="serif" style={{ fontSize: 16, lineHeight: 1.85, color: 'var(--ink)', fontStyle: 'italic' }}>
+      <div className="serif" style={{ fontSize: chatThemeFontSize(16), lineHeight: 1.85, color: 'var(--ink)', fontStyle: 'italic' }}>
         {renderBody(entry.body)}
       </div>
     </div>
@@ -128,7 +129,7 @@ function DiaryListEntry({ item, onClick }: { item: DiaryListItem; onClick: () =>
       }}
     >
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 3 }}>
-        <span className="mono" style={{ fontSize: 9.5, letterSpacing: 1.2, color: 'var(--on-forest-2)' }}>
+        <span className="mono" style={{ fontSize: chatThemeFontSize(9.5), letterSpacing: 1.2, color: 'var(--on-forest-2)' }}>
           {formatDate(item.date)}
         </span>
         {item.emotion !== null && (
@@ -136,13 +137,13 @@ function DiaryListEntry({ item, onClick }: { item: DiaryListItem; onClick: () =>
         )}
       </div>
       <div className="serif" style={{
-        fontSize: 14, fontWeight: 600, color: 'var(--on-forest)', marginBottom: 4, letterSpacing: -0.2,
+        fontSize: chatThemeFontSize(14), fontWeight: 600, color: 'var(--on-forest)', marginBottom: 4, letterSpacing: -0.2,
         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
       }}>
         {item.title}
       </div>
       <div style={{
-        fontSize: 12, color: 'var(--on-forest-2)', lineHeight: 1.5,
+        fontSize: chatThemeFontSize(12), color: 'var(--on-forest-2)', lineHeight: 1.5,
         fontFamily: 'var(--font-serif)', fontStyle: 'italic',
       }}>
         —
@@ -202,7 +203,7 @@ export function SubDiary() {
   if (loading) {
     return (
       <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <span className="mono" style={{ fontSize: 11, color: 'var(--on-forest-2)', letterSpacing: 1.2 }}>加载中…</span>
+        <span className="mono" style={{ fontSize: chatThemeFontSize(11), color: 'var(--on-forest-2)', letterSpacing: 1.2 }}>加载中…</span>
       </div>
     );
   }
@@ -213,7 +214,7 @@ export function SubDiary() {
         height: '100%', display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24,
       }}>
-        <span className="mono" style={{ fontSize: 11, color: 'var(--on-forest-2)', letterSpacing: 1.2, textAlign: 'center' }}>
+        <span className="mono" style={{ fontSize: chatThemeFontSize(11), color: 'var(--on-forest-2)', letterSpacing: 1.2, textAlign: 'center' }}>
           {error || '无数据'}
         </span>
         <Btn onClick={() => fetchList()}>重试</Btn>
@@ -230,7 +231,7 @@ export function SubDiary() {
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, alignItems: 'center' }}>
           {tabs.map(t => (
             <button key={t} onClick={() => setActiveEmotion(t)} style={{
-              padding: '3px 9px', borderRadius: 3, fontSize: 11,
+              padding: '3px 9px', borderRadius: 3, fontSize: chatThemeFontSize(11),
               background: activeEmotion === t ? 'var(--on-forest)' : 'transparent',
               color: activeEmotion === t ? 'var(--forest)' : 'var(--on-forest-2)',
               border: activeEmotion === t ? '1px solid var(--on-forest)' : '1px solid var(--forest-line)',
@@ -247,11 +248,11 @@ export function SubDiary() {
               background: 'transparent', border: '1px solid var(--forest-line)',
               color: 'var(--on-forest-2)', cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 12, fontFamily: 'inherit',
+              fontSize: chatThemeFontSize(12), fontFamily: 'inherit',
             }}
           >↻</button>
         </div>
-        <div className="mono" style={{ fontSize: 9.5, color: 'var(--on-forest-2)', letterSpacing: 1.2, marginTop: 6 }}>
+        <div className="mono" style={{ fontSize: chatThemeFontSize(9.5), color: 'var(--on-forest-2)', letterSpacing: 1.2, marginTop: 6 }}>
           {filtered.length} ENTRIES · {activeEmotion === '全部' ? 'ALL' : activeEmotion.toUpperCase()}
         </div>
       </div>
@@ -263,7 +264,7 @@ export function SubDiary() {
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             height: '100%', padding: 24,
           }}>
-            <div className="serif" style={{ fontSize: 14, color: 'var(--on-forest-2)', fontStyle: 'italic' }}>
+            <div className="serif" style={{ fontSize: chatThemeFontSize(14), color: 'var(--on-forest-2)', fontStyle: 'italic' }}>
               他还没开始写日记。
             </div>
           </div>

@@ -8,6 +8,7 @@ import { Icon } from './UIKit';
 import { wsClient } from '../../../shared/api/ws';
 import type { ConnectionState } from '../../../shared/api/types';
 import { DreamEntryButton } from '../../../features/dream';
+import { chatThemeFontSize } from '../../../shared/chatAppearance';
 
 function Sep() {
   return <div style={{ width: 24, height: 1, background: 'var(--forest-line)', margin: '6px 0' }} />;
@@ -43,7 +44,7 @@ function RibBtn({ icon, label, active, onClick }: any) {
           padding: '3px 8px',
           background: 'var(--ink)', color: 'var(--paper)',
           borderRadius: 4,
-          fontSize: 10, letterSpacing: 1.2, fontWeight: 600,
+          fontSize: chatThemeFontSize(10), letterSpacing: 1.2, fontWeight: 600,
           whiteSpace: 'nowrap', pointerEvents: 'none',
           zIndex: 200,
           boxShadow: '0 4px 12px var(--shadow-rgb-mix)',

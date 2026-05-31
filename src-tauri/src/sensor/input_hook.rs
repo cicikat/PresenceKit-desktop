@@ -52,6 +52,7 @@ pub fn create_default_sampler() -> Box<dyn InputSampler> {
 /// 非 Windows 平台暂时返回 stub
 #[cfg(not(target_os = "windows"))]
 pub fn create_default_sampler() -> Box<dyn InputSampler> {
+    eprintln!("[sensor] 非 Windows 平台：input sampler 为 stub，键鼠计数恒为 0，不代表真实输入");
     Box::new(StubSampler)
 }
 

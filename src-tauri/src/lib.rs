@@ -1,3 +1,7 @@
+// NOTE(endpoint-literals): 本文件中的后端路径（/desktop/chat、/memory/…、/garden/state、
+// /diary/…、/chat-log/…、/mood/state、/activity/current、/sensor/realtime、/upload/ingest、
+// /dream/state|enter|chat|exit|settings，共 15 个不同路径）均为字面量硬编码。
+// publisher.rs 另有 /sensor/realtime。后端路由变更时需手动同步这两个文件。
 mod actions;
 mod client_config;
 pub mod sensor;
@@ -20,6 +24,50 @@ fn avatar_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 }
 
 #[tauri::command]
+fn list_dream_fonts() -> Result<serde_json::Value, String> {
+    let font_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .ok_or_else(|| "无法定位项目根目录".to_string())?
+        .join("public")
+        .join("fonts");
+
+    if !font_dir.exists() {
+        return Ok(serde_json::json!([]));
+    }
+
+    let mut fonts = Vec::new();
+    for entry in fs::read_dir(&font_dir).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let Some(extension) = path.extension().and_then(|v| v.to_str()) else {
+            continue;
+        };
+        if !matches!(extension.to_ascii_lowercase().as_str(), "ttf" | "otf" | "woff" | "woff2") {
+            continue;
+        }
+        let Some(file_name) = path.file_name().and_then(|v| v.to_str()) else {
+            continue;
+        };
+        let label = path.file_stem()
+            .and_then(|v| v.to_str())
+            .unwrap_or(file_name);
+        fonts.push(serde_json::json!({
+            "fileName": file_name,
+            "label": label,
+            "url": format!("/fonts/{}", file_name),
+        }));
+    }
+    fonts.sort_by(|a, b| {
+        a["fileName"].as_str().unwrap_or_default()
+            .cmp(b["fileName"].as_str().unwrap_or_default())
+    });
+    Ok(serde_json::Value::Array(fonts))
+}
+
+#[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
@@ -34,17 +82,26 @@ async fn send_chat(app: tauri::AppHandle, message: String) -> Result<serde_json:
 
     let resp = client
         .post(backend_url(&cfg, "/desktop/chat"))
+        .bearer_auth(&cfg.admin_token)
         .json(&serde_json::json!({ "message": message }))
         .send()
         .await
         .map_err(|e| e.to_string())?;
 
+    if !resp.status().is_success() {
+        return Err(format!("HTTP {}", resp.status().as_u16()));
+    }
+
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn load_history(app: tauri::AppHandle, user_id: String) -> Result<serde_json::Value, String> {
+async fn load_history(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
+    let user_id = &cfg.bot_user_id;
+    if user_id.is_empty() {
+        return Ok(serde_json::json!({ "user_id": "", "history": [], "count": 0 }));
+    }
     let client = reqwest::Client::builder()
         .no_proxy()
         .build()
@@ -538,6 +595,7 @@ pub fn run() {
             actions::action_media_play_pause,
             client_config::load_public_client_config,
             greet,
+            list_dream_fonts,
             send_chat,
             load_history,
             load_garden_state,

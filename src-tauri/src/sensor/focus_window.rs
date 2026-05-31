@@ -36,6 +36,7 @@ pub fn create_default_sampler() -> Box<dyn FocusSampler> {
 /// 非 Windows 平台暂时返回 stub
 #[cfg(not(target_os = "windows"))]
 pub fn create_default_sampler() -> Box<dyn FocusSampler> {
+    eprintln!("[sensor] 非 Windows 平台：focus sampler 为 stub，窗口标题/进程名恒为空");
     Box::new(StubFocusSampler)
 }
 

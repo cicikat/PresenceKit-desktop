@@ -4,7 +4,8 @@ use tauri::Manager;
 
 const DEFAULT_BACKEND_BASE: &str = "http://127.0.0.1:8080";
 const DEFAULT_WEBSOCKET_BASE: &str = "ws://127.0.0.1:8080/ws/desktop";
-const DEFAULT_ADMIN_TOKEN: &str = "Emerald1231";
+const DEFAULT_ADMIN_TOKEN_PLACEHOLDER: &str = "CHANGE_ME";
+const DEFAULT_BOT_USER_ID: &str = "";
 const DEFAULT_SENSOR_WINDOW_SECONDS: u32 = 30;
 const DEFAULT_SENSOR_TICK_SECONDS: u32 = 5;
 const DEFAULT_SENSOR_VERSION: &str = "emerald-client-rust-1.0";
@@ -35,6 +36,7 @@ pub struct ClientConfig {
     pub websocket_base: String,
     pub admin_token: String,
     pub sensor_config: SensorConfig,
+    pub bot_user_id: String,
 }
 
 impl Default for ClientConfig {
@@ -42,8 +44,10 @@ impl Default for ClientConfig {
         Self {
             backend_base: DEFAULT_BACKEND_BASE.into(),
             websocket_base: DEFAULT_WEBSOCKET_BASE.into(),
-            admin_token: DEFAULT_ADMIN_TOKEN.into(),
+            admin_token: std::env::var("EMERALD_ADMIN_TOKEN")
+                .unwrap_or_else(|_| DEFAULT_ADMIN_TOKEN_PLACEHOLDER.to_string()),
             sensor_config: SensorConfig::default(),
+            bot_user_id: DEFAULT_BOT_USER_ID.into(),
         }
     }
 }
@@ -59,6 +63,8 @@ struct PartialClientConfig {
     admin_token: Option<String>,
     #[serde(default, alias = "sensor_config")]
     sensor_config: Option<PartialSensorConfig>,
+    #[serde(default, alias = "bot_user_id")]
+    bot_user_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -100,9 +106,20 @@ pub struct FrontendClientConfig {
 
 impl From<ClientConfig> for FrontendClientConfig {
     fn from(cfg: ClientConfig) -> Self {
+        // Append ?token= so the frontend WebSocket URL carries the credential at connect time.
+        // Skip if the base URL already contains a token= param (e.g. set manually in client.local.json).
+        let ws_base = if !cfg.admin_token.is_empty() && !cfg.websocket_base.contains("token=") {
+            if cfg.websocket_base.contains('?') {
+                format!("{}&token={}", cfg.websocket_base, cfg.admin_token)
+            } else {
+                format!("{}?token={}", cfg.websocket_base, cfg.admin_token)
+            }
+        } else {
+            cfg.websocket_base
+        };
         Self {
             backend_base: cfg.backend_base,
-            websocket_base: cfg.websocket_base,
+            websocket_base: ws_base,
             sensor_config: cfg.sensor_config,
         }
     }
@@ -117,6 +134,9 @@ fn apply_partial(cfg: &mut ClientConfig, partial: PartialClientConfig) {
     }
     if let Some(v) = partial.admin_token {
         cfg.admin_token = v;
+    }
+    if let Some(v) = partial.bot_user_id {
+        cfg.bot_user_id = v;
     }
     if let Some(sensor) = partial.sensor_config {
         if let Some(v) = sensor.enabled {
