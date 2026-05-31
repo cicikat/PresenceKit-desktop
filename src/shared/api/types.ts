@@ -1,6 +1,16 @@
+// Narrative Message Protocol — Phase 1 types
+// Segments are a read-only view; the raw reply remains the source of truth.
+export type NarrativeSegmentType = 'say' | 'do' | 'env' | 'feel' | 'narration';
+
+export interface NarrativeSegment {
+  type: NarrativeSegmentType;
+  text: string;
+}
+
 export type ServerMessage =
   | { type: 'hello_ack'; server_version: string }
   | { type: 'channel_message'; content: string; msg_id: string }
+  | { type: 'message_segments'; content: string; segments: NarrativeSegment[]; msg_id: string }
   | { type: 'action'; action: DesktopActionPayload; msg_id: string }
   | { type: 'ping' };
 
@@ -27,6 +37,8 @@ export type DesktopActionPayload = {
 export interface ChatResponse {
   reply: string;
   emotion: string;
+  // Phase 1 reserved field — not yet populated by the HTTP API
+  segments?: NarrativeSegment[];
 }
 
 export interface GardenSlot {

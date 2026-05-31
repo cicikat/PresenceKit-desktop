@@ -69,8 +69,15 @@ export interface DreamSettingsResponse {
   settings: DreamSettings;
 }
 
+import type { NarrativeSegment } from './types';
+
 export interface DreamMessage {
   id: string;
   role: 'her' | 'user' | 'system';
   text: string;
+  /** WS msg_id from channel_message, used to correlate message_segments */
+  wsMsgId?: string;
+  segments?: NarrativeSegment[];
+  /** Stripped content from message_segments; overrides text in rendering */
+  segmentedContent?: string;
 }

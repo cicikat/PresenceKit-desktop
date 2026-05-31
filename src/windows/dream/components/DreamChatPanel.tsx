@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, memo } from 'react';
 import type { DreamMessage } from '../../../shared/api/dream-types';
 import { DreamSceneBlock } from './DreamSceneBlock';
 import { avatarStore } from '../../../shared/avatars/store';
+import { DreamGlowBubble } from './DreamGlowBubble';
 
 interface DreamChatPanelProps {
   messages: DreamMessage[];
@@ -11,21 +12,26 @@ interface DreamChatPanelProps {
   endedMessage?: string;
 }
 
-type Paragraph = { kind: 'action' | 'text'; content: string };
+type BubbleLine = { kind: 'action' | 'text'; content: string };
 
-function splitDreamText(text: string): Paragraph[] {
-  return text
+function splitIntoBubbles(text: string): string[] {
+  const normalized = text
     .replace(/\\r\\n/g, '\n')
     .replace(/\\n/g, '\n')
     .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-    .split(/\r?\n|\\n/)
+    .replace(/\r/g, '\n');
+  return normalized.split(/\n\n+/).map(s => s.trim()).filter(Boolean);
+}
+
+function renderBubbleLines(segment: string): BubbleLine[] {
+  return segment
+    .split('\n')
     .map(line => line.trim())
     .filter(line => line.length > 0)
-    .map(line => {
-      const isAction = /^[（(].+[）)]$/.test(line);
-      return { kind: isAction ? 'action' : 'text', content: line } as Paragraph;
-    });
+    .map(line => ({
+      kind: /^[（(].+[）)]$/.test(line) ? 'action' : 'text',
+      content: line,
+    }));
 }
 
 function DreamHerAvatar({ herDataUrl }: { herDataUrl: string | null }) {
@@ -47,25 +53,31 @@ const DreamMsgRow = memo(function DreamMsgRow({
   }
 
   const fromUser = msg.role === 'user';
-  const paragraphs = fromUser ? null : splitDreamText(msg.text);
-  console.log('DREAM TEXT RAW:', JSON.stringify(msg.text));
-  console.log('DREAM PARAGRAPHS:', paragraphs);
-
+  const displayText = msg.segmentedContent ?? msg.text;
+  const bubbles = fromUser ? null : splitIntoBubbles(displayText);
 
   return (
     <div className={`dream-msg${fromUser ? ' dream-msg--user' : ' dream-msg--her'}`}>
       {!fromUser && <DreamHerAvatar herDataUrl={herDataUrl} />}
       <div className="dream-msg__content">
-        <div className="dream-msg__meta">{fromUser ? 'YOU' : 'HIM'}</div>
-        <div className="dream-msg__bubble">
-          {paragraphs
-            ? paragraphs.map((p, i) => (
-                <p key={i} className={p.kind === 'action' ? 'dream-bubble__action' : undefined}>
-                  {p.content}
-                </p>
-              ))
-            : msg.text}
-        </div>
+        {bubbles ? (
+          <div className="dream-msg__bubbles">
+            {bubbles.map((segment, bi) => (
+              <DreamGlowBubble key={bi} side="left" speaker={bi === 0 ? 'HIM' : undefined}>
+                {renderBubbleLines(segment).map((line, i) => (
+                  <p
+                    key={i}
+                    className={line.kind === 'action' ? 'dream-bubble__action' : undefined}
+                  >
+                    {line.content}
+                  </p>
+                ))}
+              </DreamGlowBubble>
+            ))}
+          </div>
+        ) : (
+          <DreamGlowBubble side="right" speaker="YOU">{displayText}</DreamGlowBubble>
+        )}
       </div>
     </div>
   );
@@ -115,10 +127,9 @@ export function DreamChatPanel({
           <div className="dream-msg dream-msg--her">
             <DreamHerAvatar herDataUrl={herDataUrl} />
             <div className="dream-msg__content">
-              <div className="dream-msg__meta">HIM</div>
-              <div className="dream-msg__bubble dream-msg__bubble--typing">
+              <DreamGlowBubble side="left" speaker="HIM" className="dream-glow-bubble--typing">
                 <span className="dream-typing-dots"><i /><i /><i /></span>
-              </div>
+              </DreamGlowBubble>
             </div>
           </div>
         )}

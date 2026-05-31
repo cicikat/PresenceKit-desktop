@@ -15,13 +15,9 @@ import { sendChat, uploadDocument } from '../../../shared/api/backend';
 import { loadChatLogDates, loadChatLogDay } from '../../../shared/api/backend';
 import { getClientConfig } from '../../../shared/api/config';
 import { wsClient } from '../../../shared/api/ws';
-import type { ChatLogEntry, UploadError } from '../../../shared/api/types';
-
-const BUBBLE_FONT_SIZES = {
-  small:  { assistant: 13,   user: 12.5 },
-  medium: { assistant: 14,   user: 13.5 },
-  large:  { assistant: 16,   user: 15.5 },
-} as const;
+import { chatThemeFontSize } from '../../../shared/chatAppearance';
+import { publishPetSnapshot, summarizePetReply } from '../../../shared/pet/bridge';
+import type { ChatLogEntry, UploadError, NarrativeSegment } from '../../../shared/api/types';
 
 function splitReply(text: string): string[] {
   return text.split(/\n+/).map(s => s.trim()).filter(s => s.length > 0);
@@ -49,6 +45,10 @@ interface ChatMsg {
   moodLabel?: string;
   deleted?: string;
   meta?: string;
+  // message_segments correlation
+  wsMsgId?: string;
+  segments?: NarrativeSegment[];
+  segmentedContent?: string;
 }
 
 let _msgIdCounter = 0;
@@ -189,7 +189,7 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 0 6px' }}>
         <div style={{ flex: 1, height: 1, background: 'var(--paper-edge)' }} />
-        <div className="mono" style={{ fontSize: 10, color: 'var(--ink-3)', letterSpacing: 1.5 }}>{msg.text}</div>
+        <div className="mono" style={{ fontSize: chatThemeFontSize(10), color: 'var(--ink-3)', letterSpacing: 1.5 }}>{msg.text}</div>
         <div style={{ flex: 1, height: 1, background: 'var(--paper-edge)' }} />
       </div>
     );
@@ -198,7 +198,7 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
   if (msg.role === 'raw_fallback' || msg.role === 'system') {
     return (
       <div style={{ textAlign: 'center', padding: '10px 0' }}>
-        <span className="mono" style={{ fontSize: 10.5, color: 'var(--ink-4)', letterSpacing: 0.8 }}>{msg.text}</span>
+        <span className="mono" style={{ fontSize: chatThemeFontSize(10.5), color: 'var(--ink-4)', letterSpacing: 0.8 }}>{msg.text}</span>
       </div>
     );
   }
@@ -206,7 +206,7 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
   if (msg.role === 'no_more') {
     return (
       <div style={{ textAlign: 'center', padding: '12px 0 4px' }}>
-        <span className="mono" style={{ fontSize: 10, color: 'var(--ink-4)', letterSpacing: 0.8 }}>没有更早的对话了。</span>
+        <span className="mono" style={{ fontSize: chatThemeFontSize(10), color: 'var(--ink-4)', letterSpacing: 0.8 }}>没有更早的对话了。</span>
       </div>
     );
   }
@@ -220,7 +220,7 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
     return (
       <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-end', gap: youVisible ? 8 : 0, padding: '8px 0' }}>
         <div style={{ maxWidth: '78%' }}>
-          <div className="mono" style={{ fontSize: 9.5, letterSpacing: 1.4, color: 'var(--ink-3)', textAlign: 'right', marginBottom: 4 }}>
+          <div className="mono" style={{ fontSize: chatThemeFontSize(9.5), letterSpacing: 1.4, color: 'var(--ink-3)', textAlign: 'right', marginBottom: 4 }}>
             YOU · {time}
           </div>
           <div style={{
@@ -253,7 +253,7 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
             {youDataUrl ? (
               <img src={youDataUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             ) : (
-              <div style={{ width: '100%', height: '100%', background: 'var(--paper-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 600, color: 'var(--ink-3)', fontFamily: 'var(--font-serif)' }}>Y</div>
+              <div style={{ width: '100%', height: '100%', background: 'var(--paper-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: chatThemeFontSize(14), fontWeight: 600, color: 'var(--ink-3)', fontFamily: 'var(--font-serif)' }}>Y</div>
             )}
           </div>
         )}
@@ -272,7 +272,7 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
       </div>
       <div style={{ flex: 1, maxWidth: 'calc(100% - 60px)' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
-          <span className="mono" style={{ fontSize: 9.5, letterSpacing: 1.4, color: 'var(--ink-3)' }}>HIM · {time}</span>
+          <span className="mono" style={{ fontSize: chatThemeFontSize(9.5), letterSpacing: 1.4, color: 'var(--ink-3)' }}>HIM · {time}</span>
           {msg.moodLabel && <Tag hue={hue}>{msg.moodLabel}</Tag>}
         </div>
         <div style={{
@@ -288,11 +288,11 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
           whiteSpace: 'pre-wrap',
         }}>
           {msg.deleted && (
-            <div style={{ textDecoration: 'line-through', opacity: 0.45, fontSize: 12.5, marginBottom: 4 }}>{msg.deleted}</div>
+            <div style={{ textDecoration: 'line-through', opacity: 0.45, fontSize: assistantFontSize - 1.5, marginBottom: 4 }}>{msg.deleted}</div>
           )}
-          {msg.text}
+          {msg.segmentedContent ?? msg.text}
           {msg.meta && (
-            <div className="mono" style={{ fontSize: 10, color: 'var(--ink-3)', marginTop: 6, letterSpacing: 0.8 }}>{msg.meta}</div>
+            <div className="mono" style={{ fontSize: chatThemeFontSize(10), color: 'var(--ink-3)', marginTop: 6, letterSpacing: 0.8 }}>{msg.meta}</div>
           )}
         </div>
       </div>
@@ -302,7 +302,7 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
 
 // ── 主组件 ──────────────────────────────────────────────────────────────────
 
-export function ChatPanel({ engine, chatRectRef, headerVisible = true, bubbleFontSize = 'medium' }: any) {
+export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontSize = 14 }: any) {
   const [state, setState] = useState(engine.get());
   useEffect(() => engine.subscribe(setState), [engine]);
 
@@ -331,6 +331,11 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, bubbleFon
 
   // 已渲染的 turn_id,用于 WS 去重
   const processedTurnIdsRef = useRef<Set<string>>(new Set());
+
+  // message_segments 关联：ws msg_id → 本地 ChatMsg id 列表
+  const wsMsgIdToLocalIdsRef = useRef<Map<string, string[]>>(new Map());
+  // message_segments 先于 channel_message 到达时的暂存
+  const pendingSegmentsByMsgIdRef = useRef<Map<string, { content: string; segments: NarrativeSegment[] }>>(new Map());
 
   // ── 启动加载 ─────────────────────────────────────────────────────────────
 
@@ -517,38 +522,65 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, bubbleFon
     };
   }, []);
 
-  const scheduleAssistantSegments = useCallback((fullText: string) => {
-    const segments = splitReply(fullText);
-    if (segments.length === 0) return;
+  const scheduleAssistantSegments = useCallback((fullText: string, wsMsgId?: string) => {
+    const textParts = splitReply(fullText);
+    if (textParts.length === 0) return;
+    publishPetSnapshot({
+      thinking: false,
+      latestAssistantText: summarizePetReply(fullText),
+    });
 
     const m = engine.get();
     const moodHue = MOOD_HUE[m.mood];
     const moodLabel = MOOD_LABEL_EN[m.mood];
 
-    const pushSeg = (text: string) => {
+    // Check for pending stripped content from message_segments that arrived first
+    const pending = wsMsgId ? pendingSegmentsByMsgIdRef.current.get(wsMsgId) : undefined;
+    const strippedParts = pending ? splitReply(pending.content) : null;
+
+    // Pre-generate ids so we can register them in the ref before setMessages resolves
+    const localIds = textParts.map(() => newId());
+
+    if (wsMsgId) {
+      wsMsgIdToLocalIdsRef.current.set(wsMsgId, localIds);
+      if (pending) pendingSegmentsByMsgIdRef.current.delete(wsMsgId);
+    }
+
+    const pushSeg = (idx: number) => {
+      const text = textParts[idx];
+      const segmentedContent = strippedParts
+        ? (strippedParts[idx] ?? strippedParts[0])
+        : undefined;
       setMessages(prev => [...prev, {
-        id: newId(),
-        role: 'assistant',
+        id: localIds[idx],
+        role: 'assistant' as const,
         text,
         moodHue,
         moodLabel,
         time: Date.now(),
+        wsMsgId: wsMsgId && idx === 0 ? wsMsgId : undefined,
+        segments: pending?.segments,
+        segmentedContent,
       }]);
     };
 
-    pushSeg(segments[0]);
+    pushSeg(0);
 
     let cumDelay = 0;
-    for (let i = 1; i < segments.length; i++) {
+    for (let i = 1; i < textParts.length; i++) {
       cumDelay += 100 + Math.random() * 900;
-      const seg = segments[i];
+      const segIdx = i;
       const timer = setTimeout(() => {
-        pushSeg(seg);
+        pushSeg(segIdx);
         pendingSegmentTimersRef.current = pendingSegmentTimersRef.current.filter(t => t !== timer);
       }, cumDelay);
       pendingSegmentTimersRef.current.push(timer);
     }
   }, [engine]);
+
+  useEffect(() => {
+    publishPetSnapshot({ thinking: loading });
+  }, [loading]);
 
   // ── 自动滚到底（仅新消息 append 时）──────────────────────────────────────
 
@@ -578,21 +610,44 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, bubbleFon
     }
   }, [state.wantToSpeak]);
 
-  // ── WS 连接 + channel_message 订阅 ───────────────────────────────────────
+  // ── WS 连接 + channel_message / message_segments 订阅 ────────────────────
 
   useEffect(() => {
     let mounted = true;
     getClientConfig().then(cfg => {
       if (mounted) wsClient.connect(cfg.websocketBase);
     });
-    const unsubscribe = wsClient.on('channel_message', (content) => {
+
+    const unsubMsg = wsClient.on('channel_message', ({ content, msg_id }) => {
       // TODO: 接入 turn_id 去重(需要先扩展 ws.ts 透传 turn_id)
       // 当前 /upload/ingest 后端 broadcast 会导致同一 reply 在 HTTP + WS 双路径渲染两次
-      scheduleAssistantSegments(content);
+      scheduleAssistantSegments(content, msg_id);
     });
+
+    const unsubSegs = wsClient.on('message_segments', ({ content, segments, msg_id }) => {
+      const localIds = wsMsgIdToLocalIdsRef.current.get(msg_id);
+      if (localIds && localIds.length > 0) {
+        // Bubbles already exist — update their segmentedContent in place
+        const strippedParts = splitReply(content);
+        setMessages(prev => prev.map(m => {
+          const idx = localIds.indexOf(m.id);
+          if (idx === -1) return m;
+          return {
+            ...m,
+            segments,
+            segmentedContent: strippedParts[idx] ?? strippedParts[0] ?? m.text,
+          };
+        }));
+      } else {
+        // channel_message hasn't arrived yet — park it
+        pendingSegmentsByMsgIdRef.current.set(msg_id, { content, segments });
+      }
+    });
+
     return () => {
       mounted = false;
-      unsubscribe();
+      unsubMsg();
+      unsubSegs();
     };
   }, [engine, scheduleAssistantSegments]);
 
@@ -620,10 +675,11 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, bubbleFon
     } catch (err) {
       console.error('[chat] send 失败:', err);
       const msg = err instanceof Error ? err.message : String(err);
+      const is409 = /\b409\b/.test(msg);
       setMessages(prev => [...prev, {
         id: newId(),
         role: 'system',
-        text: `（连接失败：${msg}）`,
+        text: is409 ? '（正在做梦中，请先退出梦境再聊天）' : `（连接失败：${msg}）`,
         time: Date.now(),
       }]);
     } finally {
@@ -747,9 +803,10 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, bubbleFon
   useEffect(() => { handleDropPathsRef.current = handleDropPaths; }, [handleDropPaths]);
 
   useEffect(() => {
+    let cancelled = false;
     let unlistenFn: (() => void) | null = null;
     (async () => {
-      unlistenFn = await getCurrentWebview().onDragDropEvent((event) => {
+      const unlisten = await getCurrentWebview().onDragDropEvent((event) => {
         const payload = event.payload;
         if (payload.type === 'enter' || payload.type === 'over') {
           setIsDraggingOver(true);
@@ -760,15 +817,18 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, bubbleFon
           handleDropPathsRef.current(payload.paths);
         }
       });
+      // If cleanup ran before await resolved (StrictMode double-invoke race),
+      // unregister the listener immediately instead of storing it.
+      if (cancelled) { unlisten(); } else { unlistenFn = unlisten; }
     })();
-    return () => { if (unlistenFn) unlistenFn(); };
+    return () => { cancelled = true; if (unlistenFn) unlistenFn(); };
   }, []);
 
   const currentHue = MOOD_HUE[state.mood];
   const herDataUrl = avatars.her.dataUrl;
   const youDataUrl = avatars.you.dataUrl;
   const youVisible = avatars.you.visible;
-  const fontSizes  = BUBBLE_FONT_SIZES[bubbleFontSize as keyof typeof BUBBLE_FONT_SIZES] ?? BUBBLE_FONT_SIZES.medium;
+  const fontSizes = { assistant: chatFontSize, user: chatFontSize };
 
   return (
     <div ref={rootRef} style={{
@@ -786,10 +846,10 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, bubbleFon
           <BreathingAvatar engine={engine} hue={currentHue} size={50} dataUrl={herDataUrl} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
-              <h1 className="serif" style={{ margin: 0, fontSize: 28, fontWeight: 600, color: 'var(--ink)', letterSpacing: -0.4 }}>
+              <h1 className="serif" style={{ margin: 0, fontSize: chatThemeFontSize(28), fontWeight: 600, color: 'var(--ink)', letterSpacing: -0.4 }}>
                 对话
               </h1>
-              <span className="mono" style={{ fontSize: 10.5, color: 'var(--ink-3)', letterSpacing: 1.3 }}>
+              <span className="mono" style={{ fontSize: chatThemeFontSize(10.5), color: 'var(--ink-3)', letterSpacing: 1.3 }}>
                 CHAPTER · {new Date().toLocaleDateString('zh', { month: 'long', day: 'numeric' }).toUpperCase()}
               </span>
             </div>
@@ -803,14 +863,14 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, bubbleFon
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
             <Btn icon="settings" dense>偏好</Btn>
-            <span className="mono" style={{ fontSize: 9.5, color: 'var(--ink-4)', letterSpacing: 1.4 }}>
+            <span className="mono" style={{ fontSize: chatThemeFontSize(9.5), color: 'var(--ink-4)', letterSpacing: 1.4 }}>
               {messages.filter(m => m.role === 'user' || m.role === 'assistant').length} ENTRIES
             </span>
             {historyStatus.kind === 'loading' && (
-              <span className="mono" style={{ fontSize: 9, color: 'var(--ink-4)', letterSpacing: 1 }}>载入中…</span>
+              <span className="mono" style={{ fontSize: chatThemeFontSize(9), color: 'var(--ink-4)', letterSpacing: 1 }}>载入中…</span>
             )}
             {historyStatus.kind === 'error' && (
-              <span className="mono" title={historyStatus.detail} style={{ fontSize: 9, color: 'oklch(0.52 0.14 20)', letterSpacing: 1, cursor: 'default' }}>
+              <span className="mono" title={historyStatus.detail} style={{ fontSize: chatThemeFontSize(9), color: 'oklch(0.52 0.14 20)', letterSpacing: 1, cursor: 'default' }}>
                 历史 · {historyStatus.category === 'network' ? '网络错误'
                   : historyStatus.category === 'unauthorized' ? (historyStatus.statusCode != null ? String(historyStatus.statusCode) : '401')
                   : '格式异常'}
@@ -829,21 +889,21 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, bubbleFon
         {/* 初始加载中占位 */}
         {historyStatus.kind === 'loading' && messages.length === 0 && (
           <div style={{ textAlign: 'center', padding: '60px 0 20px' }}>
-            <span className="mono" style={{ fontSize: 10, color: 'var(--ink-4)', letterSpacing: 0.8 }}>正在加载历史记录…</span>
+            <span className="mono" style={{ fontSize: chatThemeFontSize(10), color: 'var(--ink-4)', letterSpacing: 0.8 }}>正在加载历史记录…</span>
           </div>
         )}
 
         {/* 顶部加载中提示 */}
         {isLoadingMore && (
           <div style={{ textAlign: 'center', padding: '10px 0' }}>
-            <span className="mono" style={{ fontSize: 10, color: 'var(--ink-4)', letterSpacing: 0.8 }}>正在加载更早的对话…</span>
+            <span className="mono" style={{ fontSize: chatThemeFontSize(10), color: 'var(--ink-4)', letterSpacing: 0.8 }}>正在加载更早的对话…</span>
           </div>
         )}
 
         {/* loadMore 错误提示 */}
         {loadMoreError && !isLoadingMore && (
           <div style={{ textAlign: 'center', padding: '8px 0' }}>
-            <span className="mono" style={{ fontSize: 10, color: 'oklch(0.52 0.14 20)', letterSpacing: 0.8 }}>
+            <span className="mono" style={{ fontSize: chatThemeFontSize(10), color: 'oklch(0.52 0.14 20)', letterSpacing: 0.8 }}>
               {loadMoreError === 'network' ? '网络错误，历史未能继续加载' : loadMoreError === 'unauthorized' ? '401 · 无权读取历史' : '历史格式异常，已跳过'}
             </span>
           </div>
@@ -917,8 +977,8 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, bubbleFon
                 onMouseLeave={e => (e.currentTarget as any).style.background = 'transparent'}>
                 <Icon name={icon} size={16} />
                 <div>
-                  <div style={{ fontSize: 12.5, fontWeight: 500 }}>{label}</div>
-                  <div className="mono" style={{ fontSize: 9.5, color: 'var(--ink-3)', letterSpacing: 0.8 }}>{sub}</div>
+                  <div style={{ fontSize: chatThemeFontSize(12.5), fontWeight: 500 }}>{label}</div>
+                  <div className="mono" style={{ fontSize: chatThemeFontSize(9.5), color: 'var(--ink-3)', letterSpacing: 0.8 }}>{sub}</div>
                 </div>
               </button>
             ))}
@@ -945,7 +1005,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, bubbleFon
               flex: 1, resize: 'none', width: '100%', minWidth: 0,
               padding: '11px 14px', borderRadius: 6,
               background: 'var(--paper)', border: '1px solid var(--paper-edge)',
-              color: 'var(--ink)', fontSize: 14, fontFamily: 'var(--font-serif)',
+              color: 'var(--ink)', fontSize: chatFontSize, fontFamily: 'var(--font-serif)',
               outline: 'none', minHeight: 40, maxHeight: 120, lineHeight: 1.5,
             }}
           />
@@ -953,18 +1013,18 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, bubbleFon
             height: 40, padding: '0 18px', borderRadius: 6,
             background: 'var(--accent)', color: 'var(--paper)',
             border: 'none', fontWeight: 600, cursor: 'pointer',
-            fontFamily: 'inherit', fontSize: 13,
+            fontFamily: 'inherit', fontSize: chatThemeFontSize(13),
             display: 'flex', alignItems: 'center', gap: 6, letterSpacing: 0.5,
           }}>
             <Icon name="send" size={15} /> 寄出
           </button>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
-          <span className="mono" style={{ fontSize: 9.5, color: 'var(--ink-4)', letterSpacing: 1.2 }}>
+          <span className="mono" style={{ fontSize: chatThemeFontSize(9.5), color: 'var(--ink-4)', letterSpacing: 1.2 }}>
             ENTER 发送 · SHIFT+ENTER 换行
           </span>
           {state.wantToSpeak && (
-            <span className="mono" style={{ fontSize: 9.5, color: `oklch(0.45 0.12 ${currentHue})`, letterSpacing: 1.2 }}>
+            <span className="mono" style={{ fontSize: chatThemeFontSize(9.5), color: `oklch(0.45 0.12 ${currentHue})`, letterSpacing: 1.2 }}>
               · 他想说什么…
             </span>
           )}
@@ -981,7 +1041,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, bubbleFon
           borderRadius: 'inherit',
         }}>
           <div className="serif" style={{
-            fontSize: 18, fontWeight: 600, color: 'var(--ink)',
+            fontSize: chatThemeFontSize(18), fontWeight: 600, color: 'var(--ink)',
             letterSpacing: 0.5,
           }}>
             松开发送文件

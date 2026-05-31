@@ -1,9 +1,10 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { ServerMessage, ClientMessage, ConnectionState, DesktopActionPayload, DesktopActionType } from './types';
+import type { ServerMessage, ClientMessage, ConnectionState, DesktopActionPayload, DesktopActionType, NarrativeSegment } from './types';
 
 type EventMap = {
   state: ConnectionState;
-  channel_message: string;
+  channel_message: { content: string; msg_id: string };
+  message_segments: { content: string; segments: NarrativeSegment[]; msg_id: string };
   action: DesktopActionPayload;
 };
 
@@ -110,8 +111,12 @@ class WSClient {
           this._setState('connected');
           break;
         case 'channel_message':
-          this.emit('channel_message', msg.content);
+          this.emit('channel_message', { content: msg.content, msg_id: msg.msg_id });
           this._send({ type: 'ack', msg_id: msg.msg_id, ok: true });
+          break;
+        case 'message_segments':
+          // Phase 1: emit for future consumers; no ack needed (fire-and-forget)
+          this.emit('message_segments', { content: msg.content, segments: msg.segments, msg_id: msg.msg_id });
           break;
         case 'action':
           this.emit('action', msg.action);
