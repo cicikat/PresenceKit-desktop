@@ -100,7 +100,7 @@ function DiaryDetailPane({ date }: { date: string }) {
         {entry.title}
       </h1>
       <div style={{ height: 1, background: 'var(--paper-edge)', marginBottom: 20 }} />
-      <div className="serif" style={{ fontSize: chatThemeFontSize(16), lineHeight: 1.85, color: 'var(--ink)', fontStyle: 'italic' }}>
+      <div className="serif" style={{ fontSize: chatThemeFontSize(16), lineHeight: 1.85, color: 'var(--ink)', fontStyle: 'normal' }}>
         {renderBody(entry.body)}
       </div>
     </div>
