@@ -19,6 +19,7 @@ import { chatThemeFontSize } from '../../../shared/chatAppearance';
 import { publishPetSnapshot, summarizePetReply } from '../../../shared/pet/bridge';
 import { TypingDots } from '../../../shared/ui/TypingDots';
 import type { ChatLogEntry, UploadError, NarrativeSegment } from '../../../shared/api/types';
+import { normalizeChatDisplayText } from '../chatDisplay';
 
 function splitReply(text: string): string[] {
   return text.split(/\n+/).map(s => s.trim()).filter(s => s.length > 0);
@@ -244,9 +245,9 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
                   <Icon name={iconForFilename(attachFilename!)} size={16} />
                   <span style={{ fontSize: userFontSize - 1, fontWeight: 500, opacity: 0.9 }}>{attachFilename}</span>
                 </div>
-                {attachNote && <div style={{ fontSize: userFontSize }}>{attachNote}</div>}
+                {attachNote && <div style={{ fontSize: userFontSize }}>{normalizeChatDisplayText(attachNote)}</div>}
               </div>
-            ) : msg.text}
+            ) : normalizeChatDisplayText(msg.text)}
           </div>
         </div>
         {youVisible && (
@@ -289,9 +290,9 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
           whiteSpace: 'pre-wrap',
         }}>
           {msg.deleted && (
-            <div style={{ textDecoration: 'line-through', opacity: 0.45, fontSize: assistantFontSize - 1.5, marginBottom: 4 }}>{msg.deleted}</div>
+            <div style={{ textDecoration: 'line-through', opacity: 0.45, fontSize: assistantFontSize - 1.5, marginBottom: 4 }}>{normalizeChatDisplayText(msg.deleted)}</div>
           )}
-          {msg.segmentedContent ?? msg.text}
+          {normalizeChatDisplayText(msg.segmentedContent ?? msg.text)}
           {msg.meta && (
             <div className="mono" style={{ fontSize: chatThemeFontSize(10), color: 'var(--ink-3)', marginTop: 6, letterSpacing: 0.8 }}>{msg.meta}</div>
           )}
