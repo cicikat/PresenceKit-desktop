@@ -208,6 +208,7 @@ export function DreamPrefsPane({ open, dreamState, appearance, onAppearanceChang
     try {
       const resp = await dreamUpdateSettings(update);
       setSettings(resp.settings);
+      window.dispatchEvent(new CustomEvent<DreamSettings>('dream-settings-updated', { detail: resp.settings }));
       setSaveState('saved');
       setTimeout(() => setSaveState('idle'), 1500);
     } catch {
@@ -571,6 +572,23 @@ export function DreamPrefsPane({ open, dreamState, appearance, onAppearanceChang
                     <span>{appearance.backgroundBlur}px</span>
                   </div>
                 </SettingRow>
+                {settings && (
+                  <div className="dream-prefs__developer-row">
+                    <span>开发者模式</span>
+                    <button
+                      type="button"
+                      title="开启后在 Dream 状态页显示生理唤醒指标"
+                      onClick={() => patch({
+                        display: {
+                          physiological_arousal: settings.display?.physiological_arousal !== true,
+                        },
+                      })}
+                      className={`dream-prefs__toggle${settings.display?.physiological_arousal === true ? ' is-active' : ''}`}
+                    >
+                      {settings.display?.physiological_arousal === true ? '已开启' : '已关闭'}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}

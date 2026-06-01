@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
-import type { DreamState, DreamMessage } from '../../../shared/api/dream-types';
+import type { DreamFlowEntrySource, DreamState } from '../../../shared/api/dream-types';
 import { avatarStore } from '../../../shared/avatars/store';
 import { DreamGlowPanel, type DreamGlowTag } from './DreamGlowPanel';
+
+const FLOW_ENTRY_MIN_LENGTH = 20;
+const FLOW_ENTRY_MAX_LENGTH = 32;
 
 const STATUS_LABEL: Record<string, string> = {
   DREAM_ACTIVE: '梦境进行中',
@@ -13,10 +16,81 @@ const STATUS_LABEL: Record<string, string> = {
   REALITY_CHAT: '现实',
 };
 
+const WORLD_LABEL: Record<string, string> = {
+  reality_derived: '现实映射',
+  abo: '既定',
+  vampire: '既定',
+  cat: '既定',
+  flower_bud: '花苞',
+  custom: '自定义',
+};
+
+const EVENT_SUMMARY: Record<string, string> = {
+  scene_stable: '当前场景保持稳定，梦境空间仍在原有层次中缓慢延展',
+  attention_on_user: '叶瑄的注意力停留在你身上，情绪张力维持平稳',
+  boundary_stable: '梦境边界保持清晰完整，暂未观察到明显断裂',
+};
+
 interface DreamSidebarProps {
   dreamState: DreamState | null;
-  messages: DreamMessage[];
   onClose: () => void;
+}
+
+function normalizeFlowSummary(text: string): string | null {
+  const compact = text.replace(/\s+/g, ' ').trim();
+  if (!compact || /[#"'>“”‘’「」『』]/.test(compact)) return null;
+
+  let summary = compact
+    .replace(/^[\s\-*•\d.、]+/, '')
+    .replace(/[<>`*_~]/g, '')
+    .replace(/[。！？；，、\s]+$/, '');
+
+  if (summary.length < FLOW_ENTRY_MIN_LENGTH) {
+    summary += '，梦境仍在当前层次中缓慢延续';
+  }
+  if (summary.length < FLOW_ENTRY_MIN_LENGTH) return null;
+  if (summary.length >= FLOW_ENTRY_MAX_LENGTH) {
+    summary = summary.slice(0, FLOW_ENTRY_MAX_LENGTH - 1).replace(/[。！？；，、\s]+$/, '');
+  }
+  return `${summary}。`;
+}
+
+function summarizeFlowEntry(entry: DreamFlowEntrySource): string | null {
+  if (typeof entry === 'string') return normalizeFlowSummary(entry);
+
+  const source = entry.summary ?? entry.description ?? entry.label ?? (entry.type ? EVENT_SUMMARY[entry.type] : undefined);
+  return source ? normalizeFlowSummary(source) : null;
+}
+
+function getBackendFlowEntries(dreamState: DreamState | null): string[] {
+  const entries = dreamState?.flow_entries?.length
+    ? dreamState.flow_entries
+    : dreamState?.dream_events?.length
+      ? dreamState.dream_events
+      : dreamState?.events ?? [];
+
+  return entries
+    .map(summarizeFlowEntry)
+    .filter((entry): entry is string => Boolean(entry))
+    .slice(-3);
+}
+
+function buildFallbackFlowEntries(dreamState: DreamState | null): string[] {
+  const world = dreamState?.frozen_world ? (WORLD_LABEL[dreamState.frozen_world] ?? '当前') : '当前';
+  const tension = dreamState?.yexuan_tension ?? 0;
+  const boundaryIsClosing = dreamState?.status === 'DREAM_EXIT_REQUESTED'
+    || dreamState?.status === 'DREAM_CLOSING'
+    || dreamState?.status === 'REALITY_AFTERGLOW';
+
+  return [
+    `场景稳定在${world}梦境层，空间轮廓仍在缓慢延展`,
+    tension >= 0.65
+      ? '叶瑄的注意力仍停留在你身上，情绪张力正在轻微上升'
+      : '叶瑄的注意力停留在你身上，情绪张力维持平稳',
+    boundaryIsClosing
+      ? '梦境边界正在逐渐松动，现实感从远处缓慢回流'
+      : '梦境边界保持清晰完整，暂未观察到明显断裂',
+  ].map(normalizeFlowSummary).filter((entry): entry is string => Boolean(entry));
 }
 
 function BodyAxisBar({ label, value, color }: {
@@ -78,7 +152,7 @@ function HerBodyPanel({ body }: { body: { heat: number; sensitivity: number; ten
   );
 }
 
-export function DreamSidebar({ dreamState, messages, onClose }: DreamSidebarProps) {
+export function DreamSidebar({ dreamState, onClose }: DreamSidebarProps) {
   const [herDataUrl, setHerDataUrl] = useState<string | null>(avatarStore.get().her.dataUrl);
   useEffect(() => avatarStore.subscribe(a => setHerDataUrl(a.her.dataUrl)), []);
 
@@ -87,8 +161,9 @@ export function DreamSidebar({ dreamState, messages, onClose }: DreamSidebarProp
   const scene = dreamState?.scene_state;
   const anchors = dreamState?.symbolic_anchors ?? [];
   const body = dreamState?.body;
-  const recentHer = messages.filter(m => m.role === 'her').slice(-3);
-  const entryCount = messages.filter(m => m.role !== 'system').length;
+  const backendFlowEntries = getBackendFlowEntries(dreamState);
+  const flowEntries = backendFlowEntries.length > 0 ? backendFlowEntries : buildFallbackFlowEntries(dreamState);
+  const entryCount = flowEntries.length;
   const statusTags: DreamGlowTag[] = status ? [
     { content: status.replace(/_/g, ' '), tone: 'accent' },
     ...(dreamState?.dream_id ? [{ content: 'ACTIVE', tone: 'muted' as const }] : []),
@@ -199,18 +274,18 @@ export function DreamSidebar({ dreamState, messages, onClose }: DreamSidebarProp
         </div>
       )}
 
-      {/* Recent messages from her */}
-      {recentHer.length > 0 && (
+      {/* Dream flow summaries. Never render chat transcript here. */}
+      {flowEntries.length > 0 && (
         <div>
-          <div className="mono" style={{ fontSize: 'calc(9.5px * var(--dream-theme-font-scale, 1))', letterSpacing: 1.5, color: 'var(--dt-ink-3)', marginBottom: 8 }}>近期动向</div>
+          <div className="mono" style={{ fontSize: 'calc(9.5px * var(--dream-theme-font-scale, 1))', letterSpacing: 1.5, color: 'var(--dt-ink-3)', marginBottom: 8 }}>梦境流动</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {recentHer.map(m => (
-              <div key={m.id} className="dream-theme__garden-item" style={{
+            {flowEntries.map((entry, index) => (
+              <div key={`${entry}-${index}`} className="dream-theme__garden-item" style={{
                 fontSize: 'calc(12px * var(--dream-theme-font-scale, 1))', lineHeight: 1.5, fontStyle: 'italic',
                 overflow: 'hidden', display: '-webkit-box',
                 WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
               }}>
-                {m.text}
+                {entry}
               </div>
             ))}
           </div>

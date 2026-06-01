@@ -3,6 +3,7 @@ import { dreamEnter, dreamExit } from '../../shared/api/dream';
 import { useDreamState } from './hooks/useDreamState';
 import { useDreamChat } from './hooks/useDreamChat';
 import { DreamSidebar } from './components/DreamSidebar';
+import { DreamStatusSidebar } from './components/DreamStatusSidebar';
 import { DreamPrefsPane } from './components/DreamPrefsPane';
 import { DreamHelpPanel } from './components/DreamHelpPanel';
 import { DreamControlBar } from './components/DreamControlBar';
@@ -240,7 +241,6 @@ export function DreamWindow({ onClose }: DreamWindowProps) {
             <DreamSidePane
               tab={sideTab}
               dreamState={dreamState}
-              messages={messages}
               onClose={() => setSideOpen(false)}
             />
             <div
@@ -400,19 +400,25 @@ function RibbonButton({ label, icon, iconSize = 18, active, decorative = false, 
 function DreamSidePane({
   tab,
   dreamState,
-  messages,
   onClose,
 }: {
   tab: DreamSideTab;
   dreamState: any;
-  messages: any[];
   onClose: () => void;
 }) {
   if (tab === 'flow') {
     return (
       <DreamSidebar
         dreamState={dreamState}
-        messages={messages}
+        onClose={onClose}
+      />
+    );
+  }
+
+  if (tab === 'status') {
+    return (
+      <DreamStatusSidebar
+        dreamState={dreamState}
         onClose={onClose}
       />
     );
@@ -424,12 +430,11 @@ function DreamSidePane({
     subconscious: '潜意识',
   };
 
-  const bodyMap: Record<Exclude<DreamSideTab, 'flow'>, string> = {
-    status: '这里会接入梦境状态的更细指标，例如情绪张力、场景稳定度、退出倾向和最近一次状态变化。',
+  const bodyMap: Record<Exclude<DreamSideTab, 'flow' | 'status'>, string> = {
     subconscious: '这里会接入 symbolic_anchors、scene_state 的长期聚合，以及未来梦境记忆/潜意识线索。',
   };
 
-  const key = tab as Exclude<DreamSideTab, 'flow'>;
+  const key = tab as Exclude<DreamSideTab, 'flow' | 'status'>;
 
   return (
     <aside className="dream-theme__sidebar dream-theme__sidebar--placeholder" aria-label={`梦境${titleMap[tab]}`}>

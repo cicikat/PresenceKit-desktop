@@ -59,7 +59,9 @@ Dream 窗口是 `src/windows/dream/DreamWindow.tsx`：
 
 - 管理 Dream overlay、左侧 Ribbon、信息 Sidebar 和对话区域。
 - 动向 / 状态 / 潜意识使用左侧 Sidebar；偏好 / 帮助使用独立居中 modal，避免设置项挤在窄侧栏中。
-- 偏好窗口通过 `src/shared/api/dream.ts` 读写 `/dream/settings`，顶部横栏分为当前状态、梦境上下文、系统设置和其他。系统设置额外使用 `src/shared/dreamAppearance.ts` 持久化本地字体、配色和模糊度，并通过 `avatarStore` 分别保存日间 / 夜间聊天背景；帮助窗口只展示本地说明。
+- 动向 Sidebar 的「梦境流动」优先读取 `/dream/state` 可选 flow/event 摘要，旧后端缺失时从当前 dream state 派生短文案；不展示 chat transcript。
+- 状态 Sidebar 展示 `/dream/state` 的 Dream HUD v1.1 字段；文本以状态 pill 展示，数值缺失时显示空值，Dream 未激活时显示空态。`physiological_arousal` 仅在 `/dream/settings` 的 `display.physiological_arousal === true` 时展示。
+- 偏好窗口通过 `src/shared/api/dream.ts` 读写 `/dream/settings`，顶部横栏分为当前状态、梦境上下文、系统设置和其他。系统设置额外使用 `src/shared/dreamAppearance.ts` 持久化本地字体、配色和模糊度，并通过 `avatarStore` 分别保存日间 / 夜间聊天背景；底部开发者模式开关写入 `display.physiological_arousal`。帮助窗口只展示本地说明。
 - `DreamGlowPanel` / `DreamGlowBubble` 复用 `features/dream/DreamTokens.css` 的玻璃发光 token，分别承载 Sidebar 状态卡和 Dream 对话气泡。
 
 聊天区是 `src/windows/chat/components/ChatPanel.tsx`：

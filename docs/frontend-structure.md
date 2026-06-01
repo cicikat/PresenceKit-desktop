@@ -51,7 +51,8 @@ src/windows/dream/
 ├── DreamWindow.tsx          状态机编排（loading → ready → entering → active → ended）
 ├── components/
 │   ├── DreamChatPanel.tsx   消息区 + 输入框（append-only，无历史分页）
-│   ├── DreamSidebar.tsx     status / emotional_tension / scene_state / symbolic_anchors
+│   ├── DreamSidebar.tsx     status / emotional_tension / scene_state / symbolic_anchors / dream flow 摘要
+│   ├── DreamStatusSidebar.tsx Dream HUD v1.1 状态页 + /dream/settings 隐藏项开关
 │   ├── DreamGlowPanel.tsx   发光状态卡，支持 title / status / tags / children
 │   ├── DreamGlowBubble.tsx  发光聊天气泡，支持 left / right 与可选消息元信息
 │   ├── DreamPrefsPane.tsx   窗口式梦境偏好设置，读取并保存 /dream/settings
@@ -71,7 +72,9 @@ src/windows/dream/
 - 409 / 503 做可见错误提示，不 crash。
 - WAKE 按钮 / ESC：调用 `/dream/exit`，然后关闭窗口并触发 `DreamAfterglowBanner`（位于 `components/DreamAfterglowBanner.tsx`）。
 - Dream Ribbon 顶部聊天图标是固定选中的装饰入口，以短分隔线与功能区隔开；动向 / 状态 / 潜意识打开左侧副栏；偏好 / 帮助打开居中 modal，交互层级与 Chat 的偏好 / 帮助窗口一致。
-- Dream 偏好窗口使用顶部横栏分类：当前状态、梦境上下文、系统设置、其他。当前状态只读汇总可信快照；梦境上下文承接原有上下文、世界与清明度、附加设定；系统设置提供聊天字号、主题字号、`public/fonts/` 动态字体包、RGB 自定义配色、日间 / 夜间 Dream 聊天背景分别导入裁切和背景模糊度；其他暂留导入占位。梦境上下文通过 `/dream/settings` 读取和保存，梦境进行中修改时明确提示下次入梦生效；外观设置本地即时生效。
+- Dream 动向 Sidebar 的「梦境流动」区域优先读取 `/dream/state` 可选的 `flow_entries` / `dream_events` / `events` 摘要；旧后端未提供时从当前 dream state 派生 3 条短文案，不读取或展示 chat transcript。
+- Dream 状态 Sidebar 读取 `/dream/state` 的 Dream HUD v1.1 字段，以状态 pill 和 0-100 进度条展示；情绪 pill 按边界 / 亲密 / 执念方向做轻量视觉区分，未知标签保持原样显示。缺失数字显示 `—` 且条宽为 0。Dream 未激活时显示空态。`physiological_arousal` 默认隐藏，仅当 `/dream/settings` 返回 `display.physiological_arousal === true` 时展示。
+- Dream 偏好窗口使用顶部横栏分类：当前状态、梦境上下文、系统设置、其他。当前状态只读汇总可信快照；梦境上下文承接原有上下文、世界与清明度、附加设定；系统设置提供聊天字号、主题字号、`public/fonts/` 动态字体包、RGB 自定义配色、日间 / 夜间 Dream 聊天背景分别导入裁切、背景模糊度，以及控制 `display.physiological_arousal` 的开发者模式开关；其他暂留导入占位。梦境上下文通过 `/dream/settings` 读取和保存，梦境进行中修改时明确提示下次入梦生效；外观设置本地即时生效。
 - Sidebar 状态卡与消息气泡分别通过 `DreamGlowPanel` / `DreamGlowBubble` 统一玻璃底、冷色亮边、内外辉光和可选顶部扫光；视觉参数集中在 `features/dream/DreamTokens.css`。
 - 仅复用 `features/dream/DreamTokens.css` 的视觉 token。
 

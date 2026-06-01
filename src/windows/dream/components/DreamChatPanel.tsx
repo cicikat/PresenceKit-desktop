@@ -45,6 +45,12 @@ function splitSegmentLines(text: string): string[] {
     .filter(Boolean);
 }
 
+function normalizeDreamDialogueDisplayText(text: string): string {
+  return text
+    .replace(/^“([\s\S]*)”$/, '$1')
+    .replace(/^"([\s\S]*)"$/, '$1');
+}
+
 function DreamSegmentedReply({
   segments,
   herDataUrl,
@@ -78,7 +84,7 @@ function DreamSegmentedReply({
                     speaker={showSpeaker && lineIndex === 0 ? 'HIM' : undefined}
                     className="dream-glow-bubble--say"
                   >
-                    {line}
+                    {normalizeDreamDialogueDisplayText(line)}
                   </DreamGlowBubble>
                 ))}
               </div>
@@ -213,7 +219,7 @@ export function DreamChatPanel({
                 handleSend();
               }
             }}
-            placeholder={inputDisabled ? '梦已关闭' : '在这儿写点什么 …'}
+            placeholder={inputDisabled ? '梦在进行' : '在这儿写点什么 …'}
             disabled={inputDisabled}
             rows={1}
           />

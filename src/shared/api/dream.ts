@@ -38,5 +38,6 @@ export async function dreamUpdateSettings(update: DreamSettingsUpdateRequest): P
     boundaryLevel: update.boundary_level ?? null,
     worldLayer: update.world_layer ?? null,
     lucidMode: update.lucid_mode ?? null,
+    display: update.display ?? null,
   });
 }

@@ -758,6 +758,8 @@ v1 目标新增或替换：
 | `read_avatars_json()` | 前端 → Rust | 读取头像和 Dream 日间 / 夜间背景配置；旧 `dream_background` 字段由前端兼容为夜间背景 |
 | `write_avatars_json(json)` | 前端 → Rust | 写头像和 Dream 日间 / 夜间背景配置 |
 | `list_dream_fonts()` | 前端 → Rust | 扫描 `public/fonts/`，返回 `ttf / otf / woff / woff2` 字体清单 |
+| `dream_get_settings()` | 前端 → Rust → 后端 | GET `/dream/settings`；读取 Dream 上下文与 `display.physiological_arousal` |
+| `dream_update_settings(..., display)` | 前端 → Rust → 后端 | PATCH `/dream/settings`；`display` 可透传 `{ "physiological_arousal": boolean }` |
 | `greet(name)` | 前端 → Rust | Tauri 模板遗留，当前未使用 |
 
 HTTP command 必须使用：

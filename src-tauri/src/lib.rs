@@ -529,6 +529,7 @@ async fn dream_update_settings(
     boundary_level: Option<String>,
     world_layer: Option<String>,
     lucid_mode: Option<String>,
+    display: Option<serde_json::Value>,
 ) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
     let url = backend_url(&cfg, "/dream/settings");
@@ -539,6 +540,7 @@ async fn dream_update_settings(
     if let Some(v) = boundary_level  { body.insert("boundary_level".into(), v.into()); }
     if let Some(v) = world_layer     { body.insert("world_layer".into(), v.into()); }
     if let Some(v) = lucid_mode      { body.insert("lucid_mode".into(), v.into()); }
+    if let Some(v) = display         { body.insert("display".into(), v); }
     let body_json = serde_json::Value::Object(body);
     eprintln!("[dream_update_settings] PATCH {url}  body={body_json}");
     let resp = client

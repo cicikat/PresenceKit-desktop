@@ -597,6 +597,164 @@
   color: var(--dt-ink-2);
 }
 
+.dream-hud {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  overflow-y: auto;
+}
+
+.dream-hud__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.dream-hud__title {
+  color: var(--dt-ink);
+  font-family: var(--font-serif);
+  font-size: calc(20px * var(--dream-theme-font-scale, 1));
+  font-style: italic;
+  line-height: 1.1;
+}
+
+.dream-hud__kicker,
+.dream-hud__group .dream-glow-panel__title,
+.dream-hud__metric-head,
+.dream-hud__label-title {
+  color: var(--dt-ink-3);
+  font-family: var(--font-mono);
+  font-size: calc(9.5px * var(--dream-theme-font-scale, 1));
+  letter-spacing: 1.2px;
+}
+
+.dream-hud__kicker {
+  margin-top: 5px;
+  letter-spacing: 1.8px;
+}
+
+.dream-hud__close {
+  margin-left: auto;
+  padding: 2px 4px;
+  border: 0;
+  background: transparent;
+  color: var(--dt-ink-3);
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.dream-hud__groups,
+.dream-hud__metrics {
+  display: grid;
+}
+
+.dream-hud__groups {
+  gap: 12px;
+}
+
+.dream-hud__metrics {
+  gap: 10px;
+}
+
+.dream-hud__group .dream-glow-panel__title {
+  margin-bottom: 10px;
+  letter-spacing: 1.5px;
+}
+
+.dream-hud__group .dream-glow-panel__content {
+  display: grid;
+  gap: 12px;
+}
+
+.dream-hud__label-row,
+.dream-hud__metric-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dream-hud__pill {
+  min-width: 28px;
+  max-width: 72%;
+  padding: 4px 12px;
+  border: 1px solid var(--dt-border);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.10);
+  color: var(--dt-ink);
+  font-family: var(--font-serif);
+  font-size: calc(12.5px * var(--dream-theme-font-scale, 1));
+  font-weight: 600;
+  font-style: italic;
+  line-height: 1.2;
+  text-align: center;
+  box-shadow: 0 0 14px rgb(172 203 233 / 0.10);
+}
+
+.dream-hud__pill--boundary {
+  border-color: rgb(233 108 108 / 0.48);
+  background: rgb(233 108 108 / 0.13);
+  box-shadow: 0 0 14px rgb(233 108 108 / 0.12);
+}
+
+.dream-hud__pill--intimacy {
+  border-color: rgb(214 182 239 / 0.52);
+  background: rgb(214 182 239 / 0.14);
+  box-shadow: 0 0 14px rgb(214 182 239 / 0.14);
+}
+
+.dream-hud__pill--obsession {
+  border-color: rgb(185 127 232 / 0.56);
+  background: rgb(185 127 232 / 0.16);
+  box-shadow: 0 0 16px rgb(185 127 232 / 0.18);
+}
+
+.dream-hud__pill--scene {
+  border-color: rgb(127 191 232 / 0.54);
+  background: rgb(127 191 232 / 0.13);
+  box-shadow: 0 0 14px rgb(127 191 232 / 0.14);
+}
+
+.dream-hud__metric-head {
+  margin-bottom: 4px;
+}
+
+.dream-hud__meter {
+  position: relative;
+  height: 5px;
+  overflow: hidden;
+  border: 1px solid var(--dt-border-soft);
+  border-radius: 3px;
+  background: var(--dt-surface-2);
+}
+
+.dream-hud__meter-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.6s ease;
+}
+
+.dream-hud__meter-tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgb(255 255 255 / 0.16);
+}
+
+.dream-hud__empty {
+  padding: 14px 16px;
+  border: 1px solid var(--dt-border-soft);
+  border-radius: 8px;
+  background: var(--dt-surface-deep);
+  color: var(--dt-ink-2);
+  font-family: var(--font-serif);
+  font-size: calc(14px * var(--dream-theme-font-scale, 1));
+  font-style: italic;
+  line-height: 1.7;
+}
+
 .dream-afterglow {
   position: fixed;
   top: 16px;
@@ -1052,7 +1210,6 @@
 
 .dream-segment--env {
   padding: 10px 13px;
-  max-width: 56%;
   border: 1px solid var(--dt-border-soft);
   border-left: 3px solid var(--dt-border);
   border-radius: 5px;
@@ -1444,10 +1601,22 @@
 
 .dream-prefs__range-row,
 .dream-prefs__color-row,
-.dream-prefs__background-actions {
+.dream-prefs__background-actions,
+.dream-prefs__developer-row {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.dream-prefs__developer-row {
+  justify-content: space-between;
+}
+
+.dream-prefs__developer-row > span {
+  color: var(--dt-ink-2);
+  font-family: var(--font-mono);
+  font-size: calc(11px * var(--dream-theme-font-scale, 1));
+  letter-spacing: 1.2px;
 }
 
 .dream-prefs__range-row input {
