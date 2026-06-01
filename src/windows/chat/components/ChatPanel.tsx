@@ -17,6 +17,7 @@ import { getClientConfig } from '../../../shared/api/config';
 import { wsClient } from '../../../shared/api/ws';
 import { chatThemeFontSize } from '../../../shared/chatAppearance';
 import { publishPetSnapshot, summarizePetReply } from '../../../shared/pet/bridge';
+import { TypingDots } from '../../../shared/ui/TypingDots';
 import type { ChatLogEntry, UploadError, NarrativeSegment } from '../../../shared/api/types';
 
 function splitReply(text: string): string[] {
@@ -935,18 +936,10 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
               borderRight: '1px solid var(--paper-edge)',
               borderBottom: '1px solid var(--paper-edge)',
             }}>
-              <span className="typing-dots"><i /><i /><i /></span>
+              <TypingDots color="var(--ink-3)" />
             </div>
           </div>
         )}
-        <style>{`
-          .typing-dots i { display:inline-block; width:5px; height:5px; border-radius:50%;
-            background:var(--ink-3); margin:0 2px;
-            animation:dot 1.2s ease-in-out infinite; }
-          .typing-dots i:nth-child(2){ animation-delay:0.18s }
-          .typing-dots i:nth-child(3){ animation-delay:0.36s }
-          @keyframes dot { 0%,100%{ opacity:0.3; transform:translateY(0) } 50%{ opacity:1; transform:translateY(-3px) } }
-        `}</style>
       </div>
 
       {/* INPUT */}

@@ -36,6 +36,8 @@ export interface DreamChatResponse {
   exit_accepted: boolean;
   force_exited: boolean;
   error?: string;
+  segments?: NarrativeSegment[];
+  segmented_content?: string;
 }
 
 export interface DreamExitResponse {

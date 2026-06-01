@@ -129,6 +129,8 @@ export function useDreamChat(onExited: () => void) {
             id: fallbackId,
             role: 'her',
             text: normalizeDreamText(resp.reply),
+            segments: resp.segments,
+            segmentedContent: resp.segmented_content ? normalizeDreamText(resp.segmented_content) : undefined,
           }]);
         }
       }

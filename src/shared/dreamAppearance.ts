@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { listUserFonts, userFontFamily, userFontUrl } from './fontAppearance';
 import { getUIPref, setUIPref } from './uiPreferences';
 
 export interface DreamFontOption {
@@ -52,14 +52,13 @@ export function saveDreamAppearance(appearance: DreamAppearance): void {
 }
 
 export async function listDreamFonts(): Promise<DreamFontOption[]> {
-  return invoke<DreamFontOption[]>('list_dream_fonts');
+  return listUserFonts<DreamFontOption>();
 }
 
 export function dreamFontFamily(fileName: string | null): string | null {
-  if (!fileName) return null;
-  return `DreamUserFont-${fileName.replace(/[^a-z0-9]+/gi, '-')}`;
+  return userFontFamily('DreamUserFont', fileName);
 }
 
 export function dreamFontUrl(fileName: string): string {
-  return `/fonts/${encodeURIComponent(fileName)}`;
+  return userFontUrl(fileName);
 }

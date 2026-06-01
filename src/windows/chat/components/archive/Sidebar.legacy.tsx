@@ -1,5 +1,5 @@
 /* ============================================================
- * Sidebar.legacy — 原副栏 UI 骨架（Phase 2d.0 存档）
+ * archive/Sidebar.legacy — 原副栏 UI 骨架（Phase 2d.0 存档）
  *
  * 保留：组件结构、样式、布局
  * 移除：写死的 mock 文案 / mock 日记数据
@@ -7,9 +7,9 @@
  * ============================================================ */
 
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Tag, MicroLabel, Meter } from './UIKit';
-import { MOOD_HUE, MOOD_LABEL_EN, FOCUS_LABEL_EN } from './UIKit';
-import { MOODS, MOOD_TABLE } from '../../../shared/state/store';
+import { Tag, MicroLabel, Meter } from '../UIKit';
+import { MOOD_HUE, MOOD_LABEL_EN, FOCUS_LABEL_EN } from '../UIKit';
+import { MOODS, MOOD_TABLE } from '../../../../shared/state/store';
 
 const SIDEBAR_HEADER: Record<string, { title: string; subtitle: string }> = {
   flow:   { title: '动向',     subtitle: 'LIVE FEED · 他现在在做什么' },

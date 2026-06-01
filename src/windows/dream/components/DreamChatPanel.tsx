@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef, memo } from 'react';
 import type { DreamMessage } from '../../../shared/api/dream-types';
+import type { NarrativeSegment } from '../../../shared/api/types';
 import { DreamSceneBlock } from './DreamSceneBlock';
 import { avatarStore } from '../../../shared/avatars/store';
 import { DreamGlowBubble } from './DreamGlowBubble';
+import { TypingDots } from '../../../shared/ui/TypingDots';
 
 interface DreamChatPanelProps {
   messages: DreamMessage[];
@@ -34,6 +36,69 @@ function renderBubbleLines(segment: string): BubbleLine[] {
     }));
 }
 
+function splitSegmentLines(text: string): string[] {
+  return text
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean);
+}
+
+function DreamSegmentedReply({
+  segments,
+  herDataUrl,
+}: {
+  segments: NarrativeSegment[];
+  herDataUrl: string | null;
+}) {
+  let hasSaySpeaker = false;
+
+  return (
+    <div className="dream-msg__segments">
+      {segments.map((segment, segmentIndex) => {
+        if (segment.type === 'say') {
+          const lines = splitSegmentLines(segment.text);
+          if (lines.length === 0) return null;
+
+          const showSpeaker = !hasSaySpeaker;
+          hasSaySpeaker = true;
+
+          return (
+            <div
+              key={segmentIndex}
+              className={`dream-segment-say${showSpeaker ? ' dream-segment-say--with-speaker' : ''}`}
+            >
+              <DreamHerAvatar herDataUrl={herDataUrl} />
+              <div className="dream-segment-say__bubbles">
+                {lines.map((line, lineIndex) => (
+                  <DreamGlowBubble
+                    key={`${segmentIndex}-${lineIndex}`}
+                    side="left"
+                    speaker={showSpeaker && lineIndex === 0 ? 'HIM' : undefined}
+                    className="dream-glow-bubble--say"
+                  >
+                    {line}
+                  </DreamGlowBubble>
+                ))}
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          <p
+            key={segmentIndex}
+            className={`dream-segment dream-segment--${segment.type}`}
+          >
+            {segment.text}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
 function DreamHerAvatar({ herDataUrl }: { herDataUrl: string | null }) {
   if (herDataUrl) {
     return <img src={herDataUrl} className="dream-msg__avatar" alt="" />;
@@ -58,9 +123,11 @@ const DreamMsgRow = memo(function DreamMsgRow({
 
   return (
     <div className={`dream-msg${fromUser ? ' dream-msg--user' : ' dream-msg--her'}`}>
-      {!fromUser && <DreamHerAvatar herDataUrl={herDataUrl} />}
-      <div className="dream-msg__content">
-        {bubbles ? (
+      {!fromUser && !msg.segments?.length && <DreamHerAvatar herDataUrl={herDataUrl} />}
+      <div className={`dream-msg__content${!fromUser && msg.segments?.length ? ' dream-msg__content--segmented' : ''}`}>
+        {!fromUser && msg.segments?.length ? (
+          <DreamSegmentedReply segments={msg.segments} herDataUrl={herDataUrl} />
+        ) : bubbles ? (
           <div className="dream-msg__bubbles">
             {bubbles.map((segment, bi) => (
               <DreamGlowBubble key={bi} side="left" speaker={bi === 0 ? 'HIM' : undefined}>
@@ -125,28 +192,13 @@ export function DreamChatPanel({
 
         {loading && (
           <div className="dream-msg dream-msg--her">
-            <DreamHerAvatar herDataUrl={herDataUrl} />
             <div className="dream-msg__content">
               <DreamGlowBubble side="left" speaker="HIM" className="dream-glow-bubble--typing">
-                <span className="dream-typing-dots"><i /><i /><i /></span>
+                <TypingDots color="var(--dt-ink-3)" />
               </DreamGlowBubble>
             </div>
           </div>
         )}
-
-        <style>{`
-          .dream-typing-dots i {
-            display: inline-block; width: 5px; height: 5px; border-radius: 50%;
-            background: var(--dt-ink-3); margin: 0 2px;
-            animation: dream-dot 1.2s ease-in-out infinite;
-          }
-          .dream-typing-dots i:nth-child(2) { animation-delay: 0.18s; }
-          .dream-typing-dots i:nth-child(3) { animation-delay: 0.36s; }
-          @keyframes dream-dot {
-            0%, 100% { opacity: 0.3; transform: translateY(0); }
-            50% { opacity: 1; transform: translateY(-3px); }
-          }
-        `}</style>
       </div>
 
       <div className="dream-chat__input-bar">

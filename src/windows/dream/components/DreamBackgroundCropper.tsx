@@ -1,31 +1,6 @@
 import { useCallback, useState } from 'react';
 import Cropper from 'react-easy-crop';
-
-async function createImage(url: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.addEventListener('load', () => resolve(img));
-    img.addEventListener('error', reject);
-    img.src = url;
-  });
-}
-
-async function getCroppedBlob(
-  imageSrc: string,
-  pixelCrop: { x: number; y: number; width: number; height: number },
-): Promise<Blob> {
-  const image = await createImage(imageSrc);
-  const canvas = document.createElement('canvas');
-  canvas.width = 1920;
-  canvas.height = 1080;
-  const ctx = canvas.getContext('2d')!;
-  ctx.drawImage(
-    image,
-    pixelCrop.x, pixelCrop.y, pixelCrop.width, pixelCrop.height,
-    0, 0, canvas.width, canvas.height,
-  );
-  return new Promise(resolve => canvas.toBlob(blob => resolve(blob!), 'image/png'));
-}
+import { cropImageToBlob } from '../../../shared/images/cropImageToBlob';
 
 export function DreamBackgroundCropper({
   imageSrc,
@@ -48,7 +23,7 @@ export function DreamBackgroundCropper({
   const handleConfirm = async () => {
     if (!croppedAreaPixels || confirming) return;
     setConfirming(true);
-    const blob = await getCroppedBlob(imageSrc, croppedAreaPixels);
+    const blob = await cropImageToBlob(imageSrc, croppedAreaPixels, 1920, 1080);
     onConfirm(blob);
   };
 

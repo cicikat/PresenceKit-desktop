@@ -1,31 +1,6 @@
 import { useState, useCallback } from 'react';
 import Cropper from 'react-easy-crop';
-
-async function createImage(url: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.addEventListener('load', () => resolve(img));
-    img.addEventListener('error', reject);
-    img.src = url;
-  });
-}
-
-async function getCroppedBlob(
-  imageSrc: string,
-  pixelCrop: { x: number; y: number; width: number; height: number }
-): Promise<Blob> {
-  const image = await createImage(imageSrc);
-  const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 256;
-  const ctx = canvas.getContext('2d')!;
-  ctx.drawImage(
-    image,
-    pixelCrop.x, pixelCrop.y, pixelCrop.width, pixelCrop.height,
-    0, 0, 256, 256
-  );
-  return new Promise(resolve => canvas.toBlob(blob => resolve(blob!), 'image/png'));
-}
+import { cropImageToBlob } from '../../../shared/images/cropImageToBlob';
 
 export function AvatarCropper({
   imageSrc,
@@ -48,7 +23,7 @@ export function AvatarCropper({
   const handleConfirm = async () => {
     if (!croppedAreaPixels || confirming) return;
     setConfirming(true);
-    const blob = await getCroppedBlob(imageSrc, croppedAreaPixels);
+    const blob = await cropImageToBlob(imageSrc, croppedAreaPixels, 256, 256);
     onConfirm(blob);
   };
 

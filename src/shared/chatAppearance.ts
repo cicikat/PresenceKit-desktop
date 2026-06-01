@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { listUserFonts, userFontFamily, userFontUrl } from './fontAppearance';
 import { getUIPref, setUIPref } from './uiPreferences';
 
 export interface ChatFontOption {
@@ -46,16 +46,15 @@ export function saveChatAppearance(appearance: ChatAppearance): void {
 }
 
 export async function listChatFonts(): Promise<ChatFontOption[]> {
-  return invoke<ChatFontOption[]>('list_dream_fonts');
+  return listUserFonts<ChatFontOption>();
 }
 
 export function chatFontFamily(fileName: string | null): string | null {
-  if (!fileName) return null;
-  return `ChatUserFont-${fileName.replace(/[^a-z0-9]+/gi, '-')}`;
+  return userFontFamily('ChatUserFont', fileName);
 }
 
 export function chatFontUrl(fileName: string): string {
-  return `/fonts/${encodeURIComponent(fileName)}`;
+  return userFontUrl(fileName);
 }
 
 export function chatThemeFontSize(size: number): string {

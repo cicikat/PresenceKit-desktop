@@ -22,9 +22,9 @@
 | `app.jsx` | `src/windows/chat/ChatWindow.tsx` | 已迁主布局；DebugPanel 和 Pet 挂载移除 |
 | `chat.jsx` | `src/windows/chat/components/ChatPanel.tsx` | 已迁视觉；已接 HTTP send 和 legacy WS 主动消息 |
 | `ribbon.jsx` | `src/windows/chat/components/Ribbon.tsx` | 已迁；新增 WS 连接状态角标 |
-| `sidebar.jsx` | `src/windows/chat/components/Sidebar.legacy.tsx` / `Sidebar.tsx` | legacy 骨架保留；所有四个 tab 均已接真实数据 |
+| `sidebar.jsx` | `src/windows/chat/components/archive/Sidebar.legacy.tsx` / `Sidebar.tsx` | legacy 骨架保留；所有四个 tab 均已接真实数据 |
 | `panes.jsx` | `src/windows/chat/components/Panes.tsx` | 已迁浮动 pane 系统 |
-| `spec.jsx` | `SpecPanel.legacy.tsx` / `SpecPanel.tsx` | legacy 骨架保留；当前运行版是帮助/公告占位 |
+| `spec.jsx` | `src/windows/chat/components/archive/SpecPanel.legacy.tsx` / `SpecPanel.tsx` | legacy 骨架保留；当前运行版是帮助/公告占位 |
 | `ui-kit.jsx` | `src/windows/chat/components/UIKit.tsx` | 已迁共享 UI 工具 |
 | `state-engine.js` | `src/shared/state/store.ts` | 状态表已迁；behavior loop 删除，等待后端状态 |
 | `sidebar.jsx` 中的 SubFlow 视觉 | `src/windows/chat/components/SubFlow.tsx` | 已接真实 mood/activity，叙事文本 + ring buffer 时间轴 |
