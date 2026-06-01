@@ -516,7 +516,9 @@ export function ChatWindow() {
             </>
           )}
           <div style={{ flex: 1, minWidth: 0 }}>
-            <ChatPanel engine={engine} chatRectRef={chatRectRef} headerVisible={chatHeaderVisible} chatFontSize={appearance.chatFontSize} />
+            {!dreamWindowOpen && (
+              <ChatPanel engine={engine} chatRectRef={chatRectRef} headerVisible={chatHeaderVisible} chatFontSize={appearance.chatFontSize} dreamActive={dreamWindowOpen} />
+            )}
           </div>
         </div>
       </div>

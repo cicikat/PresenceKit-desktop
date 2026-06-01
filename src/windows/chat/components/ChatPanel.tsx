@@ -303,7 +303,7 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
 
 // ── 主组件 ──────────────────────────────────────────────────────────────────
 
-export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontSize = 14 }: any) {
+export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontSize = 14, dreamActive = false }: any) {
   const [state, setState] = useState(engine.get());
   useEffect(() => engine.subscribe(setState), [engine]);
 
@@ -337,6 +337,10 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
   const wsMsgIdToLocalIdsRef = useRef<Map<string, string[]>>(new Map());
   // message_segments 先于 channel_message 到达时的暂存
   const pendingSegmentsByMsgIdRef = useRef<Map<string, { content: string; segments: NarrativeSegment[] }>>(new Map());
+
+  // Dream 打开期间屏蔽 channel_message
+  const dreamActiveRef = useRef(dreamActive);
+  useEffect(() => { dreamActiveRef.current = dreamActive; }, [dreamActive]);
 
   // ── 启动加载 ─────────────────────────────────────────────────────────────
 
@@ -620,6 +624,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
     });
 
     const unsubMsg = wsClient.on('channel_message', ({ content, msg_id }) => {
+      if (dreamActiveRef.current) return;
       // TODO: 接入 turn_id 去重(需要先扩展 ws.ts 透传 turn_id)
       // 当前 /upload/ingest 后端 broadcast 会导致同一 reply 在 HTTP + WS 双路径渲染两次
       scheduleAssistantSegments(content, msg_id);
