@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { ChatResponse, GardenState, DiaryListResponse, DiaryEntry, ChatLogDatesResponse, ChatLogDay, MoodState, ActivityState, SensorRealtimeResponse, UploadIngestResponse, UploadError } from './types';
+import type { ChatResponse, GardenState, DiaryListResponse, DiaryEntry, ChatLogDatesResponse, ChatLogDay, MoodState, ActivityState, SensorRealtimeResponse, UploadIngestResponse, UploadError, PromptAssetsResponse, PromptAssetsPatch, PromptAssetsPatchResponse, HiddenStateDebugResponse } from './types';
 
 export async function sendChat(message: string): Promise<ChatResponse> {
   return invoke<ChatResponse>('send_chat', { message });
@@ -71,6 +71,28 @@ export function validateUploadFile(filePath: string, fileSize: number): UploadEr
     };
   }
   return null;
+}
+
+export async function getPromptAssets(): Promise<PromptAssetsResponse> {
+  return invoke<PromptAssetsResponse>('get_prompt_assets');
+}
+
+export async function loadHiddenStateDebug(): Promise<HiddenStateDebugResponse> {
+  return invoke<HiddenStateDebugResponse>('load_hidden_state_debug');
+}
+
+export async function desktopWake(lastSeen?: number): Promise<{ reply: string | null; source: string }> {
+  return invoke<{ reply: string | null; source: string }>('desktop_wake', {
+    lastSeen: lastSeen ?? null,
+  });
+}
+
+export async function patchPromptAssets(patch: PromptAssetsPatch): Promise<PromptAssetsPatchResponse> {
+  return invoke<PromptAssetsPatchResponse>('patch_prompt_assets', {
+    activeCharacter: patch.active_character ?? null,
+    enabledLorebooks: patch.enabled_lorebooks ?? null,
+    enabledJailbreaks: patch.enabled_jailbreaks ?? null,
+  });
 }
 
 export async function uploadDocument(

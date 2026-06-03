@@ -1,6 +1,7 @@
-// NOTE(endpoint-literals): 本文件中的后端路径（/desktop/chat、/memory/…、/garden/state、
-// /diary/…、/chat-log/…、/mood/state、/activity/current、/sensor/realtime、/upload/ingest、
-// /dream/state|enter|chat|exit|settings，共 15 个不同路径）均为字面量硬编码。
+// NOTE(endpoint-literals): 本文件中的后端路径（/desktop/chat、/desktop/wake、/desktop/activate、
+// /memory/…、/garden/state、/diary/…、/chat-log/…、/mood/state、/activity/current、
+// /sensor/realtime、/upload/ingest、/dream/state|enter|chat|exit|settings、
+// /settings/prompt-assets、/debug/user-hidden-state，共 19 个不同路径）均为字面量硬编码。
 // publisher.rs 另有 /sensor/realtime。后端路由变更时需手动同步这两个文件。
 mod actions;
 mod client_config;
@@ -529,6 +530,7 @@ async fn dream_update_settings(
     boundary_level: Option<String>,
     world_layer: Option<String>,
     lucid_mode: Option<String>,
+    jailbreak_preset: Option<String>,
     display: Option<serde_json::Value>,
 ) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
@@ -540,6 +542,7 @@ async fn dream_update_settings(
     if let Some(v) = boundary_level  { body.insert("boundary_level".into(), v.into()); }
     if let Some(v) = world_layer     { body.insert("world_layer".into(), v.into()); }
     if let Some(v) = lucid_mode      { body.insert("lucid_mode".into(), v.into()); }
+    if let Some(v) = jailbreak_preset { body.insert("jailbreak_preset".into(), v.into()); }
     if let Some(v) = display         { body.insert("display".into(), v); }
     let body_json = serde_json::Value::Object(body);
     eprintln!("[dream_update_settings] PATCH {url}  body={body_json}");
@@ -560,6 +563,137 @@ async fn dream_update_settings(
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+async fn get_prompt_assets(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = reqwest::Client::builder().no_proxy().build().map_err(|e| e.to_string())?;
+    let resp = client
+        .get(backend_url(&cfg, "/settings/prompt-assets"))
+        .bearer_auth(&cfg.admin_token)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(format!("HTTP {}", resp.status().as_u16()));
+    }
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn patch_prompt_assets(
+    app: tauri::AppHandle,
+    active_character: Option<String>,
+    enabled_lorebooks: Option<Vec<String>>,
+    enabled_jailbreaks: Option<Vec<String>>,
+) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = reqwest::Client::builder().no_proxy().build().map_err(|e| e.to_string())?;
+    let mut body = serde_json::Map::new();
+    if let Some(v) = active_character {
+        body.insert("active_character".into(), v.into());
+    }
+    if let Some(v) = enabled_lorebooks {
+        body.insert("enabled_lorebooks".into(), serde_json::Value::Array(v.into_iter().map(serde_json::Value::String).collect()));
+    }
+    if let Some(v) = enabled_jailbreaks {
+        body.insert("enabled_jailbreaks".into(), serde_json::Value::Array(v.into_iter().map(serde_json::Value::String).collect()));
+    }
+    let body_json = serde_json::Value::Object(body);
+    let resp = client
+        .patch(backend_url(&cfg, "/settings/prompt-assets"))
+        .bearer_auth(&cfg.admin_token)
+        .json(&body_json)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    let status = resp.status();
+    if !status.is_success() {
+        let body_text = resp.text().await.unwrap_or_default();
+        return Err(format!("HTTP {} — {}", status.as_u16(), body_text));
+    }
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn desktop_wake(app: tauri::AppHandle, last_seen: Option<f64>) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = reqwest::Client::builder().no_proxy().build().map_err(|e| e.to_string())?;
+    let body = if let Some(ts) = last_seen {
+        serde_json::json!({ "last_seen": ts })
+    } else {
+        serde_json::json!({})
+    };
+    let resp = client
+        .post(backend_url(&cfg, "/desktop/wake"))
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(format!("HTTP {}", resp.status().as_u16()));
+    }
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn load_hidden_state_debug(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = reqwest::Client::builder()
+        .no_proxy()
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let resp = client
+        .get(backend_url(&cfg, "/debug/user-hidden-state"))
+        .bearer_auth(&cfg.admin_token)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !resp.status().is_success() {
+        return Err(format!("HTTP {}", resp.status().as_u16()));
+    }
+
+    let mut hidden_state = resp
+        .json::<serde_json::Value>()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Keep the UI read-only: the panel still calls only load_hidden_state_debug,
+    // and this command only performs GET requests. The display flag mirrors the
+    // existing Dream developer-mode switch used by physiological_arousal.
+    let show_hidden_fields = match client
+        .get(backend_url(&cfg, "/dream/settings"))
+        .bearer_auth(&cfg.admin_token)
+        .send()
+        .await
+    {
+        Ok(settings_resp) if settings_resp.status().is_success() => settings_resp
+            .json::<serde_json::Value>()
+            .await
+            .ok()
+            .and_then(|settings| {
+                settings
+                    .get("display")
+                    .and_then(|display| display.get("physiological_arousal"))
+                    .and_then(|value| value.as_bool())
+            })
+            .unwrap_or(false),
+        _ => false,
+    };
+
+    if let Some(map) = hidden_state.as_object_mut() {
+        map.insert(
+            "display".into(),
+            serde_json::json!({
+                "physiological_arousal": show_hidden_fields,
+            }),
+        );
+    }
+
+    Ok(hidden_state)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -568,6 +702,18 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let cfg = load_client_config(app.handle());
+
+            // Phase 3: 启动后激活 desktop 通道（fire-and-forget，失败只 warning）
+            let activate_url = backend_url(&cfg, "/desktop/activate");
+            tauri::async_runtime::spawn(async move {
+                if let Ok(client) = reqwest::Client::builder().no_proxy().build() {
+                    match client.post(&activate_url).json(&serde_json::json!({})).send().await {
+                        Ok(_) => eprintln!("[lib] desktop_activate ok"),
+                        Err(e) => eprintln!("[lib] desktop_activate warning: {e}"),
+                    }
+                }
+            });
+
             if cfg.sensor_config.enabled {
                 match spawn_sensor_runner(SensorRunnerConfig {
                     backend_base_url: cfg.backend_base,
@@ -619,6 +765,10 @@ pub fn run() {
             dream_exit,
             dream_get_settings,
             dream_update_settings,
+            get_prompt_assets,
+            patch_prompt_assets,
+            load_hidden_state_debug,
+            desktop_wake,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -17,6 +17,7 @@ Emerald-client 是 `qq-st-bot` AI 陪伴系统的新桌面客户端，技术栈�
 
 - 主聊天窗口已经完成视觉迁移，并接入了部分后端通信。
 - Sidebar 的花园 tab 已接入后端 `GET /garden/state`，当前是只读展示。
+- Dream Sidebar 的潜意识 tab 已将 Phase 4.5 Hidden State UI 从 debug-only 入口提升为单用户只读状态面板。
 - WebSocket 目前是 legacy 协议订阅层，不是最终 v1 协议实现。
 - 桌宠 view 还没有在 `src/windows/pet/` 落地；Ribbon 的桌宠按钮目前只切本地状态。
 - sensor 感知功能将嵌入 Tauri Rust 侧(`src-tauri/src/sensor/`),
@@ -46,6 +47,7 @@ D:\ai\Emerald-client\
 | 理解客户端全貌 | `ARCHITECTURE.md` |
 | 改聊天窗口、Ribbon、Sidebar、样式 | `docs/frontend-structure.md` |
 | 改后端通信、协议、Tauri IPC | `docs/backend-integration.md` |
+| 改记忆 / 潜意识 / hidden state UI | `docs/memory.md` |
 | 继续旧客户端迁移 | `docs/migration-status.md` |
 | 查 bug、技术债、迁移缺口 | `docs/known-issues.md` |
 
@@ -68,6 +70,7 @@ src/
 │           ├── Ribbon.tsx
 │           ├── Sidebar.tsx
 │           ├── SubGarden.tsx
+│           ├── SubHiddenStatePanel.tsx
 │           ├── SpecPanel.tsx
 │           └── UIKit.tsx
 ├── shared/
@@ -101,6 +104,7 @@ sensor-service/
 | Tauri 权限 / 窗口配置 | `src-tauri/tauri.conf.json`、`src-tauri/capabilities/default.json` |
 | 头像本地存储 | `src/shared/avatars/store.ts` + `src-tauri/src/lib.rs` |
 | sensor 感知(键鼠/焦点窗口) | `src-tauri/src/sensor/`(规划中) |
+| 潜意识 / hidden state 只读展示 | `src/windows/dream/components/SubHiddenStatePanel.tsx` + `src/shared/api/backend.ts` |
 
 ---
 
@@ -128,6 +132,7 @@ sensor-service/
 - HTTP 对话：`POST http://127.0.0.1:8080/desktop/chat`
 - 短期历史：`GET http://127.0.0.1:8080/memory/{user_id}/short-term`
 - 花园状态：`GET http://127.0.0.1:8080/garden/state`
+- 潜意识状态：`GET http://127.0.0.1:8080/debug/user-hidden-state`，经 Tauri `load_hidden_state_debug` 只读转发；显隐开发者字段时只读参考 `/dream/settings` 的 `display.physiological_arousal`
 
 协议状态：
 

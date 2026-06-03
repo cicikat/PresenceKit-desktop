@@ -51,6 +51,7 @@ Emerald-client 是 `qq-st-bot` 的新桌面客户端。它不拥有角色记忆�
 - 创建单个 `StateEngine` 实例。
 - 管理主题、Sidebar、偏好面板、帮助面板、桌宠开关等 UI 状态。
 - 使用 `src/shared/chatAppearance.ts` 保存 Chat 聊天字号、主题字号和字体包；Sidebar 宽度仅通过界面分隔条拖拽调整。
+- 偏好面板的「世界」页通过 `getPromptAssets()` / `patchPromptAssets()` 管理 Reality Prompt Assets：角色卡单选、世界书多选和破限多选。可用选项来自后端，客户端不展示文件路径。
 - 把 engine 传给 `ChatPanel`。
 - 管理正式 Dream overlay 的本地开关；DreamWindow 自己接入 Dream API 和窗口状态机。
 - 当前没有实际 `PetWindow` 渲染。
@@ -58,11 +59,11 @@ Emerald-client 是 `qq-st-bot` 的新桌面客户端。它不拥有角色记忆�
 Dream 窗口是 `src/windows/dream/DreamWindow.tsx`：
 
 - 管理 Dream overlay、左侧 Ribbon、信息 Sidebar 和对话区域。
-- 动向 / 状态 / 潜意识使用左侧 Sidebar；偏好 / 帮助使用独立居中 modal，避免设置项挤在窄侧栏中。
+- 动向 / 状态 / 潜意识使用 Dream 左侧 Sidebar；偏好 / 帮助使用独立居中 modal，避免设置项挤在窄侧栏中。
 - 动向 Sidebar 的「梦境流动」优先读取 `/dream/state` 可选 flow/event 摘要，旧后端缺失时从当前 dream state 派生短文案；不展示 chat transcript。
 - 状态 Sidebar 展示 `/dream/state` 的 Dream HUD v1.1 字段；文本以状态 pill 展示，数值缺失时显示空值，Dream 未激活时显示空态。`physiological_arousal` 仅在 `/dream/settings` 的 `display.physiological_arousal === true` 时展示。
-- 偏好窗口通过 `src/shared/api/dream.ts` 读写 `/dream/settings`，顶部横栏分为当前状态、梦境上下文、系统设置和其他。系统设置额外使用 `src/shared/dreamAppearance.ts` 持久化本地字体、配色和模糊度，并通过 `avatarStore` 分别保存日间 / 夜间聊天背景；底部开发者模式开关写入 `display.physiological_arousal`。帮助窗口只展示本地说明。
-- `DreamGlowPanel` / `DreamGlowBubble` 复用 `features/dream/DreamTokens.css` 的玻璃发光 token，分别承载 Sidebar 状态卡和 Dream 对话气泡。
+- 偏好窗口通过 `src/shared/api/dream.ts` 读写 `/dream/settings`，顶部横栏分为当前状态、梦境上下文、系统设置、世界和其他。世界页保存 `world_layer` 世界卡和 Dream 独立 `jailbreak_preset`；系统设置额外使用 `src/shared/dreamAppearance.ts` 持久化本地字体、配色和模糊度，并通过 `avatarStore` 分别保存日间 / 夜间聊天背景；底部开发者模式开关写入 `display.physiological_arousal`。帮助窗口只展示本地说明。
+- `DreamGlowPanel` / `DreamGlowBubble` 复用 `features/dream/DreamTokens.css` 的玻璃发光 token，分别承载 Sidebar 状态卡和 Dream 对话气泡；Dream 潜意识页挂载只读 hidden state 面板。
 
 聊天区是 `src/windows/chat/components/ChatPanel.tsx`：
 
@@ -86,6 +87,14 @@ Dream 窗口是 `src/windows/dream/DreamWindow.tsx`：
 - Rust 侧分别 GET `http://127.0.0.1:8080/diary/list` 和 `/diary/{date}`，Bearer token + `reqwest.no_proxy()`。
 - 只读展示，不轮询，不写文件。
 
+潜意识面板是 `src/windows/dream/components/SubHiddenStatePanel.tsx`：
+
+- 由 `DreamWindow.tsx` 在 Dream `subconscious` tab 下挂载，Ribbon 正式入口显示为「潜意识」，不再使用 `DEV: Hidden State`，也不挂在 Chat 侧栏。
+- 挂载时只调用 `loadHiddenStateDebug()`，经 Tauri command `load_hidden_state_debug` 读取后端 `GET /debug/user-hidden-state`。
+- 常态展示 `embodied_ease`（身体放松度）、`body_memory`（身体记忆线索）、`dream_snapshot`（梦境读取到的状态）和最近来源 badge；空 `body_memory` 显示「暂无身体记忆线索」。
+- `sensitivity` 和 `touch_need` 等较细 raw 数值只在 Dream 系统设置的开发者模式打开时展示；该模式复用 `/dream/settings` 的 `display.physiological_arousal` 开关，由 Rust command 只读合并到返回值。
+- Phase 4.5 UI 已从 debug-only 入口提升为单用户状态面板；仍然只读，没有新增写接口，也不把 hidden state 注入现实 prompt 或 memory。
+
 WebSocket 在 `src/shared/api/ws.ts`：
 
 - 浏览器原生 `WebSocket` 连接 `ws://127.0.0.1:8080/ws/desktop`。
@@ -100,6 +109,8 @@ Tauri Rust 在 `src-tauri/src/lib.rs`：
 - `load_history`：GET `/memory/{user_id}/short-term`，使用 Bearer token。
 - `load_garden_state`：GET `/garden/state`，使用 Bearer token。
 - `load_sensor_realtime`：GET `/sensor/realtime`，使用 Bearer token；无数据响应归一为 `_no_data`。
+- `get_prompt_assets` / `patch_prompt_assets`：GET / PATCH `/settings/prompt-assets`，使用 Bearer token 和 `reqwest.no_proxy()`；仅服务 Chat 的 Reality Prompt Assets 设置。
+- `load_hidden_state_debug`：GET `/debug/user-hidden-state`，并只读参考 `/dream/settings.display.physiological_arousal` 作为潜意识面板开发者字段显隐；不写 hidden state。
 - `src-tauri/src/actions.rs`：执行 `minimize_window` / `open_url` / `show_notify` / `media_play_pause` 四类 desktop action。
 - `save_avatar` / `load_avatar` / `read_avatars_json` / `write_avatars_json`：本地头像和 Dream 背景持久化。
 - `list_dream_fonts`：扫描 `public/fonts/`，返回可供 Chat / Dream 使用的字体包。

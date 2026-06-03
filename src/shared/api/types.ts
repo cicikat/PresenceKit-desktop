@@ -171,3 +171,77 @@ export type SensorRealtimeResponse = SensorRealtimeData | SensorNoData;
 export function isSensorNoData(r: SensorRealtimeResponse): r is SensorNoData {
   return (r as SensorNoData)._no_data === true;
 }
+
+export interface PromptAssetCharacter {
+  id: string;
+  label: string;
+}
+
+export interface ActivePromptAssets {
+  active_character: string;
+  enabled_lorebooks: string[];
+  enabled_jailbreaks: string[];
+}
+
+export interface PromptAssetsResponse {
+  characters: PromptAssetCharacter[];
+  lorebooks: string[];
+  jailbreaks: string[];
+  active: ActivePromptAssets;
+}
+
+export interface PromptAssetsPatch {
+  active_character?: string;
+  enabled_lorebooks?: string[];
+  enabled_jailbreaks?: string[];
+}
+
+export interface PromptAssetsPatchResponse {
+  message: string;
+  active: ActivePromptAssets;
+}
+
+// ── Hidden State Panel (Phase 4.5, read-only UI) ──────────────────────────────
+
+export interface HiddenStateSensitivity {
+  baseline: number;
+  current: number;
+  last_update_source: string;
+}
+
+export interface HiddenStateTouchNeed {
+  baseline: number;
+  deficit: number;
+  last_update_source: string;
+}
+
+export interface HiddenStateScalar {
+  value: number;
+  last_update_source: string;
+}
+
+export interface HiddenStateBodyMemoryEntry {
+  cue: string;
+  response_tag: string;
+  weight: number;
+}
+
+export interface HiddenStateDreamSnapshot {
+  sensitivity: 'low' | 'mid' | 'high';
+  touch_appetite: 'low' | 'mid' | 'high';
+  embodied_ease: 'guarded' | 'neutral' | 'easy';
+  memory_cues: string[];
+}
+
+export interface HiddenStateDebugResponse {
+  schema_version: number;
+  last_decay_tick: string | null;
+  display?: {
+    physiological_arousal?: boolean;
+  };
+  sensitivity: HiddenStateSensitivity;
+  touch_need: HiddenStateTouchNeed;
+  embodied_ease: HiddenStateScalar;
+  body_memory: HiddenStateBodyMemoryEntry[];
+  dream_snapshot: HiddenStateDreamSnapshot;
+}
