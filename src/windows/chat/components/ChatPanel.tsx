@@ -11,7 +11,7 @@ import { MOOD_TABLE } from '../../../shared/state/store';
 import { avatarStore } from '../../../shared/avatars/store';
 import { open } from '@tauri-apps/plugin-dialog';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
-import { sendChat, uploadDocument } from '../../../shared/api/backend';
+import { sendChat, uploadDocument, desktopWake } from '../../../shared/api/backend';
 import { loadChatLogDates, loadChatLogDay } from '../../../shared/api/backend';
 import { getClientConfig } from '../../../shared/api/config';
 import { wsClient } from '../../../shared/api/ws';
@@ -55,6 +55,10 @@ interface ChatMsg {
 
 let _msgIdCounter = 0;
 function newId() { return `m-${Date.now()}-${++_msgIdCounter}`; }
+
+// Module-level session guard: ChatPanel can remount mid-session (e.g. when Dream opens/closes).
+// This flag ensures desktop_wake fires at most once per page/window session regardless of remounts.
+let _desktopWakeFired = false;
 
 // ── 历史加载状态 ─────────────────────────────────────────────────────────────
 
@@ -411,6 +415,34 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
 
         setMessages(msgs);
         setHistoryStatus({ kind: 'ok' });
+
+        // Phase 2B: 拉取重开问候，每次 window/page session 仅触发一次
+        if (!_desktopWakeFired) {
+          _desktopWakeFired = true;
+          // history cursor: last loaded assistant timestamp from chat log (minute-granular, ms).
+          // +60s safety margin compensates for chat log's HH:MM truncation vs backend's
+          // second-precision time.time(), preventing Path A from re-surfacing the same
+          // message as an "unreplayed trigger" on the next startup.
+          const lastAssistantMsg = msgs.filter(m => m.role === 'assistant').slice(-1)[0];
+          const historyCursorSec = lastAssistantMsg ? lastAssistantMsg.time / 1000 + 60 : undefined;
+          try {
+            const wakeResp = await desktopWake(historyCursorSec);
+            if (mounted && wakeResp.reply) {
+              const parts = wakeResp.reply.split(/\n+/).map(s => s.trim()).filter(Boolean);
+              setMessages(prev => [
+                ...prev,
+                ...parts.map((text, idx) => ({
+                  id: newId(),
+                  role: 'assistant' as const,
+                  text,
+                  time: Date.now() + idx,
+                })),
+              ]);
+            }
+          } catch (wakeErr) {
+            console.warn('[chat] desktop_wake 失败:', wakeErr);
+          }
+        }
       } catch (err) {
         console.warn('[chat-log] 初始化失败:', err);
         if (mounted) setHistoryStatus({ kind: 'error', ...classifyHistoryError(err) });

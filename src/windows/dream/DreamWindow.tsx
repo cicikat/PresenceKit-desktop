@@ -8,6 +8,7 @@ import { DreamPrefsPane } from './components/DreamPrefsPane';
 import { DreamHelpPanel } from './components/DreamHelpPanel';
 import { DreamControlBar } from './components/DreamControlBar';
 import { DreamChatPanel } from './components/DreamChatPanel';
+import { SubHiddenStatePanel } from './components/SubHiddenStatePanel';
 import { Icon } from '../chat/components/UIKit';
 import { getUIPref, setUIPref } from '../../shared/uiPreferences';
 import { avatarStore } from '../../shared/avatars/store';
@@ -424,30 +425,36 @@ function DreamSidePane({
     );
   }
 
-  const titleMap: Record<DreamSideTab, string> = {
-    flow: '动向',
-    status: '状态',
-    subconscious: '潜意识',
-  };
-
-  const bodyMap: Record<Exclude<DreamSideTab, 'flow' | 'status'>, string> = {
-    subconscious: '这里会接入 symbolic_anchors、scene_state 的长期聚合，以及未来梦境记忆/潜意识线索。',
-  };
-
-  const key = tab as Exclude<DreamSideTab, 'flow' | 'status'>;
-
-  return (
-    <aside className="dream-theme__sidebar dream-theme__sidebar--placeholder" aria-label={`梦境${titleMap[tab]}`}>
-      <div className="dream-side-placeholder__head">
-        <div>
-          <div className="dream-side-placeholder__title">{titleMap[tab]}</div>
-          <div className="dream-side-placeholder__kicker">COMING SOON</div>
+  if (tab === 'subconscious') {
+    return (
+      <aside
+        className="dream-theme__sidebar dream-theme__sidebar--subconscious"
+        aria-label="梦境潜意识"
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          '--forest': 'transparent',
+          '--forest-1': 'var(--dt-surface-deep)',
+          '--forest-line': 'var(--dt-border-soft)',
+          '--on-forest': 'var(--dt-ink)',
+          '--on-forest-2': 'var(--dt-ink-3)',
+          '--chat-theme-font-scale': 'var(--dream-theme-font-scale)',
+        } as CSSProperties}
+      >
+        <div className="dream-side-placeholder__head">
+          <div>
+            <div className="dream-side-placeholder__title">潜意识</div>
+            <div className="dream-side-placeholder__kicker">READ ONLY · HIDDEN STATE</div>
+          </div>
+          <button type="button" className="dream-side-placeholder__close" onClick={onClose} aria-label="关闭侧栏">×</button>
         </div>
-        <button type="button" className="dream-side-placeholder__close" onClick={onClose} aria-label="关闭侧栏">×</button>
-      </div>
-      <div className="dream-side-placeholder__body">
-        {bodyMap[key]}
-      </div>
-    </aside>
-  );
+        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+          <SubHiddenStatePanel />
+        </div>
+      </aside>
+    );
+  }
+
+  return null;
 }

@@ -27,7 +27,7 @@
 - 管理 Dream UI v2 preview 的本地状态：Ribbon 入口打开 overlay，Esc / WAKE 关闭并显示 afterglow。
 - 布局三列：Ribbon、Sidebar、ChatPanel。
 - 负责偏好面板内的头像上传/裁剪入口。
-- Chat 偏好浮层使用顶部横栏分类：外观、其他。外观提供主题、信息栏、聊天字号、主题字号、`public/fonts/` 动态字体包和头像设置；Sidebar 宽度只保留界面拖拽，不再在偏好里重复提供控制项。其他暂留导入占位。
+- Chat 偏好浮层使用顶部横栏分类：外观、世界、其他。外观提供主题、信息栏、聊天字号、主题字号、`public/fonts/` 动态字体包和头像设置；Sidebar 宽度只保留界面拖拽，不再在偏好里重复提供控制项。世界页通过 `PromptAssetsSettings` 读取和保存 Reality Prompt Assets，提供角色卡单选、Reality 世界书多选和 Reality 破限多选；其他暂留导入占位。
 
 关键状态：
 
@@ -39,6 +39,8 @@
 | `sidebarWidth` | 可拖拽调整，范围 250-540 |
 | `chatHeaderVisible` | 控制 ChatPanel 顶部状态栏 |
 | `appearance` | Chat 本地外观设置：聊天字号、主题字号、字体包 |
+| `PromptAssetsSettings.assets` | Chat 世界页局部状态：`characters` / `lorebooks` / `jailbreaks` / `active`；由后端读取，PATCH 成功后使用后端返回的 `active` 回写 |
+| `PromptAssetsSettings.loading` / `saving` / `error` | Chat 世界页局部请求状态 |
 | `specOpen` / `prefsOpen` | 帮助/偏好浮层 |
 | `dreamWindowOpen` / `dreamAfterglow` | 控制 DreamWindow 显示和醒后余韵横幅 |
 
@@ -71,10 +73,10 @@ src/windows/dream/
 - `/dream/chat` 返回 `exit_accepted` 或 `force_exited` 时，禁用输入框，刷新状态，进入 ended 阶段。
 - 409 / 503 做可见错误提示，不 crash。
 - WAKE 按钮 / ESC：调用 `/dream/exit`，然后关闭窗口并触发 `DreamAfterglowBanner`（位于 `components/DreamAfterglowBanner.tsx`）。
-- Dream Ribbon 顶部聊天图标是固定选中的装饰入口，以短分隔线与功能区隔开；动向 / 状态 / 潜意识打开左侧副栏；偏好 / 帮助打开居中 modal，交互层级与 Chat 的偏好 / 帮助窗口一致。
+- Dream Ribbon 顶部聊天图标是固定选中的装饰入口，以短分隔线与功能区隔开；动向 / 状态 / 潜意识打开左侧副栏，其中潜意识挂载只读 hidden state 面板；偏好 / 帮助打开居中 modal，交互层级与 Chat 的偏好 / 帮助窗口一致。
 - Dream 动向 Sidebar 的「梦境流动」区域优先读取 `/dream/state` 可选的 `flow_entries` / `dream_events` / `events` 摘要；旧后端未提供时从当前 dream state 派生 3 条短文案，不读取或展示 chat transcript。
 - Dream 状态 Sidebar 读取 `/dream/state` 的 Dream HUD v1.1 字段，以状态 pill 和 0-100 进度条展示；情绪 pill 按边界 / 亲密 / 执念方向做轻量视觉区分，未知标签保持原样显示。缺失数字显示 `—` 且条宽为 0。Dream 未激活时显示空态。`physiological_arousal` 默认隐藏，仅当 `/dream/settings` 返回 `display.physiological_arousal === true` 时展示。
-- Dream 偏好窗口使用顶部横栏分类：当前状态、梦境上下文、系统设置、其他。当前状态只读汇总可信快照；梦境上下文承接原有上下文、世界与清明度、附加设定；系统设置提供聊天字号、主题字号、`public/fonts/` 动态字体包、RGB 自定义配色、日间 / 夜间 Dream 聊天背景分别导入裁切、背景模糊度，以及控制 `display.physiological_arousal` 的开发者模式开关；其他暂留导入占位。梦境上下文通过 `/dream/settings` 读取和保存，梦境进行中修改时明确提示下次入梦生效；外观设置本地即时生效。
+- Dream 偏好窗口使用顶部横栏分类：当前状态、梦境上下文、系统设置、世界、其他。当前状态只读汇总可信快照；梦境上下文承接记忆读取、感知边界、清明模式和独立 lorebook 开关；系统设置提供聊天字号、主题字号、`public/fonts/` 动态字体包、RGB 自定义配色、日间 / 夜间 Dream 聊天背景分别导入裁切、背景模糊度，以及控制 `display.physiological_arousal` 的开发者模式开关；世界页提供六个 `world_layer` 世界卡和 Dream 独立 `jailbreak_preset` 选择；其他暂留导入占位。Dream 后端偏好通过 `/dream/settings` 读取和保存，请求 5 秒超时；读取失败时显示默认值和重试入口，避免设置页永久停在载入态。梦境进行中修改时明确提示下次入梦生效；外观设置本地即时生效。
 - Sidebar 状态卡与消息气泡分别通过 `DreamGlowPanel` / `DreamGlowBubble` 统一玻璃底、冷色亮边、内外辉光和可选顶部扫光；视觉参数集中在 `features/dream/DreamTokens.css`。
 - 仅复用 `features/dream/DreamTokens.css` 的视觉 token。
 
@@ -234,6 +236,33 @@ Ring buffer：`useState<{mood, aura}[]>` 长度 60；2s 采样；mood 轨迹柱�
 - 只读展示，没有手动浇水、采收、送花、花瓶详情。
 - 错误时显示错误文本和重试按钮。
 - `harvest_count` / `vase_count` 已在类型里，但 UI 暂未展示详情列表。
+
+---
+
+## SubHiddenStatePanel
+
+文件：`src/windows/dream/components/SubHiddenStatePanel.tsx`
+
+职责：
+
+- 在 Dream Sidebar 的 `subconscious` tab 中展示「潜意识」状态。
+- 挂载时只调用 `loadHiddenStateDebug()`；前端不直接调用 hidden state 写入、integrator、save 或 mutate API。
+- 常态展示 `embodied_ease`（身体放松度）、`body_memory`（身体记忆线索）、`dream_snapshot`（梦境读取到的状态）和最近来源 badge。
+- `body_memory` 为空时显示「暂无身体记忆线索」，不按错误处理。
+- `sensitivity.current` / `sensitivity.baseline`、`touch_need.deficit` / `touch_need.baseline`、schema 和 decay 等开发者信息仅在返回的 `display.physiological_arousal === true` 时展示；这个标记由 Tauri `load_hidden_state_debug` 只读参考 `/dream/settings` 合并。
+
+当前数据来源：
+
+| 来源 | 路径 | 说明 |
+|---|---|---|
+| 潜意识状态 | `loadHiddenStateDebug()` → Tauri `load_hidden_state_debug` | 从后端 `/debug/user-hidden-state` 读取；只读 |
+| 开发者字段显隐 | `load_hidden_state_debug` 内部 GET `/dream/settings` | 只读读取 `display.physiological_arousal`，不新增写接口 |
+
+当前边界：
+
+- Phase 4.5 UI 已从 debug-only 入口提升为单用户状态面板。
+- 面板没有编辑按钮、滑块、保存、reset 或 JSON 修改能力。
+- hidden state 只显示在 UI，不进入 Reality prompt、Dream prompt、memory 或 afterglow soft hint。
 
 ---
 

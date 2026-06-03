@@ -60,13 +60,56 @@ config/client.local.json
 
 | 客户端文件 | 调用 |
 |---|---|
-| `src/shared/api/backend.ts` | `sendChat()`、`loadHistory()`、`loadGardenState()`、`loadDiaryList()`、`loadDiaryEntry()`、`loadSensorRealtime()` |
+| `src/shared/api/backend.ts` | `sendChat()`、`loadHistory()`、`loadGardenState()`、`loadDiaryList()`、`loadDiaryEntry()`、`loadSensorRealtime()`、`getPromptAssets()`、`patchPromptAssets()` |
 | `src/shared/api/ws.ts` | `wsClient.connect()`、legacy WS 收发 |
-| `src-tauri/src/lib.rs` | `send_chat`、`load_history`、`load_garden_state`、`load_diary_list`、`load_diary_entry`、头像 / Dream 背景文件 commands、Dream 字体目录扫描 |
+| `src-tauri/src/lib.rs` | `send_chat`、`load_history`、`load_garden_state`、`load_diary_list`、`load_diary_entry`、`get_prompt_assets`、`patch_prompt_assets`、头像 / Dream 背景文件 commands、Dream 字体目录扫描 |
 | `src/windows/chat/components/ChatPanel.tsx` | 启动历史、发送消息、订阅 WS 主动消息 |
 | `src/windows/chat/components/Ribbon.tsx` | 读取 WS 连接状态 |
 | `src/windows/chat/components/SubGarden.tsx` | 读取并展示花园状态 |
 | `src/windows/chat/components/SubDiary.tsx` | 读取并展示日记列表和详情 |
+| `src/windows/chat/ChatWindow.tsx` | Chat 偏好「世界」页读取并保存 Reality Prompt Assets |
+
+---
+
+## HTTP：Reality Prompt Assets 设置
+
+Chat 偏好「世界」页只管理 Reality Prompt Assets，不复用 Dream 设置接口。
+
+读取路径：
+
+```text
+PromptAssetsSettings mount
+  → getPromptAssets()
+  → invoke("get_prompt_assets")
+  → Rust reqwest GET http://127.0.0.1:8080/settings/prompt-assets
+```
+
+保存路径：
+
+```text
+PromptAssetsSettings 用户修改
+  → patchPromptAssets(patch)
+  → invoke("patch_prompt_assets", patch)
+  → Rust reqwest PATCH http://127.0.0.1:8080/settings/prompt-assets
+  → 使用响应 active 回写局部状态
+```
+
+GET 响应：
+
+```json
+{
+  "characters": [{"id": "yexuan", "label": "叶瑄"}],
+  "lorebooks": ["base"],
+  "jailbreaks": ["base"],
+  "active": {
+    "active_character": "yexuan",
+    "enabled_lorebooks": ["base"],
+    "enabled_jailbreaks": ["base"]
+  }
+}
+```
+
+客户端仅允许提交 GET 返回列表中存在的角色卡 `id`、世界书 stem 和破限 stem，不展示后端文件路径。GET / PATCH 均由 Rust 读取 admin token，并使用 `reqwest.no_proxy()`。
 
 ---
 
@@ -749,6 +792,9 @@ v1 目标新增或替换：
 | `load_mood_state()` | 前端 → Rust → 后端 | GET `/mood/state`；Rust 侧读取 admin token |
 | `load_activity_state()` | 前端 → Rust → 后端 | GET `/activity/current`；Rust 侧读取 admin token |
 | `load_sensor_realtime()` | 前端 → Rust → 后端 | GET `/sensor/realtime`；Rust 侧读取 admin token，无数据统一返回 `_no_data` |
+| `get_prompt_assets()` | 前端 → Rust → 后端 | GET `/settings/prompt-assets`；读取 Reality 角色卡、世界书、破限可用项和当前启用项 |
+| `patch_prompt_assets(active_character, enabled_lorebooks, enabled_jailbreaks)` | 前端 → Rust → 后端 | PATCH `/settings/prompt-assets`；保存 Reality Prompt Assets 启用项并返回最新 `active` |
+| `load_hidden_state_debug()` | 前端 → Rust → 后端 | GET `/debug/user-hidden-state`；只读返回 Phase 4.5 潜意识状态，并只读参考 `/dream/settings.display.physiological_arousal` 控制开发者字段显隐 |
 | `action_minimize_window()` | 前端 → Rust | 执行 `minimize_window`，最小化当前 Tauri 窗口 |
 | `action_open_url(url)` | 前端 → Rust | 执行 `open_url`，使用 `tauri-plugin-opener` 打开 URL |
 | `action_show_notify(title, text)` | 前端 → Rust | 执行 `show_notify`，当前用 dialog fallback 展示 |
@@ -759,7 +805,7 @@ v1 目标新增或替换：
 | `write_avatars_json(json)` | 前端 → Rust | 写头像和 Dream 日间 / 夜间背景配置 |
 | `list_dream_fonts()` | 前端 → Rust | 扫描 `public/fonts/`，返回 `ttf / otf / woff / woff2` 字体清单 |
 | `dream_get_settings()` | 前端 → Rust → 后端 | GET `/dream/settings`；读取 Dream 上下文与 `display.physiological_arousal` |
-| `dream_update_settings(..., display)` | 前端 → Rust → 后端 | PATCH `/dream/settings`；`display` 可透传 `{ "physiological_arousal": boolean }` |
+| `dream_update_settings(..., jailbreak_preset, display)` | 前端 → Rust → 后端 | PATCH `/dream/settings`；透传 Dream 独立 `jailbreak_preset`，`display` 可透传 `{ "physiological_arousal": boolean }` |
 | `greet(name)` | 前端 → Rust | Tauri 模板遗留，当前未使用 |
 
 HTTP command 必须使用：
@@ -769,7 +815,7 @@ reqwest::Client::builder()
     .no_proxy()
 ```
 
-当前 `send_chat`、`load_history`、`load_garden_state`、`load_diary_list`、`load_diary_entry`、`load_chat_log_dates` 和 `load_chat_log_day` 已符合这条规则。
+当前 `send_chat`、`load_history`、`load_garden_state`、`load_diary_list`、`load_diary_entry`、`load_chat_log_dates`、`load_chat_log_day`、`get_prompt_assets`、`patch_prompt_assets` 和 `load_hidden_state_debug` 已符合这条规则。
 
 已实施:`load_sensor_realtime`,SubStatus 通过 Tauri command 消费 GET `/sensor/realtime`,Rust 侧 reqwest client 使用 `.no_proxy()`。即使 sensor 采集(POST)与消费(GET)同在 Tauri Rust 进程内,数据仍绕后端,保持后端作为 single source of truth。
 

@@ -73,6 +73,18 @@ export type MemoryAccess = 'card_only' | 'relationship_summary' | 'full_snapshot
 export type BoundaryLevel = 'vague' | 'body_perceptible' | 'numbers_visible' | 'threshold_break';
 export type WorldLayer = 'reality_derived' | 'abo' | 'vampire' | 'cat' | 'flower_bud' | 'custom';
 export type LucidMode = 'lucid_shared' | 'non_lucid';
+/** Backend accepts safe ASCII preset stems; the UI exposes its verified allowlist. */
+export type DreamJailbreakPreset = string;
+
+export const DEFAULT_DREAM_SETTINGS: DreamSettings = {
+  enable_dream_lorebook: true,
+  memory_access: 'relationship_summary',
+  boundary_level: 'body_perceptible',
+  world_layer: 'reality_derived',
+  lucid_mode: 'lucid_shared',
+  jailbreak_preset: 'default',
+  display: { physiological_arousal: false },
+};
 
 export interface DreamSettings {
   enable_dream_lorebook: boolean;
@@ -80,6 +92,7 @@ export interface DreamSettings {
   boundary_level: BoundaryLevel;
   world_layer: WorldLayer;
   lucid_mode: LucidMode;
+  jailbreak_preset: DreamJailbreakPreset;
   display?: { physiological_arousal?: boolean };
 }
 
@@ -89,6 +102,7 @@ export interface DreamSettingsUpdateRequest {
   boundary_level?: BoundaryLevel;
   world_layer?: WorldLayer;
   lucid_mode?: LucidMode;
+  jailbreak_preset?: DreamJailbreakPreset;
   display?: { physiological_arousal?: boolean };
 }
 

@@ -1,5 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { DreamState, DreamSettings, MemoryAccess, BoundaryLevel, WorldLayer, LucidMode } from '../../../shared/api/dream-types';
+import {
+  DEFAULT_DREAM_SETTINGS,
+  type DreamState,
+  type DreamSettings,
+  type MemoryAccess,
+  type BoundaryLevel,
+  type WorldLayer,
+  type LucidMode,
+  type DreamJailbreakPreset,
+} from '../../../shared/api/dream-types';
 import { dreamGetSettings, dreamUpdateSettings } from '../../../shared/api/dream';
 import {
   avatarStore,
@@ -37,15 +46,33 @@ const LUCID_MODE_LABELS: Record<LucidMode, string> = {
   non_lucid: '非清明',
 };
 
+const DREAM_JAILBREAK_PRESET_LABELS: Record<DreamJailbreakPreset, string> = {
+  default: '默认',
+  abo: 'ABO',
+  custom: '自定义',
+};
+
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
-type DreamPrefsTab = 'status' | 'context' | 'system' | 'other';
+type DreamPrefsTab = 'status' | 'context' | 'system' | 'world' | 'other';
 
 const DREAM_PREF_TABS: Array<[DreamPrefsTab, string]> = [
   ['status', '1 · 当前状态'],
   ['context', '2 · 梦境上下文'],
   ['system', '3 · 系统设置'],
-  ['other', '4 · 其他'],
+  ['world', '4 · 世界'],
+  ['other', '5 · 其他'],
 ];
+
+function normalizeDreamSettings(settings: DreamSettings): DreamSettings {
+  return {
+    ...DEFAULT_DREAM_SETTINGS,
+    ...settings,
+    display: {
+      ...DEFAULT_DREAM_SETTINGS.display,
+      ...settings.display,
+    },
+  };
+}
 
 interface DreamPrefsPaneProps {
   open: boolean;
@@ -165,6 +192,7 @@ function BackgroundImportCard({
 
 export function DreamPrefsPane({ open, dreamState, appearance, onAppearanceChange, onClose }: DreamPrefsPaneProps) {
   const [settings, setSettings] = useState<DreamSettings | null>(null);
+  const [settingsLoading, setSettingsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [tab, setTab] = useState<DreamPrefsTab>('status');
@@ -180,13 +208,23 @@ export function DreamPrefsPane({ open, dreamState, appearance, onAppearanceChang
 
   const isDreamActive = dreamState?.status === 'DREAM_ACTIVE' || dreamState?.status === 'DREAM_EXIT_REQUESTED';
 
-  useEffect(() => {
-    if (!open || settings) return;
+  const loadSettings = useCallback(async () => {
+    setSettingsLoading(true);
     setLoadError(null);
-    dreamGetSettings()
-      .then(s => setSettings(s))
-      .catch(e => setLoadError(String(e)));
-  }, [open, settings]);
+    try {
+      setSettings(normalizeDreamSettings(await dreamGetSettings()));
+    } catch (error) {
+      setSettings(current => current ?? normalizeDreamSettings(DEFAULT_DREAM_SETTINGS));
+      setLoadError(String(error));
+    } finally {
+      setSettingsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!open || settings || settingsLoading) return;
+    void loadSettings();
+  }, [loadSettings, open, settings, settingsLoading]);
 
   useEffect(() => avatarStore.subscribe(config => {
     setBackgrounds(config.dreamBackgrounds);
@@ -207,8 +245,9 @@ export function DreamPrefsPane({ open, dreamState, appearance, onAppearanceChang
     setSaveState('saving');
     try {
       const resp = await dreamUpdateSettings(update);
-      setSettings(resp.settings);
-      window.dispatchEvent(new CustomEvent<DreamSettings>('dream-settings-updated', { detail: resp.settings }));
+      const savedSettings = normalizeDreamSettings(resp.settings);
+      setSettings(savedSettings);
+      window.dispatchEvent(new CustomEvent<DreamSettings>('dream-settings-updated', { detail: savedSettings }));
       setSaveState('saved');
       setTimeout(() => setSaveState('idle'), 1500);
     } catch {
@@ -333,7 +372,8 @@ export function DreamPrefsPane({ open, dreamState, appearance, onAppearanceChang
 
           {loadError && (
             <div className="dream-modal__error">
-              加载失败：{loadError}
+              加载失败，当前显示默认设置：{loadError}
+              <button type="button" onClick={() => void loadSettings()}>重试读取</button>
             </div>
           )}
 
@@ -410,19 +450,10 @@ export function DreamPrefsPane({ open, dreamState, appearance, onAppearanceChang
 
               <div className="dream-prefs__group">
                 <div className="dream-prefs__group-head">
-                  <div className="dream-prefs__group-title">世界与清明度</div>
-                  <div className="dream-prefs__group-hint">选择梦境叙事层，以及梦中双方的清醒方式</div>
+                  <div className="dream-prefs__group-title">附加设定</div>
+                  <div className="dream-prefs__group-hint">控制梦中双方的清醒方式，并补充独立 lorebook 内容</div>
                 </div>
                 <div className="dream-prefs__grid">
-                  <SettingRow label="世界层" deferred={isDreamActive}>
-                    <SelectPref<WorldLayer>
-                      value={settings.world_layer}
-                      options={['reality_derived', 'abo', 'vampire', 'cat', 'flower_bud', 'custom']}
-                      labels={WORLD_LAYER_LABELS}
-                      onChange={v => patch({ world_layer: v })}
-                    />
-                  </SettingRow>
-
                   <SettingRow label="清明模式" deferred={isDreamActive}>
                     <SelectPref<LucidMode>
                       value={settings.lucid_mode}
@@ -431,28 +462,22 @@ export function DreamPrefsPane({ open, dreamState, appearance, onAppearanceChang
                       onChange={v => patch({ lucid_mode: v })}
                     />
                   </SettingRow>
-                </div>
-              </div>
 
-              <div className="dream-prefs__group">
-                <div className="dream-prefs__group-head">
-                  <div className="dream-prefs__group-title">附加设定</div>
-                  <div className="dream-prefs__group-hint">为梦境补充独立 lorebook 内容</div>
+                  <SettingRow label="梦境 Lorebook" deferred={isDreamActive}>
+                    <button
+                      type="button"
+                      onClick={() => patch({ enable_dream_lorebook: !settings.enable_dream_lorebook })}
+                      className={`dream-prefs__toggle${settings.enable_dream_lorebook ? ' is-active' : ''}`}
+                    >
+                      {settings.enable_dream_lorebook ? '已启用' : '已禁用'}
+                    </button>
+                  </SettingRow>
                 </div>
-                <SettingRow label="梦境 Lorebook" deferred={isDreamActive}>
-                  <button
-                    type="button"
-                    onClick={() => patch({ enable_dream_lorebook: !settings.enable_dream_lorebook })}
-                    className={`dream-prefs__toggle${settings.enable_dream_lorebook ? ' is-active' : ''}`}
-                  >
-                    {settings.enable_dream_lorebook ? '已启用' : '已禁用'}
-                  </button>
-                </SettingRow>
               </div>
             </div>
           )}
 
-          {tab === 'context' && !settings && !loadError && (
+          {tab === 'context' && settingsLoading && !settings && (
             <div className="dream-prefs__placeholder">正在读取梦境上下文…</div>
           )}
 
@@ -591,6 +616,44 @@ export function DreamPrefsPane({ open, dreamState, appearance, onAppearanceChang
                 )}
               </div>
             </div>
+          )}
+
+          {tab === 'world' && settings && (
+            <div className="dream-prefs__groups">
+              <div className="dream-prefs__group">
+                <div className="dream-prefs__group-head">
+                  <div className="dream-prefs__group-title">梦境世界卡</div>
+                  <div className="dream-prefs__group-hint">选择下一次入梦时使用的独立世界层</div>
+                </div>
+                <SettingRow label="世界卡" deferred={isDreamActive}>
+                  <SelectPref<WorldLayer>
+                    value={settings.world_layer}
+                    options={['reality_derived', 'abo', 'vampire', 'cat', 'flower_bud', 'custom']}
+                    labels={WORLD_LAYER_LABELS}
+                    onChange={v => patch({ world_layer: v })}
+                  />
+                </SettingRow>
+              </div>
+
+              <div className="dream-prefs__group">
+                <div className="dream-prefs__group-head">
+                  <div className="dream-prefs__group-title">梦境破限</div>
+                  <div className="dream-prefs__group-hint">Dream 独立 D0 预设 · 不会写入 Reality prompt</div>
+                </div>
+                <SettingRow label="破限预设" deferred={isDreamActive}>
+                  <SelectPref<DreamJailbreakPreset>
+                    value={settings.jailbreak_preset}
+                    options={['default', 'abo', 'custom']}
+                    labels={DREAM_JAILBREAK_PRESET_LABELS}
+                    onChange={v => patch({ jailbreak_preset: v })}
+                  />
+                </SettingRow>
+              </div>
+            </div>
+          )}
+
+          {tab === 'world' && settingsLoading && !settings && (
+            <div className="dream-prefs__placeholder">正在读取梦境世界设置…</div>
           )}
 
           {tab === 'other' && (

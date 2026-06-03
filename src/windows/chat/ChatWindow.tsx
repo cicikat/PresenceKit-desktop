@@ -7,6 +7,8 @@ import { useState, useEffect, useRef, useCallback, type CSSProperties } from 're
 import { Icon, MicroLabel } from './components/UIKit';
 import { StateEngine } from '../../shared/state/store';
 import { avatarStore } from '../../shared/avatars/store';
+import { getPromptAssets, patchPromptAssets } from '../../shared/api/backend';
+import type { PromptAssetsPatch, PromptAssetsResponse } from '../../shared/api/types';
 import { getUIPref, setUIPref } from '../../shared/uiPreferences';
 import {
   publishPetSnapshot,
@@ -38,7 +40,7 @@ const SIDEBAR_DEFAULT = 340;
 /* ── 偏好面板 ── */
 function PreferencesPanel({ open, onClose, theme, onThemeChange, chatHeaderVisible, onChatHeaderToggle, appearance, onAppearanceChange }: any) {
   const [avatars, setAvatars] = useState(avatarStore.get());
-  const [tab, setTab] = useState<'appearance' | 'other'>('appearance');
+  const [tab, setTab] = useState<'appearance' | 'world' | 'other'>('appearance');
   const [cropSrc, setCropSrc] = useState<string | null>(null);
   const [cropRole, setCropRole] = useState<'her' | 'you' | null>(null);
   const [fonts, setFonts] = useState<ChatFontOption[]>([]);
@@ -108,7 +110,8 @@ function PreferencesPanel({ open, onClose, theme, onThemeChange, chatHeaderVisib
           <div style={{ padding: '10px 20px 0', display: 'flex', gap: 4, borderBottom: '1px solid var(--paper-edge)' }}>
             {([
               ['appearance', '1 · 外观'],
-              ['other', '2 · 其他'],
+              ['world', '2 · 世界'],
+              ['other', '3 · 其他'],
             ] as const).map(([key, label]) => (
               <button key={key} onClick={() => setTab(key)} style={{
                 padding: '7px 14px', border: 'none', borderRadius: '6px 6px 0 0',
@@ -253,6 +256,8 @@ function PreferencesPanel({ open, onClose, theme, onThemeChange, chatHeaderVisib
                   </div>
                 </div>
               </>
+            ) : tab === 'world' ? (
+              <PromptAssetsSettings />
             ) : (
               <div className="serif" style={{
                 padding: '20px 16px', border: '1px dashed var(--paper-edge)', borderRadius: 6,
@@ -267,6 +272,169 @@ function PreferencesPanel({ open, onClose, theme, onThemeChange, chatHeaderVisib
     </>
   );
 }
+
+function PromptAssetsSettings() {
+  const [assets, setAssets] = useState<PromptAssetsResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      setAssets(await getPromptAssets());
+    } catch (loadError) {
+      setError(`读取失败：${String(loadError)}`);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const save = useCallback(async (patch: PromptAssetsPatch) => {
+    if (!assets || saving) return;
+
+    if (
+      patch.active_character !== undefined
+      && !assets.characters.some(character => character.id === patch.active_character)
+    ) return;
+    if (
+      patch.enabled_lorebooks?.some(stem => !assets.lorebooks.includes(stem))
+      || patch.enabled_jailbreaks?.some(stem => !assets.jailbreaks.includes(stem))
+    ) return;
+
+    setSaving(true);
+    setError(null);
+    try {
+      const response = await patchPromptAssets(patch);
+      setAssets(current => current ? { ...current, active: response.active } : current);
+    } catch (saveError) {
+      setError(`保存失败：${String(saveError)}`);
+    } finally {
+      setSaving(false);
+    }
+  }, [assets, saving]);
+
+  if (loading) {
+    return <div className="serif" style={{ color: 'var(--ink-3)', fontSize: 13.5 }}>正在读取 Reality 世界设置…</div>;
+  }
+
+  if (!assets) {
+    return (
+      <div style={{ display: 'grid', gap: 10 }}>
+        <div className="serif" style={{ color: 'var(--danger)', fontSize: 13.5 }}>{error ?? 'Reality 世界设置读取失败。'}</div>
+        <button onClick={() => void load()} style={prefActionButtonStyle}>重试</button>
+      </div>
+    );
+  }
+
+  const toggle = (items: string[], stem: string) => (
+    items.includes(stem) ? items.filter(item => item !== stem) : [...items, stem]
+  );
+  const activeCharacterAvailable = assets.characters.some(character => character.id === assets.active.active_character);
+
+  return (
+    <div style={{ display: 'grid', gap: 18 }}>
+      <div>
+        <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink)', marginBottom: 2 }}>角色卡</div>
+        <div className="mono" style={{ fontSize: 9.5, color: 'var(--ink-3)', letterSpacing: 1.1, marginBottom: 9 }}>单选 · 当前 Reality 对话使用的角色卡</div>
+        <select
+          value={activeCharacterAvailable ? assets.active.active_character : ''}
+          disabled={saving || assets.characters.length === 0}
+          onChange={event => void save({ active_character: event.target.value })}
+          style={prefSelectStyle}
+        >
+          {!activeCharacterAvailable && <option value="">请选择可用角色卡</option>}
+          {assets.characters.map(character => (
+            <option key={character.id} value={character.id}>{character.label}</option>
+          ))}
+        </select>
+      </div>
+      <PromptAssetChecks
+        title="Reality 世界书"
+        hint="多选 · 仅显示可用世界书 stem"
+        options={assets.lorebooks}
+        selected={assets.active.enabled_lorebooks}
+        disabled={saving}
+        onToggle={stem => void save({ enabled_lorebooks: toggle(assets.active.enabled_lorebooks, stem) })}
+      />
+      <PromptAssetChecks
+        title="Reality 破限"
+        hint="多选 · 仅显示可用破限 stem"
+        options={assets.jailbreaks}
+        selected={assets.active.enabled_jailbreaks}
+        disabled={saving}
+        onToggle={stem => void save({ enabled_jailbreaks: toggle(assets.active.enabled_jailbreaks, stem) })}
+      />
+      {(saving || error) && (
+        <div className="mono" style={{ color: error ? 'var(--danger)' : 'var(--ink-3)', fontSize: 9.5, letterSpacing: 0.8 }}>
+          {saving ? '正在保存…' : error}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PromptAssetChecks({ title, hint, options, selected, disabled, onToggle }: {
+  title: string;
+  hint: string;
+  options: string[];
+  selected: string[];
+  disabled: boolean;
+  onToggle: (stem: string) => void;
+}) {
+  return (
+    <div>
+      <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink)', marginBottom: 2 }}>{title}</div>
+      <div className="mono" style={{ fontSize: 9.5, color: 'var(--ink-3)', letterSpacing: 1.1, marginBottom: 9 }}>{hint}</div>
+      {options.length === 0 ? (
+        <div className="serif" style={{ color: 'var(--ink-3)', fontSize: 13 }}>暂无可用选项。</div>
+      ) : (
+        <div style={{ display: 'grid', gap: 7 }}>
+          {options.map(stem => (
+            <label key={stem} style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--ink-2)', fontSize: 12.5 }}>
+              <input
+                type="checkbox"
+                value={stem}
+                checked={selected.includes(stem)}
+                disabled={disabled}
+                onChange={() => onToggle(stem)}
+              />
+              <span className="mono" style={{ fontSize: 10.5, letterSpacing: 0.6 }}>{stem}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const prefSelectStyle: CSSProperties = {
+  width: '100%',
+  padding: '6px 9px',
+  border: '1px solid var(--paper-edge)',
+  borderRadius: 4,
+  background: 'var(--paper-2)',
+  color: 'var(--ink-2)',
+  fontFamily: 'inherit',
+  fontSize: 11,
+};
+
+const prefActionButtonStyle: CSSProperties = {
+  justifySelf: 'start',
+  padding: '6px 14px',
+  borderRadius: 4,
+  fontSize: 12,
+  background: 'var(--paper-2)',
+  border: '1px solid var(--paper-edge)',
+  color: 'var(--ink-2)',
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+};
 
 function PrefRow({ label, hint, children }: any) {
   return (
