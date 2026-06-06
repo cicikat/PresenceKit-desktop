@@ -175,6 +175,15 @@ export function isSensorNoData(r: SensorRealtimeResponse): r is SensorNoData {
 export interface PromptAssetCharacter {
   id: string;
   label: string;
+  kind?: string;
+  avatar_url: string | null;
+  has_runtime_avatar?: boolean;
+}
+
+export interface PromptAssetOption {
+  id: string;
+  label: string;
+  kind?: string;
 }
 
 export interface ActivePromptAssets {
@@ -185,8 +194,8 @@ export interface ActivePromptAssets {
 
 export interface PromptAssetsResponse {
   characters: PromptAssetCharacter[];
-  lorebooks: string[];
-  jailbreaks: string[];
+  lorebooks: PromptAssetOption[];
+  jailbreaks: PromptAssetOption[];
   active: ActivePromptAssets;
 }
 

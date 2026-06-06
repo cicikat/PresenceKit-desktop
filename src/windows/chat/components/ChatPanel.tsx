@@ -308,7 +308,7 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
 
 // ── 主组件 ──────────────────────────────────────────────────────────────────
 
-export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontSize = 14, dreamActive = false }: any) {
+export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontSize = 14, dreamActive = false, characterAvatarDataUrl = null }: any) {
   const [state, setState] = useState(engine.get());
   useEffect(() => engine.subscribe(setState), [engine]);
 
@@ -864,7 +864,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
   }, []);
 
   const currentHue = MOOD_HUE[state.mood];
-  const herDataUrl = avatars.her.dataUrl;
+  const herDataUrl = characterAvatarDataUrl ?? avatars.her.dataUrl;
   const youDataUrl = avatars.you.dataUrl;
   const youVisible = avatars.you.visible;
   const fontSizes = { assistant: chatFontSize, user: chatFontSize };

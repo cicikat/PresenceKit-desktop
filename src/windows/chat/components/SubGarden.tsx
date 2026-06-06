@@ -77,7 +77,7 @@ export function SubGarden() {
         每种心情都让对应的植物多长出一点。它在你不看的时候，也在生长。
       </div>
       <div style={{ display: 'grid', gap: 10 }}>
-        {data.slots.map(slot => (
+        {(data.slots ?? []).map(slot => (
           <SlotCard key={slot.slot_key} slot={slot} />
         ))}
       </div>

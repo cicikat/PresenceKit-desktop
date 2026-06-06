@@ -694,6 +694,94 @@ async fn load_hidden_state_debug(app: tauri::AppHandle) -> Result<serde_json::Va
     Ok(hidden_state)
 }
 
+#[tauri::command]
+async fn get_character_avatar(app: tauri::AppHandle, char_id: String) -> Result<Option<String>, String> {
+    let cfg = load_client_config(&app);
+    let client = reqwest::Client::builder().no_proxy().build().map_err(|e| e.to_string())?;
+    let url = backend_url(&cfg, &format!("/settings/character-avatar/{}", char_id));
+    let resp = client
+        .get(&url)
+        .bearer_auth(&cfg.admin_token)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if resp.status().as_u16() == 404 {
+        return Ok(None);
+    }
+    if !resp.status().is_success() {
+        return Err(format!("HTTP {}", resp.status().as_u16()));
+    }
+    let content_type = resp
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("image/png")
+        .split(';')
+        .next()
+        .unwrap_or("image/png")
+        .trim()
+        .to_string();
+    let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    Ok(Some(format!("data:{};base64,{}", content_type, b64)))
+}
+
+#[tauri::command]
+async fn upload_character_avatar(
+    app: tauri::AppHandle,
+    char_id: String,
+    data: Vec<u8>,
+    content_type: String,
+) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = reqwest::Client::builder().no_proxy().build().map_err(|e| e.to_string())?;
+
+    let part = reqwest::multipart::Part::bytes(data)
+        .mime_str(&content_type)
+        .map_err(|e| format!("invalid content-type: {}", e))?
+        .file_name("avatar");
+
+    let form = reqwest::multipart::Form::new().part("file", part);
+
+    let url = backend_url(&cfg, &format!("/settings/characters/{}/avatar", char_id));
+    let resp = client
+        .post(&url)
+        .bearer_auth(&cfg.admin_token)
+        .multipart(form)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let status = resp.status();
+    if !status.is_success() {
+        let body = resp.text().await.unwrap_or_default();
+        return Err(format!("HTTP {} — {}", status.as_u16(), body));
+    }
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn delete_character_avatar(
+    app: tauri::AppHandle,
+    char_id: String,
+) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = reqwest::Client::builder().no_proxy().build().map_err(|e| e.to_string())?;
+    let url = backend_url(&cfg, &format!("/settings/characters/{}/avatar", char_id));
+    let resp = client
+        .delete(&url)
+        .bearer_auth(&cfg.admin_token)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    let status = resp.status();
+    if !status.is_success() {
+        let body = resp.text().await.unwrap_or_default();
+        return Err(format!("HTTP {} — {}", status.as_u16(), body));
+    }
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -769,6 +857,9 @@ pub fn run() {
             patch_prompt_assets,
             load_hidden_state_debug,
             desktop_wake,
+            get_character_avatar,
+            upload_character_avatar,
+            delete_character_avatar,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

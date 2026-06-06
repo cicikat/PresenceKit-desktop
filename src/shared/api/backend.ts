@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { ChatResponse, GardenState, DiaryListResponse, DiaryEntry, ChatLogDatesResponse, ChatLogDay, MoodState, ActivityState, SensorRealtimeResponse, UploadIngestResponse, UploadError, PromptAssetsResponse, PromptAssetsPatch, PromptAssetsPatchResponse, HiddenStateDebugResponse } from './types';
+import type { ChatResponse, GardenState, DiaryListResponse, DiaryEntry, ChatLogDatesResponse, ChatLogDay, MoodState, ActivityState, SensorRealtimeResponse, UploadIngestResponse, UploadError, PromptAssetsResponse, PromptAssetsPatch, PromptAssetsPatchResponse, HiddenStateDebugResponse, PromptAssetCharacter, PromptAssetOption, ActivePromptAssets } from './types';
 
 export async function sendChat(message: string): Promise<ChatResponse> {
   return invoke<ChatResponse>('send_chat', { message });
@@ -74,7 +74,22 @@ export function validateUploadFile(filePath: string, fileSize: number): UploadEr
 }
 
 export async function getPromptAssets(): Promise<PromptAssetsResponse> {
-  return invoke<PromptAssetsResponse>('get_prompt_assets');
+  const response = await invoke<unknown>('get_prompt_assets');
+  return normalizePromptAssets(response);
+}
+
+export async function getCharacterAvatar(charId: string): Promise<string | null> {
+  return invoke<string | null>('get_character_avatar', { charId });
+}
+
+export async function uploadCharacterAvatar(charId: string, file: File): Promise<void> {
+  const buffer = await file.arrayBuffer();
+  const data = Array.from(new Uint8Array(buffer));
+  await invoke('upload_character_avatar', { charId, data, contentType: file.type });
+}
+
+export async function deleteCharacterAvatar(charId: string): Promise<void> {
+  await invoke('delete_character_avatar', { charId });
 }
 
 export async function loadHiddenStateDebug(): Promise<HiddenStateDebugResponse> {
@@ -88,11 +103,87 @@ export async function desktopWake(lastSeen?: number): Promise<{ reply: string | 
 }
 
 export async function patchPromptAssets(patch: PromptAssetsPatch): Promise<PromptAssetsPatchResponse> {
-  return invoke<PromptAssetsPatchResponse>('patch_prompt_assets', {
+  const response = await invoke<unknown>('patch_prompt_assets', {
     activeCharacter: patch.active_character ?? null,
     enabledLorebooks: patch.enabled_lorebooks ?? null,
     enabledJailbreaks: patch.enabled_jailbreaks ?? null,
   });
+  const raw = isRecord(response) ? response : {};
+  return {
+    message: typeof raw.message === 'string' ? raw.message : '',
+    active: normalizeActivePromptAssets(raw.active),
+  };
+}
+
+function normalizePromptAssets(value: unknown): PromptAssetsResponse {
+  const raw = isRecord(value) ? value : {};
+  return {
+    characters: normalizePromptAssetCharacters(raw.characters),
+    lorebooks: normalizePromptAssetOptions(raw.lorebooks),
+    jailbreaks: normalizePromptAssetOptions(raw.jailbreaks),
+    active: normalizeActivePromptAssets(raw.active),
+  };
+}
+
+function normalizePromptAssetCharacters(value: unknown): PromptAssetCharacter[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map(item => normalizeCharacterEntry(item))
+    .filter((item): item is PromptAssetCharacter => item !== null);
+}
+
+function normalizeCharacterEntry(value: unknown): PromptAssetCharacter | null {
+  if (typeof value === 'string') {
+    return { id: value, label: value, avatar_url: null };
+  }
+  if (!isRecord(value) || typeof value.id !== 'string') {
+    return null;
+  }
+  return {
+    id: value.id,
+    label: typeof value.label === 'string' ? value.label : value.id,
+    kind: typeof value.kind === 'string' ? value.kind : undefined,
+    avatar_url: typeof value.avatar_url === 'string' ? value.avatar_url : null,
+    has_runtime_avatar: typeof value.has_runtime_avatar === 'boolean' ? value.has_runtime_avatar : false,
+  };
+}
+
+function normalizePromptAssetOptions(value: unknown): PromptAssetOption[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map(item => normalizePromptAssetOption(item))
+    .filter((item): item is PromptAssetOption => item !== null);
+}
+
+function normalizePromptAssetOption(value: unknown): PromptAssetOption | null {
+  if (typeof value === 'string') {
+    return { id: value, label: value };
+  }
+  if (!isRecord(value) || typeof value.id !== 'string') {
+    return null;
+  }
+  return {
+    id: value.id,
+    label: typeof value.label === 'string' ? value.label : value.id,
+    kind: typeof value.kind === 'string' ? value.kind : undefined,
+  };
+}
+
+function normalizeActivePromptAssets(value: unknown): ActivePromptAssets {
+  const raw = isRecord(value) ? value : {};
+  return {
+    active_character: typeof raw.active_character === 'string' ? raw.active_character : '',
+    enabled_lorebooks: normalizeStringArray(raw.enabled_lorebooks),
+    enabled_jailbreaks: normalizeStringArray(raw.enabled_jailbreaks),
+  };
+}
+
+function normalizeStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }
 
 export async function uploadDocument(

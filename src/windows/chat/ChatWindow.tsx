@@ -7,7 +7,7 @@ import { useState, useEffect, useRef, useCallback, type CSSProperties } from 're
 import { Icon, MicroLabel } from './components/UIKit';
 import { StateEngine } from '../../shared/state/store';
 import { avatarStore } from '../../shared/avatars/store';
-import { getPromptAssets, patchPromptAssets } from '../../shared/api/backend';
+import { getPromptAssets, patchPromptAssets, getCharacterAvatar, uploadCharacterAvatar, deleteCharacterAvatar } from '../../shared/api/backend';
 import type { PromptAssetsPatch, PromptAssetsResponse } from '../../shared/api/types';
 import { getUIPref, setUIPref } from '../../shared/uiPreferences';
 import {
@@ -38,7 +38,7 @@ const SIDEBAR_MAX     = 540;
 const SIDEBAR_DEFAULT = 340;
 
 /* ── 偏好面板 ── */
-function PreferencesPanel({ open, onClose, theme, onThemeChange, chatHeaderVisible, onChatHeaderToggle, appearance, onAppearanceChange }: any) {
+function PreferencesPanel({ open, onClose, theme, onThemeChange, chatHeaderVisible, onChatHeaderToggle, appearance, onAppearanceChange, onCharacterAvatarChange }: any) {
   const [avatars, setAvatars] = useState(avatarStore.get());
   const [tab, setTab] = useState<'appearance' | 'world' | 'other'>('appearance');
   const [cropSrc, setCropSrc] = useState<string | null>(null);
@@ -257,7 +257,7 @@ function PreferencesPanel({ open, onClose, theme, onThemeChange, chatHeaderVisib
                 </div>
               </>
             ) : tab === 'world' ? (
-              <PromptAssetsSettings />
+              <PromptAssetsSettings onCharacterAvatarChange={onCharacterAvatarChange} />
             ) : (
               <div className="serif" style={{
                 padding: '20px 16px', border: '1px dashed var(--paper-edge)', borderRadius: 6,
@@ -273,23 +273,48 @@ function PreferencesPanel({ open, onClose, theme, onThemeChange, chatHeaderVisib
   );
 }
 
-function PromptAssetsSettings() {
+function PromptAssetsSettings({ onCharacterAvatarChange }: { onCharacterAvatarChange?: (dataUrl: string | null) => void }) {
   const [assets, setAssets] = useState<PromptAssetsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeCharAvatarDataUrl, setActiveCharAvatarDataUrl] = useState<string | null>(null);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const charAvatarFileRef = useRef<HTMLInputElement>(null);
+
+  const loadActiveCharAvatar = useCallback(async (charId: string, characters: PromptAssetsResponse['characters']) => {
+    const char = characters.find(c => c.id === charId);
+    if (!char?.avatar_url) {
+      setActiveCharAvatarDataUrl(null);
+      onCharacterAvatarChange?.(null);
+      return;
+    }
+    try {
+      const dataUrl = await getCharacterAvatar(charId);
+      setActiveCharAvatarDataUrl(dataUrl);
+      onCharacterAvatarChange?.(dataUrl);
+    } catch {
+      setActiveCharAvatarDataUrl(null);
+      onCharacterAvatarChange?.(null);
+    }
+  }, [onCharacterAvatarChange]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      setAssets(await getPromptAssets());
+      const result = await getPromptAssets();
+      setAssets(result);
+      if (result.active.active_character) {
+        void loadActiveCharAvatar(result.active.active_character, result.characters);
+      }
     } catch (loadError) {
       setError(`读取失败：${String(loadError)}`);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadActiveCharAvatar]);
 
   useEffect(() => {
     void load();
@@ -303,8 +328,8 @@ function PromptAssetsSettings() {
       && !assets.characters.some(character => character.id === patch.active_character)
     ) return;
     if (
-      patch.enabled_lorebooks?.some(stem => !assets.lorebooks.includes(stem))
-      || patch.enabled_jailbreaks?.some(stem => !assets.jailbreaks.includes(stem))
+      patch.enabled_lorebooks?.some(stem => !assets.lorebooks.some(option => option.id === stem))
+      || patch.enabled_jailbreaks?.some(stem => !assets.jailbreaks.some(option => option.id === stem))
     ) return;
 
     setSaving(true);
@@ -312,12 +337,60 @@ function PromptAssetsSettings() {
     try {
       const response = await patchPromptAssets(patch);
       setAssets(current => current ? { ...current, active: response.active } : current);
+      if (patch.active_character && assets) {
+        void loadActiveCharAvatar(patch.active_character, assets.characters);
+      }
     } catch (saveError) {
       setError(`保存失败：${String(saveError)}`);
     } finally {
       setSaving(false);
     }
-  }, [assets, saving]);
+  }, [assets, saving, loadActiveCharAvatar]);
+
+  const handleAvatarFileChange = useCallback(async (file: File) => {
+    if (!assets) return;
+    const charId = assets.active.active_character;
+    if (!charId) return;
+    const allowed = ['image/png', 'image/jpeg', 'image/webp'];
+    if (!allowed.includes(file.type)) {
+      setAvatarError(`不支持的格式：${file.type}，仅支持 PNG / JPEG / WebP`);
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setAvatarError('文件超过 5 MB 限制');
+      return;
+    }
+    setAvatarBusy(true);
+    setAvatarError(null);
+    try {
+      await uploadCharacterAvatar(charId, file);
+      const refreshed = await getPromptAssets();
+      setAssets(refreshed);
+      void loadActiveCharAvatar(charId, refreshed.characters);
+    } catch (err) {
+      setAvatarError(`上传失败：${String(err)}`);
+    } finally {
+      setAvatarBusy(false);
+    }
+  }, [assets, loadActiveCharAvatar]);
+
+  const handleAvatarRemove = useCallback(async () => {
+    if (!assets) return;
+    const charId = assets.active.active_character;
+    if (!charId) return;
+    setAvatarBusy(true);
+    setAvatarError(null);
+    try {
+      await deleteCharacterAvatar(charId);
+      const refreshed = await getPromptAssets();
+      setAssets(refreshed);
+      void loadActiveCharAvatar(charId, refreshed.characters);
+    } catch (err) {
+      setAvatarError(`移除失败：${String(err)}`);
+    } finally {
+      setAvatarBusy(false);
+    }
+  }, [assets, loadActiveCharAvatar]);
 
   if (loading) {
     return <div className="serif" style={{ color: 'var(--ink-3)', fontSize: 13.5 }}>正在读取 Reality 世界设置…</div>;
@@ -332,27 +405,81 @@ function PromptAssetsSettings() {
     );
   }
 
-  const toggle = (items: string[], stem: string) => (
-    items.includes(stem) ? items.filter(item => item !== stem) : [...items, stem]
+  const toggle = (items: string[], id: string) => (
+    items.includes(id) ? items.filter(item => item !== id) : [...items, id]
   );
   const activeCharacterAvailable = assets.characters.some(character => character.id === assets.active.active_character);
+  const activeChar = assets.characters.find(c => c.id === assets.active.active_character);
+  const hasRuntimeAvatar = activeChar?.has_runtime_avatar ?? false;
 
   return (
     <div style={{ display: 'grid', gap: 18 }}>
+      <input
+        ref={charAvatarFileRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        style={{ display: 'none' }}
+        onChange={e => {
+          const f = e.target.files?.[0];
+          if (f) void handleAvatarFileChange(f);
+          e.target.value = '';
+        }}
+      />
       <div>
         <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink)', marginBottom: 2 }}>角色卡</div>
         <div className="mono" style={{ fontSize: 9.5, color: 'var(--ink-3)', letterSpacing: 1.1, marginBottom: 9 }}>单选 · 当前 Reality 对话使用的角色卡</div>
-        <select
-          value={activeCharacterAvailable ? assets.active.active_character : ''}
-          disabled={saving || assets.characters.length === 0}
-          onChange={event => void save({ active_character: event.target.value })}
-          style={prefSelectStyle}
-        >
-          {!activeCharacterAvailable && <option value="">请选择可用角色卡</option>}
-          {assets.characters.map(character => (
-            <option key={character.id} value={character.id}>{character.label}</option>
-          ))}
-        </select>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+            border: '1px solid var(--paper-edge)', overflow: 'hidden',
+            background: 'var(--paper-2)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            {activeCharAvatarDataUrl ? (
+              <img src={activeCharAvatarDataUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--ink-3)', fontFamily: 'var(--font-serif)' }}>
+                {(assets.active.active_character?.[0] ?? '?').toUpperCase()}
+              </span>
+            )}
+          </div>
+          <select
+            value={activeCharacterAvailable ? assets.active.active_character : ''}
+            disabled={saving || assets.characters.length === 0}
+            onChange={event => void save({ active_character: event.target.value })}
+            style={{ ...prefSelectStyle, flex: 1 }}
+          >
+            {!activeCharacterAvailable && <option value="">请选择可用角色卡</option>}
+            {assets.characters.map(character => (
+              <option key={character.id} value={character.id}>{character.label}</option>
+            ))}
+          </select>
+        </div>
+        {activeCharacterAvailable && (
+          <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+            <button
+              disabled={avatarBusy || saving}
+              onClick={() => charAvatarFileRef.current?.click()}
+              style={prefActionButtonStyle}
+            >
+              {avatarBusy ? '处理中…' : '上传头像'}
+            </button>
+            {hasRuntimeAvatar && (
+              <button
+                disabled={avatarBusy || saving}
+                onClick={() => void handleAvatarRemove()}
+                style={prefActionButtonStyle}
+              >
+                移除自定义头像
+              </button>
+            )}
+          </div>
+        )}
+        {avatarError && (
+          <div className="mono" style={{ color: 'var(--danger)', fontSize: 9.5, letterSpacing: 0.8, marginTop: 5 }}>
+            {avatarError}
+          </div>
+        )}
       </div>
       <PromptAssetChecks
         title="Reality 世界书"
@@ -360,7 +487,7 @@ function PromptAssetsSettings() {
         options={assets.lorebooks}
         selected={assets.active.enabled_lorebooks}
         disabled={saving}
-        onToggle={stem => void save({ enabled_lorebooks: toggle(assets.active.enabled_lorebooks, stem) })}
+        onToggle={id => void save({ enabled_lorebooks: toggle(assets.active.enabled_lorebooks, id) })}
       />
       <PromptAssetChecks
         title="Reality 破限"
@@ -368,7 +495,7 @@ function PromptAssetsSettings() {
         options={assets.jailbreaks}
         selected={assets.active.enabled_jailbreaks}
         disabled={saving}
-        onToggle={stem => void save({ enabled_jailbreaks: toggle(assets.active.enabled_jailbreaks, stem) })}
+        onToggle={id => void save({ enabled_jailbreaks: toggle(assets.active.enabled_jailbreaks, id) })}
       />
       {(saving || error) && (
         <div className="mono" style={{ color: error ? 'var(--danger)' : 'var(--ink-3)', fontSize: 9.5, letterSpacing: 0.8 }}>
@@ -382,10 +509,10 @@ function PromptAssetsSettings() {
 function PromptAssetChecks({ title, hint, options, selected, disabled, onToggle }: {
   title: string;
   hint: string;
-  options: string[];
+  options: { id: string; label: string }[];
   selected: string[];
   disabled: boolean;
-  onToggle: (stem: string) => void;
+  onToggle: (id: string) => void;
 }) {
   return (
     <div>
@@ -395,16 +522,16 @@ function PromptAssetChecks({ title, hint, options, selected, disabled, onToggle 
         <div className="serif" style={{ color: 'var(--ink-3)', fontSize: 13 }}>暂无可用选项。</div>
       ) : (
         <div style={{ display: 'grid', gap: 7 }}>
-          {options.map(stem => (
-            <label key={stem} style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--ink-2)', fontSize: 12.5 }}>
+          {options.map(option => (
+            <label key={option.id} style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--ink-2)', fontSize: 12.5 }}>
               <input
                 type="checkbox"
-                value={stem}
-                checked={selected.includes(stem)}
+                value={option.id}
+                checked={selected.includes(option.id)}
                 disabled={disabled}
-                onChange={() => onToggle(stem)}
+                onChange={() => onToggle(option.id)}
               />
-              <span className="mono" style={{ fontSize: 10.5, letterSpacing: 0.6 }}>{stem}</span>
+              <span className="mono" style={{ fontSize: 10.5, letterSpacing: 0.6 }}>{option.label}</span>
             </label>
           ))}
         </div>
@@ -534,6 +661,7 @@ export function ChatWindow() {
   const [prefsOpen, setPrefsOpen]                 = useState(false);
   const [dreamWindowOpen, setDreamWindowOpen]     = useState(false);
   const [dreamAfterglow, setDreamAfterglow]       = useState(false);
+  const [characterAvatarDataUrl, setCharacterAvatarDataUrl] = useState<string | null>(null);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -568,6 +696,21 @@ export function ChatWindow() {
       return next;
     });
   }, []);
+
+  const loadCharacterAvatar = useCallback(async (charId: string | null) => {
+    if (!charId) { setCharacterAvatarDataUrl(null); return; }
+    try {
+      setCharacterAvatarDataUrl(await getCharacterAvatar(charId));
+    } catch {
+      setCharacterAvatarDataUrl(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    getPromptAssets()
+      .then(assets => loadCharacterAvatar(assets.active.active_character || null))
+      .catch(() => {});
+  }, [loadCharacterAvatar]);
 
   useEffect(() => {
     if (!appearance.fontFile) {
@@ -685,7 +828,7 @@ export function ChatWindow() {
           )}
           <div style={{ flex: 1, minWidth: 0 }}>
             {!dreamWindowOpen && (
-              <ChatPanel engine={engine} chatRectRef={chatRectRef} headerVisible={chatHeaderVisible} chatFontSize={appearance.chatFontSize} dreamActive={dreamWindowOpen} />
+              <ChatPanel engine={engine} chatRectRef={chatRectRef} headerVisible={chatHeaderVisible} chatFontSize={appearance.chatFontSize} dreamActive={dreamWindowOpen} characterAvatarDataUrl={characterAvatarDataUrl} />
             )}
           </div>
         </div>
@@ -715,7 +858,8 @@ export function ChatWindow() {
         chatHeaderVisible={chatHeaderVisible}
         onChatHeaderToggle={() => setChatHeaderVisible(v => { const next = !v; setUIPref('chat.headerVisible', next); return next; })}
         appearance={appearance}
-        onAppearanceChange={updateAppearance} />
+        onAppearanceChange={updateAppearance}
+        onCharacterAvatarChange={setCharacterAvatarDataUrl} />
     </div>
   );
 }
