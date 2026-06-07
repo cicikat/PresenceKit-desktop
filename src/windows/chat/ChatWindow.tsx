@@ -281,6 +281,8 @@ function PromptAssetsSettings({ onCharacterAvatarChange }: { onCharacterAvatarCh
   const [activeCharAvatarDataUrl, setActiveCharAvatarDataUrl] = useState<string | null>(null);
   const [avatarBusy, setAvatarBusy] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
+  const [avatarCropSrc, setAvatarCropSrc] = useState<string | null>(null);
+  const [avatarCropCharId, setAvatarCropCharId] = useState<string | null>(null);
   const charAvatarFileRef = useRef<HTMLInputElement>(null);
 
   const loadActiveCharAvatar = useCallback(async (charId: string, characters: PromptAssetsResponse['characters']) => {
@@ -320,6 +322,10 @@ function PromptAssetsSettings({ onCharacterAvatarChange }: { onCharacterAvatarCh
     void load();
   }, [load]);
 
+  useEffect(() => () => {
+    if (avatarCropSrc) URL.revokeObjectURL(avatarCropSrc);
+  }, [avatarCropSrc]);
+
   const save = useCallback(async (patch: PromptAssetsPatch) => {
     if (!assets || saving) return;
 
@@ -347,7 +353,12 @@ function PromptAssetsSettings({ onCharacterAvatarChange }: { onCharacterAvatarCh
     }
   }, [assets, saving, loadActiveCharAvatar]);
 
-  const handleAvatarFileChange = useCallback(async (file: File) => {
+  const closeAvatarCropper = useCallback(() => {
+    setAvatarCropSrc(null);
+    setAvatarCropCharId(null);
+  }, []);
+
+  const handleAvatarFileChange = useCallback((file: File) => {
     if (!assets) return;
     const charId = assets.active.active_character;
     if (!charId) return;
@@ -360,19 +371,28 @@ function PromptAssetsSettings({ onCharacterAvatarChange }: { onCharacterAvatarCh
       setAvatarError('文件超过 5 MB 限制');
       return;
     }
+    setAvatarError(null);
+    setAvatarCropCharId(charId);
+    setAvatarCropSrc(URL.createObjectURL(file));
+  }, [assets]);
+
+  const handleAvatarCropConfirm = useCallback(async (blob: Blob) => {
+    if (!avatarCropCharId) return;
     setAvatarBusy(true);
     setAvatarError(null);
     try {
-      await uploadCharacterAvatar(charId, file);
+      const file = new File([blob], 'avatar.png', { type: 'image/png' });
+      await uploadCharacterAvatar(avatarCropCharId, file);
       const refreshed = await getPromptAssets();
       setAssets(refreshed);
-      void loadActiveCharAvatar(charId, refreshed.characters);
+      await loadActiveCharAvatar(refreshed.active.active_character, refreshed.characters);
+      closeAvatarCropper();
     } catch (err) {
       setAvatarError(`上传失败：${String(err)}`);
     } finally {
       setAvatarBusy(false);
     }
-  }, [assets, loadActiveCharAvatar]);
+  }, [avatarCropCharId, closeAvatarCropper, loadActiveCharAvatar]);
 
   const handleAvatarRemove = useCallback(async () => {
     if (!assets) return;
@@ -414,6 +434,14 @@ function PromptAssetsSettings({ onCharacterAvatarChange }: { onCharacterAvatarCh
 
   return (
     <div style={{ display: 'grid', gap: 18 }}>
+      {avatarCropSrc && (
+        <AvatarCropper
+          imageSrc={avatarCropSrc}
+          onConfirm={handleAvatarCropConfirm}
+          onCancel={closeAvatarCropper}
+          error={avatarError}
+        />
+      )}
       <input
         ref={charAvatarFileRef}
         type="file"
@@ -421,7 +449,7 @@ function PromptAssetsSettings({ onCharacterAvatarChange }: { onCharacterAvatarCh
         style={{ display: 'none' }}
         onChange={e => {
           const f = e.target.files?.[0];
-          if (f) void handleAvatarFileChange(f);
+          if (f) handleAvatarFileChange(f);
           e.target.value = '';
         }}
       />
@@ -838,6 +866,7 @@ export function ChatWindow() {
 
       {dreamWindowOpen && (
         <DreamWindow
+          characterAvatarDataUrl={characterAvatarDataUrl}
           onClose={() => {
             setDreamWindowOpen(false);
             setDreamAfterglow(true);

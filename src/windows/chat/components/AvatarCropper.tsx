@@ -6,10 +6,12 @@ export function AvatarCropper({
   imageSrc,
   onConfirm,
   onCancel,
+  error,
 }: {
   imageSrc: string;
-  onConfirm: (blob: Blob) => void;
+  onConfirm: (blob: Blob) => void | Promise<void>;
   onCancel: () => void;
+  error?: string | null;
 }) {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
@@ -23,8 +25,12 @@ export function AvatarCropper({
   const handleConfirm = async () => {
     if (!croppedAreaPixels || confirming) return;
     setConfirming(true);
-    const blob = await cropImageToBlob(imageSrc, croppedAreaPixels, 256, 256);
-    onConfirm(blob);
+    try {
+      const blob = await cropImageToBlob(imageSrc, croppedAreaPixels, 256, 256);
+      await onConfirm(blob);
+    } finally {
+      setConfirming(false);
+    }
   };
 
   return (
@@ -70,6 +76,11 @@ export function AvatarCropper({
               style={{ flex: 1 }}
             />
           </div>
+          {error && (
+            <div className="mono" style={{ color: 'var(--danger)', fontSize: 9.5, letterSpacing: 0.8 }}>
+              {error}
+            </div>
+          )}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
             <button onClick={onCancel} style={{
               padding: '8px 20px', borderRadius: 4, fontSize: 12.5,
@@ -84,7 +95,7 @@ export function AvatarCropper({
               cursor: confirming ? 'wait' : 'pointer',
               fontFamily: 'inherit', fontWeight: 600,
               transition: 'all 0.15s',
-            }}>确认</button>
+            }}>{confirming ? '处理中…' : '确认'}</button>
           </div>
         </div>
       </div>
