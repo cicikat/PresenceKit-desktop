@@ -343,6 +343,10 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
   // message_segments 先于 channel_message 到达时的暂存
   const pendingSegmentsByMsgIdRef = useRef<Map<string, { content: string; segments: NarrativeSegment[] }>>(new Map());
 
+  // desktopWake HTTP fallback: store reply here instead of rendering immediately.
+  // WS channel_message is the primary render path; HTTP reply only renders if WS never arrives.
+  const pendingWakeReplyRef = useRef<{ timerId: ReturnType<typeof setTimeout>; parts: string[] } | null>(null);
+
   // Dream 打开期间屏蔽 channel_message
   const dreamActiveRef = useRef(dreamActive);
   useEffect(() => { dreamActiveRef.current = dreamActive; }, [dreamActive]);
@@ -429,15 +433,26 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
             const wakeResp = await desktopWake(historyCursorSec);
             if (mounted && wakeResp.reply) {
               const parts = wakeResp.reply.split(/\n+/).map(s => s.trim()).filter(Boolean);
-              setMessages(prev => [
-                ...prev,
-                ...parts.map((text, idx) => ({
-                  id: newId(),
-                  role: 'assistant' as const,
-                  text,
-                  time: Date.now() + idx,
-                })),
-              ]);
+              console.log('[wake] HTTP response received, wsState:', wsClient.getState(), 'source:', wakeResp.source, 'segments:', parts.length, 'didAppendHttpReply: false (deferred)');
+              // Do NOT render directly — WS channel_message is the primary render path.
+              // Store as fallback and render only if WS never delivers within 5s.
+              const timerId = setTimeout(() => {
+                if (!pendingWakeReplyRef.current) return; // already handled by WS
+                pendingWakeReplyRef.current = null;
+                console.log('[wake] WS timeout — rendering HTTP fallback, wsState:', wsClient.getState(), 'didAppendHttpReply: true');
+                setMessages(prev => [
+                  ...prev,
+                  ...parts.map((text, idx) => ({
+                    id: newId(),
+                    role: 'assistant' as const,
+                    text,
+                    time: Date.now() + idx,
+                  })),
+                ]);
+              }, 5000);
+              pendingWakeReplyRef.current = { timerId, parts };
+            } else {
+              console.log('[wake] HTTP response received, no reply, source:', wakeResp.source);
             }
           } catch (wakeErr) {
             console.warn('[chat] desktop_wake 失败:', wakeErr);
@@ -450,7 +465,13 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
     }
 
     init();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+      if (pendingWakeReplyRef.current) {
+        clearTimeout(pendingWakeReplyRef.current.timerId);
+        pendingWakeReplyRef.current = null;
+      }
+    };
   }, []);
 
   // ── 滚顶懒加载 ───────────────────────────────────────────────────────────
@@ -658,8 +679,16 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
 
     const unsubMsg = wsClient.on('channel_message', ({ content, msg_id }) => {
       if (dreamActiveRef.current) return;
-      // TODO: 接入 turn_id 去重(需要先扩展 ws.ts 透传 turn_id)
-      // 当前 /upload/ingest 后端 broadcast 会导致同一 reply 在 HTTP + WS 双路径渲染两次
+      // Cancel any pending HTTP wake fallback — WS is the primary render path.
+      // This prevents the double-render where desktopWake HTTP reply and WS channel_message
+      // both append the same assistant turn.
+      if (pendingWakeReplyRef.current) {
+        clearTimeout(pendingWakeReplyRef.current.timerId);
+        pendingWakeReplyRef.current = null;
+        console.log('[wake] WS channel_message arrived — cancelled HTTP fallback, msg_id:', msg_id, 'duplicateDropped: true');
+      } else {
+        console.log('[wake] WS channel_message received, msg_id:', msg_id, 'duplicateDropped: false');
+      }
       scheduleAssistantSegments(content, msg_id);
     });
 
