@@ -1,6 +1,4 @@
-import { useState, useEffect } from 'react';
 import type { DreamFlowEntrySource, DreamState } from '../../../shared/api/dream-types';
-import { avatarStore } from '../../../shared/avatars/store';
 import { DreamGlowPanel, type DreamGlowTag } from './DreamGlowPanel';
 
 const FLOW_ENTRY_MIN_LENGTH = 20;
@@ -33,6 +31,7 @@ const EVENT_SUMMARY: Record<string, string> = {
 
 interface DreamSidebarProps {
   dreamState: DreamState | null;
+  herDataUrl: string | null;
   onClose: () => void;
 }
 
@@ -152,10 +151,7 @@ function HerBodyPanel({ body }: { body: { heat: number; sensitivity: number; ten
   );
 }
 
-export function DreamSidebar({ dreamState, onClose }: DreamSidebarProps) {
-  const [herDataUrl, setHerDataUrl] = useState<string | null>(avatarStore.get().her.dataUrl);
-  useEffect(() => avatarStore.subscribe(a => setHerDataUrl(a.her.dataUrl)), []);
-
+export function DreamSidebar({ dreamState, herDataUrl, onClose }: DreamSidebarProps) {
   const status = dreamState?.status;
   const tension = dreamState?.yexuan_tension;
   const scene = dreamState?.scene_state;

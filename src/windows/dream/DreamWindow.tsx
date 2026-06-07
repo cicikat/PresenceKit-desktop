@@ -31,10 +31,11 @@ const SIDEBAR_MAX = 480;
 const SIDEBAR_DEFAULT = 380;
 
 interface DreamWindowProps {
+  characterAvatarDataUrl?: string | null;
   onClose: () => void;
 }
 
-export function DreamWindow({ onClose }: DreamWindowProps) {
+export function DreamWindow({ characterAvatarDataUrl = null, onClose }: DreamWindowProps) {
   const { dreamState, stateError, refresh: refreshState } = useDreamState();
   const [phase, setPhase] = useState<WindowPhase>('loading');
   const [phaseError, setPhaseError] = useState<string | null>(null);
@@ -45,6 +46,7 @@ export function DreamWindow({ onClose }: DreamWindowProps) {
   const [tone, setTone] = useState<DreamTone>(() => getUIPref('dream.tone', 'day'));
   const [appearance, setAppearance] = useState<DreamAppearance>(() => loadDreamAppearance());
   const [backgrounds, setBackgrounds] = useState(() => avatarStore.get().dreamBackgrounds);
+  const [defaultHerAvatarDataUrl, setDefaultHerAvatarDataUrl] = useState(() => avatarStore.get().her.dataUrl);
   const [loadedFontFamily, setLoadedFontFamily] = useState<string | null>(null);
   const shellRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef(false);
@@ -59,6 +61,7 @@ export function DreamWindow({ onClose }: DreamWindowProps) {
 
   useEffect(() => avatarStore.subscribe(config => {
     setBackgrounds(config.dreamBackgrounds);
+    setDefaultHerAvatarDataUrl(config.her.dataUrl);
   }), []);
 
   useEffect(() => {
@@ -195,6 +198,7 @@ export function DreamWindow({ onClose }: DreamWindowProps) {
   const inputDisabled = phase !== 'active' || chatLoading;
   const sidebarPixels = sideOpen ? sidebarWidth : 0;
   const backgroundDataUrl = backgrounds[tone].dataUrl;
+  const herAvatarDataUrl = characterAvatarDataUrl ?? defaultHerAvatarDataUrl;
 
   return (
     <div
@@ -242,6 +246,7 @@ export function DreamWindow({ onClose }: DreamWindowProps) {
             <DreamSidePane
               tab={sideTab}
               dreamState={dreamState}
+              herDataUrl={herAvatarDataUrl}
               onClose={() => setSideOpen(false)}
             />
             <div
@@ -265,7 +270,7 @@ export function DreamWindow({ onClose }: DreamWindowProps) {
               aria-hidden="true"
             />
           )}
-          <DreamControlBar dreamState={dreamState} phase={phase} onWake={handleWake} />
+          <DreamControlBar dreamState={dreamState} phase={phase} herDataUrl={herAvatarDataUrl} onWake={handleWake} />
 
           {/* State-specific content */}
           {phase === 'loading' && (
@@ -317,6 +322,7 @@ export function DreamWindow({ onClose }: DreamWindowProps) {
               messages={messages}
               loading={chatLoading}
               inputDisabled={inputDisabled}
+              herDataUrl={herAvatarDataUrl}
               onSend={send}
               endedMessage={phase === 'ended' ? '梦境已关闭。按 WAKE 醒来。' : undefined}
             />
@@ -401,16 +407,19 @@ function RibbonButton({ label, icon, iconSize = 18, active, decorative = false, 
 function DreamSidePane({
   tab,
   dreamState,
+  herDataUrl,
   onClose,
 }: {
   tab: DreamSideTab;
   dreamState: any;
+  herDataUrl: string | null;
   onClose: () => void;
 }) {
   if (tab === 'flow') {
     return (
       <DreamSidebar
         dreamState={dreamState}
+        herDataUrl={herDataUrl}
         onClose={onClose}
       />
     );

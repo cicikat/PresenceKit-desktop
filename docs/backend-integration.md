@@ -99,8 +99,8 @@ GET 响应：
 ```json
 {
   "characters": [{"id": "yexuan", "label": "叶瑄"}],
-  "lorebooks": ["base"],
-  "jailbreaks": ["base"],
+  "lorebooks": [{"id": "base", "label": "base", "kind": "reality_lorebook"}],
+  "jailbreaks": [{"id": "base", "label": "base", "kind": "reality_jailbreak"}],
   "active": {
     "active_character": "yexuan",
     "enabled_lorebooks": ["base"],
@@ -109,7 +109,9 @@ GET 响应：
 }
 ```
 
-客户端仅允许提交 GET 返回列表中存在的角色卡 `id`、世界书 stem 和破限 stem，不展示后端文件路径。GET / PATCH 均由 Rust 读取 admin token，并使用 `reqwest.no_proxy()`。
+客户端兼容旧版字符串数组与新版 `{ id, label, kind }` 数组；UI 展示 `label`，保存时仅提交 GET 返回列表中存在的角色卡 `id`、世界书 `id` 和破限 `id`，不展示后端文件路径。GET / PATCH 均由 Rust 读取 admin token，并使用 `reqwest.no_proxy()`。
+
+角色卡头像上传在 Chat 世界页先复用客户端 `AvatarCropper` 裁剪为 256 × 256 PNG，再由 Tauri `upload_character_avatar` POST `/settings/characters/{char_id}/avatar`。裁剪只改变上传图片内容，不改变后端接口或最终 `data/runtime/characters/{char_id}/avatar.png` 存储位置。
 
 ---
 

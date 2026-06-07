@@ -1,17 +1,13 @@
-import { useState, useEffect } from 'react';
 import type { DreamState } from '../../../shared/api/dream-types';
-import { avatarStore } from '../../../shared/avatars/store';
 
 interface DreamControlBarProps {
   dreamState: DreamState | null;
   phase: string;
+  herDataUrl: string | null;
   onWake: () => void;
 }
 
-export function DreamControlBar({ dreamState, phase, onWake }: DreamControlBarProps) {
-  const [herDataUrl, setHerDataUrl] = useState<string | null>(avatarStore.get().her.dataUrl);
-  useEffect(() => avatarStore.subscribe(a => setHerDataUrl(a.her.dataUrl)), []);
-
+export function DreamControlBar({ dreamState, phase, herDataUrl, onWake }: DreamControlBarProps) {
   const scene = dreamState?.scene_state;
   const tension = dreamState?.yexuan_tension;
 

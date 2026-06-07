@@ -27,6 +27,7 @@
 - 管理 Dream UI v2 preview 的本地状态：Ribbon 入口打开 overlay，Esc / WAKE 关闭并显示 afterglow。
 - 布局三列：Ribbon、Sidebar、ChatPanel。
 - 负责偏好面板内的头像上传/裁剪入口。
+- 世界页角色卡头像同样复用 `AvatarCropper`，选择 PNG / JPEG / WebP 后先裁剪为 256 × 256 PNG，再通过角色头像后端接口上传。
 - Chat 偏好浮层使用顶部横栏分类：外观、世界、其他。外观提供主题、信息栏、聊天字号、主题字号、`public/fonts/` 动态字体包和头像设置；Sidebar 宽度只保留界面拖拽，不再在偏好里重复提供控制项。世界页通过 `PromptAssetsSettings` 读取和保存 Reality Prompt Assets，提供角色卡单选、Reality 世界书多选和 Reality 破限多选；其他暂留导入占位。
 
 关键状态：
@@ -39,8 +40,9 @@
 | `sidebarWidth` | 可拖拽调整，范围 250-540 |
 | `chatHeaderVisible` | 控制 ChatPanel 顶部状态栏 |
 | `appearance` | Chat 本地外观设置：聊天字号、主题字号、字体包 |
-| `PromptAssetsSettings.assets` | Chat 世界页局部状态：`characters` / `lorebooks` / `jailbreaks` / `active`；由后端读取，PATCH 成功后使用后端返回的 `active` 回写 |
+| `PromptAssetsSettings.assets` | Chat 世界页局部状态：`characters` / `lorebooks` / `jailbreaks` / `active`；由后端读取，API 层兼容旧字符串数组与新版 `{ id, label, kind }` 选项数组，PATCH 成功后使用后端返回的 `active` 回写 |
 | `PromptAssetsSettings.loading` / `saving` / `error` | Chat 世界页局部请求状态 |
+| `PromptAssetsSettings.avatarCropSrc` / `avatarCropCharId` | 世界页角色卡头像裁剪源与上传目标角色；确认裁剪后才调用后端上传 |
 | `specOpen` / `prefsOpen` | 帮助/偏好浮层 |
 | `dreamWindowOpen` / `dreamAfterglow` | 控制 DreamWindow 显示和醒后余韵横幅 |
 
@@ -68,6 +70,7 @@ src/windows/dream/
 职责：
 
 - `DreamWindow` 是唯一接入后端 Dream API 的正式入口，由 `ChatWindow` 在 Ribbon 月亮按钮触发后以 fixed overlay 形式渲染。
+- Dream 头像由 `ChatWindow` 将当前 Reality 激活角色卡头像传入 `DreamWindow`，再统一下发给控制栏、动向侧栏和消息区；角色卡没有头像时回退到外观设置中的 HER 头像，最后才显示 Dream 默认占位头像。
 - 状态机：初始获取 `/dream/state` → 若已在 DREAM_ACTIVE 直接进入 active；否则展示「进入梦境」按钮 → POST `/dream/enter` → active 模式。
 - 消息 buffer 为 append-only，不读历史 log，不接 WebSocket。
 - `/dream/chat` 返回 `exit_accepted` 或 `force_exited` 时，禁用输入框，刷新状态，进入 ended 阶段。

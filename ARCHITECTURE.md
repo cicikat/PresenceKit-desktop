@@ -54,6 +54,7 @@ Emerald-client 是 `qq-st-bot` 的新桌面客户端。它不拥有角色记忆�
 - 偏好面板的「世界」页通过 `getPromptAssets()` / `patchPromptAssets()` 管理 Reality Prompt Assets：角色卡单选、世界书多选和破限多选。可用选项来自后端，客户端不展示文件路径。
 - 把 engine 传给 `ChatPanel`。
 - 管理正式 Dream overlay 的本地开关；DreamWindow 自己接入 Dream API 和窗口状态机。
+- 将当前 Reality 激活角色卡头像传给 DreamWindow；Dream 内控制栏、动向侧栏和消息区优先显示该头像，无角色头像时回退到本地 HER 头像。
 - 当前没有实际 `PetWindow` 渲染。
 
 Dream 窗口是 `src/windows/dream/DreamWindow.tsx`：

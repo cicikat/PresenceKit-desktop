@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, memo } from 'react';
 import type { DreamMessage } from '../../../shared/api/dream-types';
 import type { NarrativeSegment } from '../../../shared/api/types';
 import { DreamSceneBlock } from './DreamSceneBlock';
-import { avatarStore } from '../../../shared/avatars/store';
 import { DreamGlowBubble } from './DreamGlowBubble';
 import { TypingDots } from '../../../shared/ui/TypingDots';
 
@@ -10,6 +9,7 @@ interface DreamChatPanelProps {
   messages: DreamMessage[];
   loading: boolean;
   inputDisabled: boolean;
+  herDataUrl: string | null;
   onSend: (text: string) => void;
   endedMessage?: string;
 }
@@ -160,14 +160,12 @@ export function DreamChatPanel({
   messages,
   loading,
   inputDisabled,
+  herDataUrl,
   onSend,
   endedMessage,
 }: DreamChatPanelProps) {
   const [input, setInput] = useState('');
-  const [herDataUrl, setHerDataUrl] = useState<string | null>(avatarStore.get().her.dataUrl);
   const scrollRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => avatarStore.subscribe(a => setHerDataUrl(a.her.dataUrl)), []);
 
   useEffect(() => {
     if (scrollRef.current) {
