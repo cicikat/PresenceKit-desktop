@@ -35,13 +35,13 @@ export function SpecPanel({ open, onClose }: { open: boolean; onClose: () => voi
         </div>
         <div style={{ padding: '22px 28px 32px', display: 'grid', gap: 20, overflowY: 'auto' }}>
           <HelpSection title="关于">
-            <TodoHint>（占位：作者 / 项目说明 · 待补）</TodoHint>
+            <TodoHint>项目说明即将提供。</TodoHint>
           </HelpSection>
           <HelpSection title="链接">
-            <TodoHint>（占位：仓库地址 / 联系方式 · 待补）</TodoHint>
+            <TodoHint>仓库地址及联系方式即将提供。</TodoHint>
           </HelpSection>
           <HelpSection title="免责声明">
-            <TodoHint>（占位：内容待补）</TodoHint>
+            <TodoHint>免责声明即将提供。</TodoHint>
           </HelpSection>
           <HelpSection title="公告">
             <TodoHint>暂无公告</TodoHint>
