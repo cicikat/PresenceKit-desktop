@@ -53,14 +53,13 @@ const DREAM_JAILBREAK_PRESET_LABELS: Record<DreamJailbreakPreset, string> = {
 };
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
-type DreamPrefsTab = 'status' | 'context' | 'system' | 'world' | 'other';
+type DreamPrefsTab = 'status' | 'context' | 'system' | 'world';
 
 const DREAM_PREF_TABS: Array<[DreamPrefsTab, string]> = [
   ['status', '1 · 当前状态'],
   ['context', '2 · 梦境上下文'],
   ['system', '3 · 系统设置'],
   ['world', '4 · 世界'],
-  ['other', '5 · 其他'],
 ];
 
 function normalizeDreamSettings(settings: DreamSettings): DreamSettings {
@@ -392,12 +391,12 @@ export function DreamPrefsPane({ open, dreamState, appearance, onAppearanceChang
                   />
                   <StatusItem
                     label="当前生效"
-                    value={dreamState?.frozen_world?.replace(/_/g, ' ') ?? '本次梦境 frozen_world'}
+                    value={dreamState?.frozen_world?.replace(/_/g, ' ') ?? '—'}
                     detail="FROZEN WORLD"
                   />
                   <StatusItem
                     label="已经历"
-                    value="x 次"
+                    value="—"
                     detail="待接入统计"
                   />
                   <StatusItem
@@ -656,11 +655,7 @@ export function DreamPrefsPane({ open, dreamState, appearance, onAppearanceChang
             <div className="dream-prefs__placeholder">正在读取梦境世界设置…</div>
           )}
 
-          {tab === 'other' && (
-            <div className="dream-prefs__placeholder">
-              其他梦境偏好待导入。
-            </div>
-          )}
+
         </div>
       </section>
     </div>
