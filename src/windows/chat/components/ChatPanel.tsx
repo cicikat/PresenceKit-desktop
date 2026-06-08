@@ -458,6 +458,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
           // message as an "unreplayed trigger" on the next startup.
           const lastAssistantMsg = msgs.filter(m => m.role === 'assistant').slice(-1)[0];
           const historyCursorSec = lastAssistantMsg ? lastAssistantMsg.time / 1000 + 60 : undefined;
+          console.log('[wake] start | historyCursorSec:', historyCursorSec ?? 'none');
           if (mounted) setWakeLoading(true);
           try {
             const wakeResp = await desktopWake(historyCursorSec);
@@ -467,7 +468,12 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
               // Do NOT render directly — WS channel_message is the primary render path.
               // Store as fallback and render only if WS never delivers within 5s.
               const timerId = setTimeout(() => {
-                if (!pendingWakeReplyRef.current) return; // already handled by WS
+                // Identity check: bail if WS already cancelled this specific timer
+                // (ref set to null) or a new wake replaced it (different timerId).
+                if (pendingWakeReplyRef.current?.timerId !== timerId) {
+                  console.log('[wake] fallbackSkippedBecauseCanceled: true | loadingSource: wake');
+                  return;
+                }
                 pendingWakeReplyRef.current = null;
                 const fallbackIds = parts.map(() => newId());
                 const normalizedHash = normalizeForDedup(wakeResp.reply);
@@ -735,21 +741,25 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       let duplicateDropped = false;
 
       // Cancel desktopWake HTTP fallback — WS is the primary render path.
+      // Important: we do NOT return here; we fall through to scheduleAssistantSegments
+      // below so the WS content is rendered exactly once. The cancel only prevents the
+      // 5s fallback timer from rendering a second copy after WS already delivered.
       if (pendingWakeReplyRef.current) {
         clearTimeout(pendingWakeReplyRef.current.timerId);
         pendingWakeReplyRef.current = null;
         duplicateDropped = true;
         setWakeLoading(false);
-        console.log('[chat] loadingClearedBy: ws | loadingSource: wake | msg_id:', msg_id, '| cancelledPending: wake | pendingSend:', !!pendingSendReplyRef.current);
+        console.log('[chat] wsMatchedPending: wake | loadingClearedBy: ws | fallbackCanceled: true | msg_id:', msg_id, '| pendingSend:', !!pendingSendReplyRef.current);
       }
 
       // Cancel send()/uploadDocument HTTP fallback — WS supersedes HTTP reply.
+      // Same no-return reasoning: WS content must still render via the shared path below.
       if (pendingSendReplyRef.current) {
         clearTimeout(pendingSendReplyRef.current.timerId);
         pendingSendReplyRef.current = null;
         duplicateDropped = true;
         setLoading(false);
-        console.log('[chat] loadingClearedBy: ws | loadingSource: send | msg_id:', msg_id, '| cancelledPending: send | pendingWake: false | pendingSend: false');
+        console.log('[chat] wsMatchedPending: send | loadingClearedBy: ws | fallbackCanceled: true | msg_id:', msg_id);
       }
 
       // Check if a fallback was already rendered (timer fired before WS arrived).
@@ -779,7 +789,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       }
 
       const contentHashRaw = content.length > 0 ? content.slice(0, 32).replace(/\s+/g, ' ') : '(empty)';
-      console.log('[chat] appendSource: channel_message_segments | msg_id:', msg_id, '| source:', source ?? 'reality', '| contentHashRaw:', contentHashRaw, '| normalizedHash:', normalizedHash, '| pendingWake:', !!pendingWakeReplyRef.current, '| pendingSend:', !!pendingSendReplyRef.current, '| duplicateDropped:', duplicateDropped, '| replacedFallback: false');
+      console.log('[chat] assistantRendered: ws | msg_id:', msg_id, '| source:', source ?? 'reality', '| contentHashRaw:', contentHashRaw, '| normalizedHash:', normalizedHash, '| duplicateDropped:', duplicateDropped, '| replacedFallback: false');
 
       scheduleAssistantSegments(content, msg_id);
     });
@@ -840,7 +850,12 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         clearTimeout(pendingSendReplyRef.current.timerId);
       }
       const timerId = setTimeout(() => {
-        if (!pendingSendReplyRef.current) return;
+        // Identity check: WS may have cancelled this timer and nulled the ref,
+        // or a rapid second send may have replaced the ref with a newer timer.
+        if (pendingSendReplyRef.current?.timerId !== timerId) {
+          console.log('[chat] fallbackSkippedBecauseCanceled: true | loadingSource: send');
+          return;
+        }
         pendingSendReplyRef.current = null;
         const parts = splitReply(reply);
         const fallbackIds = parts.map(() => newId());
@@ -891,7 +906,10 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         clearTimeout(pendingSendReplyRef.current.timerId);
       }
       const timerId = setTimeout(() => {
-        if (!pendingSendReplyRef.current) return;
+        if (pendingSendReplyRef.current?.timerId !== timerId) {
+          console.log('[chat] fallbackSkippedBecauseCanceled: true | loadingSource: upload');
+          return;
+        }
         pendingSendReplyRef.current = null;
         const parts = splitReply(reply);
         const fallbackIds = parts.map(() => newId());
