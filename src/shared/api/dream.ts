@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
   DreamState,
+  DreamEnterOptions,
   DreamEnterResponse,
   DreamChatResponse,
   DreamExitResponse,
@@ -29,9 +30,11 @@ export async function dreamGetState(): Promise<DreamState> {
   return invoke<DreamState>('dream_get_state');
 }
 
-export async function dreamEnter(entry_reason?: string): Promise<DreamEnterResponse> {
+export async function dreamEnter(options: DreamEnterOptions = {}): Promise<DreamEnterResponse> {
   return invoke<DreamEnterResponse>('dream_enter', {
-    entryReason: entry_reason ?? null,
+    entryReason: options.entry_reason ?? null,
+    dreamMode: options.dream_mode ?? 'sandbox',
+    scriptId: options.script_id ?? null,
   });
 }
 

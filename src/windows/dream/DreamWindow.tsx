@@ -12,6 +12,7 @@ import { SubHiddenStatePanel } from './components/SubHiddenStatePanel';
 import { Icon } from '../chat/components/UIKit';
 import { getUIPref, setUIPref } from '../../shared/uiPreferences';
 import { avatarStore } from '../../shared/avatars/store';
+import type { DreamEntryMode } from '../../shared/api/dream-types';
 import {
   dreamFontFamily,
   dreamFontUrl,
@@ -44,6 +45,8 @@ export function DreamWindow({ characterAvatarDataUrl = null, onClose }: DreamWin
   const [openModal, setOpenModal] = useState<DreamModal>(null);
   const [sidebarWidth, setSidebarWidth] = useState(() => getUIPref('dream.sidebarWidth', SIDEBAR_DEFAULT));
   const [tone, setTone] = useState<DreamTone>(() => getUIPref('dream.tone', 'day'));
+  const [entryMode, setEntryMode] = useState<DreamEntryMode>(() => getUIPref<DreamEntryMode>('dream.entryMode', 'sandbox'));
+  const [scenarioScriptId, setScenarioScriptId] = useState(() => getUIPref('dream.scenarioScriptId', 'prison_demo'));
   const [appearance, setAppearance] = useState<DreamAppearance>(() => loadDreamAppearance());
   const [backgrounds, setBackgrounds] = useState(() => avatarStore.get().dreamBackgrounds);
   const [defaultHerAvatarDataUrl, setDefaultHerAvatarDataUrl] = useState(() => avatarStore.get().her.dataUrl);
@@ -113,11 +116,33 @@ export function DreamWindow({ characterAvatarDataUrl = null, onClose }: DreamWin
     }
   }, [dreamState, phase, addSystemMsg]);
 
+  useEffect(() => {
+    if (!dreamState || (dreamState.status !== 'DREAM_ACTIVE' && dreamState.status !== 'DREAM_EXIT_REQUESTED')) return;
+    const activeMode = dreamState.dream_mode ?? dreamState.mode;
+    if (activeMode === 'sandbox' || activeMode === 'scenario' || activeMode === 'mirror') {
+      setEntryMode(activeMode);
+      setUIPref('dream.entryMode', activeMode);
+    }
+    const activeScriptId = dreamState.scenario?.script_id ?? dreamState.script_id;
+    if (activeMode === 'scenario' && activeScriptId) {
+      setScenarioScriptId(activeScriptId);
+      setUIPref('dream.scenarioScriptId', activeScriptId);
+    }
+  }, [dreamState]);
+
   const handleEnter = async () => {
+    const scriptId = scenarioScriptId.trim();
+    if (entryMode === 'scenario' && !scriptId) {
+      setPhaseError('剧本模式需要填写剧本 ID。');
+      return;
+    }
     setPhase('entering');
     setPhaseError(null);
     try {
-      const resp = await dreamEnter();
+      const resp = await dreamEnter({
+        dream_mode: entryMode,
+        script_id: entryMode === 'scenario' ? scriptId : undefined,
+      });
       console.debug('[Dream] dreamEnter response:', resp);
       if (!resp.ok) {
         console.debug('[Dream] dreamEnter rejected:', resp.error);
@@ -333,7 +358,17 @@ export function DreamWindow({ characterAvatarDataUrl = null, onClose }: DreamWin
       <DreamPrefsPane
         open={openModal === 'prefs'}
         dreamState={dreamState}
+        entryMode={entryMode}
+        scenarioScriptId={scenarioScriptId}
         appearance={appearance}
+        onEntryModeChange={mode => {
+          setEntryMode(mode);
+          setUIPref('dream.entryMode', mode);
+        }}
+        onScenarioScriptIdChange={scriptId => {
+          setScenarioScriptId(scriptId);
+          setUIPref('dream.scenarioScriptId', scriptId);
+        }}
         onAppearanceChange={updateAppearance}
         onClose={() => setOpenModal(null)}
       />

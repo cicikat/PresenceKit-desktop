@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   DEFAULT_DREAM_SETTINGS,
   type DreamState,
+  type DreamScenarioState,
+  type DreamMirrorCoreState,
+  type DreamEntryMode,
   type DreamSettings,
   type MemoryAccess,
   type BoundaryLevel,
@@ -76,7 +79,11 @@ function normalizeDreamSettings(settings: DreamSettings): DreamSettings {
 interface DreamPrefsPaneProps {
   open: boolean;
   dreamState: DreamState | null;
+  entryMode: DreamEntryMode;
+  scenarioScriptId: string;
   appearance: DreamAppearance;
+  onEntryModeChange: (mode: DreamEntryMode) => void;
+  onScenarioScriptIdChange: (scriptId: string) => void;
   onAppearanceChange: (patch: Partial<DreamAppearance>) => void;
   onClose: () => void;
 }
@@ -114,11 +121,13 @@ function SelectPref<T extends string>({
   options,
   labels,
   onChange,
+  disabled = false,
 }: {
   value: T;
   options: T[];
   labels: Record<T, string>;
   onChange: (v: T) => void;
+  disabled?: boolean;
 }) {
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -126,14 +135,16 @@ function SelectPref<T extends string>({
         <button
           key={opt}
           type="button"
+          disabled={disabled}
           onClick={() => onChange(opt)}
           style={{
-            padding: '4px 10px', borderRadius: 8, fontSize: 'calc(11px * var(--dream-theme-font-scale, 1))', cursor: 'pointer',
+            padding: '4px 10px', borderRadius: 8, fontSize: 'calc(11px * var(--dream-theme-font-scale, 1))', cursor: disabled ? 'not-allowed' : 'pointer',
             fontFamily: 'var(--font-mono)', letterSpacing: 0.8,
             background: value === opt ? 'var(--dt-flower-dandelion)' : 'var(--dt-surface-2)',
             color: value === opt ? 'var(--dt-ink)' : 'var(--dt-ink-3)',
             border: value === opt ? '1px solid transparent' : '1px solid var(--dt-border-soft)',
             transition: 'background 0.15s, color 0.15s',
+            opacity: disabled ? 0.55 : 1,
           }}
         >
           {labels[opt]}
@@ -149,6 +160,125 @@ function StatusItem({ label, value, detail }: { label: string; value: string; de
       <div className="dream-prefs__status-label">{label}</div>
       <div className="dream-prefs__status-value">{value}</div>
       {detail && <div className="dream-prefs__status-detail">{detail}</div>}
+    </div>
+  );
+}
+
+function scenarioValue(value: string | number | null | undefined): string {
+  if (value === null || value === undefined || value === '') return '—';
+  return String(value);
+}
+
+function formatDreamMode(mode: string | null | undefined): string {
+  if (mode === 'sandbox') return 'sandbox / 沙盒';
+  if (mode === 'scenario') return 'scenario / 剧本';
+  if (mode === 'mirror') return 'mirror / 镜像';
+  return scenarioValue(mode);
+}
+
+function getScenarioState(dreamState: DreamState): DreamScenarioState {
+  return dreamState.scenario ?? {
+    script_id: dreamState.script_id,
+    current_stage_id: dreamState.current_stage_id,
+    stage_turns: dreamState.stage_turns,
+    ending_state: dreamState.ending_state,
+    last_progress_signal: dreamState.last_progress_signal,
+    satisfied_streak: dreamState.satisfied_streak,
+    last_matched_exit_signs: dreamState.last_matched_exit_signs,
+    last_blocked_events: dreamState.last_blocked_events,
+  };
+}
+
+function getMirrorState(dreamState: DreamState): DreamMirrorCoreState {
+  return dreamState.mirror_core ?? dreamState.mirror ?? {};
+}
+
+function MirrorStateGroup({ dreamState }: { dreamState: DreamState }) {
+  const mode = dreamState.dream_mode ?? dreamState.mode;
+  if (mode !== 'mirror') return null;
+
+  const mirror = getMirrorState(dreamState);
+  const bucketEntries = Object.entries(mirror.snapshot_buckets ?? {});
+  const hints = mirror.symbolic_hints ?? [];
+
+  return (
+    <div className="dream-prefs__group">
+      <div className="dream-prefs__group-head">
+        <div className="dream-prefs__group-title">镜像模式状态</div>
+        <div className="dream-prefs__group-hint">Mirror v0.1 · 只读后端 snapshot · 不写回长期状态</div>
+      </div>
+      <div className="dream-prefs__status-grid">
+        <StatusItem label="模式" value={formatDreamMode(mode)} detail="MODE" />
+        <StatusItem label="Mirror" value="v0.1" detail="MIRROR MODE" />
+        <StatusItem label="版本" value={scenarioValue(mirror.version)} detail="MIRROR CORE VERSION" />
+        <StatusItem label="来源" value={scenarioValue(mirror.source)} detail="SOURCE" />
+        <StatusItem label="Bucket" value={bucketEntries.length ? `${bucketEntries.length} 项` : '—'} detail="SNAPSHOT BUCKETS" />
+        <StatusItem label="Hints" value={hints.length ? `${hints.length} 条` : '—'} detail="SYMBOLIC HINTS" />
+      </div>
+      {(bucketEntries.length > 0 || hints.length > 0) && (
+        <details className="dream-prefs__scenario-details">
+          <summary>展开 Mirror 调试详情</summary>
+          {bucketEntries.length > 0 && (
+            <div className="dream-prefs__scenario-detail">
+              <div>SNAPSHOT BUCKETS</div>
+              <ul>{bucketEntries.map(([key, value]) => <li key={key}>{key}: {value}</li>)}</ul>
+            </div>
+          )}
+          {hints.length > 0 && (
+            <div className="dream-prefs__scenario-detail">
+              <div>SYMBOLIC HINTS</div>
+              <ul>{hints.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ul>
+            </div>
+          )}
+        </details>
+      )}
+    </div>
+  );
+}
+
+function ScenarioStateGroup({ dreamState }: { dreamState: DreamState }) {
+  const mode = dreamState.dream_mode ?? dreamState.mode;
+  if (mode !== 'scenario') return null;
+
+  const scenario = getScenarioState(dreamState);
+  const completed = scenario.ending_state === 'completed';
+  const matchedExitSigns = scenario.last_matched_exit_signs ?? [];
+  const blockedEvents = scenario.last_blocked_events ?? [];
+  const hasDetails = matchedExitSigns.length > 0 || blockedEvents.length > 0;
+
+  return (
+    <div className="dream-prefs__group">
+      <div className="dream-prefs__group-head">
+        <div className="dream-prefs__group-title">剧本模式状态</div>
+        <div className="dream-prefs__group-hint">只读开发信息 · 阶段推进与完成状态由后端负责</div>
+      </div>
+      {completed && <div className="dream-prefs__scenario-complete">剧本已完成</div>}
+      <div className="dream-prefs__status-grid">
+        <StatusItem label="模式" value={formatDreamMode(mode)} detail="MODE" />
+        <StatusItem label="剧本" value={scenarioValue(scenario.script_id)} detail="SCRIPT ID" />
+        <StatusItem label="当前阶段" value={scenarioValue(scenario.current_stage_id)} detail="CURRENT STAGE ID" />
+        <StatusItem label="阶段轮次" value={scenarioValue(scenario.stage_turns)} detail="STAGE TURNS" />
+        <StatusItem label="进展信号" value={scenarioValue(scenario.last_progress_signal)} detail="DEV · LAST PROGRESS SIGNAL" />
+        <StatusItem label="满足连续数" value={scenarioValue(scenario.satisfied_streak)} detail="DEV · SATISFIED STREAK" />
+        <StatusItem label="结束状态" value={scenarioValue(scenario.ending_state)} detail="ENDING STATE" />
+      </div>
+      {hasDetails && (
+        <details className="dream-prefs__scenario-details">
+          <summary>展开 Scenario 调试详情</summary>
+          {matchedExitSigns.length > 0 && (
+            <div className="dream-prefs__scenario-detail">
+              <div>LAST MATCHED EXIT SIGNS</div>
+              <ul>{matchedExitSigns.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ul>
+            </div>
+          )}
+          {blockedEvents.length > 0 && (
+            <div className="dream-prefs__scenario-detail">
+              <div>LAST BLOCKED EVENTS</div>
+              <ul>{blockedEvents.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ul>
+            </div>
+          )}
+        </details>
+      )}
     </div>
   );
 }
@@ -189,7 +319,17 @@ function BackgroundImportCard({
   );
 }
 
-export function DreamPrefsPane({ open, dreamState, appearance, onAppearanceChange, onClose }: DreamPrefsPaneProps) {
+export function DreamPrefsPane({
+  open,
+  dreamState,
+  entryMode,
+  scenarioScriptId,
+  appearance,
+  onEntryModeChange,
+  onScenarioScriptIdChange,
+  onAppearanceChange,
+  onClose,
+}: DreamPrefsPaneProps) {
   const [settings, setSettings] = useState<DreamSettings | null>(null);
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -621,6 +761,40 @@ export function DreamPrefsPane({ open, dreamState, appearance, onAppearanceChang
             <div className="dream-prefs__groups">
               <div className="dream-prefs__group">
                 <div className="dream-prefs__group-head">
+                  <div className="dream-prefs__group-title">入梦模式</div>
+                  <div className="dream-prefs__group-hint">选择下一次进入梦境时使用的模式 · 梦境进行中不可切换</div>
+                </div>
+                <SettingRow label="模式" deferred={isDreamActive}>
+                  <SelectPref<DreamEntryMode>
+                    value={entryMode}
+                    options={['sandbox', 'scenario', 'mirror']}
+                    labels={{ sandbox: '沙盒', scenario: '剧本', mirror: '镜像' }}
+                    onChange={onEntryModeChange}
+                    disabled={isDreamActive}
+                  />
+                </SettingRow>
+                {entryMode === 'scenario' && (
+                  <SettingRow label="剧本 ID" hint="对应后端 data/dream/scenarios/{script_id}.yaml" deferred={isDreamActive}>
+                    <input
+                      className="dream-prefs__text-input"
+                      type="text"
+                      value={scenarioScriptId}
+                      disabled={isDreamActive}
+                      placeholder="例如 prison_demo"
+                      spellCheck={false}
+                      onChange={event => onScenarioScriptIdChange(event.target.value)}
+                    />
+                  </SettingRow>
+                )}
+                {entryMode === 'mirror' && (
+                  <div className="dream-prefs__mode-note">
+                    镜像梦：根据现实状态与内在状态生成隐喻梦境。当前为 v0.1，只读，不写回长期状态。
+                  </div>
+                )}
+              </div>
+
+              <div className="dream-prefs__group">
+                <div className="dream-prefs__group-head">
                   <div className="dream-prefs__group-title">梦境世界卡</div>
                   <div className="dream-prefs__group-hint">选择下一次入梦时使用的独立世界层</div>
                 </div>
@@ -648,6 +822,9 @@ export function DreamPrefsPane({ open, dreamState, appearance, onAppearanceChang
                   />
                 </SettingRow>
               </div>
+
+              {dreamState && <ScenarioStateGroup dreamState={dreamState} />}
+              {dreamState && <MirrorStateGroup dreamState={dreamState} />}
             </div>
           )}
 

@@ -17,11 +17,47 @@ export interface DreamFlowEntry {
 
 export type DreamFlowEntrySource = string | DreamFlowEntry;
 
+export interface DreamScenarioState {
+  script_id?: string | null;
+  current_stage_id?: string | null;
+  stage_turns?: number | null;
+  ending_state?: string | null;
+  last_progress_signal?: string | null;
+  satisfied_streak?: number | null;
+  last_matched_exit_signs?: string[];
+  last_blocked_events?: string[];
+}
+
+export interface DreamMirrorCoreState {
+  version?: string;
+  source?: string;
+  snapshot_buckets?: Record<string, string>;
+  symbolic_hints?: string[];
+}
+
 export interface DreamState {
   status: DreamStatus;
+  active?: boolean;
   dream_id?: string;
   frozen_world?: string;
   lucid_mode?: string;
+  /** Dream runtime mode. Older/newer backends may expose either field name. */
+  dream_mode?: 'sandbox' | 'scenario' | 'mirror' | string;
+  mode?: 'sandbox' | 'scenario' | 'mirror' | string;
+  /** Scenario progress is backend-owned and read-only in the client. */
+  scenario?: DreamScenarioState;
+  /** Mirror Mode v0.1 projected read-only state. Backend owns the snapshot. */
+  mirror_core?: DreamMirrorCoreState;
+  mirror?: DreamMirrorCoreState;
+  /** Flat scenario fields are retained for compatibility with alternate projections. */
+  script_id?: string | null;
+  current_stage_id?: string | null;
+  stage_turns?: number | null;
+  ending_state?: string | null;
+  last_progress_signal?: string | null;
+  satisfied_streak?: number | null;
+  last_matched_exit_signs?: string[];
+  last_blocked_events?: string[];
   /** Her cyber body numbers — user sees own numbers always (orthogonal to boundary_level). */
   body: {
     heat: number;       // 0–100
@@ -52,7 +88,16 @@ export interface DreamState {
 export interface DreamEnterResponse {
   ok: boolean;
   dream_id?: string;
+  dream_mode?: DreamEntryMode;
   error?: string;
+}
+
+export type DreamEntryMode = 'sandbox' | 'scenario' | 'mirror';
+
+export interface DreamEnterOptions {
+  entry_reason?: string;
+  dream_mode?: DreamEntryMode;
+  script_id?: string;
 }
 
 export interface DreamChatResponse {
