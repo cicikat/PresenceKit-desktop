@@ -9,8 +9,8 @@ export interface NarrativeSegment {
 
 export type ServerMessage =
   | { type: 'hello_ack'; server_version: string }
-  | { type: 'channel_message'; content: string; msg_id: string }
-  | { type: 'message_segments'; content: string; segments: NarrativeSegment[]; msg_id: string }
+  | { type: 'channel_message'; content: string; msg_id: string; source?: string }
+  | { type: 'message_segments'; content: string; segments: NarrativeSegment[]; msg_id: string; source?: string }
   | { type: 'action'; action: DesktopActionPayload; msg_id: string }
   | { type: 'ping' };
 

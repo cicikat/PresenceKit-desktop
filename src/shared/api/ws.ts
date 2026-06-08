@@ -3,8 +3,8 @@ import type { ServerMessage, ClientMessage, ConnectionState, DesktopActionPayloa
 
 type EventMap = {
   state: ConnectionState;
-  channel_message: { content: string; msg_id: string };
-  message_segments: { content: string; segments: NarrativeSegment[]; msg_id: string };
+  channel_message: { content: string; msg_id: string; source?: string };
+  message_segments: { content: string; segments: NarrativeSegment[]; msg_id: string; source?: string };
   action: DesktopActionPayload;
 };
 
@@ -111,12 +111,12 @@ class WSClient {
           this._setState('connected');
           break;
         case 'channel_message':
-          this.emit('channel_message', { content: msg.content, msg_id: msg.msg_id });
+          this.emit('channel_message', { content: msg.content, msg_id: msg.msg_id, source: msg.source });
           this._send({ type: 'ack', msg_id: msg.msg_id, ok: true });
           break;
         case 'message_segments':
           // Phase 1: emit for future consumers; no ack needed (fire-and-forget)
-          this.emit('message_segments', { content: msg.content, segments: msg.segments, msg_id: msg.msg_id });
+          this.emit('message_segments', { content: msg.content, segments: msg.segments, msg_id: msg.msg_id, source: msg.source });
           break;
         case 'action':
           this.emit('action', msg.action);

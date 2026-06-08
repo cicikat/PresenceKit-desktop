@@ -688,8 +688,10 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       if (mounted) wsClient.connect(cfg.websocketBase);
     });
 
-    const unsubMsg = wsClient.on('channel_message', ({ content, msg_id }) => {
+    const unsubMsg = wsClient.on('channel_message', ({ content, msg_id, source }) => {
       if (dreamActiveRef.current) return;
+      // Defense: only consume reality messages (source field added P0; old server = no source = reality).
+      if (source && source !== 'reality') return;
 
       let duplicateDropped = false;
 
@@ -717,7 +719,9 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       scheduleAssistantSegments(content, msg_id);
     });
 
-    const unsubSegs = wsClient.on('message_segments', ({ content, segments, msg_id }) => {
+    const unsubSegs = wsClient.on('message_segments', ({ content, segments, msg_id, source }) => {
+      // Defense: only consume reality segments.
+      if (source && source !== 'reality') return;
       const localIds = wsMsgIdToLocalIdsRef.current.get(msg_id);
       if (localIds && localIds.length > 0) {
         // Bubbles already exist — update their segmentedContent in place
