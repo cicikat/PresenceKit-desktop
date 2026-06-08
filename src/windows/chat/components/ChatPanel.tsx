@@ -25,6 +25,18 @@ function splitReply(text: string): string[] {
   return text.split(/\n+/).map(s => s.trim()).filter(s => s.length > 0);
 }
 
+// Strip leading parenthetical action/narration blocks so that raw HTTP reply and
+// cleaned message_segments content can be matched against each other for dedup.
+function normalizeForDedup(text: string): string {
+  return text
+    .replace(/^([（(][^）)\n]*[）)]\s*)+/, '')
+    .replace(/^(\*[^*\n]*\*\s*)+/, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80)
+    .toLowerCase();
+}
+
 // ── 日期工具 ────────────────────────────────────────────────────────────────
 
 function todayStr() {
@@ -51,6 +63,13 @@ interface ChatMsg {
   wsMsgId?: string;
   segments?: NarrativeSegment[];
   segmentedContent?: string;
+}
+
+interface FallbackRecord {
+  sourceKind: 'send' | 'wake' | 'upload';
+  normalizedHash: string;
+  renderedAt: number;
+  renderedMsgIds: string[];
 }
 
 let _msgIdCounter = 0;
@@ -319,6 +338,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
   const [input, setInput] = useState('');
   const [typing, setTyping] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [wakeLoading, setWakeLoading] = useState(false);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
 
@@ -350,6 +370,11 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
   // send() / uploadDocument HTTP fallback: same pattern as desktopWake.
   // WS channel_message supersedes the HTTP reply; HTTP only renders if WS never arrives.
   const pendingSendReplyRef = useRef<{ timerId: ReturnType<typeof setTimeout>; reply: string } | null>(null);
+
+  // Tracks fallbacks that already rendered (timer fired before WS arrived).
+  // Allows late-arriving channel_message to replace/skip rather than double-append.
+  // Entries expire after 15s; keyed by normalizeForDedup() of the reply text.
+  const recentFallbacksRef = useRef<FallbackRecord[]>([]);
 
   // Dream 打开期间屏蔽 channel_message
   const dreamActiveRef = useRef(dreamActive);
@@ -433,33 +458,44 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
           // message as an "unreplayed trigger" on the next startup.
           const lastAssistantMsg = msgs.filter(m => m.role === 'assistant').slice(-1)[0];
           const historyCursorSec = lastAssistantMsg ? lastAssistantMsg.time / 1000 + 60 : undefined;
+          if (mounted) setWakeLoading(true);
           try {
             const wakeResp = await desktopWake(historyCursorSec);
             if (mounted && wakeResp.reply) {
               const parts = wakeResp.reply.split(/\n+/).map(s => s.trim()).filter(Boolean);
-              console.log('[wake] HTTP response received, wsState:', wsClient.getState(), 'source:', wakeResp.source, 'segments:', parts.length, 'didAppendHttpReply: false (deferred)');
+              console.log('[wake] httpDone | loadingSource: wake | waitingForWs: true | wsState:', wsClient.getState(), '| source:', wakeResp.source, '| segments:', parts.length);
               // Do NOT render directly — WS channel_message is the primary render path.
               // Store as fallback and render only if WS never delivers within 5s.
               const timerId = setTimeout(() => {
                 if (!pendingWakeReplyRef.current) return; // already handled by WS
                 pendingWakeReplyRef.current = null;
-                console.log('[wake] WS timeout — rendering HTTP fallback, wsState:', wsClient.getState(), 'didAppendHttpReply: true');
+                const fallbackIds = parts.map(() => newId());
+                const normalizedHash = normalizeForDedup(wakeResp.reply);
+                const now = Date.now();
+                recentFallbacksRef.current = [
+                  ...recentFallbacksRef.current.filter(r => now - r.renderedAt < 15000),
+                  { sourceKind: 'wake' as const, normalizedHash, renderedAt: now, renderedMsgIds: fallbackIds },
+                ];
+                console.log('[chat] loadingClearedBy: fallback | loadingSource: wake | normalizedHash:', normalizedHash, '| partsCount:', parts.length, '| renderedMsgIds:', fallbackIds, '| wsState:', wsClient.getState());
+                setWakeLoading(false);
                 setMessages(prev => [
                   ...prev,
                   ...parts.map((text, idx) => ({
-                    id: newId(),
+                    id: fallbackIds[idx],
                     role: 'assistant' as const,
                     text,
-                    time: Date.now() + idx,
+                    time: now + idx,
                   })),
                 ]);
               }, 5000);
               pendingWakeReplyRef.current = { timerId, parts };
-            } else {
+            } else if (mounted) {
               console.log('[wake] HTTP response received, no reply, source:', wakeResp.source);
+              setWakeLoading(false);
             }
           } catch (wakeErr) {
             console.warn('[chat] desktop_wake 失败:', wakeErr);
+            if (mounted) setWakeLoading(false);
           }
         }
       } catch (err) {
@@ -589,12 +625,13 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
     };
   }, []);
 
-  const scheduleAssistantSegments = useCallback((fullText: string, wsMsgId?: string) => {
+  const scheduleAssistantSegments = useCallback((fullText: string, wsMsgId?: string, preGeneratedIds?: string[]) => {
     const textParts = splitReply(fullText);
     if (textParts.length === 0) return;
-    const contentHash = fullText.slice(0, 32).replace(/\s+/g, ' ');
+    const contentHashRaw = fullText.slice(0, 32).replace(/\s+/g, ' ');
+    const contentHashNormalized = normalizeForDedup(fullText);
     const appendSource = wsMsgId ? 'channel_message_segments' : 'http_fallback';
-    console.log('[chat] scheduleAssistantSegments | appendSource:', appendSource, '| msg_id:', wsMsgId ?? '(none)', '| partsCount:', textParts.length, '| contentHash:', contentHash, '| timestamp:', Date.now());
+    console.log('[chat] scheduleAssistantSegments | appendSource:', appendSource, '| msg_id:', wsMsgId ?? '(none)', '| partsCount:', textParts.length, '| contentHashRaw:', contentHashRaw, '| contentHashNormalized:', contentHashNormalized, '| pendingWake:', !!pendingWakeReplyRef.current, '| pendingSend:', !!pendingSendReplyRef.current, '| timestamp:', Date.now());
     publishPetSnapshot({
       thinking: false,
       latestAssistantText: summarizePetReply(fullText),
@@ -608,8 +645,10 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
     const pending = wsMsgId ? pendingSegmentsByMsgIdRef.current.get(wsMsgId) : undefined;
     const strippedParts = pending ? splitReply(pending.content) : null;
 
-    // Pre-generate ids so we can register them in the ref before setMessages resolves
-    const localIds = textParts.map(() => newId());
+    // Pre-generate ids so we can register them in the ref before setMessages resolves.
+    // Caller may supply pre-generated IDs so they can record them in recentFallbacksRef
+    // before the first setMessages call fires.
+    const localIds = preGeneratedIds ?? textParts.map(() => newId());
 
     if (wsMsgId) {
       wsMsgIdToLocalIdsRef.current.set(wsMsgId, localIds);
@@ -649,8 +688,8 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
   }, [engine]);
 
   useEffect(() => {
-    publishPetSnapshot({ thinking: loading });
-  }, [loading]);
+    publishPetSnapshot({ thinking: loading || wakeLoading });
+  }, [loading, wakeLoading]);
 
   // ── 自动滚到底（仅新消息 append 时）──────────────────────────────────────
 
@@ -700,7 +739,8 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         clearTimeout(pendingWakeReplyRef.current.timerId);
         pendingWakeReplyRef.current = null;
         duplicateDropped = true;
-        console.log('[chat] appendSource: channel_message_full | msg_id:', msg_id, '| cancelledPending: wake | duplicateDropped: true');
+        setWakeLoading(false);
+        console.log('[chat] loadingClearedBy: ws | loadingSource: wake | msg_id:', msg_id, '| cancelledPending: wake | pendingSend:', !!pendingSendReplyRef.current);
       }
 
       // Cancel send()/uploadDocument HTTP fallback — WS supersedes HTTP reply.
@@ -708,13 +748,38 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         clearTimeout(pendingSendReplyRef.current.timerId);
         pendingSendReplyRef.current = null;
         duplicateDropped = true;
-        console.log('[chat] appendSource: channel_message_full | msg_id:', msg_id, '| cancelledPending: send | duplicateDropped: true');
+        setLoading(false);
+        console.log('[chat] loadingClearedBy: ws | loadingSource: send | msg_id:', msg_id, '| cancelledPending: send | pendingWake: false | pendingSend: false');
       }
 
-      if (!duplicateDropped) {
-        const contentHash = content.length > 0 ? content.slice(0, 32).replace(/\s+/g, ' ') : '(empty)';
-        console.log('[chat] appendSource: channel_message_full | msg_id:', msg_id, '| contentHash:', contentHash, '| duplicateDropped: false');
+      // Check if a fallback was already rendered (timer fired before WS arrived).
+      // In that case, wire the fallback bubble IDs to this msg_id and return early —
+      // message_segments will then update those bubbles' segmentedContent in place.
+      const normalizedHash = normalizeForDedup(content);
+      const now = Date.now();
+      recentFallbacksRef.current = recentFallbacksRef.current.filter(r => now - r.renderedAt < 15000);
+      const matchedFallback = recentFallbacksRef.current.find(r => r.normalizedHash === normalizedHash);
+      if (matchedFallback) {
+        recentFallbacksRef.current = recentFallbacksRef.current.filter(r => r !== matchedFallback);
+        // Wire fallback bubble IDs to this msg_id so message_segments can update segmentedContent
+        wsMsgIdToLocalIdsRef.current.set(msg_id, matchedFallback.renderedMsgIds);
+        // Apply pending message_segments immediately if they already arrived before channel_message
+        const pending = pendingSegmentsByMsgIdRef.current.get(msg_id);
+        if (pending) {
+          pendingSegmentsByMsgIdRef.current.delete(msg_id);
+          const strippedParts = splitReply(pending.content);
+          setMessages(prev => prev.map(m => {
+            const idx = matchedFallback.renderedMsgIds.indexOf(m.id);
+            if (idx === -1) return m;
+            return { ...m, segments: pending.segments, segmentedContent: strippedParts[idx] ?? strippedParts[0] ?? m.text };
+          }));
+        }
+        console.log('[chat] appendSource: channel_message_segments | msg_id:', msg_id, '| replacedFallback: true | sourceKind:', matchedFallback.sourceKind, '| normalizedHash:', normalizedHash, '| renderedMsgIds:', matchedFallback.renderedMsgIds, '| pendingSegmentsApplied:', !!pending, '| pendingWake: false | pendingSend: false | duplicateDropped: false');
+        return;
       }
+
+      const contentHashRaw = content.length > 0 ? content.slice(0, 32).replace(/\s+/g, ' ') : '(empty)';
+      console.log('[chat] appendSource: channel_message_segments | msg_id:', msg_id, '| source:', source ?? 'reality', '| contentHashRaw:', contentHashRaw, '| normalizedHash:', normalizedHash, '| pendingWake:', !!pendingWakeReplyRef.current, '| pendingSend:', !!pendingSendReplyRef.current, '| duplicateDropped:', duplicateDropped, '| replacedFallback: false');
 
       scheduleAssistantSegments(content, msg_id);
     });
@@ -771,18 +836,26 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       // Do NOT render directly — WS channel_message is the primary render path.
       // Store as fallback; render only if WS never delivers within 3s.
       const contentHash = reply.slice(0, 32).replace(/\s+/g, ' ');
-      console.log('[chat] appendSource: sendChat_deferred | contentHash:', contentHash, '| partsCount:', reply.split(/\n+/).filter(Boolean).length, '| timestamp:', Date.now(), '| duplicateDropped: false (pending WS)');
       if (pendingSendReplyRef.current) {
         clearTimeout(pendingSendReplyRef.current.timerId);
       }
       const timerId = setTimeout(() => {
         if (!pendingSendReplyRef.current) return;
         pendingSendReplyRef.current = null;
-        const parts = reply.split(/\n+/).map(s => s.trim()).filter(Boolean);
-        console.log('[chat] appendSource: http_fallback | contentHash:', contentHash, '| partsCount:', parts.length, '| timestamp:', Date.now(), '| duplicateDropped: false (WS timeout)');
-        scheduleAssistantSegments(reply);
+        const parts = splitReply(reply);
+        const fallbackIds = parts.map(() => newId());
+        const normalizedHash = normalizeForDedup(reply);
+        const now = Date.now();
+        recentFallbacksRef.current = [
+          ...recentFallbacksRef.current.filter(r => now - r.renderedAt < 15000),
+          { sourceKind: 'send' as const, normalizedHash, renderedAt: now, renderedMsgIds: fallbackIds },
+        ];
+        console.log('[chat] loadingClearedBy: fallback | loadingSource: send | contentHashRaw:', contentHash, '| normalizedHash:', normalizedHash, '| partsCount:', parts.length, '| renderedMsgIds:', fallbackIds, '| timestamp:', now);
+        setLoading(false);
+        scheduleAssistantSegments(reply, undefined, fallbackIds);
       }, 3000);
       pendingSendReplyRef.current = { timerId, reply };
+      console.log('[chat] httpDone | loadingSource: send | waitingForWs: true | contentHash:', contentHash, '| partsCount:', reply.split(/\n+/).filter(Boolean).length, '| timestamp:', Date.now());
     } catch (err) {
       console.error('[chat] send 失败:', err);
       const msg = err instanceof Error ? err.message : String(err);
@@ -793,8 +866,8 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         text: is409 ? '（正在做梦中，请先退出梦境再聊天）' : `（连接失败：${msg}）`,
         time: Date.now(),
       }]);
-    } finally {
       setLoading(false);
+      console.log('[chat] loadingClearedBy: error | loadingSource: send');
     }
   };
 
@@ -814,17 +887,26 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       // Defer render same as send() — WS channel_message is primary path.
       const reply = resp.reply;
       const contentHash = reply.slice(0, 32).replace(/\s+/g, ' ');
-      console.log('[chat] appendSource: uploadDocument_deferred | contentHash:', contentHash, '| partsCount:', reply.split(/\n+/).filter(Boolean).length, '| timestamp:', Date.now(), '| duplicateDropped: false (pending WS)');
       if (pendingSendReplyRef.current) {
         clearTimeout(pendingSendReplyRef.current.timerId);
       }
       const timerId = setTimeout(() => {
         if (!pendingSendReplyRef.current) return;
         pendingSendReplyRef.current = null;
-        console.log('[chat] appendSource: http_fallback (upload) | contentHash:', contentHash, '| timestamp:', Date.now(), '| duplicateDropped: false (WS timeout)');
-        scheduleAssistantSegments(reply);
+        const parts = splitReply(reply);
+        const fallbackIds = parts.map(() => newId());
+        const normalizedHash = normalizeForDedup(reply);
+        const now = Date.now();
+        recentFallbacksRef.current = [
+          ...recentFallbacksRef.current.filter(r => now - r.renderedAt < 15000),
+          { sourceKind: 'upload' as const, normalizedHash, renderedAt: now, renderedMsgIds: fallbackIds },
+        ];
+        console.log('[chat] loadingClearedBy: fallback | loadingSource: upload | contentHashRaw:', contentHash, '| normalizedHash:', normalizedHash, '| partsCount:', parts.length, '| renderedMsgIds:', fallbackIds, '| timestamp:', now);
+        setLoading(false);
+        scheduleAssistantSegments(reply, undefined, fallbackIds);
       }, 3000);
       pendingSendReplyRef.current = { timerId, reply };
+      console.log('[chat] httpDone | loadingSource: upload | waitingForWs: true | contentHash:', contentHash, '| partsCount:', reply.split(/\n+/).filter(Boolean).length, '| timestamp:', Date.now());
     } catch (err: any) {
       let msg = '上传失败';
       if (err && typeof err === 'object' && 'kind' in err) {
@@ -842,8 +924,8 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       setMessages(prev => [...prev, {
         id: newId(), role: 'system', text: `(${msg})`, time: Date.now(),
       }]);
-    } finally {
       setLoading(false);
+      console.log('[chat] loadingClearedBy: error | loadingSource: upload');
     }
   }, [input, scheduleAssistantSegments]);
 
@@ -1046,7 +1128,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
           />
         ))}
 
-        {(typing || loading) && (
+        {(typing || loading || wakeLoading) && (
           <div style={{ display: 'flex', gap: 10, padding: '8px 0', alignItems: 'flex-start' }}>
             <div style={{ paddingTop: 6 }}>
               <BreathingAvatar engine={engine} hue={currentHue} size={36} dataUrl={herDataUrl} />
