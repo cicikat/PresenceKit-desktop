@@ -347,6 +347,10 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
   // WS channel_message is the primary render path; HTTP reply only renders if WS never arrives.
   const pendingWakeReplyRef = useRef<{ timerId: ReturnType<typeof setTimeout>; parts: string[] } | null>(null);
 
+  // send() / uploadDocument HTTP fallback: same pattern as desktopWake.
+  // WS channel_message supersedes the HTTP reply; HTTP only renders if WS never arrives.
+  const pendingSendReplyRef = useRef<{ timerId: ReturnType<typeof setTimeout>; reply: string } | null>(null);
+
   // Dream 打开期间屏蔽 channel_message
   const dreamActiveRef = useRef(dreamActive);
   useEffect(() => { dreamActiveRef.current = dreamActive; }, [dreamActive]);
@@ -471,6 +475,10 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         clearTimeout(pendingWakeReplyRef.current.timerId);
         pendingWakeReplyRef.current = null;
       }
+      if (pendingSendReplyRef.current) {
+        clearTimeout(pendingSendReplyRef.current.timerId);
+        pendingSendReplyRef.current = null;
+      }
     };
   }, []);
 
@@ -584,6 +592,9 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
   const scheduleAssistantSegments = useCallback((fullText: string, wsMsgId?: string) => {
     const textParts = splitReply(fullText);
     if (textParts.length === 0) return;
+    const contentHash = fullText.slice(0, 32).replace(/\s+/g, ' ');
+    const appendSource = wsMsgId ? 'channel_message_segments' : 'http_fallback';
+    console.log('[chat] scheduleAssistantSegments | appendSource:', appendSource, '| msg_id:', wsMsgId ?? '(none)', '| partsCount:', textParts.length, '| contentHash:', contentHash, '| timestamp:', Date.now());
     publishPetSnapshot({
       thinking: false,
       latestAssistantText: summarizePetReply(fullText),
@@ -679,16 +690,30 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
 
     const unsubMsg = wsClient.on('channel_message', ({ content, msg_id }) => {
       if (dreamActiveRef.current) return;
-      // Cancel any pending HTTP wake fallback — WS is the primary render path.
-      // This prevents the double-render where desktopWake HTTP reply and WS channel_message
-      // both append the same assistant turn.
+
+      let duplicateDropped = false;
+
+      // Cancel desktopWake HTTP fallback — WS is the primary render path.
       if (pendingWakeReplyRef.current) {
         clearTimeout(pendingWakeReplyRef.current.timerId);
         pendingWakeReplyRef.current = null;
-        console.log('[wake] WS channel_message arrived — cancelled HTTP fallback, msg_id:', msg_id, 'duplicateDropped: true');
-      } else {
-        console.log('[wake] WS channel_message received, msg_id:', msg_id, 'duplicateDropped: false');
+        duplicateDropped = true;
+        console.log('[chat] appendSource: channel_message_full | msg_id:', msg_id, '| cancelledPending: wake | duplicateDropped: true');
       }
+
+      // Cancel send()/uploadDocument HTTP fallback — WS supersedes HTTP reply.
+      if (pendingSendReplyRef.current) {
+        clearTimeout(pendingSendReplyRef.current.timerId);
+        pendingSendReplyRef.current = null;
+        duplicateDropped = true;
+        console.log('[chat] appendSource: channel_message_full | msg_id:', msg_id, '| cancelledPending: send | duplicateDropped: true');
+      }
+
+      if (!duplicateDropped) {
+        const contentHash = content.length > 0 ? content.slice(0, 32).replace(/\s+/g, ' ') : '(empty)';
+        console.log('[chat] appendSource: channel_message_full | msg_id:', msg_id, '| contentHash:', contentHash, '| duplicateDropped: false');
+      }
+
       scheduleAssistantSegments(content, msg_id);
     });
 
@@ -739,7 +764,21 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
     setLoading(true);
     try {
       const { reply } = await sendChat(t);
-      scheduleAssistantSegments(reply);
+      // Do NOT render directly — WS channel_message is the primary render path.
+      // Store as fallback; render only if WS never delivers within 3s.
+      const contentHash = reply.slice(0, 32).replace(/\s+/g, ' ');
+      console.log('[chat] appendSource: sendChat_deferred | contentHash:', contentHash, '| partsCount:', reply.split(/\n+/).filter(Boolean).length, '| timestamp:', Date.now(), '| duplicateDropped: false (pending WS)');
+      if (pendingSendReplyRef.current) {
+        clearTimeout(pendingSendReplyRef.current.timerId);
+      }
+      const timerId = setTimeout(() => {
+        if (!pendingSendReplyRef.current) return;
+        pendingSendReplyRef.current = null;
+        const parts = reply.split(/\n+/).map(s => s.trim()).filter(Boolean);
+        console.log('[chat] appendSource: http_fallback | contentHash:', contentHash, '| partsCount:', parts.length, '| timestamp:', Date.now(), '| duplicateDropped: false (WS timeout)');
+        scheduleAssistantSegments(reply);
+      }, 3000);
+      pendingSendReplyRef.current = { timerId, reply };
     } catch (err) {
       console.error('[chat] send 失败:', err);
       const msg = err instanceof Error ? err.message : String(err);
@@ -768,7 +807,20 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
     try {
       const resp = await uploadDocument(filePath, userMessage);
       if (resp.turn_id) processedTurnIdsRef.current.add(resp.turn_id);
-      scheduleAssistantSegments(resp.reply);
+      // Defer render same as send() — WS channel_message is primary path.
+      const reply = resp.reply;
+      const contentHash = reply.slice(0, 32).replace(/\s+/g, ' ');
+      console.log('[chat] appendSource: uploadDocument_deferred | contentHash:', contentHash, '| partsCount:', reply.split(/\n+/).filter(Boolean).length, '| timestamp:', Date.now(), '| duplicateDropped: false (pending WS)');
+      if (pendingSendReplyRef.current) {
+        clearTimeout(pendingSendReplyRef.current.timerId);
+      }
+      const timerId = setTimeout(() => {
+        if (!pendingSendReplyRef.current) return;
+        pendingSendReplyRef.current = null;
+        console.log('[chat] appendSource: http_fallback (upload) | contentHash:', contentHash, '| timestamp:', Date.now(), '| duplicateDropped: false (WS timeout)');
+        scheduleAssistantSegments(reply);
+      }, 3000);
+      pendingSendReplyRef.current = { timerId, reply };
     } catch (err: any) {
       let msg = '上传失败';
       if (err && typeof err === 'object' && 'kind' in err) {
