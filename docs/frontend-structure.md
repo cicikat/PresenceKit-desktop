@@ -463,3 +463,21 @@ Tauri 命令：
 - mood/activity/presence 只通过 `StateEngine` 改。
 - Sidebar 四个 tab 接数据时优先保留 `Sidebar.tsx` 的占位入口和 `components/archive/Sidebar.legacy.tsx` 的视觉参考关系。
 - 桌宠迁入时不要把宠物状态复制成另一份 store；先设计聊天窗口和宠物窗口共享 engine 的方式。
+
+---
+
+## Dream 模式状态显示
+
+文件：`src/windows/dream/components/DreamPrefsPane.tsx`
+
+- 在 Dream 偏好窗口的“世界”页显示 Dream 模式选择和只读状态，不挂载到 Chat。
+- “入梦模式”提供沙盒 / 剧本 / 镜像按钮；剧本模式额外填写 `script_id`。选择只影响下一次
+  点击“进入梦境”时提交的参数，梦境进行中按钮和输入框禁用。
+- Mirror 模式不显示 `script_id` 输入框；仅显示 v0.1 只读说明。
+- 数据来自 `DreamWindow` 传入的 `dreamState`，复用 `useDreamState()` 对
+  `GET /dream/state` 的既有刷新；不新增 WebSocket 或轮询体系。
+- 仅当 `dreamState.dream_mode ?? dreamState.mode` 为 `scenario` 时显示 Scenario dev 分组；
+  兼容后端返回 `scenario` 嵌套对象或平铺字段，字段缺失时显示 `—`。
+- 仅当 mode 为 `mirror` 时显示 Mirror dev 分组；兼容 `mirror_core` 或 `mirror`，字段缺失时显示 `—`。
+- `ending_state === "completed"` 显示“剧本已完成”，但不触发退出。
+- 前端不推进 stage、不模拟 `satisfied_streak`、不写回 scenario progress，也不读取或计算 hidden state / Mirror bucket。

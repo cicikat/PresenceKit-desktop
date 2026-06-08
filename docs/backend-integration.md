@@ -868,3 +868,50 @@ data/channel_queue.json
 - `qq-st-bot/admin/routers/chat_log.py`
 - `qq-st-bot/admin/routers/sensor.py`
 - `qq-st-bot/core/memory/realtime_state.py`
+
+---
+
+## HTTP：读取 Dream 模式状态
+
+当前真实路径：
+
+```text
+DreamWindow
+  → useDreamState()
+  → dreamGetState()
+  → Tauri invoke("dream_get_state")
+  → Rust reqwest GET http://127.0.0.1:8080/dream/state
+```
+
+Scenario / Mirror 状态 UI 只消费 `/dream/state`，显示位置是 Dream 偏好窗口的“世界”页。
+它不新增后端接口、WebSocket 或 progress 写回。Scenario 前端优先读取 `state.scenario`，
+并兼容同名平铺字段；Mirror 前端优先读取 `state.mirror_core`，并兼容 `state.mirror`。
+
+世界页的“入梦模式”复用现有 `POST /dream/enter`：
+
+```json
+{
+  "dream_mode": "scenario",
+  "script_id": "prison_demo"
+}
+```
+
+Mirror 入梦只提交模式，不提交 `script_id`：
+
+```json
+{
+  "dream_mode": "mirror"
+}
+```
+
+客户端提供 `sandbox` / `scenario` / `mirror` 三个同级按钮。选择值保存在本地 UI 偏好中，
+并由 `DreamWindow.handleEnter()` 在下一次入梦时提交；梦境进行中不可切换。
+
+- 只有 `state.dream_mode ?? state.mode` 为 `scenario` 时显示 Scenario dev 信息。
+- 只有 `state.dream_mode ?? state.mode` 为 `mirror` 时显示 Mirror dev 信息。
+- 缺失字段显示 `—`。
+- `ending_state === "completed"` 只显示完成状态，不自动关闭 Dream。
+- `last_progress_signal`、`satisfied_streak`、`last_matched_exit_signs` 和
+  `last_blocked_events` 仅用于只读 dev/debug 展示；stage transition 由后端负责。
+- Mirror dev 信息可显示 `version`、`source`、`snapshot_buckets` 和 `symbolic_hints`；客户端
+  不读取 hidden_state、不计算 bucket、不写回 Mirror 状态。

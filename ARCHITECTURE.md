@@ -302,3 +302,21 @@ Dream 背景按 `day` / `night` 分开记录。旧版单字段 `dream_background
 - P-02 已将 backend base、WebSocket base、admin token 和 sensor config 外化到 client config；`config/client.local.json` 不提交。`loadHistory()` 仍保留备用 user id 默认值，默认开发 token 仅作为无本地配置时的兼容 fallback，不代表生产鉴权方案。
 
 完整列表见 `docs/known-issues.md`。
+
+---
+
+## Dream 模式状态显示
+
+Dream 模式只在正式 Dream 系统内显示，不进入 Chat 侧边栏。当前实现位于
+`src/windows/dream/components/DreamPrefsPane.tsx` 的“偏好 / 世界”页，复用
+`DreamWindow` 中 `useDreamState()` 对 `GET /dream/state` 的既有刷新结果。
+
+- “入梦模式”提供沙盒 / 剧本 / 镜像按钮；选择结果保存在本地 UI 偏好中，并在下一次
+  `POST /dream/enter` 时作为 `dream_mode` 提交。剧本模式额外提交 `script_id`。梦境进行中不可切换。
+- 只有 `dream_mode ?? mode` 等于 `scenario` 时才渲染“剧本模式状态”分组。
+- 优先读取 `scenario` 嵌套字段，并兼容同名平铺字段。
+- 缺失字段显示 `—`；`ending_state === "completed"` 仅显示“剧本已完成”，不自动关闭 Dream。
+- Scenario progress 和 stage transition 完全由后端负责；客户端只读展示 dev/debug 信息。
+- 只有 `dream_mode ?? mode` 等于 `mirror` 时才渲染“镜像模式状态”分组；优先读取
+  `mirror_core`，并兼容 `mirror`。MirrorCore、hidden state snapshot、afterglow 和 impression
+  均由后端负责，客户端只读显示 version/source/buckets/hints。
