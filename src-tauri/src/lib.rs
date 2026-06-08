@@ -446,17 +446,22 @@ async fn dream_get_state(app: tauri::AppHandle) -> Result<serde_json::Value, Str
 }
 
 #[tauri::command]
-async fn dream_enter(app: tauri::AppHandle, entry_reason: Option<String>) -> Result<serde_json::Value, String> {
+async fn dream_enter(
+    app: tauri::AppHandle,
+    entry_reason: Option<String>,
+    dream_mode: Option<String>,
+    script_id: Option<String>,
+) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
     let client = reqwest::Client::builder().no_proxy().build().map_err(|e| e.to_string())?;
-    let body = match entry_reason {
-        Some(r) => serde_json::json!({ "entry_reason": r }),
-        None    => serde_json::json!({}),
-    };
+    let mut body = serde_json::Map::new();
+    if let Some(v) = entry_reason { body.insert("entry_reason".into(), v.into()); }
+    if let Some(v) = dream_mode { body.insert("dream_mode".into(), v.into()); }
+    if let Some(v) = script_id { body.insert("script_id".into(), v.into()); }
     let resp = client
         .post(backend_url(&cfg, "/dream/enter"))
         .bearer_auth(&cfg.admin_token)
-        .json(&body)
+        .json(&serde_json::Value::Object(body))
         .send()
         .await
         .map_err(|e| e.to_string())?;
