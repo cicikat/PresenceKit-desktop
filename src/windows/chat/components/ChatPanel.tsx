@@ -446,6 +446,8 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
           }
         }
 
+        const historyAssistantCount = msgs.filter(m => m.role === 'assistant').length;
+        console.log('[chat] appendSource: history-replay | phase: init | assistantBubbles:', historyAssistantCount, '| totalMsgs:', msgs.length);
         setMessages(msgs);
         setHistoryStatus({ kind: 'ok' });
 
@@ -471,28 +473,21 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
                 // Identity check: bail if WS already cancelled this specific timer
                 // (ref set to null) or a new wake replaced it (different timerId).
                 if (pendingWakeReplyRef.current?.timerId !== timerId) {
-                  console.log('[wake] fallbackSkippedBecauseCanceled: true | loadingSource: wake');
+                  console.log('[chat] appendSource: fallback-skipped | loadingSource: wake');
                   return;
                 }
                 pendingWakeReplyRef.current = null;
                 const fallbackIds = parts.map(() => newId());
                 const normalizedHash = normalizeForDedup(wakeResp.reply);
+                const contentHash = wakeResp.reply.slice(0, 32).replace(/\s+/g, ' ');
                 const now = Date.now();
                 recentFallbacksRef.current = [
                   ...recentFallbacksRef.current.filter(r => now - r.renderedAt < 15000),
                   { sourceKind: 'wake' as const, normalizedHash, renderedAt: now, renderedMsgIds: fallbackIds },
                 ];
-                console.log('[chat] loadingClearedBy: fallback | loadingSource: wake | normalizedHash:', normalizedHash, '| partsCount:', parts.length, '| renderedMsgIds:', fallbackIds, '| wsState:', wsClient.getState());
+                console.log('[chat] appendSource: fallback | loadingSource: wake | msg_id: (none) | contentHash:', contentHash, '| normalizedHash:', normalizedHash, '| partsCount:', parts.length, '| renderedMsgIds:', fallbackIds, '| wsState:', wsClient.getState());
                 setWakeLoading(false);
-                setMessages(prev => [
-                  ...prev,
-                  ...parts.map((text, idx) => ({
-                    id: fallbackIds[idx],
-                    role: 'assistant' as const,
-                    text,
-                    time: now + idx,
-                  })),
-                ]);
+                scheduleAssistantSegments(wakeResp.reply, undefined, fallbackIds);
               }, 5000);
               pendingWakeReplyRef.current = { timerId, parts };
             } else if (mounted) {
@@ -569,6 +564,8 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       insertMsgs.push(...newMsgs);
       insertMsgs.push(dividerMsg(earliestLoaded));
 
+      const loadMoreAssistantCount = newMsgs.filter(m => m.role === 'assistant').length;
+      console.log('[chat] appendSource: history-replay | phase: loadMore | date:', targetDate, '| assistantBubbles:', loadMoreAssistantCount);
       setMessages(prev => {
         // 移除顶部可能存在的 no_more 占位
         const withoutNoMore = prev[0]?.role === 'no_more' ? prev.slice(1) : prev;
@@ -636,8 +633,8 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
     if (textParts.length === 0) return;
     const contentHashRaw = fullText.slice(0, 32).replace(/\s+/g, ' ');
     const contentHashNormalized = normalizeForDedup(fullText);
-    const appendSource = wsMsgId ? 'channel_message_segments' : 'http_fallback';
-    console.log('[chat] scheduleAssistantSegments | appendSource:', appendSource, '| msg_id:', wsMsgId ?? '(none)', '| partsCount:', textParts.length, '| contentHashRaw:', contentHashRaw, '| contentHashNormalized:', contentHashNormalized, '| pendingWake:', !!pendingWakeReplyRef.current, '| pendingSend:', !!pendingSendReplyRef.current, '| timestamp:', Date.now());
+    const appendSource = wsMsgId ? 'ws' : 'fallback';
+    console.log('[chat] scheduleAssistantSegments | appendSource:', appendSource, '| msg_id:', wsMsgId ?? '(none)', '| partsCount:', textParts.length, '| contentHash:', contentHashRaw, '| normalizedHash:', contentHashNormalized, '| pendingWake:', !!pendingWakeReplyRef.current, '| pendingSend:', !!pendingSendReplyRef.current, '| timestamp:', Date.now());
     publishPetSnapshot({
       thinking: false,
       latestAssistantText: summarizePetReply(fullText),
@@ -784,12 +781,12 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
             return { ...m, segments: pending.segments, segmentedContent: strippedParts[idx] ?? strippedParts[0] ?? m.text };
           }));
         }
-        console.log('[chat] appendSource: channel_message_segments | msg_id:', msg_id, '| replacedFallback: true | sourceKind:', matchedFallback.sourceKind, '| normalizedHash:', normalizedHash, '| renderedMsgIds:', matchedFallback.renderedMsgIds, '| pendingSegmentsApplied:', !!pending, '| pendingWake: false | pendingSend: false | duplicateDropped: false');
+        console.log('[chat] appendSource: late-ws-replace | msg_id:', msg_id, '| replacedFallback: true | sourceKind:', matchedFallback.sourceKind, '| normalizedHash:', normalizedHash, '| renderedMsgIds:', matchedFallback.renderedMsgIds, '| pendingSegmentsApplied:', !!pending, '| pendingWake: false | pendingSend: false | duplicateDropped: false');
         return;
       }
 
       const contentHashRaw = content.length > 0 ? content.slice(0, 32).replace(/\s+/g, ' ') : '(empty)';
-      console.log('[chat] assistantRendered: ws | msg_id:', msg_id, '| source:', source ?? 'reality', '| contentHashRaw:', contentHashRaw, '| normalizedHash:', normalizedHash, '| duplicateDropped:', duplicateDropped, '| replacedFallback: false');
+      console.log('[chat] appendSource: ws | msg_id:', msg_id, '| source:', source ?? 'reality', '| contentHash:', contentHashRaw, '| normalizedHash:', normalizedHash, '| duplicateDropped:', duplicateDropped, '| replacedFallback: false');
 
       scheduleAssistantSegments(content, msg_id);
     });
@@ -801,6 +798,8 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       if (localIds && localIds.length > 0) {
         // Bubbles already exist — update their segmentedContent in place
         const strippedParts = splitReply(content);
+        const segContentHash = content.length > 0 ? content.slice(0, 32).replace(/\s+/g, ' ') : '(empty)';
+        console.log('[chat] appendSource: segments-update | msg_id:', msg_id, '| localIdsCount:', localIds.length, '| contentHash:', segContentHash, '| partsCount:', strippedParts.length, '| timestamp:', Date.now());
         setMessages(prev => prev.map(m => {
           const idx = localIds.indexOf(m.id);
           if (idx === -1) return m;
@@ -812,6 +811,8 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         }));
       } else {
         // channel_message hasn't arrived yet — park it
+        const segContentHash = content.length > 0 ? content.slice(0, 32).replace(/\s+/g, ' ') : '(empty)';
+        console.log('[chat] appendSource: segments-parked | msg_id:', msg_id, '| contentHash:', segContentHash, '| timestamp:', Date.now());
         pendingSegmentsByMsgIdRef.current.set(msg_id, { content, segments });
       }
     });
@@ -853,7 +854,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         // Identity check: WS may have cancelled this timer and nulled the ref,
         // or a rapid second send may have replaced the ref with a newer timer.
         if (pendingSendReplyRef.current?.timerId !== timerId) {
-          console.log('[chat] fallbackSkippedBecauseCanceled: true | loadingSource: send');
+          console.log('[chat] appendSource: fallback-skipped | loadingSource: send');
           return;
         }
         pendingSendReplyRef.current = null;
@@ -865,7 +866,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
           ...recentFallbacksRef.current.filter(r => now - r.renderedAt < 15000),
           { sourceKind: 'send' as const, normalizedHash, renderedAt: now, renderedMsgIds: fallbackIds },
         ];
-        console.log('[chat] loadingClearedBy: fallback | loadingSource: send | contentHashRaw:', contentHash, '| normalizedHash:', normalizedHash, '| partsCount:', parts.length, '| renderedMsgIds:', fallbackIds, '| timestamp:', now);
+        console.log('[chat] appendSource: fallback | loadingSource: send | msg_id: (none) | contentHash:', contentHash, '| normalizedHash:', normalizedHash, '| partsCount:', parts.length, '| renderedMsgIds:', fallbackIds, '| timestamp:', now);
         setLoading(false);
         scheduleAssistantSegments(reply, undefined, fallbackIds);
       }, 3000);
@@ -907,7 +908,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       }
       const timerId = setTimeout(() => {
         if (pendingSendReplyRef.current?.timerId !== timerId) {
-          console.log('[chat] fallbackSkippedBecauseCanceled: true | loadingSource: upload');
+          console.log('[chat] appendSource: fallback-skipped | loadingSource: upload');
           return;
         }
         pendingSendReplyRef.current = null;
@@ -919,7 +920,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
           ...recentFallbacksRef.current.filter(r => now - r.renderedAt < 15000),
           { sourceKind: 'upload' as const, normalizedHash, renderedAt: now, renderedMsgIds: fallbackIds },
         ];
-        console.log('[chat] loadingClearedBy: fallback | loadingSource: upload | contentHashRaw:', contentHash, '| normalizedHash:', normalizedHash, '| partsCount:', parts.length, '| renderedMsgIds:', fallbackIds, '| timestamp:', now);
+        console.log('[chat] appendSource: fallback | loadingSource: upload | msg_id: (none) | contentHash:', contentHash, '| normalizedHash:', normalizedHash, '| partsCount:', parts.length, '| renderedMsgIds:', fallbackIds, '| timestamp:', now);
         setLoading(false);
         scheduleAssistantSegments(reply, undefined, fallbackIds);
       }, 3000);
