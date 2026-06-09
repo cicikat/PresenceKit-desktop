@@ -1,7 +1,8 @@
 // NOTE(endpoint-literals): 本文件中的后端路径（/desktop/chat、/desktop/wake、/desktop/activate、
 // /memory/…、/garden/state、/diary/…、/chat-log/…、/mood/state、/activity/current、
 // /sensor/realtime、/upload/ingest、/dream/state|enter|chat|exit|settings、
-// /settings/prompt-assets、/debug/user-hidden-state，共 19 个不同路径）均为字面量硬编码。
+// /settings/prompt-assets、/debug/user-hidden-state、
+// /activity/reading/…(5)、/activity/gomoku/…(5)、/activity/chess/…(5)，共 34 个不同路径）均为字面量硬编码。
 // publisher.rs 另有 /sensor/realtime。后端路由变更时需手动同步这两个文件。
 mod actions;
 mod client_config;
@@ -787,6 +788,178 @@ async fn delete_character_avatar(
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
 
+// ── Activity helpers ──────────────────────────────────────────────────────────
+// All activity HTTP calls go through Rust (same as every other API command),
+// so they carry Bearer auth and avoid WebView CORS restrictions.
+
+async fn activity_get(app: &tauri::AppHandle, path: &str) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(app);
+    let client = reqwest::Client::builder().no_proxy().build().map_err(|e| e.to_string())?;
+    let resp = client
+        .get(backend_url(&cfg, path))
+        .bearer_auth(&cfg.admin_token)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    let status = resp.status();
+    if !status.is_success() {
+        let body = resp.text().await.unwrap_or_default();
+        return Err(format!("HTTP {}: {}", status.as_u16(), body));
+    }
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+async fn activity_post(app: &tauri::AppHandle, path: &str, body: serde_json::Value) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(app);
+    let client = reqwest::Client::builder().no_proxy().build().map_err(|e| e.to_string())?;
+    let resp = client
+        .post(backend_url(&cfg, path))
+        .bearer_auth(&cfg.admin_token)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    let status = resp.status();
+    if !status.is_success() {
+        let body = resp.text().await.unwrap_or_default();
+        return Err(format!("HTTP {}: {}", status.as_u16(), body));
+    }
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+// ── Activity payload structs ──────────────────────────────────────────────────
+// Use structs (not bare params) so serde deserializes field names as-is
+// (snake_case), avoiding Tauri's automatic camelCase conversion for bare params.
+
+#[derive(serde::Deserialize)]
+struct ActivitySessionPayload {
+    session_id: String,
+}
+
+#[derive(serde::Deserialize, Debug)]
+struct GomokuMovePayload {
+    session_id: String,
+    x: i64,
+    y: i64,
+}
+
+#[derive(serde::Deserialize, Debug)]
+struct GomokuChatPayload {
+    session_id: String,
+    message: String,
+}
+
+#[derive(serde::Deserialize)]
+struct ChessMovePayload {
+    session_id: String,
+    uci: String,
+}
+
+#[derive(serde::Deserialize)]
+struct ReadingPagePayload {
+    session_id: String,
+    page: i64,
+}
+
+#[derive(serde::Deserialize)]
+struct ReadingTurnPagePayload {
+    session_id: String,
+    direction: String,
+}
+
+// ── Reading ───────────────────────────────────────────────────────────────────
+
+#[tauri::command]
+async fn activity_reading_start(app: tauri::AppHandle, file_path: String) -> Result<serde_json::Value, String> {
+    activity_post(&app, "/activity/reading/start", serde_json::json!({ "file_path": file_path })).await
+}
+
+#[tauri::command]
+async fn activity_reading_state(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    activity_get(&app, "/activity/reading/state").await
+}
+
+#[tauri::command]
+async fn activity_reading_page(app: tauri::AppHandle, payload: ReadingPagePayload) -> Result<serde_json::Value, String> {
+    let path = format!("/activity/reading/page?session_id={}&page={}", payload.session_id, payload.page);
+    activity_get(&app, &path).await
+}
+
+#[tauri::command]
+async fn activity_reading_turn_page(app: tauri::AppHandle, payload: ReadingTurnPagePayload) -> Result<serde_json::Value, String> {
+    activity_post(&app, "/activity/reading/turn_page", serde_json::json!({ "session_id": payload.session_id, "direction": payload.direction })).await
+}
+
+#[tauri::command]
+async fn activity_reading_close(app: tauri::AppHandle, payload: ActivitySessionPayload) -> Result<serde_json::Value, String> {
+    activity_post(&app, "/activity/reading/close", serde_json::json!({ "session_id": payload.session_id })).await
+}
+
+// ── Gomoku ────────────────────────────────────────────────────────────────────
+
+#[tauri::command]
+async fn activity_gomoku_start(app: tauri::AppHandle, opponent: Option<String>, ai_style: Option<String>) -> Result<serde_json::Value, String> {
+    println!("[activity] rust command activity_gomoku_start opponent={:?} ai_style={:?}", opponent, ai_style);
+    let actual_opponent = opponent.as_deref().unwrap_or("human");
+    let body = if let Some(style) = &ai_style {
+        serde_json::json!({"opponent": actual_opponent, "ai_style": style})
+    } else {
+        serde_json::json!({"opponent": actual_opponent})
+    };
+    println!("[activity] POST /activity/gomoku/start body={}", body);
+    activity_post(&app, "/activity/gomoku/start", body).await
+}
+
+#[tauri::command]
+async fn activity_gomoku_state(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    activity_get(&app, "/activity/gomoku/state").await
+}
+
+#[tauri::command]
+async fn activity_gomoku_move(app: tauri::AppHandle, payload: GomokuMovePayload) -> Result<serde_json::Value, String> {
+    println!("[activity] rust command activity_gomoku_move {:?}", payload);
+    activity_post(&app, "/activity/gomoku/move", serde_json::json!({ "session_id": payload.session_id, "x": payload.x, "y": payload.y })).await
+}
+
+#[tauri::command]
+async fn activity_gomoku_close(app: tauri::AppHandle, payload: ActivitySessionPayload) -> Result<serde_json::Value, String> {
+    activity_post(&app, "/activity/gomoku/close", serde_json::json!({ "session_id": payload.session_id })).await
+}
+
+#[tauri::command]
+async fn activity_gomoku_chat(app: tauri::AppHandle, payload: GomokuChatPayload) -> Result<serde_json::Value, String> {
+    activity_post(&app, "/activity/gomoku/chat", serde_json::json!({ "session_id": payload.session_id, "message": payload.message })).await
+}
+
+// ── Chess ─────────────────────────────────────────────────────────────────────
+
+#[tauri::command]
+async fn activity_chess_start(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    activity_post(&app, "/activity/chess/start", serde_json::json!({})).await
+}
+
+#[tauri::command]
+async fn activity_chess_state(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    activity_get(&app, "/activity/chess/state").await
+}
+
+#[tauri::command]
+async fn activity_chess_move(app: tauri::AppHandle, payload: ChessMovePayload) -> Result<serde_json::Value, String> {
+    // backend MoveRequest uses "move" not "uci"
+    activity_post(&app, "/activity/chess/move", serde_json::json!({ "session_id": payload.session_id, "move": payload.uci })).await
+}
+
+#[tauri::command]
+async fn activity_chess_legal_moves(app: tauri::AppHandle, payload: ActivitySessionPayload) -> Result<serde_json::Value, String> {
+    let path = format!("/activity/chess/legal_moves?session_id={}", payload.session_id);
+    activity_get(&app, &path).await
+}
+
+#[tauri::command]
+async fn activity_chess_close(app: tauri::AppHandle, payload: ActivitySessionPayload) -> Result<serde_json::Value, String> {
+    activity_post(&app, "/activity/chess/close", serde_json::json!({ "session_id": payload.session_id })).await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -865,6 +1038,21 @@ pub fn run() {
             get_character_avatar,
             upload_character_avatar,
             delete_character_avatar,
+            activity_reading_start,
+            activity_reading_state,
+            activity_reading_page,
+            activity_reading_turn_page,
+            activity_reading_close,
+            activity_gomoku_start,
+            activity_gomoku_state,
+            activity_gomoku_move,
+            activity_gomoku_close,
+            activity_gomoku_chat,
+            activity_chess_start,
+            activity_chess_state,
+            activity_chess_move,
+            activity_chess_legal_moves,
+            activity_chess_close,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

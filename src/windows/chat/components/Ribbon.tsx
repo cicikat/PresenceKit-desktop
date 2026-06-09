@@ -60,6 +60,7 @@ export function Ribbon({
   theme, onThemeToggle,
   onOpenSpec, onOpenPrefs,
   dreamWindowOpen, onDreamToggle,
+  onActivityOpen,
 }: any) {
   const [connState, setConnState] = useState<ConnectionState>(wsClient.getState());
   useEffect(() => wsClient.on('state', setConnState), []);
@@ -109,6 +110,7 @@ export function Ribbon({
         onClick={() => { if (sidebarOpen && sidebarTab === 'garden') onCloseSidebar(); else onSidebarTab('garden'); }} />
       <Sep />
       <DreamEntryButton active={dreamWindowOpen} onToggle={onDreamToggle} />
+      <RibBtn icon="grid2" label="一起做事" onClick={onActivityOpen} />
       <RibBtn icon="pet" label="桌宠" active={petVisible} onClick={onPetToggle} />
       <div style={{ flex: 1 }} />
       <RibBtn icon="settings" label="偏好" onClick={onOpenPrefs} />

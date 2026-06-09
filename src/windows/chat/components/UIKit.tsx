@@ -129,6 +129,7 @@ export function Icon({ name, size = 18, stroke = 'currentColor', strokeWidth = 1
     case 'pet':     return <svg {...common}><circle cx="12" cy="13" r="6"/><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="10" cy="13" r=".6" fill={stroke}/><circle cx="14" cy="13" r=".6" fill={stroke}/></svg>;
     case 'wind':    return <svg {...common}><path d="M4 10h12a3 3 0 1 0-3-3M4 14h16a3 3 0 1 1-3 3"/></svg>;
     case 'spec':    return <svg {...common}><path d="M4 4h11l5 5v11H4z"/><path d="M15 4v5h5M8 13h8M8 17h5"/></svg>;
+    case 'grid2':   return <svg {...common}><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>;
     default:        return <svg {...common}><circle cx="12" cy="12" r="4"/></svg>;
   }
 }

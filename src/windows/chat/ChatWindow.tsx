@@ -672,7 +672,7 @@ function Divider({ onDrag }: any) {
 }
 
 /* ── ChatWindow (App) ── */
-export function ChatWindow() {
+export function ChatWindow({ onActivityOpen }: { onActivityOpen?: () => void } = {}) {
   const engineRef = useRef<StateEngine | null>(null);
   if (!engineRef.current) engineRef.current = new StateEngine();
   const engine = engineRef.current;
@@ -691,6 +691,9 @@ export function ChatWindow() {
   const [dreamAfterglow, setDreamAfterglow]       = useState(false);
   const [characterAvatarDataUrl, setCharacterAvatarDataUrl] = useState<string | null>(null);
 
+  // Sets data-theme on <html> — this is a GLOBAL appearance switch, not Chat-only.
+  // All windows (Activity, Dream) inherit theme via CSS variables on :root.
+  // Preference key 'chat.theme' is a legacy namespace; the effect is app-wide.
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     setUIPref('chat.theme', theme);
@@ -840,6 +843,7 @@ export function ChatWindow() {
           onOpenPrefs={() => setPrefsOpen(true)}
           dreamWindowOpen={dreamWindowOpen}
           onDreamToggle={toggleDreamWindow}
+          onActivityOpen={onActivityOpen}
         />
         <div ref={bodyRef} style={{ flex: 1, display: 'flex', minHeight: 0, minWidth: 0, position: 'relative' }}>
           {sidebarOpen && (
