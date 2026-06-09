@@ -376,6 +376,15 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
   // Entries expire after 15s; keyed by normalizeForDedup() of the reply text.
   const recentFallbacksRef = useRef<FallbackRecord[]>([]);
 
+  // Tracks normalizedHash → timestamp for assistant bubbles loaded from history (30s window).
+  // Prevents WS channel_message from double-appending content already in the chat log.
+  const recentHistoryHashesRef = useRef<Map<string, number>>(new Map());
+
+  // Tracks normalizedHash → timestamp for content already rendered by WS channel_message (30s window).
+  // Prevents HTTP fallback timers from double-appending when WS arrived before pendingRef was set
+  // (i.e. before desktopWake HTTP returned and set pendingWakeReplyRef).
+  const recentWSContentHashesRef = useRef<Map<string, number>>(new Map());
+
   // Dream 打开期间屏蔽 channel_message
   const dreamActiveRef = useRef(dreamActive);
   useEffect(() => { dreamActiveRef.current = dreamActive; }, [dreamActive]);
@@ -449,6 +458,19 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         const historyAssistantCount = msgs.filter(m => m.role === 'assistant').length;
         console.log('[chat] appendSource: history-replay | phase: init | assistantBubbles:', historyAssistantCount, '| totalMsgs:', msgs.length);
         setMessages(msgs);
+
+        // Register assistant bubble hashes for WS cross-path dedup (30s window).
+        const _histInitNow = Date.now();
+        for (const _m of msgs) {
+          if (_m.role === 'assistant') {
+            const _h = normalizeForDedup(_m.text);
+            if (_h) {
+              recentHistoryHashesRef.current.set(_h, _histInitNow);
+              console.log('[chat] appendSource: history-replay-register | phase: init | hash:', _h, '| textPreview:', _m.text.slice(0, 40));
+            }
+          }
+        }
+
         setHistoryStatus({ kind: 'ok' });
 
         // Phase 2B: 拉取重开问候，每次 window/page session 仅触发一次
@@ -474,6 +496,18 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
                 // (ref set to null) or a new wake replaced it (different timerId).
                 if (pendingWakeReplyRef.current?.timerId !== timerId) {
                   console.log('[chat] appendSource: fallback-skipped | loadingSource: wake');
+                  return;
+                }
+                // WS-before-wake-set guard: if WS channel_message arrived and rendered BEFORE
+                // desktopWake HTTP returned (so pendingWakeReplyRef was not yet set at WS arrival
+                // time and the WS handler could not cancel this timer), skip the fallback to
+                // prevent double-render.
+                const _wakeHash = normalizeForDedup(wakeResp.reply);
+                const _wsRenderedAt = recentWSContentHashesRef.current.get(_wakeHash);
+                if (_wsRenderedAt !== undefined && Date.now() - _wsRenderedAt < 30_000) {
+                  pendingWakeReplyRef.current = null;
+                  setWakeLoading(false);
+                  console.log('[chat] appendSource: fallback-skipped | loadingSource: wake | reason: ws-already-rendered | hash:', _wakeHash);
                   return;
                 }
                 pendingWakeReplyRef.current = null;
@@ -572,6 +606,18 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         return [...insertMsgs, ...withoutNoMore];
       });
 
+      // Register loadMore assistant hashes for WS cross-path dedup (30s window).
+      const _histLmNow = Date.now();
+      for (const _m of newMsgs) {
+        if (_m.role === 'assistant') {
+          const _h = normalizeForDedup(_m.text);
+          if (_h) {
+            recentHistoryHashesRef.current.set(_h, _histLmNow);
+            console.log('[chat] appendSource: history-replay-register | phase: loadMore | hash:', _h, '| textPreview:', _m.text.slice(0, 40));
+          }
+        }
+      }
+
       // 补偿滚动位置
       requestAnimationFrame(() => {
         if (scroll) {
@@ -634,6 +680,13 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
     const contentHashRaw = fullText.slice(0, 32).replace(/\s+/g, ' ');
     const contentHashNormalized = normalizeForDedup(fullText);
     const appendSource = wsMsgId ? 'ws' : 'fallback';
+
+    // Guard: if this wsMsgId was already processed (e.g. double channel_message), drop it.
+    if (wsMsgId && wsMsgIdToLocalIdsRef.current.has(wsMsgId)) {
+      console.warn('[chat] BUG-duplicate-scheduleAssistantSegments | msg_id:', wsMsgId, '| already processed — skipping to prevent double-render');
+      return;
+    }
+
     console.log('[chat] scheduleAssistantSegments | appendSource:', appendSource, '| msg_id:', wsMsgId ?? '(none)', '| partsCount:', textParts.length, '| contentHash:', contentHashRaw, '| normalizedHash:', contentHashNormalized, '| pendingWake:', !!pendingWakeReplyRef.current, '| pendingSend:', !!pendingSendReplyRef.current, '| timestamp:', Date.now());
     publishPetSnapshot({
       thinking: false,
@@ -655,6 +708,8 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
 
     if (wsMsgId) {
       wsMsgIdToLocalIdsRef.current.set(wsMsgId, localIds);
+      // Register WS content hash so fallback timers can detect this was already rendered.
+      recentWSContentHashesRef.current.set(contentHashNormalized, Date.now());
       if (pending) pendingSegmentsByMsgIdRef.current.delete(wsMsgId);
     }
 
@@ -663,6 +718,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       const segmentedContent = strippedParts
         ? (strippedParts[idx] ?? strippedParts[0])
         : undefined;
+      console.log('[chat] pushSeg-append | appendSource:', appendSource, '| msg_id:', wsMsgId ?? '(none)', '| idx:', idx, '| id:', localIds[idx], '| partsTotal:', textParts.length, '| timestamp:', Date.now());
       setMessages(prev => [...prev, {
         id: localIds[idx],
         role: 'assistant' as const,
@@ -786,7 +842,22 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       }
 
       const contentHashRaw = content.length > 0 ? content.slice(0, 32).replace(/\s+/g, ' ') : '(empty)';
-      console.log('[chat] appendSource: ws | msg_id:', msg_id, '| source:', source ?? 'reality', '| contentHash:', contentHashRaw, '| normalizedHash:', normalizedHash, '| duplicateDropped:', duplicateDropped, '| replacedFallback: false');
+      const partsCount = content.split(/\n+/).filter(s => s.trim().length > 0).length;
+
+      // History dedup: drop WS append if same content was loaded from chat log recently (30s window).
+      // Defends against history-replay + WS double-render for regular turns.
+      // NOTE: scheduler trigger responses are NOT in the chat log (no ## header written for
+      // trigger-only event_log entries), so this check never fires for scheduler triggers.
+      // It remains a defensive guard for edge cases where a normal turn arrives via WS while
+      // still within the history registration window.
+      const _wsNow = Date.now();
+      recentHistoryHashesRef.current.forEach((ts, h) => { if (_wsNow - ts > 30_000) recentHistoryHashesRef.current.delete(h); });
+      if (recentHistoryHashesRef.current.has(normalizedHash)) {
+        console.log('[chat] appendSource: history-ws-dedup | msg_id:', msg_id, '| normalizedHash:', normalizedHash, '| textPreview:', content.slice(0, 40));
+        return;
+      }
+
+      console.log('[chat] appendSource: ws | msg_id:', msg_id, '| source:', source ?? 'reality', '| contentHash:', contentHashRaw, '| partsCount:', partsCount, '| normalizedHash:', normalizedHash, '| duplicateDropped:', duplicateDropped, '| replacedFallback: false');
 
       scheduleAssistantSegments(content, msg_id);
     });
@@ -794,12 +865,20 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
     const unsubSegs = wsClient.on('message_segments', ({ content, segments, msg_id, source }) => {
       // Defense: only consume reality segments.
       if (source && source !== 'reality') return;
+      // Invariant: message_segments MUST NEVER append new assistant bubbles.
+      // It only updates segmentedContent of existing bubbles via .map().
       const localIds = wsMsgIdToLocalIdsRef.current.get(msg_id);
       if (localIds && localIds.length > 0) {
-        // Bubbles already exist — update their segmentedContent in place
+        // Bubbles already exist — update their segmentedContent in place.
+        // channel_message msg_id matches: this is the expected path.
         const strippedParts = splitReply(content);
         const segContentHash = content.length > 0 ? content.slice(0, 32).replace(/\s+/g, ' ') : '(empty)';
         console.log('[chat] appendSource: segments-update | msg_id:', msg_id, '| localIdsCount:', localIds.length, '| contentHash:', segContentHash, '| partsCount:', strippedParts.length, '| timestamp:', Date.now());
+        if (strippedParts.length > localIds.length) {
+          // Segments have more parts than bubbles — extra parts silently dropped.
+          // This is a content mismatch: channel_message split fewer paragraphs than message_segments.
+          console.warn('[chat] BUG-segments-mismatch | msg_id:', msg_id, '| strippedParts:', strippedParts.length, '| localIds:', localIds.length, '| excess parts will be dropped');
+        }
         setMessages(prev => prev.map(m => {
           const idx = localIds.indexOf(m.id);
           if (idx === -1) return m;
@@ -810,9 +889,11 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
           };
         }));
       } else {
-        // channel_message hasn't arrived yet — park it
+        // channel_message hasn't arrived yet — park segments; apply when channel_message arrives.
+        // Parking MUST NOT create new bubbles; data is stored only.
+        const strippedParts = splitReply(content);
         const segContentHash = content.length > 0 ? content.slice(0, 32).replace(/\s+/g, ' ') : '(empty)';
-        console.log('[chat] appendSource: segments-parked | msg_id:', msg_id, '| contentHash:', segContentHash, '| timestamp:', Date.now());
+        console.log('[chat] appendSource: segments-parked | msg_id:', msg_id, '| contentHash:', segContentHash, '| partsCount:', strippedParts.length, '| timestamp:', Date.now());
         pendingSegmentsByMsgIdRef.current.set(msg_id, { content, segments });
       }
     });
