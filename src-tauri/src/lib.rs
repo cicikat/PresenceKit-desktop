@@ -43,7 +43,10 @@ fn authorized_request(
 
 fn safe_http_error(status: reqwest::StatusCode) -> String {
     if matches!(status.as_u16(), 401 | 403) {
-        "认证失败，请检查本地 token 配置".to_string()
+        format!(
+            "HTTP {}: 认证失败，请检查本地 token 配置",
+            status.as_u16()
+        )
     } else {
         format!("HTTP {}", status.as_u16())
     }
@@ -1093,7 +1096,13 @@ mod auth_tests {
     fn auth_http_errors_are_safe() {
         for status in [reqwest::StatusCode::UNAUTHORIZED, reqwest::StatusCode::FORBIDDEN] {
             let message = safe_http_error(status);
-            assert_eq!(message, "认证失败，请检查本地 token 配置");
+            assert_eq!(
+                message,
+                format!(
+                    "HTTP {}: 认证失败，请检查本地 token 配置",
+                    status.as_u16()
+                )
+            );
             assert!(!message.contains("Bearer"));
             assert!(!message.contains("secret-value"));
         }
