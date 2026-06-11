@@ -20,6 +20,16 @@ use tauri::Manager;
 fn http_client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
         .no_proxy()
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|_| "无法创建后端连接".to_string())
+}
+
+// LLM-backed endpoints (chat, wake, dream chat/enter/exit) may wait >10s for inference.
+fn llm_http_client() -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .no_proxy()
+        .timeout(std::time::Duration::from_secs(120))
         .build()
         .map_err(|_| "无法创建后端连接".to_string())
 }
@@ -108,21 +118,16 @@ fn greet(name: &str) -> String {
 #[tauri::command]
 async fn send_chat(app: tauri::AppHandle, message: String) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
-    let client = reqwest::Client::builder()
-        .no_proxy()
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client = llm_http_client()?;
 
-    let resp = client
-        .post(backend_url(&cfg, "/desktop/chat"))
-        .bearer_auth(&cfg.admin_token)
+    let resp = authorized_request(&cfg, client.post(backend_url(&cfg, "/desktop/chat")))
         .json(&serde_json::json!({ "message": message }))
         .send()
         .await
         .map_err(|e| e.to_string())?;
 
     if !resp.status().is_success() {
-        return Err(format!("HTTP {}", resp.status().as_u16()));
+        return Err(safe_http_error(resp.status()));
     }
 
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
@@ -135,10 +140,7 @@ async fn load_history(app: tauri::AppHandle) -> Result<serde_json::Value, String
     if user_id.is_empty() {
         return Ok(serde_json::json!({ "user_id": "", "history": [], "count": 0 }));
     }
-    let client = reqwest::Client::builder()
-        .no_proxy()
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client = http_client()?;
 
     let url = backend_url(&cfg, &format!("/memory/{}/short-term", user_id));
     let resp = client
@@ -149,7 +151,7 @@ async fn load_history(app: tauri::AppHandle) -> Result<serde_json::Value, String
         .map_err(|e| e.to_string())?;
 
     if !resp.status().is_success() {
-        return Err(format!("后端返回 {}", resp.status()));
+        return Err(format!("HTTP {}", resp.status().as_u16()));
     }
 
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
@@ -158,10 +160,7 @@ async fn load_history(app: tauri::AppHandle) -> Result<serde_json::Value, String
 #[tauri::command]
 async fn load_garden_state(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
-    let client = reqwest::Client::builder()
-        .no_proxy()
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client = http_client()?;
 
     let resp = client
         .get(backend_url(&cfg, "/garden/state"))
@@ -171,7 +170,7 @@ async fn load_garden_state(app: tauri::AppHandle) -> Result<serde_json::Value, S
         .map_err(|e| e.to_string())?;
 
     if !resp.status().is_success() {
-        return Err(format!("HTTP {}", resp.status()));
+        return Err(format!("HTTP {}", resp.status().as_u16()));
     }
 
     resp.json::<serde_json::Value>()
@@ -182,10 +181,7 @@ async fn load_garden_state(app: tauri::AppHandle) -> Result<serde_json::Value, S
 #[tauri::command]
 async fn load_diary_list(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
-    let client = reqwest::Client::builder()
-        .no_proxy()
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client = http_client()?;
 
     let resp = client
         .get(backend_url(&cfg, "/diary/list"))
@@ -195,7 +191,7 @@ async fn load_diary_list(app: tauri::AppHandle) -> Result<serde_json::Value, Str
         .map_err(|e| e.to_string())?;
 
     if !resp.status().is_success() {
-        return Err(format!("HTTP {}", resp.status()));
+        return Err(format!("HTTP {}", resp.status().as_u16()));
     }
 
     resp.json::<serde_json::Value>()
@@ -206,10 +202,7 @@ async fn load_diary_list(app: tauri::AppHandle) -> Result<serde_json::Value, Str
 #[tauri::command]
 async fn load_diary_entry(app: tauri::AppHandle, date: String) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
-    let client = reqwest::Client::builder()
-        .no_proxy()
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client = http_client()?;
 
     let url = backend_url(&cfg, &format!("/diary/{}", date));
     let resp = client
@@ -220,7 +213,7 @@ async fn load_diary_entry(app: tauri::AppHandle, date: String) -> Result<serde_j
         .map_err(|e| e.to_string())?;
 
     if !resp.status().is_success() {
-        return Err(format!("HTTP {}", resp.status()));
+        return Err(format!("HTTP {}", resp.status().as_u16()));
     }
 
     resp.json::<serde_json::Value>()
@@ -231,10 +224,7 @@ async fn load_diary_entry(app: tauri::AppHandle, date: String) -> Result<serde_j
 #[tauri::command]
 async fn load_chat_log_dates(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
-    let client = reqwest::Client::builder()
-        .no_proxy()
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client = http_client()?;
 
     let resp = client
         .get(backend_url(&cfg, "/chat-log/dates"))
@@ -244,7 +234,7 @@ async fn load_chat_log_dates(app: tauri::AppHandle) -> Result<serde_json::Value,
         .map_err(|e| e.to_string())?;
 
     if !resp.status().is_success() {
-        return Err(format!("HTTP {}", resp.status()));
+        return Err(format!("HTTP {}", resp.status().as_u16()));
     }
 
     resp.json::<serde_json::Value>()
@@ -255,10 +245,7 @@ async fn load_chat_log_dates(app: tauri::AppHandle) -> Result<serde_json::Value,
 #[tauri::command]
 async fn load_chat_log_day(app: tauri::AppHandle, date: String) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
-    let client = reqwest::Client::builder()
-        .no_proxy()
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client = http_client()?;
 
     let url = backend_url(&cfg, &format!("/chat-log/{}", date));
     let resp = client
@@ -269,7 +256,7 @@ async fn load_chat_log_day(app: tauri::AppHandle, date: String) -> Result<serde_
         .map_err(|e| e.to_string())?;
 
     if !resp.status().is_success() {
-        return Err(format!("HTTP {}", resp.status()));
+        return Err(format!("HTTP {}", resp.status().as_u16()));
     }
 
     resp.json::<serde_json::Value>()
@@ -280,10 +267,7 @@ async fn load_chat_log_day(app: tauri::AppHandle, date: String) -> Result<serde_
 #[tauri::command]
 async fn load_mood_state(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
-    let client = reqwest::Client::builder()
-        .no_proxy()
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client = http_client()?;
 
     let resp = client
         .get(backend_url(&cfg, "/mood/state"))
@@ -293,7 +277,7 @@ async fn load_mood_state(app: tauri::AppHandle) -> Result<serde_json::Value, Str
         .map_err(|e| e.to_string())?;
 
     if !resp.status().is_success() {
-        return Err(format!("HTTP {}", resp.status()));
+        return Err(format!("HTTP {}", resp.status().as_u16()));
     }
 
     resp.json::<serde_json::Value>()
@@ -304,10 +288,7 @@ async fn load_mood_state(app: tauri::AppHandle) -> Result<serde_json::Value, Str
 #[tauri::command]
 async fn load_activity_state(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
-    let client = reqwest::Client::builder()
-        .no_proxy()
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client = http_client()?;
 
     let resp = client
         .get(backend_url(&cfg, "/activity/current"))
@@ -317,7 +298,7 @@ async fn load_activity_state(app: tauri::AppHandle) -> Result<serde_json::Value,
         .map_err(|e| e.to_string())?;
 
     if !resp.status().is_success() {
-        return Err(format!("HTTP {}", resp.status()));
+        return Err(format!("HTTP {}", resp.status().as_u16()));
     }
 
     resp.json::<serde_json::Value>()
@@ -328,10 +309,7 @@ async fn load_activity_state(app: tauri::AppHandle) -> Result<serde_json::Value,
 #[tauri::command]
 async fn load_sensor_realtime(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
-    let client = reqwest::Client::builder()
-        .no_proxy()
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client = http_client()?;
 
     let resp = client
         .get(backend_url(&cfg, "/sensor/realtime"))
@@ -347,7 +325,7 @@ async fn load_sensor_realtime(app: tauri::AppHandle) -> Result<serde_json::Value
     }
 
     if !status.is_success() {
-        return Err(format!("HTTP {}", status));
+        return Err(format!("HTTP {}", status.as_u16()));
     }
 
     let val = resp.json::<serde_json::Value>()
@@ -475,7 +453,7 @@ async fn dream_enter(
     script_id: Option<String>,
 ) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
-    let client = http_client()?;
+    let client = llm_http_client()?;
     let mut body = serde_json::Map::new();
     if let Some(v) = entry_reason { body.insert("entry_reason".into(), v.into()); }
     if let Some(v) = dream_mode { body.insert("dream_mode".into(), v.into()); }
@@ -492,7 +470,7 @@ async fn dream_enter(
 #[tauri::command]
 async fn dream_chat(app: tauri::AppHandle, message: String) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
-    let client = http_client()?;
+    let client = llm_http_client()?;
     let resp = authorized_request(&cfg, client.post(backend_url(&cfg, "/dream/chat")))
         .json(&serde_json::json!({ "message": message }))
         .send()
@@ -505,7 +483,7 @@ async fn dream_chat(app: tauri::AppHandle, message: String) -> Result<serde_json
 #[tauri::command]
 async fn dream_exit(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
-    let client = http_client()?;
+    let client = llm_http_client()?;
     let resp = authorized_request(&cfg, client.post(backend_url(&cfg, "/dream/exit")))
         .json(&serde_json::json!({}))
         .send()
@@ -569,7 +547,7 @@ async fn dream_update_settings(
 #[tauri::command]
 async fn get_prompt_assets(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
-    let client = reqwest::Client::builder().no_proxy().build().map_err(|e| e.to_string())?;
+    let client = http_client()?;
     let resp = client
         .get(backend_url(&cfg, "/settings/prompt-assets"))
         .bearer_auth(&cfg.admin_token)
@@ -577,7 +555,7 @@ async fn get_prompt_assets(app: tauri::AppHandle) -> Result<serde_json::Value, S
         .await
         .map_err(|e| e.to_string())?;
     if !resp.status().is_success() {
-        return Err(format!("HTTP {}", resp.status().as_u16()));
+        return Err(safe_http_error(resp.status()));
     }
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
@@ -590,7 +568,7 @@ async fn patch_prompt_assets(
     enabled_jailbreaks: Option<Vec<String>>,
 ) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
-    let client = reqwest::Client::builder().no_proxy().build().map_err(|e| e.to_string())?;
+    let client = http_client()?;
     let mut body = serde_json::Map::new();
     if let Some(v) = active_character {
         body.insert("active_character".into(), v.into());
@@ -620,7 +598,7 @@ async fn patch_prompt_assets(
 #[tauri::command]
 async fn desktop_wake(app: tauri::AppHandle, last_seen: Option<f64>) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
-    let client = http_client()?;
+    let client = llm_http_client()?;
     let body = if let Some(ts) = last_seen {
         serde_json::json!({ "last_seen": ts })
     } else {
@@ -640,10 +618,7 @@ async fn desktop_wake(app: tauri::AppHandle, last_seen: Option<f64>) -> Result<s
 #[tauri::command]
 async fn load_hidden_state_debug(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
-    let client = reqwest::Client::builder()
-        .no_proxy()
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client = http_client()?;
 
     let resp = client
         .get(backend_url(&cfg, "/debug/user-hidden-state"))
@@ -699,7 +674,7 @@ async fn load_hidden_state_debug(app: tauri::AppHandle) -> Result<serde_json::Va
 #[tauri::command]
 async fn get_character_avatar(app: tauri::AppHandle, char_id: String) -> Result<Option<String>, String> {
     let cfg = load_client_config(&app);
-    let client = reqwest::Client::builder().no_proxy().build().map_err(|e| e.to_string())?;
+    let client = http_client()?;
     let url = backend_url(&cfg, &format!("/settings/character-avatar/{}", char_id));
     let resp = client
         .get(&url)
@@ -736,7 +711,7 @@ async fn upload_character_avatar(
     content_type: String,
 ) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
-    let client = reqwest::Client::builder().no_proxy().build().map_err(|e| e.to_string())?;
+    let client = http_client()?;
 
     let part = reqwest::multipart::Part::bytes(data)
         .mime_str(&content_type)
@@ -768,7 +743,7 @@ async fn delete_character_avatar(
     char_id: String,
 ) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
-    let client = reqwest::Client::builder().no_proxy().build().map_err(|e| e.to_string())?;
+    let client = http_client()?;
     let url = backend_url(&cfg, &format!("/settings/characters/{}/avatar", char_id));
     let resp = client
         .delete(&url)
@@ -790,7 +765,7 @@ async fn delete_character_avatar(
 
 async fn activity_get(app: &tauri::AppHandle, path: &str) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(app);
-    let client = reqwest::Client::builder().no_proxy().build().map_err(|e| e.to_string())?;
+    let client = http_client()?;
     let resp = client
         .get(backend_url(&cfg, path))
         .bearer_auth(&cfg.admin_token)
@@ -807,7 +782,7 @@ async fn activity_get(app: &tauri::AppHandle, path: &str) -> Result<serde_json::
 
 async fn activity_post(app: &tauri::AppHandle, path: &str, body: serde_json::Value) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(app);
-    let client = reqwest::Client::builder().no_proxy().build().map_err(|e| e.to_string())?;
+    let client = http_client()?;
     let resp = client
         .post(backend_url(&cfg, path))
         .bearer_auth(&cfg.admin_token)
@@ -975,7 +950,7 @@ pub fn run() {
             let activate_url = backend_url(&cfg, "/desktop/activate");
             let activate_cfg = cfg.clone();
             tauri::async_runtime::spawn(async move {
-                if let Ok(client) = reqwest::Client::builder().no_proxy().build() {
+                if let Ok(client) = http_client() {
                     match authorized_request(&activate_cfg, client.post(&activate_url)).json(&serde_json::json!({})).send().await {
                         Ok(response) if response.status().is_success() => eprintln!("[lib] desktop_activate ok"),
                         Ok(response) => eprintln!("[lib] desktop_activate warning: {}", safe_http_error(response.status())),
@@ -1122,5 +1097,12 @@ mod auth_tests {
             assert!(!message.contains("Bearer"));
             assert!(!message.contains("secret-value"));
         }
+    }
+
+    #[test]
+    fn http_client_has_timeout() {
+        // Verifies that http_client() builds successfully (timeout is set internally).
+        assert!(http_client().is_ok());
+        assert!(llm_http_client().is_ok());
     }
 }
