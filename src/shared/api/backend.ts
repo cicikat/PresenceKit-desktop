@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { ChatResponse, GardenState, DiaryListResponse, DiaryEntry, ChatLogDatesResponse, ChatLogDay, MoodState, ActivityState, SensorRealtimeResponse, UploadIngestResponse, UploadError, PromptAssetsResponse, PromptAssetsPatch, PromptAssetsPatchResponse, HiddenStateDebugResponse, PromptAssetCharacter, PromptAssetOption, ActivePromptAssets } from './types';
+import type { ChatResponse, DesktopWakeResponse, GardenState, DiaryListResponse, DiaryEntry, ChatLogDatesResponse, ChatLogDay, MoodState, ActivityState, SensorRealtimeResponse, UploadIngestResponse, UploadError, PromptAssetsResponse, PromptAssetsPatch, PromptAssetsPatchResponse, HiddenStateDebugResponse, PromptAssetCharacter, PromptAssetOption, ActivePromptAssets } from './types';
 
 export async function sendChat(message: string): Promise<ChatResponse> {
   return invoke<ChatResponse>('send_chat', { message });
@@ -96,8 +96,8 @@ export async function loadHiddenStateDebug(): Promise<HiddenStateDebugResponse> 
   return invoke<HiddenStateDebugResponse>('load_hidden_state_debug');
 }
 
-export async function desktopWake(lastSeen?: number): Promise<{ reply: string | null; source: string }> {
-  return invoke<{ reply: string | null; source: string }>('desktop_wake', {
+export async function desktopWake(lastSeen?: number): Promise<DesktopWakeResponse> {
+  return invoke<DesktopWakeResponse>('desktop_wake', {
     lastSeen: lastSeen ?? null,
   });
 }

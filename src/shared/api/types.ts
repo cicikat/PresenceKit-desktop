@@ -37,8 +37,17 @@ export type DesktopActionPayload = {
 export interface ChatResponse {
   reply: string;
   emotion: string;
+  turn_id?: string;
+  msg_id?: string;
   // Phase 1 reserved field — not yet populated by the HTTP API
   segments?: NarrativeSegment[];
+}
+
+export interface DesktopWakeResponse {
+  reply: string | null;
+  source: string;
+  turn_id?: string;
+  msg_id?: string;
 }
 
 export interface GardenSlot {
@@ -119,6 +128,7 @@ export interface UploadIngestResponse {
   level: string;
   emotion: string;
   turn_id: string;
+  msg_id?: string;
   critical_written: boolean;
   stored_path: string;
 }
