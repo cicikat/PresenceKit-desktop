@@ -12,9 +12,7 @@ function AppRoot() {
   const [activeWindow, setActiveWindow] = useState<"chat" | "activity">("chat");
   return (
     <>
-      {activeWindow === "chat" && (
-        <ChatWindow onActivityOpen={() => setActiveWindow("activity")} />
-      )}
+      <ChatWindow onActivityOpen={() => setActiveWindow("activity")} />
       {activeWindow === "activity" && (
         <ActivityWindow onClose={() => setActiveWindow("chat")} />
       )}
