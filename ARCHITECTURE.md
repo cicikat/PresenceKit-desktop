@@ -98,7 +98,8 @@ Dream 窗口是 `src/windows/dream/DreamWindow.tsx`：
 
 WebSocket 在 `src/shared/api/ws.ts`：
 
-- 浏览器原生 `WebSocket` 连接 `ws://127.0.0.1:8080/ws/desktop`。
+- 前端通过 Tauri commands / events 调用 `src-tauri/src/ws_bridge.rs` 的原生 WebSocket client。
+- Rust 从本地 client config 读取 admin token，并在握手请求中设置 `Authorization: Bearer ...`；token 不进入 URL 或 WebView。
 - 支持 legacy `hello_ack`、`channel_message`、`action`、`ping`。
 - `action` 保持 legacy envelope，不改协议；收到后异步 dispatch 到 Tauri action commands，并按执行结果回 `ack`。
 - 自动重连，指数退避最大 30 秒。
@@ -107,6 +108,7 @@ WebSocket 在 `src/shared/api/ws.ts`：
 Tauri Rust 在 `src-tauri/src/lib.rs`：
 
 - `send_chat`：POST `/desktop/chat`，使用 `reqwest.no_proxy()`。
+- `ws_bridge.rs`：原生 WebSocket Bearer 鉴权、收发桥接和 URL query token 清洗。
 - `load_history`：GET `/memory/{user_id}/short-term`，使用 Bearer token。
 - `load_garden_state`：GET `/garden/state`，使用 Bearer token。
 - `load_sensor_realtime`：GET `/sensor/realtime`，使用 Bearer token；无数据响应归一为 `_no_data`。
@@ -286,7 +288,7 @@ Dream 背景按 `day` / `night` 分开记录。旧版单字段 `dream_background
 
 - HTTP 不从浏览器 `fetch` 直连后端，而是走 Tauri command，避免 CORS 和代理问题。
 - Rust HTTP client 必须 `no_proxy()`。
-- WS 使用浏览器原生 `WebSocket`，连接本机 `127.0.0.1`。
+- WS 使用 Tauri Rust 原生 bridge，以 Bearer header 连接本机 `127.0.0.1`，前端不持有 token。
 - 业务数据以 `qq-st-bot` 为准；客户端状态只是 UI 镜像。
 - legacy 协议和 v1 目标协议要在文档里明确区分，不能混写。
 

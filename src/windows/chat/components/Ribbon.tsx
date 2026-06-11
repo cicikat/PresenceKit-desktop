@@ -83,9 +83,15 @@ export function Ribbon({
         }}>
           <Icon name="logo" size={18} strokeWidth={1.8} />
         </div>
-        {(connState === 'connecting' || connState === 'disconnected') && (
+        {(connState === 'connecting' || connState === 'disconnected' || connState === 'auth-failed') && (
           <div
-            title={connState === 'connecting' ? '连接中' : '已断开，正在重连'}
+            title={
+              connState === 'connecting'
+                ? '连接中'
+                : connState === 'auth-failed'
+                  ? '认证失败，请检查本地 token 配置'
+                  : '已断开，正在重连'
+            }
             style={{
               position: 'absolute', bottom: -2, right: -2,
               width: 8, height: 8, borderRadius: '50%',

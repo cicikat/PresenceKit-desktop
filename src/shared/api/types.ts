@@ -19,7 +19,7 @@ export type ClientMessage =
   | { type: 'ack'; msg_id: string; ok: boolean; error?: string }
   | { type: 'pong' };
 
-export type ConnectionState = 'idle' | 'connecting' | 'connected' | 'disconnected';
+export type ConnectionState = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'auth-failed';
 
 export type DesktopActionType =
   | 'minimize_window'

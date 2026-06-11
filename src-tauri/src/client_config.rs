@@ -106,20 +106,10 @@ pub struct FrontendClientConfig {
 
 impl From<ClientConfig> for FrontendClientConfig {
     fn from(cfg: ClientConfig) -> Self {
-        // Append ?token= so the frontend WebSocket URL carries the credential at connect time.
-        // Skip if the base URL already contains a token= param (e.g. set manually in client.local.json).
-        let ws_base = if !cfg.admin_token.is_empty() && !cfg.websocket_base.contains("token=") {
-            if cfg.websocket_base.contains('?') {
-                format!("{}&token={}", cfg.websocket_base, cfg.admin_token)
-            } else {
-                format!("{}?token={}", cfg.websocket_base, cfg.admin_token)
-            }
-        } else {
-            cfg.websocket_base
-        };
         Self {
             backend_base: cfg.backend_base,
-            websocket_base: ws_base,
+            websocket_base: crate::ws_bridge::sanitize_websocket_url(&cfg.websocket_base)
+                .unwrap_or_else(|_| DEFAULT_WEBSOCKET_BASE.to_string()),
             sensor_config: cfg.sensor_config,
         }
     }

@@ -6,6 +6,7 @@
 // publisher.rs 另有 /sensor/realtime。后端路由变更时需手动同步这两个文件。
 mod actions;
 mod client_config;
+mod ws_bridge;
 pub mod sensor;
 
 use std::fs;
@@ -15,6 +16,36 @@ use base64::Engine;
 use crate::client_config::{backend_url, load_client_config};
 use crate::sensor::runner::{spawn_sensor_runner, SensorRunnerConfig, SensorRunnerHandle};
 use tauri::Manager;
+
+fn http_client() -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .no_proxy()
+        .build()
+        .map_err(|_| "无法创建后端连接".to_string())
+}
+
+fn authorized_request(
+    cfg: &crate::client_config::ClientConfig,
+    request: reqwest::RequestBuilder,
+) -> reqwest::RequestBuilder {
+    request.bearer_auth(&cfg.admin_token)
+}
+
+fn safe_http_error(status: reqwest::StatusCode) -> String {
+    if matches!(status.as_u16(), 401 | 403) {
+        "认证失败，请检查本地 token 配置".to_string()
+    } else {
+        format!("HTTP {}", status.as_u16())
+    }
+}
+
+async fn require_success(response: reqwest::Response) -> Result<reqwest::Response, String> {
+    if response.status().is_success() {
+        Ok(response)
+    } else {
+        Err(safe_http_error(response.status()))
+    }
+}
 
 fn avatar_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let dir = app.path()
@@ -360,24 +391,18 @@ async fn upload_document(
         .text("channel", "desktop");
 
     // 4. 发请求(必须 no_proxy)
-    let client = reqwest::Client::builder()
-        .no_proxy()
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client = http_client()?;
 
-    let resp = client
-        .post(backend_url(&cfg, "/upload/ingest"))
-        .bearer_auth(cfg.admin_token)
+    let resp = authorized_request(&cfg, client.post(backend_url(&cfg, "/upload/ingest")))
         .multipart(form)
         .send()
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|_| "上传请求失败".to_string())?;
 
     let status = resp.status();
     if !status.is_success() {
         // 分类错误码,前端按 status 数字处理文案
-        let body = resp.text().await.unwrap_or_default();
-        return Err(format!("HTTP {}: {}", status.as_u16(), body));
+        return Err(safe_http_error(status));
     }
 
     resp.json::<serde_json::Value>()
@@ -433,16 +458,12 @@ async fn write_avatars_json(app: tauri::AppHandle, json: String) -> Result<(), S
 #[tauri::command]
 async fn dream_get_state(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
-    let client = reqwest::Client::builder().no_proxy().build().map_err(|e| e.to_string())?;
-    let resp = client
-        .get(backend_url(&cfg, "/dream/state"))
-        .bearer_auth(&cfg.admin_token)
+    let client = http_client()?;
+    let resp = authorized_request(&cfg, client.get(backend_url(&cfg, "/dream/state")))
         .send()
         .await
-        .map_err(|e| e.to_string())?;
-    if !resp.status().is_success() {
-        return Err(format!("HTTP {}", resp.status().as_u16()));
-    }
+        .map_err(|_| "Dream state 请求失败".to_string())?;
+    let resp = require_success(resp).await?;
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
 
@@ -454,55 +475,43 @@ async fn dream_enter(
     script_id: Option<String>,
 ) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
-    let client = reqwest::Client::builder().no_proxy().build().map_err(|e| e.to_string())?;
+    let client = http_client()?;
     let mut body = serde_json::Map::new();
     if let Some(v) = entry_reason { body.insert("entry_reason".into(), v.into()); }
     if let Some(v) = dream_mode { body.insert("dream_mode".into(), v.into()); }
     if let Some(v) = script_id { body.insert("script_id".into(), v.into()); }
-    let resp = client
-        .post(backend_url(&cfg, "/dream/enter"))
-        .bearer_auth(&cfg.admin_token)
+    let resp = authorized_request(&cfg, client.post(backend_url(&cfg, "/dream/enter")))
         .json(&serde_json::Value::Object(body))
         .send()
         .await
-        .map_err(|e| e.to_string())?;
-    if !resp.status().is_success() {
-        return Err(format!("HTTP {}", resp.status().as_u16()));
-    }
+        .map_err(|_| "Dream enter 请求失败".to_string())?;
+    let resp = require_success(resp).await?;
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 async fn dream_chat(app: tauri::AppHandle, message: String) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
-    let client = reqwest::Client::builder().no_proxy().build().map_err(|e| e.to_string())?;
-    let resp = client
-        .post(backend_url(&cfg, "/dream/chat"))
-        .bearer_auth(&cfg.admin_token)
+    let client = http_client()?;
+    let resp = authorized_request(&cfg, client.post(backend_url(&cfg, "/dream/chat")))
         .json(&serde_json::json!({ "message": message }))
         .send()
         .await
-        .map_err(|e| e.to_string())?;
-    if !resp.status().is_success() {
-        return Err(format!("HTTP {}", resp.status().as_u16()));
-    }
+        .map_err(|_| "Dream chat 请求失败".to_string())?;
+    let resp = require_success(resp).await?;
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 async fn dream_exit(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
-    let client = reqwest::Client::builder().no_proxy().build().map_err(|e| e.to_string())?;
-    let resp = client
-        .post(backend_url(&cfg, "/dream/exit"))
-        .bearer_auth(&cfg.admin_token)
+    let client = http_client()?;
+    let resp = authorized_request(&cfg, client.post(backend_url(&cfg, "/dream/exit")))
         .json(&serde_json::json!({}))
         .send()
         .await
-        .map_err(|e| e.to_string())?;
-    if !resp.status().is_success() {
-        return Err(format!("HTTP {}", resp.status().as_u16()));
-    }
+        .map_err(|_| "Dream exit 请求失败".to_string())?;
+    let resp = require_success(resp).await?;
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
 
@@ -510,20 +519,14 @@ async fn dream_exit(app: tauri::AppHandle) -> Result<serde_json::Value, String> 
 async fn dream_get_settings(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
     let url = backend_url(&cfg, "/dream/settings");
-    eprintln!("[dream_get_settings] GET {url}");
-    let client = reqwest::Client::builder().no_proxy().build().map_err(|e| e.to_string())?;
-    let resp = client
-        .get(&url)
-        .bearer_auth(&cfg.admin_token)
+    let client = http_client()?;
+    let resp = authorized_request(&cfg, client.get(&url))
         .send()
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|_| "Dream settings 请求失败".to_string())?;
     let status = resp.status();
-    eprintln!("[dream_get_settings] status={}", status.as_u16());
     if !status.is_success() {
-        let body = resp.text().await.unwrap_or_default();
-        eprintln!("[dream_get_settings] error body: {body}");
-        return Err(format!("HTTP {} — {}", status.as_u16(), body));
+        return Err(safe_http_error(status));
     }
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
@@ -541,7 +544,7 @@ async fn dream_update_settings(
 ) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
     let url = backend_url(&cfg, "/dream/settings");
-    let client = reqwest::Client::builder().no_proxy().build().map_err(|e| e.to_string())?;
+    let client = http_client()?;
     let mut body = serde_json::Map::new();
     if let Some(v) = enable_dream_lorebook { body.insert("enable_dream_lorebook".into(), v.into()); }
     if let Some(v) = memory_access   { body.insert("memory_access".into(), v.into()); }
@@ -551,20 +554,14 @@ async fn dream_update_settings(
     if let Some(v) = jailbreak_preset { body.insert("jailbreak_preset".into(), v.into()); }
     if let Some(v) = display         { body.insert("display".into(), v); }
     let body_json = serde_json::Value::Object(body);
-    eprintln!("[dream_update_settings] PATCH {url}  body={body_json}");
-    let resp = client
-        .patch(&url)
-        .bearer_auth(&cfg.admin_token)
+    let resp = authorized_request(&cfg, client.patch(&url))
         .json(&body_json)
         .send()
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|_| "Dream settings 更新失败".to_string())?;
     let status = resp.status();
-    eprintln!("[dream_update_settings] status={}", status.as_u16());
     if !status.is_success() {
-        let body = resp.text().await.unwrap_or_default();
-        eprintln!("[dream_update_settings] error body: {body}");
-        return Err(format!("HTTP {} — {}", status.as_u16(), body));
+        return Err(safe_http_error(status));
     }
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
@@ -623,20 +620,19 @@ async fn patch_prompt_assets(
 #[tauri::command]
 async fn desktop_wake(app: tauri::AppHandle, last_seen: Option<f64>) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
-    let client = reqwest::Client::builder().no_proxy().build().map_err(|e| e.to_string())?;
+    let client = http_client()?;
     let body = if let Some(ts) = last_seen {
         serde_json::json!({ "last_seen": ts })
     } else {
         serde_json::json!({})
     };
-    let resp = client
-        .post(backend_url(&cfg, "/desktop/wake"))
+    let resp = authorized_request(&cfg, client.post(backend_url(&cfg, "/desktop/wake")))
         .json(&body)
         .send()
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|_| "Desktop wake 请求失败".to_string())?;
     if !resp.status().is_success() {
-        return Err(format!("HTTP {}", resp.status().as_u16()));
+        return Err(safe_http_error(resp.status()));
     }
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
@@ -967,15 +963,18 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            ws_bridge::register(app);
             let cfg = load_client_config(app.handle());
 
             // Phase 3: 启动后激活 desktop 通道（fire-and-forget，失败只 warning）
             let activate_url = backend_url(&cfg, "/desktop/activate");
+            let activate_cfg = cfg.clone();
             tauri::async_runtime::spawn(async move {
                 if let Ok(client) = reqwest::Client::builder().no_proxy().build() {
-                    match client.post(&activate_url).json(&serde_json::json!({})).send().await {
-                        Ok(_) => eprintln!("[lib] desktop_activate ok"),
-                        Err(e) => eprintln!("[lib] desktop_activate warning: {e}"),
+                    match authorized_request(&activate_cfg, client.post(&activate_url)).json(&serde_json::json!({})).send().await {
+                        Ok(response) if response.status().is_success() => eprintln!("[lib] desktop_activate ok"),
+                        Ok(response) => eprintln!("[lib] desktop_activate warning: {}", safe_http_error(response.status())),
+                        Err(_) => eprintln!("[lib] desktop_activate warning: request failed"),
                     }
                 }
             });
@@ -1008,6 +1007,9 @@ pub fn run() {
             actions::action_show_notify,
             actions::action_media_play_pause,
             client_config::load_public_client_config,
+            ws_bridge::native_ws_connect,
+            ws_bridge::native_ws_send,
+            ws_bridge::native_ws_disconnect,
             greet,
             list_dream_fonts,
             send_chat,
@@ -1056,4 +1058,63 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod auth_tests {
+    use super::*;
+    use crate::client_config::{ClientConfig, SensorConfig};
+    use reqwest::header::AUTHORIZATION;
+
+    fn test_config() -> ClientConfig {
+        ClientConfig {
+            backend_base: "http://127.0.0.1:8080".to_string(),
+            websocket_base: "ws://127.0.0.1:8080/ws/desktop".to_string(),
+            admin_token: "secret-value".to_string(),
+            sensor_config: SensorConfig::default(),
+            bot_user_id: String::new(),
+        }
+    }
+
+    #[test]
+    fn protected_http_requests_use_bearer_header_without_url_leakage() {
+        let cfg = test_config();
+        let client = http_client().unwrap();
+        let endpoints = [
+            ("POST", "/desktop/wake"),
+            ("POST", "/desktop/activate"),
+            ("POST", "/upload/ingest"),
+            ("POST", "/dream/enter"),
+            ("POST", "/dream/chat"),
+            ("POST", "/dream/exit"),
+            ("GET", "/dream/state"),
+            ("GET", "/dream/settings"),
+            ("PATCH", "/dream/settings"),
+        ];
+
+        for (method, path) in endpoints {
+            let builder = match method {
+                "GET" => client.get(backend_url(&cfg, path)),
+                "PATCH" => client.patch(backend_url(&cfg, path)),
+                _ => client.post(backend_url(&cfg, path)),
+            };
+            let request = authorized_request(&cfg, builder).build().unwrap();
+            assert_eq!(
+                request.headers().get(AUTHORIZATION).unwrap(),
+                "Bearer secret-value"
+            );
+            assert!(!request.url().as_str().contains("secret-value"));
+            assert!(!request.url().as_str().contains("token="));
+        }
+    }
+
+    #[test]
+    fn auth_http_errors_are_safe() {
+        for status in [reqwest::StatusCode::UNAUTHORIZED, reqwest::StatusCode::FORBIDDEN] {
+            let message = safe_http_error(status);
+            assert_eq!(message, "认证失败，请检查本地 token 配置");
+            assert!(!message.contains("Bearer"));
+            assert!(!message.contains("secret-value"));
+        }
+    }
 }

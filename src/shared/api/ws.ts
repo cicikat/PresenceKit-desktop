@@ -1,11 +1,26 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { ServerMessage, ClientMessage, ConnectionState, DesktopActionPayload, DesktopActionType, NarrativeSegment } from './types';
+import { listen } from '@tauri-apps/api/event';
+import type {
+  ServerMessage,
+  ClientMessage,
+  ConnectionState,
+  DesktopActionPayload,
+  DesktopActionType,
+  NarrativeSegment,
+} from './types';
 
 type EventMap = {
   state: ConnectionState;
   channel_message: { content: string; msg_id: string; source?: string };
   message_segments: { content: string; segments: NarrativeSegment[]; msg_id: string; source?: string };
   action: DesktopActionPayload;
+};
+
+type NativeMessageEvent = { connectionId: number; data: string };
+type NativeCloseEvent = {
+  connectionId: number;
+  code: number;
+  replacedByNewConnection: boolean;
 };
 
 function actionType(action: DesktopActionPayload): string | null {
@@ -19,11 +34,7 @@ function actionParams(action: DesktopActionPayload): Record<string, unknown> {
     : {};
 }
 
-function stringParam(
-  action: DesktopActionPayload,
-  keys: string[],
-  fallback = '',
-): string {
+function stringParam(action: DesktopActionPayload, keys: string[], fallback = ''): string {
   const params = actionParams(action);
   for (const key of keys) {
     const value = params[key] ?? action[key];
@@ -33,13 +44,15 @@ function stringParam(
 }
 
 class WSClient {
-  private ws: WebSocket | null = null;
+  private connectionId: number | null = null;
   private connState: ConnectionState = 'idle';
   private backoff = 1000;
   private lastRecv = 0;
   private watchdogTimer: number | null = null;
   private reconnectTimer: number | null = null;
   private url = '';
+  private authFailed = false;
+  private listenersPromise: Promise<void> | null = null;
   private handlers = new Map<string, Set<(payload: any) => void>>();
 
   on<K extends keyof EventMap>(event: K, handler: (payload: EventMap[K]) => void): () => void {
@@ -49,132 +62,174 @@ class WSClient {
   }
 
   private emit<K extends keyof EventMap>(event: K, payload: EventMap[K]) {
-    this.handlers.get(event)?.forEach(h => h(payload));
+    this.handlers.get(event)?.forEach(handler => handler(payload));
   }
 
   connect(url: string) {
-    if (this.url) return; // already initialized, idempotent
+    if (this.url) return;
+    // The URL is only an initialization marker. Rust reads and sanitizes the real
+    // configured URL so credentials never enter WebView state or native events.
     this.url = url;
+    this.authFailed = false;
     this._connect();
   }
 
   disconnect() {
-    this.url = ''; // clears url so onclose won't reschedule
+    this.url = '';
     this._clearTimers();
-    if (this.ws) {
-      this.ws.onclose = null;
-      this.ws.close();
-      this.ws = null;
-    }
+    this.connectionId = null;
+    void invoke('native_ws_disconnect');
     this._setState('idle');
   }
 
-  getState(): ConnectionState { return this.connState; }
+  getState(): ConnectionState {
+    return this.connState;
+  }
 
-  private _setState(s: ConnectionState) {
-    this.connState = s;
-    this.emit('state', s);
+  private _setState(state: ConnectionState) {
+    this.connState = state;
+    this.emit('state', state);
   }
 
   private _clearTimers() {
-    if (this.watchdogTimer !== null) { clearInterval(this.watchdogTimer); this.watchdogTimer = null; }
-    if (this.reconnectTimer !== null) { clearTimeout(this.reconnectTimer); this.reconnectTimer = null; }
+    if (this.watchdogTimer !== null) {
+      clearInterval(this.watchdogTimer);
+      this.watchdogTimer = null;
+    }
+    if (this.reconnectTimer !== null) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+  }
+
+  private async _ensureListeners() {
+    if (!this.listenersPromise) {
+      this.listenersPromise = Promise.all([
+        listen<NativeMessageEvent>('client-ws-message', event => {
+          if (event.payload.connectionId !== this.connectionId) return;
+          this._handleMessage(event.payload.data);
+        }),
+        listen<NativeCloseEvent>('client-ws-close', event => {
+          if (event.payload.connectionId !== this.connectionId) return;
+          this._handleClose(event.payload.replacedByNewConnection);
+        }),
+      ]).then(() => undefined);
+    }
+    return this.listenersPromise;
   }
 
   private _connect() {
+    void this._connectNative();
+  }
+
+  private async _connectNative() {
     this._setState('connecting');
-    const ws = new WebSocket(this.url);
-    this.ws = ws;
-    this.lastRecv = Date.now();
-
-    ws.onopen = () => {
-      this._send({ type: 'hello', client: 'emerald-client', version: '0.1' });
-      console.log('[ws] WS 已连接，hello 已发送');
-      this.watchdogTimer = window.setInterval(() => {
-        if (Date.now() - this.lastRecv > 60_000) {
-          console.log('[ws] watchdog: 60s 无消息，主动断开重连');
-          ws.close();
-        }
-      }, 5_000);
-    };
-
-    ws.onmessage = (e) => {
-      this.lastRecv = Date.now();
-      let msg: ServerMessage;
-      try { msg = JSON.parse(e.data as string); }
-      catch { return; }
-
-      switch (msg.type) {
-        case 'hello_ack':
-          console.log('[ws] 握手成功, server_version:', msg.server_version);
-          this.backoff = 1000; // reset backoff on confirmed handshake, not on open
-          this._setState('connected');
-          break;
-        case 'channel_message':
-          this.emit('channel_message', { content: msg.content, msg_id: msg.msg_id, source: msg.source });
-          this._send({ type: 'ack', msg_id: msg.msg_id, ok: true });
-          break;
-        case 'message_segments':
-          // Phase 1: emit for future consumers; no ack needed (fire-and-forget)
-          this.emit('message_segments', { content: msg.content, segments: msg.segments, msg_id: msg.msg_id, source: msg.source });
-          break;
-        case 'action':
-          this.emit('action', msg.action);
-          void this._handleAction(msg.msg_id, msg.action);
-          break;
-        case 'ping':
-          this._send({ type: 'pong' });
-          break;
-      }
-    };
-
-    ws.onerror = () => { /* onclose always follows */ };
-
-    ws.onclose = (e: CloseEvent) => {
-      if (this.ws !== ws) return; // stale socket closed after a newer connection took over
-
-      const replacedByNewConnection =
-        e.code === 1000 && e.reason.includes('replaced by new connection');
-
-      this._clearTimers();
-      this.ws = null;
-      if (replacedByNewConnection) {
-        this.url = '';
-        this._setState('idle');
-        console.log('[ws] 连接被新 desktop websocket 替换，停止自动重连');
+    try {
+      await this._ensureListeners();
+      const connectionId = await invoke<number>('native_ws_connect');
+      if (!this.url) {
+        await invoke('native_ws_disconnect');
         return;
       }
-      if (!this.url) {
+      this.connectionId = connectionId;
+      this.authFailed = false;
+      this.lastRecv = Date.now();
+      this._send({ type: 'hello', client: 'emerald-client', version: '0.1' });
+      this.watchdogTimer = window.setInterval(() => {
+        if (Date.now() - this.lastRecv > 60_000) {
+          void invoke('native_ws_disconnect');
+        }
+      }, 5_000);
+    } catch (error) {
+      const message = String(error);
+      this.connectionId = null;
+      this._clearTimers();
+      if (message.includes('AUTHENTICATION_FAILED')) {
+        this.authFailed = true;
+        this._setState('auth-failed');
+        console.warn('[ws] 认证失败，请检查本地 token 配置');
         return;
       }
       this._setState('disconnected');
-      const delay = this.backoff;
-      this.backoff = Math.min(this.backoff * 2, 30_000);
-      console.log(`[ws] 连接断开，${delay / 1000}s 后重连`);
-      this.reconnectTimer = window.setTimeout(() => this._connect(), delay);
-    };
+      this._scheduleReconnect();
+    }
+  }
+
+  private _handleMessage(data: string) {
+    this.lastRecv = Date.now();
+    let msg: ServerMessage;
+    try {
+      msg = JSON.parse(data);
+    } catch {
+      return;
+    }
+
+    switch (msg.type) {
+      case 'hello_ack':
+        this.backoff = 1000;
+        this._setState('connected');
+        break;
+      case 'channel_message':
+        this.emit('channel_message', { content: msg.content, msg_id: msg.msg_id, source: msg.source });
+        this._send({ type: 'ack', msg_id: msg.msg_id, ok: true });
+        break;
+      case 'message_segments':
+        this.emit('message_segments', {
+          content: msg.content,
+          segments: msg.segments,
+          msg_id: msg.msg_id,
+          source: msg.source,
+        });
+        break;
+      case 'action':
+        this.emit('action', msg.action);
+        void this._handleAction(msg.msg_id, msg.action);
+        break;
+      case 'ping':
+        this._send({ type: 'pong' });
+        break;
+    }
+  }
+
+  private _handleClose(replacedByNewConnection: boolean) {
+    this._clearTimers();
+    this.connectionId = null;
+    if (replacedByNewConnection) {
+      this.url = '';
+      this._setState('idle');
+      return;
+    }
+    if (!this.url || this.authFailed) return;
+    this._setState('disconnected');
+    this._scheduleReconnect();
+  }
+
+  private _scheduleReconnect() {
+    if (!this.url || this.authFailed) return;
+    const delay = this.backoff;
+    this.backoff = Math.min(this.backoff * 2, 30_000);
+    this.reconnectTimer = window.setTimeout(() => this._connect(), delay);
   }
 
   private _send(msg: ClientMessage) {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(msg));
-    }
+    if (this.connectionId === null) return;
+    void invoke('native_ws_send', {
+      connectionId: this.connectionId,
+      message: JSON.stringify(msg),
+    });
   }
 
   private async _handleAction(msgId: string, action: DesktopActionPayload) {
     const type = actionType(action);
-    console.log('[ws] action received:', action);
-
     if (!type) {
       const error = 'action 缺少 type/action_type';
-      console.warn('[ws] action dispatch failed:', error, action);
+      console.warn('[ws] action dispatch failed:', error);
       this._send({ type: 'ack', msg_id: msgId, ok: false, error });
       return;
     }
 
     try {
       await this._dispatchAction(type as DesktopActionType, action);
-      console.log('[ws] action executed:', type);
       this._send({ type: 'ack', msg_id: msgId, ok: true });
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);

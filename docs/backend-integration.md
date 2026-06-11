@@ -45,8 +45,8 @@ config/client.local.json
 | 字段 | 默认值 | 说明 |
 |---|---|---|
 | `backendBase` | `http://127.0.0.1:8080` | Rust Tauri command 访问后端 HTTP 的 base URL，不包含末尾 `/` |
-| `websocketBase` | `ws://127.0.0.1:8080/ws/desktop` | 前端原生 WebSocket 连接地址 |
-| `adminToken` | 当前本地开发默认 token | 仅 Rust 侧读取和使用，不透传给前端日志 |
+| `websocketBase` | `ws://127.0.0.1:8080/ws/desktop` | Rust 原生 WebSocket bridge 连接地址；配置中的 legacy `token` query 会被移除 |
+| `adminToken` | 当前本地开发默认 token | 仅 Rust 侧读取，用于 HTTP / WebSocket Bearer header，不透传给前端日志 |
 | `sensorConfig.enabled` | `true` | 是否启动 Tauri 内嵌 sensor runner |
 | `sensorConfig.windowSeconds` | `30` | sensor 聚合窗口长度 |
 | `sensorConfig.tickSeconds` | `5` | sensor 采样/推送 tick |
@@ -61,7 +61,8 @@ config/client.local.json
 | 客户端文件 | 调用 |
 |---|---|
 | `src/shared/api/backend.ts` | `sendChat()`、`loadHistory()`、`loadGardenState()`、`loadDiaryList()`、`loadDiaryEntry()`、`loadSensorRealtime()`、`getPromptAssets()`、`patchPromptAssets()` |
-| `src/shared/api/ws.ts` | `wsClient.connect()`、legacy WS 收发 |
+| `src/shared/api/ws.ts` | `wsClient.connect()`、通过 Tauri commands / events 完成 legacy WS 收发 |
+| `src-tauri/src/ws_bridge.rs` | 原生 WS 连接、Bearer header、URL 清洗与前端事件桥接 |
 | `src-tauri/src/lib.rs` | `send_chat`、`load_history`、`load_garden_state`、`load_diary_list`、`load_diary_entry`、`get_prompt_assets`、`patch_prompt_assets`、头像 / Dream 背景文件 commands、Dream 字体目录扫描 |
 | `src/windows/chat/components/ChatPanel.tsx` | 启动历史、发送消息、订阅 WS 主动消息 |
 | `src/windows/chat/components/Ribbon.tsx` | 读取 WS 连接状态 |
@@ -645,6 +646,10 @@ ws://127.0.0.1:8080/ws/desktop
 
 ### 连接语义
 
+- 前端不再调用浏览器原生 `new WebSocket()`；连接由 `src-tauri/src/ws_bridge.rs` 建立。
+- Rust 使用本地 `adminToken` 设置 `Authorization: Bearer <token>`，不会生成 `?token=...` URL。
+- 若旧本地配置的 `websocketBase` 含 `token` query，bridge 会在连接前移除；该值不会进入公开前端配置。
+- 401/403 返回安全认证提示并停止自动重连，避免鉴权失败无限刷屏。
 - 后端只保留一个当前 WS 连接。
 - 新连接进来时，后端关闭旧连接。
 - 后端每 30 秒发 `ping`。
@@ -784,6 +789,9 @@ v1 目标新增或替换：
 
 | Command | 方向 | 说明 |
 |---|---|---|
+| `native_ws_connect()` | 前端 → Rust → 后端 | 使用本地 admin token 建立带 Bearer header 的原生 WebSocket |
+| `native_ws_send(connection_id, message)` | 前端 → Rust → 后端 | 发送既有 legacy WS payload，不改变消息协议 |
+| `native_ws_disconnect()` | 前端 → Rust → 后端 | 关闭当前原生 WebSocket |
 | `send_chat(message)` | 前端 → Rust → 后端 | POST `/desktop/chat` |
 | `load_history(user_id)` | 前端 → Rust → 后端 | GET `/memory/{user_id}/short-term`；Rust 侧读取 admin token |
 | `load_garden_state()` | 前端 → Rust → 后端 | GET `/garden/state`；Rust 侧读取 admin token |
@@ -818,6 +826,15 @@ reqwest::Client::builder()
 ```
 
 当前 `send_chat`、`load_history`、`load_garden_state`、`load_diary_list`、`load_diary_entry`、`load_chat_log_dates`、`load_chat_log_day`、`get_prompt_assets`、`patch_prompt_assets` 和 `load_hidden_state_debug` 已符合这条规则。
+
+Client Auth Sync（R9 / SEC-AUTH-1）已同步的受保护调用点：
+
+- `POST /desktop/wake`、启动时 `POST /desktop/activate`
+- `POST /upload/ingest`
+- `POST /dream/enter`、`POST /dream/chat`、`POST /dream/exit`
+- `GET /dream/state`、`GET /dream/settings`、`PATCH /dream/settings`
+
+当前未发现客户端调用点：`POST /desktop/deactivate`、`POST /agent/think`。未为它们新增业务调用。
 
 已实施:`load_sensor_realtime`,SubStatus 通过 Tauri command 消费 GET `/sensor/realtime`,Rust 侧 reqwest client 使用 `.no_proxy()`。即使 sensor 采集(POST)与消费(GET)同在 Tauri Rust 进程内,数据仍绕后端,保持后端作为 single source of truth。
 
