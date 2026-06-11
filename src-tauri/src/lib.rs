@@ -927,6 +927,11 @@ async fn activity_gomoku_chat(app: tauri::AppHandle, payload: GomokuChatPayload)
     activity_post(&app, "/activity/gomoku/chat", serde_json::json!({ "session_id": payload.session_id, "message": payload.message })).await
 }
 
+#[tauri::command]
+async fn activity_gomoku_ai_move(app: tauri::AppHandle, payload: ActivitySessionPayload) -> Result<serde_json::Value, String> {
+    activity_post(&app, "/activity/gomoku/ai_move", serde_json::json!({ "session_id": payload.session_id })).await
+}
+
 // ── Chess ─────────────────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -1050,6 +1055,7 @@ pub fn run() {
             activity_gomoku_move,
             activity_gomoku_close,
             activity_gomoku_chat,
+            activity_gomoku_ai_move,
             activity_chess_start,
             activity_chess_state,
             activity_chess_move,

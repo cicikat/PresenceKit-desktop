@@ -95,10 +95,32 @@ export interface GomokuStartRequest {
   ai_style?: GomokuAiStyle;
 }
 
+export interface GomokuUserMoveFacts {
+  created_chain?: number | null;
+  blocked_opponent_chain?: number | null;
+  is_center_area?: boolean;
+  is_edge_area?: boolean;
+  adjacent_stones?: number;
+  summary?: string;
+}
+
+export interface GomokuAiMoveFacts {
+  purpose?: string;
+  created_chain?: number | null;
+  blocked_user_chain?: number | null;
+  summary?: string;
+}
+
+export interface GomokuGroundingFacts {
+  last_user_move_facts?: GomokuUserMoveFacts;
+  last_ai_move_facts?: GomokuAiMoveFacts;
+}
+
 export interface GomokuChatResult {
   session_id: string;
   reply: string;
-  control: Record<string, unknown>;
+  control?: Record<string, unknown>;
+  grounding?: GomokuGroundingFacts;
 }
 
 export const gomokuApi = {
@@ -116,6 +138,8 @@ export const gomokuApi = {
     invokeActivity('activity_gomoku_close', { payload: { session_id } }),
   chat: (params: { session_id: string; message: string }): Promise<GomokuChatResult> =>
     invokeActivity('activity_gomoku_chat', { payload: { session_id: params.session_id, message: params.message } }),
+  aiMove: (session_id: string): Promise<Omit<GomokuState, 'session_id'>> =>
+    invokeActivity('activity_gomoku_ai_move', { payload: { session_id } }),
 };
 
 // ── Chess ─────────────────────────────────────────────────────────────────────

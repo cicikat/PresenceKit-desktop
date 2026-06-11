@@ -1,10 +1,52 @@
 import { useState, useEffect, useRef } from 'react';
-import { gomokuApi } from '../../../shared/api/activity-api';
+import { gomokuApi, type GomokuGroundingFacts, type GomokuUserMoveFacts } from '../../../shared/api/activity-api';
 
 interface ChatMessage {
   role: 'user' | 'yexuan';
   text: string;
   error?: boolean;
+  grounding?: GomokuGroundingFacts;
+}
+
+function buildUserMoveHint(f: GomokuUserMoveFacts): string | null {
+  if (f.summary) return `依据：${f.summary}`;
+  if ((f.created_chain ?? 0) >= 3) return `依据：你这手形成了 ${f.created_chain} 连。`;
+  if ((f.blocked_opponent_chain ?? 0) >= 3) return `依据：你这手挡住了对方的 ${f.blocked_opponent_chain} 连。`;
+  if ((f.adjacent_stones ?? 0) > 0) return `依据：你这手靠近已有棋子，附近有 ${f.adjacent_stones} 枚相邻棋子。`;
+  if (f.is_center_area) return `依据：你这手靠近棋盘中心。`;
+  return null;
+}
+
+function GomokuGroundingHint({ grounding }: { grounding?: GomokuGroundingFacts }) {
+  const userHint = grounding?.last_user_move_facts
+    ? buildUserMoveHint(grounding.last_user_move_facts)
+    : null;
+  const aiHint = grounding?.last_ai_move_facts?.summary
+    ? `叶瑄上一手：${grounding.last_ai_move_facts.summary}`
+    : null;
+
+  const hasContent = userHint || aiHint;
+
+  return (
+    <div style={{
+      marginTop: 5,
+      fontSize: 11.5,
+      lineHeight: 1.55,
+      color: 'var(--ink-3)',
+      opacity: hasContent ? 0.72 : 0.45,
+      maxWidth: '100%',
+      wordBreak: 'break-word',
+    }}>
+      {hasContent ? (
+        <>
+          {userHint && <div>{userHint}</div>}
+          {aiHint && <div>{aiHint}</div>}
+        </>
+      ) : (
+        <div>这句是陪聊，不是棋局判断。</div>
+      )}
+    </div>
+  );
 }
 
 interface Props {
@@ -45,7 +87,8 @@ export function ActivityCompanionPanel({ sessionId, sessionActive, sessionFinish
     try {
       const result = await gomokuApi.chat({ session_id: sessionId, message: text });
       console.debug('[gomoku-chat] control', result.control);
-      setMessages(prev => [...prev, { role: 'yexuan', text: result.reply }]);
+      console.debug('[gomoku-chat] grounding', result.grounding);
+      setMessages(prev => [...prev, { role: 'yexuan', text: result.reply, grounding: result.grounding }]);
     } catch (e: any) {
       setMessages(prev => [...prev, { role: 'yexuan', text: String(e?.message ?? e), error: true }]);
     } finally {
@@ -110,6 +153,9 @@ export function ActivityCompanionPanel({ sessionId, sessionActive, sessionFinish
             }}>
               {msg.text}
             </div>
+            {msg.role === 'yexuan' && !msg.error && (
+              <GomokuGroundingHint grounding={msg.grounding} />
+            )}
           </div>
         ))}
         {sending && (
