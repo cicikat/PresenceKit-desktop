@@ -792,12 +792,16 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       if (source && source !== 'reality') return;
 
       let duplicateDropped = false;
+      const normalizedHash = normalizeForDedup(content);
 
       // Cancel desktopWake HTTP fallback — WS is the primary render path.
       // Important: we do NOT return here; we fall through to scheduleAssistantSegments
       // below so the WS content is rendered exactly once. The cancel only prevents the
       // 5s fallback timer from rendering a second copy after WS already delivered.
-      if (pendingWakeReplyRef.current) {
+      const pendingWakeHash = pendingWakeReplyRef.current
+        ? normalizeForDedup(pendingWakeReplyRef.current.parts.join('\n'))
+        : '';
+      if (pendingWakeReplyRef.current && pendingWakeHash === normalizedHash) {
         clearTimeout(pendingWakeReplyRef.current.timerId);
         pendingWakeReplyRef.current = null;
         duplicateDropped = true;
@@ -807,7 +811,10 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
 
       // Cancel send()/uploadDocument HTTP fallback — WS supersedes HTTP reply.
       // Same no-return reasoning: WS content must still render via the shared path below.
-      if (pendingSendReplyRef.current) {
+      const pendingSendHash = pendingSendReplyRef.current
+        ? normalizeForDedup(pendingSendReplyRef.current.reply)
+        : '';
+      if (pendingSendReplyRef.current && pendingSendHash === normalizedHash) {
         clearTimeout(pendingSendReplyRef.current.timerId);
         pendingSendReplyRef.current = null;
         duplicateDropped = true;
@@ -818,7 +825,6 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       // Check if a fallback was already rendered (timer fired before WS arrived).
       // In that case, wire the fallback bubble IDs to this msg_id and return early —
       // message_segments will then update those bubbles' segmentedContent in place.
-      const normalizedHash = normalizeForDedup(content);
       const now = Date.now();
       recentFallbacksRef.current = recentFallbacksRef.current.filter(r => now - r.renderedAt < 15000);
       const matchedFallback = recentFallbacksRef.current.find(r => r.normalizedHash === normalizedHash);
