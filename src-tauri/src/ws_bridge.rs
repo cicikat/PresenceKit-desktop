@@ -12,6 +12,10 @@ use tokio_tungstenite::tungstenite::{
 };
 
 const AUTH_ERROR: &str = "AUTHENTICATION_FAILED: 认证失败，请检查本地 token 配置";
+// Backend close-frame protocol contract. Until the backend defines a dedicated
+// close code, only this exact normal-close tuple means "do not reconnect".
+const REPLACED_BY_NEW_CONNECTION_CODE: u16 = 1000;
+const REPLACED_BY_NEW_CONNECTION_REASON: &str = "replaced by new connection";
 
 pub struct WsBridgeState {
     next_connection_id: AtomicU64,
@@ -85,6 +89,10 @@ fn connection_error(error: tokio_tungstenite::tungstenite::Error) -> String {
     }
 }
 
+fn is_replaced_by_new_connection(code: u16, reason: &str) -> bool {
+    code == REPLACED_BY_NEW_CONNECTION_CODE && reason == REPLACED_BY_NEW_CONNECTION_REASON
+}
+
 #[tauri::command]
 pub async fn native_ws_connect(
     app: tauri::AppHandle,
@@ -132,10 +140,15 @@ pub async fn native_ws_connect(
                             });
                         }
                         Some(Ok(Message::Close(frame))) => {
-                            let code = frame.as_ref().map(|value| value.code.into()).unwrap_or(1000);
+                            let code = frame
+                                .as_ref()
+                                .map(|value| value.code.into())
+                                .unwrap_or(1000);
                             let replaced = frame
                                 .as_ref()
-                                .map(|value| value.reason.contains("replaced by new connection"))
+                                .map(|value| {
+                                    is_replaced_by_new_connection(code, value.reason.as_ref())
+                                })
                                 .unwrap_or(false);
                             let _ = app_handle.emit("client-ws-close", WsCloseEvent {
                                 connection_id,
@@ -232,5 +245,29 @@ mod tests {
         assert!(AUTH_ERROR.contains("认证失败"));
         assert!(!AUTH_ERROR.contains("Bearer"));
         assert!(!AUTH_ERROR.contains("secret-value"));
+    }
+
+    #[test]
+    fn exact_normal_close_reason_marks_connection_as_replaced() {
+        assert!(is_replaced_by_new_connection(
+            REPLACED_BY_NEW_CONNECTION_CODE,
+            REPLACED_BY_NEW_CONNECTION_REASON
+        ));
+    }
+
+    #[test]
+    fn similar_reason_or_non_normal_code_does_not_mark_connection_as_replaced() {
+        assert!(!is_replaced_by_new_connection(
+            REPLACED_BY_NEW_CONNECTION_CODE,
+            "client replaced by new connection"
+        ));
+        assert!(!is_replaced_by_new_connection(
+            1006,
+            REPLACED_BY_NEW_CONNECTION_REASON
+        ));
+        assert!(!is_replaced_by_new_connection(
+            REPLACED_BY_NEW_CONNECTION_CODE,
+            ""
+        ));
     }
 }
