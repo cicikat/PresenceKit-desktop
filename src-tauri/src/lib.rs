@@ -10,7 +10,7 @@ mod ws_bridge;
 pub mod sensor;
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use base64::Engine;
 use crate::client_config::{backend_url, load_client_config};
@@ -69,20 +69,57 @@ fn avatar_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(dir)
 }
 
-#[tauri::command]
-fn list_dream_fonts() -> Result<serde_json::Value, String> {
-    let font_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+fn dream_fonts_dev_dir() -> Result<PathBuf, String> {
+    Ok(PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .ok_or_else(|| "无法定位项目根目录".to_string())?
         .join("public")
-        .join("fonts");
+        .join("fonts"))
+}
 
-    if !font_dir.exists() {
-        return Ok(serde_json::json!([]));
+fn dream_fonts_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let mut checked = Vec::new();
+
+    match app.path().resource_dir() {
+        Ok(resource_dir) => {
+            let font_dir = resource_dir.join("fonts");
+            if font_dir.is_dir() {
+                return Ok(font_dir);
+            }
+            checked.push(font_dir);
+        }
+        Err(error) => {
+            eprintln!("[dream_fonts] 无法定位运行期资源目录: {error}");
+        }
     }
 
+    if cfg!(debug_assertions) {
+        let dev_dir = dream_fonts_dev_dir()?;
+        if dev_dir.is_dir() {
+            eprintln!(
+                "[dream_fonts] 运行期字体资源不可用，使用开发环境 fallback: {}",
+                dev_dir.display()
+            );
+            return Ok(dev_dir);
+        }
+        checked.push(dev_dir);
+    }
+
+    let checked_paths = checked
+        .iter()
+        .map(|path| path.display().to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let message = format!("无法定位 Dream 字体目录，已检查: {checked_paths}");
+    eprintln!("[dream_fonts] {message}");
+    Err(message)
+}
+
+fn list_dream_fonts_in_dir(font_dir: &Path) -> Result<serde_json::Value, String> {
     let mut fonts = Vec::new();
-    for entry in fs::read_dir(&font_dir).map_err(|e| e.to_string())? {
+    for entry in fs::read_dir(font_dir)
+        .map_err(|e| format!("无法读取 Dream 字体目录 {}: {e}", font_dir.display()))?
+    {
         let entry = entry.map_err(|e| e.to_string())?;
         let path = entry.path();
         if !path.is_file() {
@@ -111,6 +148,12 @@ fn list_dream_fonts() -> Result<serde_json::Value, String> {
             .cmp(b["fileName"].as_str().unwrap_or_default())
     });
     Ok(serde_json::Value::Array(fonts))
+}
+
+#[tauri::command]
+fn list_dream_fonts(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let font_dir = dream_fonts_dir(&app)?;
+    list_dream_fonts_in_dir(&font_dir)
 }
 
 #[tauri::command]
@@ -1113,5 +1156,46 @@ mod auth_tests {
         // Verifies that http_client() builds successfully (timeout is set internally).
         assert!(http_client().is_ok());
         assert!(llm_http_client().is_ok());
+    }
+}
+
+#[cfg(test)]
+mod dream_font_tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn lists_supported_dream_fonts_with_compatible_shape() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let font_dir = std::env::temp_dir().join(format!(
+            "emerald-dream-font-test-{}-{unique}",
+            std::process::id()
+        ));
+        fs::create_dir_all(font_dir.join("nested")).unwrap();
+        fs::write(font_dir.join("Alpha.ttf"), []).unwrap();
+        fs::write(font_dir.join("Beta.WOFF2"), []).unwrap();
+        fs::write(font_dir.join("ignored.txt"), []).unwrap();
+
+        let value = list_dream_fonts_in_dir(&font_dir).unwrap();
+        fs::remove_dir_all(&font_dir).unwrap();
+
+        assert_eq!(
+            value,
+            serde_json::json!([
+                {
+                    "fileName": "Alpha.ttf",
+                    "label": "Alpha",
+                    "url": "/fonts/Alpha.ttf",
+                },
+                {
+                    "fileName": "Beta.WOFF2",
+                    "label": "Beta",
+                    "url": "/fonts/Beta.WOFF2",
+                },
+            ])
+        );
     }
 }
