@@ -3,12 +3,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { Tag, MicroLabel } from './UIKit';
 import { MOOD_HUE, MOOD_LABEL_EN, FOCUS_LABEL_EN } from './UIKit';
-import { loadMoodState, loadActivityState } from '../../../shared/api/backend';
-import { backendMoodToFrontend } from '../../../shared/state/mood-mapping';
 import { MOOD_TABLE } from '../../../shared/state/store';
 import { chatThemeFontSize } from '../../../shared/chatAppearance';
 import type { Mood } from '../../../shared/state/store';
-import type { ActivityState } from '../../../shared/api/types';
 
 interface FlowEntry {
   id: string;
@@ -56,39 +53,6 @@ function formatAgo(timestamp: number): string {
 export function SubFlow({ engine }: { engine: any }) {
   const [state, setState] = useState(engine.get());
   useEffect(() => engine.subscribe(setState), [engine]);
-
-  // ── slow mood poll (60s) ──────────────────────────────────────────────────
-  useEffect(() => {
-    const fetchMood = async () => {
-      try {
-        const raw = await loadMoodState();
-        engine.applyBackendState('mood-poll', { mood: backendMoodToFrontend(raw.current) });
-      } catch {}
-    };
-    fetchMood();
-    const h = setInterval(fetchMood, 60_000);
-    return () => clearInterval(h);
-  }, [engine]);
-
-  // ── slow activity poll (90s) ──────────────────────────────────────────────
-  useEffect(() => {
-    const fetchActivity = async () => {
-      try {
-        const raw: ActivityState = await loadActivityState();
-        engine.applyBackendState('activity-poll', {
-          activity: {
-            id: raw.id,
-            text: raw.text,
-            arc: raw.arc,
-            thinkingAboutEligible: raw.thinking_about_eligible,
-          },
-        });
-      } catch {}
-    };
-    fetchActivity();
-    const h = setInterval(fetchActivity, 90_000);
-    return () => clearInterval(h);
-  }, [engine]);
 
   // ── ring buffer ───────────────────────────────────────────────────────────
   const [timeline, setTimeline] = useState<FlowEntry[]>([]);

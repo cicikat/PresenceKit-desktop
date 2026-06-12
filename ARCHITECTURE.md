@@ -136,7 +136,7 @@ Tauri Rust 在 `src-tauri/src/lib.rs`：
 - `mode`：`companion` / `chat-only`
 - `wantToSpeak`、`behaviorId`、`bodyTiltOverride` 等视觉信号
 
-当前 engine 是前端本地对象。`STATE_FIELD_OWNERSHIP` 明确字段当前 owner；后端轮询写入统一走 `applyBackendState(source, patch)`，本地 focus 推断走 `setLocalFocus()`。WS `state_update` 尚未接入，`state-update` source 仅作为未来入口保留。sensor 快照当前不写入 engine，只在 `SubStatus` 内派生信号。
+当前 engine 是前端本地对象。`STATE_FIELD_OWNERSHIP` 明确字段当前 owner；`useBackendStatePolling()` 是 mood/activity 后端轮询的唯一入口，并统一通过 `applyBackendState(source, patch)` 写入；本地 focus 推断走 `setLocalFocus()`。WS `state_update` 尚未接入，`state-update` source 仅作为未来入口保留。sensor 快照当前不写入 engine，只在 `SubStatus` 内派生信号。
 
 旧原型 `D:\ai\Emerald-desktopUI\state-engine.js` 里有完整 behavior loop；当前 TypeScript 版删掉了 mock 行为循环，等待后端状态推送。
 

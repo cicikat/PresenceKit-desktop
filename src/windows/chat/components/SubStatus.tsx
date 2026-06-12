@@ -3,11 +3,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { MicroLabel } from './UIKit';
 import { MOOD_HUE, MOOD_LABEL_EN } from './UIKit';
-import { loadMoodState, loadActivityState, loadSensorRealtime } from '../../../shared/api/backend';
-import { backendMoodToFrontend } from '../../../shared/state/mood-mapping';
-import type { ActivityState, SensorRealtimeResponse, SensorRealtimeData } from '../../../shared/api/types';
+import { loadSensorRealtime } from '../../../shared/api/backend';
+import type { SensorRealtimeResponse, SensorRealtimeData } from '../../../shared/api/types';
 import { isSensorNoData } from '../../../shared/api/types';
 import { chatThemeFontSize } from '../../../shared/chatAppearance';
+import type { BackendStatePollingControls } from '../../../shared/state/useBackendStatePolling';
 
 // ── mood_aura 基准值（与 useTelemetrySignals 共享）────────────────────────────
 const MOOD_AURA_BASE: Record<string, number> = {
@@ -113,55 +113,18 @@ function useTelemetrySignals(
 
 // ── 主组件 ────────────────────────────────────────────────────────────────────
 
-export function SubStatus({ engine }: { engine: any }) {
+export function SubStatus({
+  engine,
+  backendStatePolling,
+}: {
+  engine: any;
+  backendStatePolling: BackendStatePollingControls;
+}) {
   const [state, setState] = useState(engine.get());
   useEffect(() => engine.subscribe(setState), [engine]);
 
-  const [moodError, setMoodError] = useState<string | null>(null);
-  const [actError, setActError] = useState<string | null>(null);
   const [sensorData, setSensorData] = useState<SensorRealtimeData | null>(null);
   const [sensorAvailable, setSensorAvailable] = useState(false);
-
-  // ── 每 30s 拉 mood ──────────────────────────────────────────────────────────
-  const fetchMood = async () => {
-    try {
-      const raw = await loadMoodState();
-      engine.applyBackendState('mood-poll', { mood: backendMoodToFrontend(raw.current) });
-      setMoodError(null);
-    } catch (e: any) {
-      setMoodError(String(e));
-    }
-  };
-
-  useEffect(() => {
-    fetchMood();
-    const h = setInterval(fetchMood, 30_000);
-    return () => clearInterval(h);
-  }, [engine]);
-
-  // ── 每 60s 拉 activity ──────────────────────────────────────────────────────
-  const fetchActivity = async () => {
-    try {
-      const raw: ActivityState = await loadActivityState();
-      engine.applyBackendState('activity-poll', {
-        activity: {
-          id: raw.id,
-          text: raw.text,
-          arc: raw.arc,
-          thinkingAboutEligible: raw.thinking_about_eligible,
-        },
-      });
-      setActError(null);
-    } catch (e: any) {
-      setActError(String(e));
-    }
-  };
-
-  useEffect(() => {
-    fetchActivity();
-    const h = setInterval(fetchActivity, 60_000);
-    return () => clearInterval(h);
-  }, [engine]);
 
   // ── 每 10s 拉 sensor realtime ─────────────────────────────────────────────
   const fetchSensor = async () => {
@@ -211,7 +174,8 @@ export function SubStatus({ engine }: { engine: any }) {
     return () => clearInterval(h);
   }, [engine]);
 
-  const hasError = moodError || actError;
+  const { moodError, activityError, retryMood, retryActivity } = backendStatePolling;
+  const hasError = moodError || activityError;
 
   return (
     <div style={{ padding: '12px 14px 18px', overflowY: 'auto', height: '100%' }}>
@@ -226,10 +190,10 @@ export function SubStatus({ engine }: { engine: any }) {
           display: 'flex', alignItems: 'center', gap: 10,
         }}>
           <span className="mono" style={{ flex: 1, fontSize: chatThemeFontSize(9.5), color: 'var(--on-forest-2)', letterSpacing: 1.1 }}>
-            {moodError ? 'mood' : ''}{moodError && actError ? ' · ' : ''}{actError ? 'activity' : ''} 无法连接
+            {moodError ? 'mood' : ''}{moodError && activityError ? ' · ' : ''}{activityError ? 'activity' : ''} 无法连接
           </span>
           <button
-            onClick={() => { if (moodError) fetchMood(); if (actError) fetchActivity(); }}
+            onClick={() => { if (moodError) retryMood(); if (activityError) retryActivity(); }}
             style={{
               fontSize: chatThemeFontSize(10), padding: '2px 8px', borderRadius: 3, cursor: 'pointer',
               background: 'transparent', border: '1px solid var(--forest-line)',

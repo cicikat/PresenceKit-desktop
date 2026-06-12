@@ -158,7 +158,7 @@ src/windows/dream/
 职责：
 
 - 在 Sidebar 的 `flow` tab 中展示叶瑄此刻的动向（Live Feed）。
-- 自己启动 mood（60s）和 activity（90s）的后台轮询，写入 engine。若 SubStatus 同时挂载，两份轮询并存是可接受代价，不做去重协调。
+- 不直接请求后端；读取并订阅 StateEngine。Sidebar 挂载的共享 `useBackendStatePolling()` 在 flow tab 使用 mood 60s / activity 90s 周期。
 - 从 engine `activity / focus / presence` 派生叙事文本（`buildNarrative`），不发起新网络请求。
 - 维护组件内 ring buffer（最多 10 条），追踪 activity/focus 变化历史。
 
@@ -180,8 +180,8 @@ Ring buffer：`useState<FlowEntry[]>` 长度上限 10；按 `text|mood` 联合�
 
 | 来源 | 路径 | 轮询 |
 |---|---|---|
-| mood | `loadMoodState()` → `engine.applyBackendState('mood-poll', {mood})` | 60s |
-| activity | `loadActivityState()` → `engine.applyBackendState('activity-poll', {activity})` | 90s |
+| mood | `useBackendStatePolling()` → `engine.applyBackendState('mood-poll', {mood})` | 60s |
+| activity | `useBackendStatePolling()` → `engine.applyBackendState('activity-poll', {activity})` | 90s |
 | focus / presence | engine 现有值（由 ChatPanel 交互驱动） | — |
 
 ---
@@ -193,7 +193,7 @@ Ring buffer：`useState<FlowEntry[]>` 长度上限 10；按 `text|mood` 联合�
 职责：
 
 - 在 Sidebar 的 `status` tab 展示叶瑄持续状态信号。
-- 启动时拉 mood/activity 真实数据并写入 engine，之后定期轮询。
+- 读取并订阅 StateEngine；Sidebar 共享 poller 负责 mood/activity 请求、写入和错误重试。
 - 从 engine state 派生 4 个可感知信号（前端 derived，不进 engine state）。
 - 维护 60 格 ring buffer，2 秒采样一次，呈现近 2 分钟 mood 轨迹。
 
@@ -201,8 +201,8 @@ Ring buffer：`useState<FlowEntry[]>` 长度上限 10；按 `text|mood` 联合�
 
 | 来源 | 路径 | 轮询 |
 |---|---|---|
-| mood 后端持久值 | `loadMoodState()` → `/mood/state` → `engine.applyBackendState('mood-poll', {mood})` | 30s |
-| activity 身体动作 | `loadActivityState()` → `/activity/current` → `engine.applyBackendState('activity-poll', {activity})` | 60s |
+| mood 后端持久值 | `useBackendStatePolling()` → `/mood/state` → `engine.applyBackendState('mood-poll', {mood})` | 30s |
+| activity 身体动作 | `useBackendStatePolling()` → `/activity/current` → `engine.applyBackendState('activity-poll', {activity})` | 60s |
 | sensor 实时快照 | `loadSensorRealtime()` → `/sensor/realtime` → 真实键鼠/焦点数据 | 10s |
 | presence | engine 现有值（默认 active）；sensor 可用时仅参与 4 个信号派生，不写入 engine | — |
 | focus | ChatPanel 输入驱动，SubStatus 不动 | — |
@@ -321,7 +321,7 @@ WS 连接状态来自 `wsClient.getState()` 和 `wsClient.on("state")`。
 
 - `flow`：动向，挂 `SubFlow`，从 engine 读 mood/activity/focus/presence
 - `diary`：他的日记，读取后端日记列表和正文
-- `status`：状态，挂 `SubStatus`，持续轮询 mood/activity
+- `status`：状态，挂 `SubStatus`，读取 engine 并显示共享 poller 的 mood/activity 错误与重试
 - `garden`：陪伴花园，读取后端花园状态
 
 `components/archive/Sidebar.legacy.tsx` 存着原副栏 UI 骨架，供后续真实数据接入时参考，不是当前运行入口。
@@ -372,6 +372,7 @@ WS 连接状态来自 `wsClient.getState()` 和 `wsClient.on("state")`。
 
 - 保存 mood / focus / presence / mode / activity。
 - 提供 subscribe/emit/get，以及按 ownership 区分的写入入口。
+- `src/shared/state/useBackendStatePolling.ts` 是 mood/activity 后端轮询的单一入口；由 Sidebar 挂载并按 flow/status tab 使用原有周期。
 - 后端轮询统一走 `applyBackendState(source, patch)`；`state-update` source 已保留，但尚未接入 WS `state_update`。
 - 本地 focus 推断统一走 `setLocalFocus()`；mode 与交互时间分别走 `setMode()` / `markInteraction()`。
 - focus 有 duration 时会自动回到默认 focus。

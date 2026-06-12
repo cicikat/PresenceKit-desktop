@@ -8,6 +8,11 @@ import { SubDiary } from './SubDiary';
 import { SubStatus } from './SubStatus';
 import { SubFlow } from './SubFlow';
 import { chatThemeFontSize } from '../../../shared/chatAppearance';
+import {
+  FLOW_BACKEND_STATE_CADENCE,
+  STATUS_BACKEND_STATE_CADENCE,
+  useBackendStatePolling,
+} from '../../../shared/state/useBackendStatePolling';
 
 const SIDEBAR_HEADER: Record<string, { title: string; subtitle: string }> = {
   flow:   { title: '动向',     subtitle: 'LIVE FEED · 他现在在做什么' },
@@ -18,6 +23,12 @@ const SIDEBAR_HEADER: Record<string, { title: string; subtitle: string }> = {
 
 export function SidebarPanel({ engine, sidebarRectRef, tab, onClose }: any) {
   const rootRef = useRef<HTMLDivElement>(null);
+  const backendStateCadence = tab === 'flow'
+    ? FLOW_BACKEND_STATE_CADENCE
+    : tab === 'status'
+      ? STATUS_BACKEND_STATE_CADENCE
+      : null;
+  const backendStatePolling = useBackendStatePolling(engine, backendStateCadence);
 
   useEffect(() => {
     const update = () => {
@@ -65,7 +76,7 @@ export function SidebarPanel({ engine, sidebarRectRef, tab, onClose }: any) {
         ) : tab === 'diary' ? (
           <SubDiary />
         ) : (
-          <SubStatus engine={engine} />
+          <SubStatus engine={engine} backendStatePolling={backendStatePolling} />
         )}
       </div>
     </div>
