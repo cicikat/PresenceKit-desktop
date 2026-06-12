@@ -180,8 +180,8 @@ Ring buffer：`useState<FlowEntry[]>` 长度上限 10；按 `text|mood` 联合�
 
 | 来源 | 路径 | 轮询 |
 |---|---|---|
-| mood | `loadMoodState()` → `engine.applyStateUpdate({mood})` | 60s |
-| activity | `loadActivityState()` → `engine.set({activity})` | 90s |
+| mood | `loadMoodState()` → `engine.applyBackendState('mood-poll', {mood})` | 60s |
+| activity | `loadActivityState()` → `engine.applyBackendState('activity-poll', {activity})` | 90s |
 | focus / presence | engine 现有值（由 ChatPanel 交互驱动） | — |
 
 ---
@@ -201,8 +201,8 @@ Ring buffer：`useState<FlowEntry[]>` 长度上限 10；按 `text|mood` 联合�
 
 | 来源 | 路径 | 轮询 |
 |---|---|---|
-| mood 后端持久值 | `loadMoodState()` → `/mood/state` → `engine.applyStateUpdate({mood})` | 30s |
-| activity 身体动作 | `loadActivityState()` → `/activity/current` → `engine.set({activity})` | 60s |
+| mood 后端持久值 | `loadMoodState()` → `/mood/state` → `engine.applyBackendState('mood-poll', {mood})` | 30s |
+| activity 身体动作 | `loadActivityState()` → `/activity/current` → `engine.applyBackendState('activity-poll', {activity})` | 60s |
 | sensor 实时快照 | `loadSensorRealtime()` → `/sensor/realtime` → 真实键鼠/焦点数据 | 10s |
 | presence | engine 现有值（默认 active）；sensor 可用时仅参与 4 个信号派生，不写入 engine | — |
 | focus | ChatPanel 输入驱动，SubStatus 不动 | — |
@@ -371,24 +371,27 @@ WS 连接状态来自 `wsClient.getState()` 和 `wsClient.on("state")`。
 当前 engine 是轻量前端状态机：
 
 - 保存 mood / focus / presence / mode / activity。
-- 提供 subscribe/emit/get/set。
-- `applyStateUpdate()` 可接受后端状态补丁，但尚未接入 WS `state_update`。
+- 提供 subscribe/emit/get，以及按 ownership 区分的写入入口。
+- 后端轮询统一走 `applyBackendState(source, patch)`；`state-update` source 已保留，但尚未接入 WS `state_update`。
+- 本地 focus 推断统一走 `setLocalFocus()`；mode 与交互时间分别走 `setMode()` / `markInteraction()`。
 - focus 有 duration 时会自动回到默认 focus。
 
 字段说明：
 
-| 字段 | 类型 | 说明 |
+| 字段 | ownership | 说明 |
 |---|---|---|
-| `mood` | `Mood`（7 个中文状态） | 情绪，对应 MOOD_TABLE 视觉参数 |
-| `focus` | `Focus`（7 个中文状态） | 注意力指向（原 `activity` 字段，已重命名）；前端本地推断 |
-| `presence` | `Presence` | active / idle / away |
-| `activity` | `{ id, text, arc, thinkingAboutEligible } \| null` | 后端身体动作（来自 activity_manager）；初始 null，接口可调但暂未挂组件 |
+| `mood` | backend-polled | 情绪，对应 MOOD_TABLE 视觉参数 |
+| `activity` | backend-polled | 后端身体动作（来自 activity_manager） |
+| `focus` | local-derived | ChatPanel 输入、发送与临时 focus 回落 |
+| `presence` | local-derived | 当前由本地交互恢复 active；sensor 快照尚不写入 engine |
+| `mode` / `lastInteraction` | local-derived | 本地窗口模式与交互时间 |
+| `wantToSpeak` / `behaviorId` / `behaviorEndsAt` / `bodyTiltOverride` | backend-pushed | 为未来后端推送保留；当前没有 WS `state_update` 写入 |
 
 `MOODS` 已扩展为 7 个：`['平静', '开心', '低落', '病娇', '分心', '生气', '惊讶']`。
 
 `FOCUS_TABLE`（原 `ACTIVITY_TABLE`）仍保持 7 条注意力指向配置，与后端 16 条身体动作无关。
 
-旧原型的 behavior loop 已删除。不要在组件里重新造一套行为状态；未来接后端 `state_update` 时应调用 `engine.applyStateUpdate()`。
+旧原型的 behavior loop 已删除。不要在组件里重新造一套行为状态；未来接后端 `state_update` 时应调用 `engine.applyBackendState('state-update', patch)`。
 
 情绪映射：`src/shared/state/mood-mapping.ts` 提供 `backendMoodToFrontend(token)` 将后端英文 token 转换为前端 7 个中文 Mood 之一。
 

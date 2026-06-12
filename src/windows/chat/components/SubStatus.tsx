@@ -126,7 +126,7 @@ export function SubStatus({ engine }: { engine: any }) {
   const fetchMood = async () => {
     try {
       const raw = await loadMoodState();
-      engine.applyStateUpdate({ mood: backendMoodToFrontend(raw.current) });
+      engine.applyBackendState('mood-poll', { mood: backendMoodToFrontend(raw.current) });
       setMoodError(null);
     } catch (e: any) {
       setMoodError(String(e));
@@ -143,7 +143,7 @@ export function SubStatus({ engine }: { engine: any }) {
   const fetchActivity = async () => {
     try {
       const raw: ActivityState = await loadActivityState();
-      engine.set({
+      engine.applyBackendState('activity-poll', {
         activity: {
           id: raw.id,
           text: raw.text,

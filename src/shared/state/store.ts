@@ -12,12 +12,14 @@ export const PRESENCES = ['active', 'idle', 'away'] as const;
 export type Mood     = typeof MOODS[number];
 export type Focus    = typeof FOCUSES[number];
 export type Presence = typeof PRESENCES[number];
+export type EngineMode = 'companion' | 'chat-only';
+export type StateOwnership = 'backend-polled' | 'backend-pushed' | 'local-derived' | 'sensor-derived';
 
 export interface EngineState {
   mood:              Mood;
   focus:             Focus;
   presence:          Presence;
-  mode:              'companion' | 'chat-only';
+  mode:              EngineMode;
   lastInteraction:   number;
   wantToSpeak:       boolean;
   behaviorId:        string | null;
@@ -25,6 +27,37 @@ export interface EngineState {
   bodyTiltOverride:  number;
   activity:          { id: string | null; text: string; arc: string; thinkingAboutEligible: boolean } | null;
 }
+
+export type BackendStateSource = 'mood-poll' | 'activity-poll' | 'state-update';
+export interface BackendStatePatchBySource {
+  'mood-poll': Pick<EngineState, 'mood'>;
+  'activity-poll': Pick<EngineState, 'activity'>;
+  'state-update': Partial<Pick<
+    EngineState,
+    'wantToSpeak' | 'behaviorId' | 'behaviorEndsAt' | 'bodyTiltOverride'
+  >>;
+}
+
+/**
+ * Current ownership contract. Future writers must use an entry point matching
+ * the field owner instead of calling the internal patch helper.
+ *
+ * Sensor snapshots are intentionally not mirrored into EngineState yet.
+ * SubStatus owns the current sensor-derived telemetry; a future presence
+ * mirror needs a dedicated sensor entry point and an explicit ownership change.
+ */
+export const STATE_FIELD_OWNERSHIP: Record<keyof EngineState, StateOwnership> = {
+  mood: 'backend-polled',
+  focus: 'local-derived',
+  presence: 'local-derived',
+  mode: 'local-derived',
+  lastInteraction: 'local-derived',
+  wantToSpeak: 'backend-pushed',
+  behaviorId: 'backend-pushed',
+  behaviorEndsAt: 'backend-pushed',
+  bodyTiltOverride: 'backend-pushed',
+  activity: 'backend-polled',
+};
 
 /* mood 持续可感知信号 — 用于视觉动画 */
 export const MOOD_TABLE: Record<string, any> = {
@@ -95,26 +128,32 @@ export class StateEngine {
   emit() { for (const fn of this.listeners) fn(this.state); }
   get()  { return this.state; }
 
-  set(patch: Partial<EngineState>, opts: { userInteraction?: boolean } = {}) {
+  private applyPatch(patch: Partial<EngineState>) {
     this.state = { ...this.state, ...patch };
     this.emit();
-    if (opts.userInteraction) this.markInteraction();
   }
 
-  // TODO: Phase-3 WebSocket — 后端推送 state_update 时调此方法
-  applyStateUpdate(update: Partial<EngineState>) {
-    const patch: Partial<EngineState> = {};
-    if (update.mood       !== undefined) patch.mood       = update.mood;
-    if (update.focus      !== undefined) patch.focus      = update.focus;
-    if (update.presence   !== undefined) patch.presence   = update.presence;
-    if (update.wantToSpeak !== undefined) patch.wantToSpeak = update.wantToSpeak;
-    this.set(patch);
+  applyBackendState<Source extends BackendStateSource>(
+    source: Source,
+    patch: BackendStatePatchBySource[Source],
+  ) {
+    this.applyPatch(patch);
+    // Preserve the existing mood-poll behavior: it refreshed an active
+    // temporary focus timer, while activity polls did not.
+    if (source === 'mood-poll') this.scheduleFocusReset();
+  }
 
+  setLocalFocus(focus: Focus) {
+    this.applyPatch({ focus });
+    this.scheduleFocusReset();
+  }
+
+  private scheduleFocusReset() {
     const foc = FOCUS_TABLE[this.state.focus];
     if (foc && foc.duration) {
       if (this._focusTimer) clearTimeout(this._focusTimer);
       this._focusTimer = setTimeout(() => {
-        this.set({ focus: this._defaultFocusForMood() });
+        this.applyPatch({ focus: this._defaultFocusForMood() });
       }, foc.duration);
     }
   }
@@ -128,11 +167,11 @@ export class StateEngine {
 
   markInteraction() {
     this.state.lastInteraction = Date.now();
-    if (this.state.presence !== 'active') this.set({ presence: 'active' });
+    if (this.state.presence !== 'active') this.applyPatch({ presence: 'active' });
   }
 
-  setMode(mode: 'companion' | 'chat-only') {
-    this.set({ mode });
-    if (mode === 'chat-only') this.set({ focus: '看你打字' });
+  setMode(mode: EngineMode) {
+    this.applyPatch({ mode });
+    if (mode === 'chat-only') this.setLocalFocus('看你打字');
   }
 }

@@ -63,11 +63,11 @@ Phase 2c+ 之后，ChatPanel 启动历史改走 `/chat-log/*` 接口，owner_qq 
 
 **位置**：`src/shared/state/store.ts`、`src/shared/api/ws.ts`
 
-`StateEngine.applyStateUpdate()` 已存在，但 WS 类型里没有 `state_update`，`wsClient` 也没有处理。
+`StateEngine.applyBackendState('state-update', patch)` 已保留未来 source，但 WS 类型里没有 `state_update`，`wsClient` 也没有处理；当前 mood/activity/presence ownership 也未切换为推送。
 
-**影响**：后端情绪、活动、presence 不能驱动 UI；当前 header 和视觉状态主要是本地推断。
+**影响**：后端推送的情绪、活动、presence 不能驱动 UI；当前 mood/activity 来自轮询，presence 仍由本地交互驱动。
 
-**建议**：协议对齐后，把后端状态变化统一转成 `engine.applyStateUpdate()`。
+**建议**：协议对齐后先明确推送字段 ownership，再把后端状态变化统一转成 `engine.applyBackendState('state-update', patch)`。
 
 ---
 

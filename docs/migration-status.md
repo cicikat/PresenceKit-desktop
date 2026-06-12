@@ -49,7 +49,7 @@
 | 后端主动消息 | 已实现 `channel_message` | 改 `assistant_message` |
 | 情绪状态（持久值） | 已实现并接入 UI：`load_mood_state` → `/mood/state` → SubStatus（Phase 2d.3） | — |
 | 活动状态（身体动作） | 已实现并接入 UI：`load_activity_state` → `/activity/current` → SubStatus（Phase 2d.3） | — |
-| 状态推送 | 未实现 | 接 `state_update` 到 `StateEngine.applyStateUpdate()` |
+| 状态推送 | 未实现 | 明确推送字段 ownership 后接到 `StateEngine.applyBackendState('state-update', patch)` |
 | 用户输入 WS 化 | 未实现 | `user_message` |
 | 模式/窗口事件 | 未实现 | `client_event` |
 | 桌面 action 执行 | 未实现 | 收 action、执行、返回真实 ack |

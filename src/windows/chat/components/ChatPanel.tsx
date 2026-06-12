@@ -1061,9 +1061,9 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
   const onInputChange = (v: string) => {
     setInput(v);
     engine.markInteraction();
-    if (state.focus !== '看你打字') engine.applyStateUpdate({ focus: '看你打字' });
+    if (state.focus !== '看你打字') engine.setLocalFocus('看你打字');
     if (inputTimer.current) clearTimeout(inputTimer.current);
-    inputTimer.current = setTimeout(() => engine.applyStateUpdate({ focus: '看你' }), 2500);
+    inputTimer.current = setTimeout(() => engine.setLocalFocus('看你'), 2500);
   };
 
   const send = async () => {
@@ -1071,7 +1071,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
     if (!t || loading) return;
     setInput('');
     setMessages(m => [...m, { id: newId(), role: 'user', text: t, time: Date.now() }]);
-    engine.applyStateUpdate({ focus: '想事情' });
+    engine.setLocalFocus('想事情');
     setLoading(true);
     try {
       const response = await sendChat(t);

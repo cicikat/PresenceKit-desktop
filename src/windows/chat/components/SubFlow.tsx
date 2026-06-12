@@ -62,7 +62,7 @@ export function SubFlow({ engine }: { engine: any }) {
     const fetchMood = async () => {
       try {
         const raw = await loadMoodState();
-        engine.applyStateUpdate({ mood: backendMoodToFrontend(raw.current) });
+        engine.applyBackendState('mood-poll', { mood: backendMoodToFrontend(raw.current) });
       } catch {}
     };
     fetchMood();
@@ -75,7 +75,7 @@ export function SubFlow({ engine }: { engine: any }) {
     const fetchActivity = async () => {
       try {
         const raw: ActivityState = await loadActivityState();
-        engine.set({
+        engine.applyBackendState('activity-poll', {
           activity: {
             id: raw.id,
             text: raw.text,
