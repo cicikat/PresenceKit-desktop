@@ -859,9 +859,7 @@ export function ChatWindow({ onActivityOpen }: { onActivityOpen?: () => void } =
             </>
           )}
           <div style={{ flex: 1, minWidth: 0 }}>
-            {!dreamWindowOpen && (
-              <ChatPanel engine={engine} chatRectRef={chatRectRef} headerVisible={chatHeaderVisible} chatFontSize={appearance.chatFontSize} dreamActive={dreamWindowOpen} characterAvatarDataUrl={characterAvatarDataUrl} />
-            )}
+            <ChatPanel engine={engine} chatRectRef={chatRectRef} headerVisible={chatHeaderVisible} chatFontSize={appearance.chatFontSize} dreamActive={dreamWindowOpen} characterAvatarDataUrl={characterAvatarDataUrl} />
           </div>
         </div>
       </div>
