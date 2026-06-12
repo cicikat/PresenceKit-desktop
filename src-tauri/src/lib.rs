@@ -69,6 +69,46 @@ fn avatar_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(dir)
 }
 
+fn is_known_avatar_role(role: &str) -> bool {
+    matches!(
+        role,
+        "her" | "you" | "dream_background_day" | "dream_background_night"
+    )
+}
+
+fn is_generated_avatar_for_role(file_name: &str, role: &str) -> bool {
+    let Some(timestamp) = file_name
+        .strip_prefix(role)
+        .and_then(|value| value.strip_prefix('_'))
+        .and_then(|value| value.strip_suffix(".png"))
+    else {
+        return false;
+    };
+    !timestamp.is_empty() && timestamp.bytes().all(|byte| byte.is_ascii_digit())
+}
+
+fn cleanup_old_generated_avatars(dir: &Path, role: &str, keep_path: &Path) -> Result<(), String> {
+    for entry in fs::read_dir(dir).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+        if path == keep_path || !path.is_file() {
+            continue;
+        }
+        let Some(file_name) = path.file_name().and_then(|value| value.to_str()) else {
+            continue;
+        };
+        if is_generated_avatar_for_role(file_name, role) {
+            if let Err(error) = fs::remove_file(&path) {
+                eprintln!(
+                    "[avatar] 无法清理同用途旧头像 {}: {error}",
+                    path.display()
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
 fn dream_fonts_dev_dir() -> Result<PathBuf, String> {
     Ok(PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -436,6 +476,9 @@ async fn upload_document(
 
 #[tauri::command]
 async fn save_avatar(app: tauri::AppHandle, role: String, image_b64: String) -> Result<String, String> {
+    if !is_known_avatar_role(&role) {
+        return Err("不支持的头像用途".to_string());
+    }
     let dir = avatar_dir(&app)?;
     let ts = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -447,6 +490,9 @@ async fn save_avatar(app: tauri::AppHandle, role: String, image_b64: String) -> 
         .decode(&image_b64)
         .map_err(|e| e.to_string())?;
     fs::write(&path, &bytes).map_err(|e| e.to_string())?;
+    if let Err(error) = cleanup_old_generated_avatars(&dir, &role, &path) {
+        eprintln!("[avatar] 无法扫描同用途旧头像: {error}");
+    }
     Ok(path.to_string_lossy().to_string())
 }
 
@@ -1197,5 +1243,50 @@ mod dream_font_tests {
                 },
             ])
         );
+    }
+}
+
+#[cfg(test)]
+mod avatar_file_tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn cleanup_removes_only_old_generated_files_for_same_role() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!(
+            "emerald-avatar-cleanup-test-{}-{unique}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+
+        let keep = dir.join("her_200.png");
+        let old_same_role = dir.join("her_100.png");
+        let other_role = dir.join("you_100.png");
+        let default_avatar = dir.join("her_default.png");
+        let unrelated = dir.join("notes.txt");
+        for path in [&keep, &old_same_role, &other_role, &default_avatar, &unrelated] {
+            fs::write(path, []).unwrap();
+        }
+
+        cleanup_old_generated_avatars(&dir, "her", &keep).unwrap();
+
+        assert!(keep.exists());
+        assert!(!old_same_role.exists());
+        assert!(other_role.exists());
+        assert!(default_avatar.exists());
+        assert!(unrelated.exists());
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn generated_avatar_name_requires_exact_role_and_numeric_timestamp() {
+        assert!(is_generated_avatar_for_role("dream_background_day_123.png", "dream_background_day"));
+        assert!(!is_generated_avatar_for_role("dream_background_night_123.png", "dream_background_day"));
+        assert!(!is_generated_avatar_for_role("her_default.png", "her"));
+        assert!(!is_generated_avatar_for_role("her_123.jpg", "her"));
     }
 }
