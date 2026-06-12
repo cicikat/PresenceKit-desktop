@@ -537,12 +537,14 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         // Phase 2B: 拉取重开问候，每次 window/page session 仅触发一次
         if (!_desktopWakeFired) {
           _desktopWakeFired = true;
-          // history cursor: last loaded assistant timestamp from chat log (minute-granular, ms).
-          // +60s safety margin compensates for chat log's HH:MM truncation vs backend's
-          // second-precision time.time(), preventing Path A from re-surfacing the same
-          // message as an "unreplayed trigger" on the next startup.
+          // The chat-log API currently exposes only HH:MM, so this cursor is the start
+          // of the last displayed assistant's minute. Do not advance it by 60s: that
+          // can mark a real unseen trigger from the same minute as already seen.
+          // TODO: replace this with a precise timestamp/turn_id from the chat-log API.
           const lastAssistantMsg = msgs.filter(m => m.role === 'assistant').slice(-1)[0];
-          const historyCursorSec = lastAssistantMsg ? lastAssistantMsg.time / 1000 + 60 : undefined;
+          const historyCursorSec = lastAssistantMsg
+            ? Math.floor(lastAssistantMsg.time / 60_000) * 60
+            : undefined;
           console.log('[wake] start | historyCursorSec:', historyCursorSec ?? 'none');
           if (mounted) setWakeLoading(true);
           try {
@@ -569,10 +571,20 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
                 const _wsAlreadyRendered = msgId
                   ? wsMsgIdToLocalIdsRef.current.has(msgId)
                   : _wsRenderedAt !== undefined && Date.now() - _wsRenderedAt < 30_000;
-                if (_wsAlreadyRendered) {
+                // With a minute-granular history cursor, Path A may return the last
+                // already displayed assistant from that same minute. Until chat-log
+                // exposes timestamp/turn_id, suppress only when every returned part
+                // is already present in the just-loaded history.
+                const _alreadyInHistory = wakeResp.source === 'pending_trigger'
+                  && parts.length > 0
+                  && parts.every(part => {
+                    const hash = normalizeForDedup(part);
+                    return hash.length > 0 && recentHistoryHashesRef.current.has(hash);
+                  });
+                if (_wsAlreadyRendered || _alreadyInHistory) {
                   pendingWakeReplyRef.current = null;
                   setWakeLoading(false);
-                  console.log('[chat] appendSource: fallback-skipped | loadingSource: wake | reason: ws-already-rendered | msg_id:', msgId ?? '(none)', '| hash:', _wakeHash);
+                  console.log('[chat] appendSource: fallback-skipped | loadingSource: wake | reason:', _wsAlreadyRendered ? 'ws-already-rendered' : 'history-already-rendered', '| msg_id:', msgId ?? '(none)', '| hash:', _wakeHash);
                   return;
                 }
                 pendingWakeReplyRef.current = null;
