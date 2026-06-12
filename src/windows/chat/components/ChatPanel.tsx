@@ -61,6 +61,7 @@ interface ChatMsg {
   meta?: string;
   // message_segments correlation
   wsMsgId?: string;
+  turnId?: string;
   segments?: NarrativeSegment[];
   segmentedContent?: string;
 }
@@ -113,8 +114,8 @@ function pruneStalePendingSegments(map: Map<string, PendingRealitySegments>, now
 let _msgIdCounter = 0;
 function newId() { return `m-${Date.now()}-${++_msgIdCounter}`; }
 
-function responseMsgId(response: { msg_id?: string }): string | undefined {
-  return response.msg_id || undefined;
+function responseMsgId(response: { msg_id?: string; turn_id?: string }): string | undefined {
+  return response.msg_id || response.turn_id || undefined;
 }
 
 // Module-level session guard: ChatPanel can remount mid-session (e.g. when Dream opens/closes).
@@ -155,17 +156,21 @@ function entriesToMsgs(dateStr: string, entries: ChatLogEntry[], rawFallback: bo
   }
   const msgs: ChatMsg[] = [];
   for (const entry of entries) {
-    const [h, min] = entry.time.split(':').map(Number);
-    const d = parseISO(dateStr);
-    const ts = new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, min).getTime();
+    const ts = typeof entry.ts === 'number'
+      ? entry.ts * 1000
+      : (() => {
+        const [h, min] = entry.time.split(':').map(Number);
+        const d = parseISO(dateStr);
+        return new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, min).getTime();
+      })();
 
     if (entry.user) {
-      msgs.push({ id: newId(), role: 'user', text: entry.user, time: ts });
+      msgs.push({ id: newId(), role: 'user', text: entry.user, time: ts, turnId: entry.turn_id });
     }
     if (entry.assistant) {
       const segments = splitReply(entry.assistant);
-      segments.forEach((seg, idx) => {
-        msgs.push({ id: newId(), role: 'assistant', text: seg, time: ts + 1 + idx });
+      segments.forEach((seg) => {
+        msgs.push({ id: newId(), role: 'assistant', text: seg, time: ts, turnId: entry.turn_id });
       });
     }
   }
@@ -520,10 +525,16 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         console.log('[chat] appendSource: history-replay | phase: init | assistantBubbles:', historyAssistantCount, '| totalMsgs:', msgs.length);
         setMessages(msgs);
 
-        // Register assistant bubble hashes for WS cross-path dedup (30s window).
+        // Register canonical turn IDs and hashes for WS cross-path dedup.
         const _histInitNow = Date.now();
+        const historyIdsByTurn = new Map<string, string[]>();
         for (const _m of msgs) {
           if (_m.role === 'assistant') {
+            if (_m.turnId) {
+              const ids = historyIdsByTurn.get(_m.turnId) ?? [];
+              ids.push(_m.id);
+              historyIdsByTurn.set(_m.turnId, ids);
+            }
             const _h = normalizeForDedup(_m.text);
             if (_h) {
               recentHistoryHashesRef.current.set(_h, _histInitNow);
@@ -531,19 +542,18 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
             }
           }
         }
+        historyIdsByTurn.forEach((ids, turnId) => {
+          setBoundedMapEntry(wsMsgIdToLocalIdsRef.current, turnId, ids, MAX_WS_MSG_ID_MAPPINGS);
+        });
 
         setHistoryStatus({ kind: 'ok' });
 
         // Phase 2B: 拉取重开问候，每次 window/page session 仅触发一次
         if (!_desktopWakeFired) {
           _desktopWakeFired = true;
-          // The chat-log API currently exposes only HH:MM, so this cursor is the start
-          // of the last displayed assistant's minute. Do not advance it by 60s: that
-          // can mark a real unseen trigger from the same minute as already seen.
-          // TODO: replace this with a precise timestamp/turn_id from the chat-log API.
           const lastAssistantMsg = msgs.filter(m => m.role === 'assistant').slice(-1)[0];
           const historyCursorSec = lastAssistantMsg
-            ? Math.floor(lastAssistantMsg.time / 60_000) * 60
+            ? lastAssistantMsg.time / 1000
             : undefined;
           console.log('[wake] start | historyCursorSec:', historyCursorSec ?? 'none');
           if (mounted) setWakeLoading(true);
@@ -571,20 +581,10 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
                 const _wsAlreadyRendered = msgId
                   ? wsMsgIdToLocalIdsRef.current.has(msgId)
                   : _wsRenderedAt !== undefined && Date.now() - _wsRenderedAt < 30_000;
-                // With a minute-granular history cursor, Path A may return the last
-                // already displayed assistant from that same minute. Until chat-log
-                // exposes timestamp/turn_id, suppress only when every returned part
-                // is already present in the just-loaded history.
-                const _alreadyInHistory = wakeResp.source === 'pending_trigger'
-                  && parts.length > 0
-                  && parts.every(part => {
-                    const hash = normalizeForDedup(part);
-                    return hash.length > 0 && recentHistoryHashesRef.current.has(hash);
-                  });
-                if (_wsAlreadyRendered || _alreadyInHistory) {
+                if (_wsAlreadyRendered) {
                   pendingWakeReplyRef.current = null;
                   setWakeLoading(false);
-                  console.log('[chat] appendSource: fallback-skipped | loadingSource: wake | reason:', _wsAlreadyRendered ? 'ws-already-rendered' : 'history-already-rendered', '| msg_id:', msgId ?? '(none)', '| hash:', _wakeHash);
+                  console.log('[chat] appendSource: fallback-skipped | loadingSource: wake | reason: ws-already-rendered | msg_id:', msgId ?? '(none)', '| hash:', _wakeHash);
                   return;
                 }
                 pendingWakeReplyRef.current = null;
@@ -684,10 +684,16 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         return [...insertMsgs, ...withoutNoMore];
       });
 
-      // Register loadMore assistant hashes for WS cross-path dedup (30s window).
+      // Register loadMore canonical turn IDs and hashes for WS cross-path dedup.
       const _histLmNow = Date.now();
+      const historyIdsByTurn = new Map<string, string[]>();
       for (const _m of newMsgs) {
         if (_m.role === 'assistant') {
+          if (_m.turnId) {
+            const ids = historyIdsByTurn.get(_m.turnId) ?? [];
+            ids.push(_m.id);
+            historyIdsByTurn.set(_m.turnId, ids);
+          }
           const _h = normalizeForDedup(_m.text);
           if (_h) {
             recentHistoryHashesRef.current.set(_h, _histLmNow);
@@ -695,6 +701,9 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
           }
         }
       }
+      historyIdsByTurn.forEach((ids, turnId) => {
+        setBoundedMapEntry(wsMsgIdToLocalIdsRef.current, turnId, ids, MAX_WS_MSG_ID_MAPPINGS);
+      });
 
       // 补偿滚动位置
       requestAnimationFrame(() => {
@@ -939,12 +948,8 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       const contentHashRaw = content.length > 0 ? content.slice(0, 32).replace(/\s+/g, ' ') : '(empty)';
       const partsCount = content.split(/\n+/).filter(s => s.trim().length > 0).length;
 
-      // History dedup: drop WS append if same content was loaded from chat log recently (30s window).
-      // Defends against history-replay + WS double-render for regular turns.
-      // NOTE: scheduler trigger responses are NOT in the chat log (no ## header written for
-      // trigger-only event_log entries), so this check never fires for scheduler triggers.
-      // It remains a defensive guard for edge cases where a normal turn arrives via WS while
-      // still within the history registration window.
+      // History dedup: canonical turn_id/msg_id is registered during chat-log replay.
+      // Content hash remains a short-lived fallback for legacy entries without turn_id.
       const _wsNow = Date.now();
       recentHistoryHashesRef.current.forEach((ts, h) => { if (_wsNow - ts > 30_000) recentHistoryHashesRef.current.delete(h); });
       if (recentHistoryHashesRef.current.has(normalizedHash)) {

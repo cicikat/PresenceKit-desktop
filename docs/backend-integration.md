@@ -377,11 +377,29 @@ ChatPanel 启动或滚顶触发
 {
   "date": "2026-05-16",
   "entries": [
-    { "time": "20:19", "user": "叶瑄！", "assistant": "他听到你那声……" }
+    {
+      "time": "20:19",
+      "user": "叶瑄！",
+      "assistant": "他听到你那声……",
+      "ts": 1778933947.0,
+      "turn_id": "assistant-correlation-id"
+    },
+    {
+      "time": "20:21",
+      "user": "",
+      "assistant": "该休息一下了。",
+      "ts": 1778934062.0,
+      "turn_id": "trigger-correlation-id"
+    }
   ],
   "raw_fallback": false
 }
 ```
+
+`ts` 是秒级 Unix 时间戳，`turn_id` 是该轮 canonical correlation ID。客户端用
+`ts` 推进 `/desktop/wake` 的 `last_seen` 游标，并优先用 `turn_id` 对账历史回放和
+WebSocket 消息；`time` 仅用于旧响应兼容和显示。assistant-only trigger turn 的
+`user` 为空字符串，客户端仍渲染 assistant 消息。
 
 后端文件：`D:\ai\qq-st-bot\admin\routers\chat_log.py`
 

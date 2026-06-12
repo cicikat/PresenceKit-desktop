@@ -92,6 +92,8 @@ export interface ChatLogEntry {
   time: string;
   user: string;
   assistant: string;
+  ts?: number;
+  turn_id?: string;
 }
 
 export interface ChatLogDay {

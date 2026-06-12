@@ -116,6 +116,8 @@ src/windows/dream/
 职责：
 
 - 按日文件懒加载历史对话（Phase 2c+），启动拉今日，不足 10 条兜底一次昨日。
+- `/chat-log` entry 的 `ts` 用作秒级时间和 wake `last_seen` 游标，`turn_id` 用于历史回放与 WS 去重；旧响应缺字段时兼容 `time: HH:MM`。
+- assistant-only trigger entry 的 `user` 为空字符串，仍正常渲染 assistant 气泡。
 - 滚到顶时懒加载更早一天，保持滚动位置不跳。
 - 用户发送时调用 `sendChat()`。
 - 订阅 WS `channel_message` / `message_segments`，优先按 assistant `msg_id` 与 HTTP 回复对账；content hash 只作为旧后端或异常路径 fallback。
