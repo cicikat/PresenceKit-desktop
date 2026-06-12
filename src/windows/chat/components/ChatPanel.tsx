@@ -73,6 +73,23 @@ interface FallbackRecord {
   renderedMsgIds: string[];
 }
 
+interface RealityChannelMessage {
+  content: string;
+  msg_id: string;
+  source?: string;
+}
+
+interface PendingRealitySegments {
+  content: string;
+  segments: NarrativeSegment[];
+}
+
+interface ParkedRealityMessage extends RealityChannelMessage {
+  pendingSegments?: PendingRealitySegments;
+}
+
+const MAX_PARKED_REALITY_MESSAGES = 50;
+
 let _msgIdCounter = 0;
 function newId() { return `m-${Date.now()}-${++_msgIdCounter}`; }
 
@@ -366,7 +383,11 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
   // message_segments 关联：ws msg_id → 本地 ChatMsg id 列表
   const wsMsgIdToLocalIdsRef = useRef<Map<string, string[]>>(new Map());
   // message_segments 先于 channel_message 到达时的暂存
-  const pendingSegmentsByMsgIdRef = useRef<Map<string, { content: string; segments: NarrativeSegment[] }>>(new Map());
+  const pendingSegmentsByMsgIdRef = useRef<Map<string, PendingRealitySegments>>(new Map());
+
+  // Reality messages stay hidden during Dream, then re-enter the normal WS render path on wake.
+  const parkedRealityMessagesRef = useRef<Map<string, ParkedRealityMessage>>(new Map());
+  const processRealityChannelMessageRef = useRef<((message: RealityChannelMessage) => void) | null>(null);
 
   // desktopWake HTTP fallback: store reply here instead of rendering immediately.
   // WS channel_message is the primary render path; HTTP reply only renders if WS never arrives.
@@ -393,6 +414,37 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
   // Dream 打开期间屏蔽 channel_message
   const dreamActiveRef = useRef(dreamActive);
   useEffect(() => { dreamActiveRef.current = dreamActive; }, [dreamActive]);
+
+  const parkPendingSegments = useCallback((msgId: string, pendingSegments: PendingRealitySegments) => {
+    const pending = pendingSegmentsByMsgIdRef.current;
+    pending.delete(msgId);
+    pending.set(msgId, pendingSegments);
+    while (pending.size > MAX_PARKED_REALITY_MESSAGES) {
+      const oldestMsgId = pending.keys().next().value as string | undefined;
+      if (!oldestMsgId) break;
+      pending.delete(oldestMsgId);
+    }
+  }, []);
+
+  const parkRealityMessage = useCallback((message: RealityChannelMessage) => {
+    const parked = parkedRealityMessagesRef.current;
+    const pendingSegments = pendingSegmentsByMsgIdRef.current.get(message.msg_id);
+    if (pendingSegments) pendingSegmentsByMsgIdRef.current.delete(message.msg_id);
+
+    const existing = parked.get(message.msg_id);
+    parked.delete(message.msg_id);
+    parked.set(message.msg_id, {
+      ...message,
+      pendingSegments: existing?.pendingSegments ?? pendingSegments,
+    });
+
+    while (parked.size > MAX_PARKED_REALITY_MESSAGES) {
+      const oldestMsgId = parked.keys().next().value as string | undefined;
+      if (!oldestMsgId) break;
+      parked.delete(oldestMsgId);
+      pendingSegmentsByMsgIdRef.current.delete(oldestMsgId);
+    }
+  }, []);
 
   // ── 启动加载 ─────────────────────────────────────────────────────────────
 
@@ -796,8 +848,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       if (mounted) wsClient.connect(cfg.websocketBase);
     });
 
-    const unsubMsg = wsClient.on('channel_message', ({ content, msg_id, source }) => {
-      if (dreamActiveRef.current) return;
+    const processRealityChannelMessage = ({ content, msg_id, source }: RealityChannelMessage) => {
       // Defense: only consume reality messages (source field added P0; old server = no source = reality).
       if (source && source !== 'reality') return;
 
@@ -885,11 +936,37 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       console.log('[chat] appendSource: ws | msg_id:', msg_id, '| source:', source ?? 'reality', '| contentHash:', contentHashRaw, '| partsCount:', partsCount, '| normalizedHash:', normalizedHash, '| duplicateDropped:', duplicateDropped, '| replacedFallback: false');
 
       scheduleAssistantSegments(content, msg_id);
+    };
+
+    processRealityChannelMessageRef.current = processRealityChannelMessage;
+
+    const unsubMsg = wsClient.on('channel_message', (message) => {
+      if (message.source && message.source !== 'reality') return;
+      if (dreamActiveRef.current) {
+        parkRealityMessage(message);
+        console.log('[chat] appendSource: dream-parked | msg_id:', message.msg_id, '| parkedCount:', parkedRealityMessagesRef.current.size);
+        return;
+      }
+      processRealityChannelMessage(message);
     });
 
     const unsubSegs = wsClient.on('message_segments', ({ content, segments, msg_id, source }) => {
       // Defense: only consume reality segments.
       if (source && source !== 'reality') return;
+      const parkedMessage = parkedRealityMessagesRef.current.get(msg_id);
+      if (dreamActiveRef.current || parkedMessage) {
+        if (parkedMessage) {
+          parkedRealityMessagesRef.current.delete(msg_id);
+          parkedRealityMessagesRef.current.set(msg_id, {
+            ...parkedMessage,
+            pendingSegments: { content, segments },
+          });
+        } else {
+          parkPendingSegments(msg_id, { content, segments });
+        }
+        console.log('[chat] appendSource: dream-segments-parked | msg_id:', msg_id, '| parkedWithChannel:', !!parkedMessage);
+        return;
+      }
       // Invariant: message_segments MUST NEVER append new assistant bubbles.
       // It only updates segmentedContent of existing bubbles via .map().
       const localIds = wsMsgIdToLocalIdsRef.current.get(msg_id);
@@ -919,7 +996,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         const strippedParts = splitReply(content);
         const segContentHash = content.length > 0 ? content.slice(0, 32).replace(/\s+/g, ' ') : '(empty)';
         console.log('[chat] appendSource: segments-parked | msg_id:', msg_id, '| contentHash:', segContentHash, '| partsCount:', strippedParts.length, '| timestamp:', Date.now());
-        pendingSegmentsByMsgIdRef.current.set(msg_id, { content, segments });
+        parkPendingSegments(msg_id, { content, segments });
       }
     });
 
@@ -927,8 +1004,30 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       mounted = false;
       unsubMsg();
       unsubSegs();
+      if (processRealityChannelMessageRef.current === processRealityChannelMessage) {
+        processRealityChannelMessageRef.current = null;
+      }
     };
-  }, [engine, scheduleAssistantSegments]);
+  }, [engine, parkPendingSegments, parkRealityMessage, scheduleAssistantSegments]);
+
+  useEffect(() => {
+    if (dreamActive) return;
+    const processRealityChannelMessage = processRealityChannelMessageRef.current;
+    if (!processRealityChannelMessage || parkedRealityMessagesRef.current.size === 0) return;
+
+    const parkedMessages = Array.from(parkedRealityMessagesRef.current.values());
+    parkedRealityMessagesRef.current.clear();
+    parkedMessages.forEach(message => {
+      if (message.pendingSegments) {
+        pendingSegmentsByMsgIdRef.current.set(message.msg_id, message.pendingSegments);
+      }
+      processRealityChannelMessage(message);
+      // The normal render path consumes segments synchronously. Any remainder belongs
+      // to a message that another dedup path intentionally skipped.
+      pendingSegmentsByMsgIdRef.current.delete(message.msg_id);
+    });
+    console.log('[chat] appendSource: dream-flush | flushedCount:', parkedMessages.length);
+  }, [dreamActive]);
 
   // ── 输入处理 ──────────────────────────────────────────────────────────────
 
