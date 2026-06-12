@@ -4,6 +4,7 @@
 //! - 浏览器:只保留域名(github.com,不保留完整 URL)
 //! - 编辑器:只保留文件名(ChatPanel.tsx,不保留完整路径)
 //! - 聊天软件:直接置空字符串
+//! - 未知/其他应用:直接置空字符串
 //! - 黑名单关键词(密码、银行、医疗等)整条置空
 //! - 最大长度 80 字符(服务端兜底再截一次)
 
@@ -16,7 +17,7 @@ pub enum AppCategory {
     Editor,
     /// 聊天/通讯 - 直接置空
     Chat,
-    /// 其他 - 仅做黑名单 + 长度截断
+    /// 其他/未知 - 直接置空
     Other,
 }
 
@@ -49,9 +50,8 @@ const MAX_TITLE_LEN: usize = 80;
 // 钉钉、企业微信、网易邮箱、Bilibili 桌面端、各种 IM 桌面版,
 // 以及 Claude / ChatGPT 等 AI 聊天桌面客户端,默认都应归 Chat。
 //
-// 关于终端类(WindowsTerminal.exe / cmd.exe / powershell.exe /
-// wt.exe):当前归 Other(原文 trim 透出),可能泄漏命令路径/host。
-// 后期统一安全检修时决定是否改归 Chat。见 known-issues.md。
+// Other 是保守默认类别,不会返回原始 title。只有明确归入 Browser 或
+// Editor 的进程才允许返回经过清洗的 title_hint。
 //
 // 黑名单关键词(BLACKLIST_KEYWORDS)是无差别匹配,任何 title
 // 命中直接置空,不需要按 app 分类。
@@ -89,7 +89,7 @@ pub fn classify_app(app_lower: &str) -> AppCategory {
 /// 2. Chat 类别 → 直接返回空字符串
 /// 3. Browser → 提取域名
 /// 4. Editor → 提取文件名(最后一段路径)
-/// 5. Other → 原文 trim
+/// 5. Other → 直接返回空字符串
 /// 6. 最后 UTF-8 安全截断到 MAX_TITLE_LEN
 ///
 /// 输入 app 和 raw_title 都来自焦点窗口抓取,后者可能含敏感信息。
@@ -109,7 +109,7 @@ pub fn sanitize(app: &str, raw_title: &str) -> String {
         AppCategory::Chat => String::new(),
         AppCategory::Browser => extract_domain(raw_title),
         AppCategory::Editor => extract_filename(raw_title),
-        AppCategory::Other => raw_title.trim().to_string(),
+        AppCategory::Other => String::new(),
     };
 
     // 步骤 3:UTF-8 安全截断
@@ -276,15 +276,29 @@ mod tests {
     }
 
     #[test]
-    fn sanitize_other_returns_trimmed_original() {
-        let s = sanitize("notepad.exe", "  Untitled  ");
-        assert_eq!(s, "Untitled");
+    fn sanitize_unknown_app_does_not_leak_title() {
+        assert_eq!(
+            sanitize("unknown.exe", r"C:\Users\alice\Documents\private-plan.docx"),
+            ""
+        );
+    }
+
+    #[test]
+    fn sanitize_file_viewers_and_archivers_do_not_leak_filenames() {
+        for (app, title) in [
+            ("explorer.exe", r"private-folder - File Explorer"),
+            ("winword.exe", "quarterly-results.docx - Word"),
+            ("acrord32.exe", "medical-record.pdf - Adobe Acrobat Reader"),
+            ("7zfm.exe", "backup-secrets.zip"),
+        ] {
+            assert_eq!(sanitize(app, title), "", "{app} leaked its window title");
+        }
     }
 
     #[test]
     fn sanitize_truncates_to_80_bytes() {
         let long = "a".repeat(200);
-        let s = sanitize("notepad.exe", &long);
+        let s = sanitize("code.exe", &long);
         assert!(s.len() <= 80);
         assert_eq!(s.len(), 80);
     }
@@ -293,7 +307,7 @@ mod tests {
     fn sanitize_truncate_utf8_safe() {
         // 中文 3 字节,放到 80 字节边界附近确认不 panic
         let s = "测试".repeat(30); // 60 字符 × 3 字节 = 180 字节
-        let out = sanitize("notepad.exe", &s);
+        let out = sanitize("code.exe", &s);
         assert!(out.len() <= 80);
         // 截断后必须仍是合法 UTF-8(能 to_string 不 panic)
         let _ = out.to_string();
