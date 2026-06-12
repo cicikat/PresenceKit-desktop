@@ -804,8 +804,12 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
 
     const pushSeg = (idx: number) => {
       const text = textParts[idx];
-      const segmentedContent = strippedParts
-        ? (strippedParts[idx] ?? strippedParts[0])
+      // Per-index mapping is only valid when both sides split into the same number
+      // of paragraphs. On mismatch, fall back to the raw bubble text — the old
+      // `?? strippedParts[0]` fallback rendered the FULL message into one bubble,
+      // which displayed as duplicated text ("double-send").
+      const segmentedContent = strippedParts && strippedParts.length === textParts.length
+        ? strippedParts[idx]
         : undefined;
       console.log('[chat] pushSeg-append | appendSource:', appendSource, '| msg_id:', wsMsgId ?? '(none)', '| idx:', idx, '| id:', localIds[idx], '| partsTotal:', textParts.length, '| timestamp:', Date.now());
       setMessages(prev => [...prev, {
@@ -935,10 +939,13 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         if (pending) {
           pendingSegmentsByMsgIdRef.current.delete(msg_id);
           const strippedParts = splitReply(pending.content);
+          // Only map per-index when paragraph counts match; otherwise keep raw text.
+          // `?? strippedParts[0]` on mismatch duplicated the full message into bubbles.
+          const countsMatch = strippedParts.length === matchedFallback.renderedMsgIds.length;
           setMessages(prev => prev.map(m => {
             const idx = matchedFallback.renderedMsgIds.indexOf(m.id);
             if (idx === -1) return m;
-            return { ...m, segments: pending.segments, segmentedContent: strippedParts[idx] ?? strippedParts[0] ?? m.text };
+            return { ...m, segments: pending.segments, segmentedContent: countsMatch ? strippedParts[idx] : undefined };
           }));
         }
         console.log('[chat] appendSource: late-ws-replace | msg_id:', msg_id, '| replacedFallback: true | sourceKind:', matchedFallback.sourceKind, '| normalizedHash:', normalizedHash, '| renderedMsgIds:', matchedFallback.renderedMsgIds, '| pendingSegmentsApplied:', !!pending, '| pendingWake: false | pendingSend: false | duplicateDropped: false');
@@ -1002,10 +1009,15 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         const strippedParts = splitReply(content);
         const segContentHash = content.length > 0 ? content.slice(0, 32).replace(/\s+/g, ' ') : '(empty)';
         console.log('[chat] appendSource: segments-update | msg_id:', msg_id, '| localIdsCount:', localIds.length, '| contentHash:', segContentHash, '| partsCount:', strippedParts.length, '| timestamp:', Date.now());
-        if (strippedParts.length > localIds.length) {
-          // Segments have more parts than bubbles — extra parts silently dropped.
-          // This is a content mismatch: channel_message split fewer paragraphs than message_segments.
-          console.warn('[chat] BUG-segments-mismatch | msg_id:', msg_id, '| strippedParts:', strippedParts.length, '| localIds:', localIds.length, '| excess parts will be dropped');
+        if (strippedParts.length !== localIds.length) {
+          // Paragraph-count mismatch between message_segments content and the bubbles
+          // created from channel_message. Per-index mapping would be wrong, and the old
+          // `?? strippedParts[0]` fallback wrote the FULL segments content into bubble #0
+          // (later bubbles kept their raw paragraph) — rendering duplicated text that
+          // looked like a double-send. Keep raw bubble text; attach segments only.
+          console.warn('[chat] segments-count-mismatch | msg_id:', msg_id, '| strippedParts:', strippedParts.length, '| localIds:', localIds.length, '| skipping segmentedContent overwrite');
+          setMessages(prev => prev.map(m => (localIds.includes(m.id) ? { ...m, segments } : m)));
+          return;
         }
         setMessages(prev => prev.map(m => {
           const idx = localIds.indexOf(m.id);
@@ -1013,7 +1025,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
           return {
             ...m,
             segments,
-            segmentedContent: strippedParts[idx] ?? strippedParts[0] ?? m.text,
+            segmentedContent: strippedParts[idx],
           };
         }));
       } else {
