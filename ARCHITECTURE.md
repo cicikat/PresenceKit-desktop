@@ -45,6 +45,7 @@ Emerald-client 是 `qq-st-bot` 的新桌面客户端。它不拥有角色记忆�
 - 初始化头像 / Dream 背景 store：`avatarStore.init()`。
 - 挂载全局样式：`src/shared/theme/globals.css`。
 - 渲染唯一主 view：`<ChatWindow />`。
+- Activity 打开时继续保持 `<ChatWindow />` 挂载，由 `<ActivityWindow />` 作为 overlay 覆盖，避免卸载 ChatPanel 和 WS 订阅。
 
 主窗口是 `src/windows/chat/ChatWindow.tsx`：
 
@@ -53,6 +54,7 @@ Emerald-client 是 `qq-st-bot` 的新桌面客户端。它不拥有角色记忆�
 - 使用 `src/shared/chatAppearance.ts` 保存 Chat 聊天字号、主题字号和字体包；Sidebar 宽度仅通过界面分隔条拖拽调整。
 - 偏好面板的「世界」页通过 `getPromptAssets()` / `patchPromptAssets()` 管理 Reality Prompt Assets：角色卡单选、世界书多选和破限多选。可用选项来自后端，客户端不展示文件路径。
 - 把 engine 传给 `ChatPanel`。
+- Activity 打开时保持 ChatWindow / ChatPanel 挂载，ActivityWindow 只作为覆盖层显示。
 - 管理正式 Dream overlay 的本地开关；DreamWindow 自己接入 Dream API 和窗口状态机。
 - 将当前 Reality 激活角色卡头像传给 DreamWindow；Dream 内控制栏、动向侧栏和消息区优先显示该头像，无角色头像时回退到本地 HER 头像。
 - 当前没有实际 `PetWindow` 渲染。
@@ -70,7 +72,8 @@ Dream 窗口是 `src/windows/dream/DreamWindow.tsx`：
 
 - 启动时通过 Tauri command 加载短期历史。
 - 用户发送消息时调用 `sendChat()`，走 Tauri Rust command 再打后端 HTTP。
-- 订阅 `wsClient` 的 `channel_message`，接收后端主动推送消息。
+- 订阅 `wsClient` 的 `channel_message` / `message_segments`，接收后端主动推送并按 assistant `msg_id` 关联；content hash 只用于旧后端或异常响应 fallback。
+- `pending message_segments` 使用 5 分钟 TTL 和 50 条上限，`msg_id` 到本地消息的映射只保留最近 200 条。
 - 用本地 engine 的 mood/activity/presence 渲染 header 标签和头像呼吸。
 
 花园面板是 `src/windows/chat/components/SubGarden.tsx`：
@@ -100,14 +103,15 @@ WebSocket 在 `src/shared/api/ws.ts`：
 
 - 前端通过 Tauri commands / events 调用 `src-tauri/src/ws_bridge.rs` 的原生 WebSocket client。
 - Rust 从本地 client config 读取 admin token，并在握手请求中设置 `Authorization: Bearer ...`；token 不进入 URL 或 WebView。
-- 支持 legacy `hello_ack`、`channel_message`、`action`、`ping`。
+- 支持 legacy `hello_ack`、`channel_message`、`message_segments`、`action`、`ping`。
 - `action` 保持 legacy envelope，不改协议；收到后异步 dispatch 到 Tauri action commands，并按执行结果回 `ack`。
 - 自动重连，指数退避最大 30 秒。
 - 当前没有实现 v1 envelope，也没有发送 `user_message` / `client_event`。
 
 Tauri Rust 在 `src-tauri/src/lib.rs`：
 
-- `send_chat`：POST `/desktop/chat`，使用 `reqwest.no_proxy()`。
+- `send_chat`：POST `/desktop/chat`，使用 `reqwest.no_proxy()`；响应保留 assistant `turn_id` / `msg_id`。
+- HTTP client 普通请求超时为 15 秒，chat / wake / Dream 等 LLM 请求超时为 120 秒；401/403 统一返回 `HTTP 401/403: 认证失败，请检查本地 token 配置`。
 - `ws_bridge.rs`：原生 WebSocket Bearer 鉴权、收发桥接和 URL query token 清洗。
 - `load_history`：GET `/memory/{user_id}/short-term`，使用 Bearer token。
 - `load_garden_state`：GET `/garden/state`，使用 Bearer token。
@@ -116,7 +120,8 @@ Tauri Rust 在 `src-tauri/src/lib.rs`：
 - `load_hidden_state_debug`：GET `/debug/user-hidden-state`，并只读参考 `/dream/settings.display.physiological_arousal` 作为潜意识面板开发者字段显隐；不写 hidden state。
 - `src-tauri/src/actions.rs`：执行 `minimize_window` / `open_url` / `show_notify` / `media_play_pause` 四类 desktop action。
 - `save_avatar` / `load_avatar` / `read_avatars_json` / `write_avatars_json`：本地头像和 Dream 背景持久化。
-- `list_dream_fonts`：扫描 `public/fonts/`，返回可供 Chat / Dream 使用的字体包。
+- `list_dream_fonts`：打包后优先扫描 `resource_dir/fonts`，debug/dev 模式回退源码 `public/fonts/`；目录不可用时返回明确错误。
+- sensor `title_sanitizer` 采用保守默认：Browser 仅返回域名，Editor 仅返回安全 basename，Chat / Other / 未知及文件查看类应用不返回 `title_hint`。
 
 ---
 
@@ -146,11 +151,12 @@ ChatPanel.send()
   → Tauri invoke("send_chat")
   → src-tauri/src/lib.rs reqwest POST /desktop/chat
   → qq-st-bot pipeline
-  ← HTTP JSON { reply, emotion, affection, level }
-  → ChatPanel 追加 assistant bubble
+  ← HTTP JSON { reply, emotion, affection, level, turn_id, msg_id }
+  → ChatPanel 优先按 msg_id 与 WS channel_message / message_segments 对账
 ```
 
 这条路径是当前真实路径，但不是 v1 目标协议的最终路径。v1 目标是用户输入走 WS `user_message`，回复走 WS `assistant_message`。
+后端当前 assistant correlation ID 对齐为 `HTTP turn_id = HTTP msg_id = WS channel_message.msg_id = WS message_segments.msg_id`。
 
 ### 后端主动消息
 
@@ -247,7 +253,7 @@ Dream 背景按 `day` / `night` 分开记录。旧版单字段 `dream_background
 | `src/shared/ui/TypingDots.tsx` / `TypingDots.css` | Chat / Dream 共用输入中视觉组件 |
 | `src/shared/theme/globals.css` | 全局主题变量 |
 | `src-tauri/src/lib.rs` | Tauri command 和 Rust HTTP 桥 |
-| `src-tauri/src/sensor/`(规划中) | sensor 感知模块,嵌入 Tauri Rust 进程 |
+| `src-tauri/src/sensor/` | sensor 感知模块,嵌入 Tauri Rust 进程 |
 | `sensor-service/` | 已废弃,原 Python 独立进程方案 |
 
 ---
@@ -269,12 +275,11 @@ Dream 背景按 `day` / `night` 分开记录。旧版单字段 `dream_background
 - `state-engine.js` 的状态表 → `shared/state/store.ts`
 - 花园只读 panel → `SubGarden.tsx`
 - 日记只读 panel → `SubDiary.tsx`
+- sensor 感知模块 → `src-tauri/src/sensor/`，已嵌入 Tauri Rust 进程
 
 未迁或未完成：
 
 - `pet.jsx` 的桌宠渲染与行为。
-- sensor 感知模块嵌入 Tauri Rust(`src-tauri/src/sensor/`),
-  不再走原 PyQt / Python 独立进程方案。
 - v1 WebSocket 协议。
 - Sidebar flow/status tab 的真实数据接入。
 - 花园交互能力和 harvest/vase 详情展示。

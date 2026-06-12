@@ -26,9 +26,10 @@
 - 管理 UI 状态：主题、侧栏开关、侧栏 tab、侧栏宽度、帮助面板、偏好面板、桌宠开关。
 - 管理 Dream UI v2 preview 的本地状态：Ribbon 入口打开 overlay，Esc / WAKE 关闭并显示 afterglow。
 - 布局三列：Ribbon、Sidebar、ChatPanel。
+- ActivityWindow 由 `src/main.tsx` 作为 overlay 覆盖；Activity 打开期间 ChatWindow / ChatPanel 保持挂载，WS 订阅不中断。
 - 负责偏好面板内的头像上传/裁剪入口。
 - 世界页角色卡头像同样复用 `AvatarCropper`，选择 PNG / JPEG / WebP 后先裁剪为 256 × 256 PNG，再通过角色头像后端接口上传。
-- Chat 偏好浮层使用顶部横栏分类：外观、世界、其他。外观提供主题、信息栏、聊天字号、主题字号、`public/fonts/` 动态字体包和头像设置；Sidebar 宽度只保留界面拖拽，不再在偏好里重复提供控制项。世界页通过 `PromptAssetsSettings` 读取和保存 Reality Prompt Assets，提供角色卡单选、Reality 世界书多选和 Reality 破限多选；其他暂留导入占位。
+- Chat 偏好浮层使用顶部横栏分类：外观、世界、其他。外观提供主题、信息栏、聊天字号、主题字号、动态字体包和头像设置；Sidebar 宽度只保留界面拖拽，不再在偏好里重复提供控制项。世界页通过 `PromptAssetsSettings` 读取和保存 Reality Prompt Assets，提供角色卡单选、Reality 世界书多选和 Reality 破限多选；其他暂留导入占位。
 
 关键状态：
 
@@ -79,7 +80,7 @@ src/windows/dream/
 - Dream Ribbon 顶部聊天图标是固定选中的装饰入口，以短分隔线与功能区隔开；动向 / 状态 / 潜意识打开左侧副栏，其中潜意识挂载只读 hidden state 面板；偏好 / 帮助打开居中 modal，交互层级与 Chat 的偏好 / 帮助窗口一致。
 - Dream 动向 Sidebar 的「梦境流动」区域优先读取 `/dream/state` 可选的 `flow_entries` / `dream_events` / `events` 摘要；旧后端未提供时从当前 dream state 派生 3 条短文案，不读取或展示 chat transcript。
 - Dream 状态 Sidebar 读取 `/dream/state` 的 Dream HUD v1.1 字段，以状态 pill 和 0-100 进度条展示；情绪 pill 按边界 / 亲密 / 执念方向做轻量视觉区分，未知标签保持原样显示。缺失数字显示 `—` 且条宽为 0。Dream 未激活时显示空态。`physiological_arousal` 默认隐藏，仅当 `/dream/settings` 返回 `display.physiological_arousal === true` 时展示。
-- Dream 偏好窗口使用顶部横栏分类：当前状态、梦境上下文、系统设置、世界、其他。当前状态只读汇总可信快照；梦境上下文承接记忆读取、感知边界、清明模式和独立 lorebook 开关；系统设置提供聊天字号、主题字号、`public/fonts/` 动态字体包、RGB 自定义配色、日间 / 夜间 Dream 聊天背景分别导入裁切、背景模糊度，以及控制 `display.physiological_arousal` 的开发者模式开关；世界页提供六个 `world_layer` 世界卡和 Dream 独立 `jailbreak_preset` 选择；其他暂留导入占位。Dream 后端偏好通过 `/dream/settings` 读取和保存，请求 5 秒超时；读取失败时显示默认值和重试入口，避免设置页永久停在载入态。梦境进行中修改时明确提示下次入梦生效；外观设置本地即时生效。
+- Dream 偏好窗口使用顶部横栏分类：当前状态、梦境上下文、系统设置、世界、其他。当前状态只读汇总可信快照；梦境上下文承接记忆读取、感知边界、清明模式和独立 lorebook 开关；系统设置提供聊天字号、主题字号、动态字体包、RGB 自定义配色、日间 / 夜间 Dream 聊天背景分别导入裁切、背景模糊度，以及控制 `display.physiological_arousal` 的开发者模式开关；世界页提供六个 `world_layer` 世界卡和 Dream 独立 `jailbreak_preset` 选择；其他暂留导入占位。Dream 后端偏好通过 `/dream/settings` 读取和保存，请求 5 秒超时；读取失败时显示默认值和重试入口，避免设置页永久停在载入态。梦境进行中修改时明确提示下次入梦生效；外观设置本地即时生效。
 - Sidebar 状态卡与消息气泡分别通过 `DreamGlowPanel` / `DreamGlowBubble` 统一玻璃底、冷色亮边、内外辉光和可选顶部扫光；视觉参数集中在 `features/dream/DreamTokens.css`。
 - 仅复用 `features/dream/DreamTokens.css` 的视觉 token。
 
@@ -117,7 +118,9 @@ src/windows/dream/
 - 按日文件懒加载历史对话（Phase 2c+），启动拉今日，不足 10 条兜底一次昨日。
 - 滚到顶时懒加载更早一天，保持滚动位置不跳。
 - 用户发送时调用 `sendChat()`。
-- 订阅 WS `channel_message`，显示后端主动消息。
+- 订阅 WS `channel_message` / `message_segments`，优先按 assistant `msg_id` 与 HTTP 回复对账；content hash 只作为旧后端或异常路径 fallback。
+- `message_segments` 只更新同 `msg_id` 的既有气泡，不单独追加消息；提前到达时暂存，使用 5 分钟 TTL 和 50 条上限。
+- WS `msg_id` 到本地消息 id 的映射只保留最近 200 条，避免长会话无限增长。
 - 根据 engine mood/activity/presence 渲染 header 标签、头像呼吸和 typing 指示。
 
 当前消息来源：
@@ -416,7 +419,7 @@ Tauri 命令：
 职责：
 
 - 使用 `localStorage` 保存 Dream 聊天字号、主题字号、所选字体包、RGB 自定义配色和背景模糊度。
-- 调 Tauri `list_dream_fonts` 动态扫描 `public/fonts/` 中的 `ttf / otf / woff / woff2` 文件。
+- 调 Tauri `list_dream_fonts` 动态扫描字体资源：packaged 优先 `resource_dir/fonts`，debug/dev 回退源码 `public/fonts/`；支持 `ttf / otf / woff / woff2`。
 - DreamWindow 通过 `FontFace` 加载所选字体，并只在 Dream 根节点覆盖字体变量。
 - 日间 / 夜间导入背景按当前 tone 分别渲染在 `.dream-theme__chat` 内；模糊度控制该背景图层，不影响 Ribbon 和 Sidebar。日间使用浅色 overlay，夜间使用深色 overlay。
 
@@ -431,7 +434,7 @@ Tauri 命令：
 职责：
 
 - 使用 `localStorage` 保存 Chat 聊天字号、主题字号和所选字体包；旧版 `chat.bubbleFontSize` 会作为首次读取时的字号迁移来源。
-- 复用 Tauri `list_dream_fonts` 扫描 `public/fonts/` 中的 `ttf / otf / woff / woff2` 文件。
+- 复用 Tauri `list_dream_fonts` 扫描字体资源：packaged 优先 `resource_dir/fonts`，debug/dev 回退源码 `public/fonts/`；支持 `ttf / otf / woff / woff2`。
 - ChatWindow 通过 `FontFace` 加载所选字体，并只在 `.chat-ui` 主布局容器覆盖字体变量，不影响 Dream。
 - 主题字号通过 `--chat-theme-font-scale` 应用于当前运行中的 Ribbon、Sidebar tabs 和 ChatPanel；聊天字号单独控制聊天气泡与输入框。
 

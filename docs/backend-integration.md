@@ -54,6 +54,8 @@ config/client.local.json
 
 兼容说明：旧的 AppData `sensor_config.json` 仍可作为 sensor 兼容配置来源；新的 `config/client.local.json` 优先级更高，并同时覆盖 HTTP base、WS base、admin token 和 sensor 配置。
 
+Rust/Tauri HTTP client 统一显式禁用代理并设置超时：普通请求 15 秒，chat / wake / Dream 等 LLM 路径 120 秒。使用共享安全错误处理的受保护路径以稳定的 `HTTP <status>` 格式返回错误；401/403 返回 `HTTP 401/403: 认证失败，请检查本地 token 配置`，不包含 token 或响应正文。
+
 ---
 
 ## 当前客户端调用点
@@ -142,20 +144,26 @@ ChatPanel.send()
   "reply": "……",
   "affection": 0,
   "level": "",
-  "emotion": "gentle"
+  "emotion": "gentle",
+  "turn_id": "assistant-correlation-id",
+  "msg_id": "assistant-correlation-id"
 }
 ```
 
-客户端类型目前只声明：
+客户端声明并消费：
 
 ```ts
 interface ChatResponse {
   reply: string;
   emotion: string;
+  turn_id?: string;
+  msg_id?: string;
 }
 ```
 
-多余字段会被忽略。
+assistant correlation ID 已对齐：`HTTP turn_id = HTTP msg_id = WS channel_message.msg_id = WS message_segments.msg_id`。ChatPanel 优先按 `msg_id` 对账 HTTP/WS 回复；content hash 仅作为旧后端未返回 `msg_id` 或异常路径的 fallback。
+
+`POST /desktop/wake` 有 assistant reply 时同样返回 `turn_id` / `msg_id`，并遵循相同 correlation ID 约束。
 
 重要差异：旧 v1 方案写明 Tauri 客户端最终不应调用 `/desktop/chat`，而应通过 WS `user_message` 发消息，再用 WS `assistant_message` 收回复。当前尚未做到。
 
@@ -505,7 +513,7 @@ Authorization: Bearer <admin_token>
 
 - 浏览器：只保留域名（`github.com`，不保留完整 URL）
 - 编辑器：只保留文件名（`ChatPanel.tsx`，不保留完整路径）
-- 聊天软件：直接置空字符串
+- 聊天软件、Other、未知应用、Explorer / Office / PDF / 压缩工具：直接置空字符串
 - 黑名单关键词（密码、银行、医疗等）整条置空
 
 后端文件：`D:\ai\qq-st-bot\admin\routers\sensor.py`、`D:\ai\qq-st-bot\core\memory\realtime_state.py`
@@ -706,6 +714,19 @@ ws://127.0.0.1:8080/ws/desktop
 }
 ```
 
+分段元数据：
+
+```json
+{
+  "type": "message_segments",
+  "content": "……",
+  "segments": [],
+  "msg_id": "1748000000000"
+}
+```
+
+同一 assistant 回复的 HTTP `turn_id` / `msg_id`、`channel_message.msg_id` 和 `message_segments.msg_id` 相同。`message_segments` 只更新已关联的消息气泡；先到达时由 ChatPanel 暂存。
+
 桌面动作：
 
 ```json
@@ -752,6 +773,7 @@ P-01 已接入的最小执行动作：
 |---|---|
 | `hello_ack` | 设置连接状态为 `connected` |
 | `channel_message` | emit 给 ChatPanel，并立即 ack |
+| `message_segments` | emit 给 ChatPanel，按 `msg_id` 更新对应 assistant 气泡 |
 | `action` | emit 给订阅者，异步 dispatch 到 Tauri action command，按执行结果 ack |
 | `ping` | 回 `pong` |
 
@@ -813,7 +835,7 @@ v1 目标新增或替换：
 | `load_avatar(path)` | 前端 → Rust | 读取头像或 Dream 背景并返回 data URL |
 | `read_avatars_json()` | 前端 → Rust | 读取头像和 Dream 日间 / 夜间背景配置；旧 `dream_background` 字段由前端兼容为夜间背景 |
 | `write_avatars_json(json)` | 前端 → Rust | 写头像和 Dream 日间 / 夜间背景配置 |
-| `list_dream_fonts()` | 前端 → Rust | 扫描 `public/fonts/`，返回 `ttf / otf / woff / woff2` 字体清单 |
+| `list_dream_fonts()` | 前端 → Rust | packaged 优先扫描 `resource_dir/fonts`，debug/dev 回退源码 `public/fonts/`；目录不可用时报明确错误 |
 | `dream_get_settings()` | 前端 → Rust → 后端 | GET `/dream/settings`；读取 Dream 上下文与 `display.physiological_arousal` |
 | `dream_update_settings(..., jailbreak_preset, display)` | 前端 → Rust → 后端 | PATCH `/dream/settings`；透传 Dream 独立 `jailbreak_preset`，`display` 可透传 `{ "physiological_arousal": boolean }` |
 | `greet(name)` | 前端 → Rust | Tauri 模板遗留，当前未使用 |
@@ -824,6 +846,8 @@ HTTP command 必须使用：
 reqwest::Client::builder()
     .no_proxy()
 ```
+
+普通 HTTP client 设置 15 秒超时；chat / wake / Dream 等 LLM 请求使用 120 秒超时。
 
 当前 `send_chat`、`load_history`、`load_garden_state`、`load_diary_list`、`load_diary_entry`、`load_chat_log_dates`、`load_chat_log_day`、`get_prompt_assets`、`patch_prompt_assets` 和 `load_hidden_state_debug` 已符合这条规则。
 

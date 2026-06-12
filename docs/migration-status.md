@@ -110,6 +110,8 @@ Ribbon 的桌宠按钮会：
 - 数据通路更短,Rust 抓取后直接 POST,不经过 IPC
 - 隐私清洗在同一进程内完成,原始键鼠/窗口标题不离开
   `title_sanitizer` 函数
+- `title_sanitizer` 采用白名单输出：Browser 仅保留域名，Editor 仅保留安全 basename；
+  Chat、Other、未知应用及 Explorer / Office / PDF / 压缩工具不返回 `title_hint`
 - 单进程模型,无需 daemon 管理
 - Rust 跨平台键鼠/窗口 API 比 Python 更稳定
 
