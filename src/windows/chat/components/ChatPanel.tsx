@@ -82,6 +82,7 @@ interface RealityChannelMessage {
 interface PendingRealitySegments {
   content: string;
   segments: NarrativeSegment[];
+  receivedAt: number;
 }
 
 interface ParkedRealityMessage extends RealityChannelMessage {
@@ -89,6 +90,25 @@ interface ParkedRealityMessage extends RealityChannelMessage {
 }
 
 const MAX_PARKED_REALITY_MESSAGES = 50;
+const MAX_WS_MSG_ID_MAPPINGS = 200;
+const PENDING_SEGMENTS_TTL_MS = 5 * 60_000;
+
+function setBoundedMapEntry<K, V>(map: Map<K, V>, key: K, value: V, maxSize: number) {
+  map.delete(key);
+  map.set(key, value);
+  while (map.size > maxSize) {
+    const oldestKey = map.keys().next().value as K | undefined;
+    if (oldestKey === undefined) break;
+    map.delete(oldestKey);
+  }
+}
+
+function pruneStalePendingSegments(map: Map<string, PendingRealitySegments>, now = Date.now()) {
+  const staleBefore = now - PENDING_SEGMENTS_TTL_MS;
+  map.forEach((value, key) => {
+    if (value.receivedAt < staleBefore) map.delete(key);
+  });
+}
 
 let _msgIdCounter = 0;
 function newId() { return `m-${Date.now()}-${++_msgIdCounter}`; }
@@ -377,9 +397,6 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
   const rootRef  = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // 已渲染的 turn_id,用于 WS 去重
-  const processedTurnIdsRef = useRef<Set<string>>(new Set());
-
   // message_segments 关联：ws msg_id → 本地 ChatMsg id 列表
   const wsMsgIdToLocalIdsRef = useRef<Map<string, string[]>>(new Map());
   // message_segments 先于 channel_message 到达时的暂存
@@ -417,13 +434,8 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
 
   const parkPendingSegments = useCallback((msgId: string, pendingSegments: PendingRealitySegments) => {
     const pending = pendingSegmentsByMsgIdRef.current;
-    pending.delete(msgId);
-    pending.set(msgId, pendingSegments);
-    while (pending.size > MAX_PARKED_REALITY_MESSAGES) {
-      const oldestMsgId = pending.keys().next().value as string | undefined;
-      if (!oldestMsgId) break;
-      pending.delete(oldestMsgId);
-    }
+    pruneStalePendingSegments(pending);
+    setBoundedMapEntry(pending, msgId, pendingSegments, MAX_PARKED_REALITY_MESSAGES);
   }, []);
 
   const parkRealityMessage = useCallback((message: RealityChannelMessage) => {
@@ -432,18 +444,10 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
     if (pendingSegments) pendingSegmentsByMsgIdRef.current.delete(message.msg_id);
 
     const existing = parked.get(message.msg_id);
-    parked.delete(message.msg_id);
-    parked.set(message.msg_id, {
+    setBoundedMapEntry(parked, message.msg_id, {
       ...message,
       pendingSegments: existing?.pendingSegments ?? pendingSegments,
-    });
-
-    while (parked.size > MAX_PARKED_REALITY_MESSAGES) {
-      const oldestMsgId = parked.keys().next().value as string | undefined;
-      if (!oldestMsgId) break;
-      parked.delete(oldestMsgId);
-      pendingSegmentsByMsgIdRef.current.delete(oldestMsgId);
-    }
+    }, MAX_PARKED_REALITY_MESSAGES);
   }, []);
 
   // ── 启动加载 ─────────────────────────────────────────────────────────────
@@ -580,7 +584,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
                   ...recentFallbacksRef.current.filter(r => now - r.renderedAt < 15000),
                   { sourceKind: 'wake' as const, msgId, normalizedHash, renderedAt: now, renderedMsgIds: fallbackIds },
                 ];
-                if (msgId) wsMsgIdToLocalIdsRef.current.set(msgId, fallbackIds);
+                if (msgId) setBoundedMapEntry(wsMsgIdToLocalIdsRef.current, msgId, fallbackIds, MAX_WS_MSG_ID_MAPPINGS);
                 console.log('[chat] appendSource: fallback | loadingSource: wake | msg_id:', msgId ?? '(none)', '| contentHash:', contentHash, '| normalizedHash:', normalizedHash, '| partsCount:', parts.length, '| renderedMsgIds:', fallbackIds, '| wsState:', wsClient.getState());
                 setWakeLoading(false);
                 scheduleAssistantSegments(wakeResp.reply, undefined, fallbackIds);
@@ -745,6 +749,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
 
     // Guard: if this wsMsgId was already processed (e.g. double channel_message), drop it.
     if (wsMsgId && wsMsgIdToLocalIdsRef.current.has(wsMsgId)) {
+      pendingSegmentsByMsgIdRef.current.delete(wsMsgId);
       console.warn('[chat] BUG-duplicate-scheduleAssistantSegments | msg_id:', wsMsgId, '| already processed — skipping to prevent double-render');
       return;
     }
@@ -760,6 +765,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
     const moodLabel = MOOD_LABEL_EN[m.mood];
 
     // Check for pending stripped content from message_segments that arrived first
+    pruneStalePendingSegments(pendingSegmentsByMsgIdRef.current);
     const pending = wsMsgId ? pendingSegmentsByMsgIdRef.current.get(wsMsgId) : undefined;
     const strippedParts = pending ? splitReply(pending.content) : null;
 
@@ -769,7 +775,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
     const localIds = preGeneratedIds ?? textParts.map(() => newId());
 
     if (wsMsgId) {
-      wsMsgIdToLocalIdsRef.current.set(wsMsgId, localIds);
+      setBoundedMapEntry(wsMsgIdToLocalIdsRef.current, wsMsgId, localIds, MAX_WS_MSG_ID_MAPPINGS);
       // Register WS content hash so fallback timers can detect this was already rendered.
       recentWSContentHashesRef.current.set(contentHashNormalized, Date.now());
       if (pending) pendingSegmentsByMsgIdRef.current.delete(wsMsgId);
@@ -851,6 +857,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
     const processRealityChannelMessage = ({ content, msg_id, source }: RealityChannelMessage) => {
       // Defense: only consume reality messages (source field added P0; old server = no source = reality).
       if (source && source !== 'reality') return;
+      pruneStalePendingSegments(pendingSegmentsByMsgIdRef.current);
 
       let duplicateDropped = false;
       const normalizedHash = normalizeForDedup(content);
@@ -901,7 +908,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       if (matchedFallback) {
         recentFallbacksRef.current = recentFallbacksRef.current.filter(r => r !== matchedFallback);
         // Wire fallback bubble IDs to this msg_id so message_segments can update segmentedContent
-        wsMsgIdToLocalIdsRef.current.set(msg_id, matchedFallback.renderedMsgIds);
+        setBoundedMapEntry(wsMsgIdToLocalIdsRef.current, msg_id, matchedFallback.renderedMsgIds, MAX_WS_MSG_ID_MAPPINGS);
         // Apply pending message_segments immediately if they already arrived before channel_message
         const pending = pendingSegmentsByMsgIdRef.current.get(msg_id);
         if (pending) {
@@ -929,6 +936,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       const _wsNow = Date.now();
       recentHistoryHashesRef.current.forEach((ts, h) => { if (_wsNow - ts > 30_000) recentHistoryHashesRef.current.delete(h); });
       if (recentHistoryHashesRef.current.has(normalizedHash)) {
+        pendingSegmentsByMsgIdRef.current.delete(msg_id);
         console.log('[chat] appendSource: history-ws-dedup | msg_id:', msg_id, '| normalizedHash:', normalizedHash, '| textPreview:', content.slice(0, 40));
         return;
       }
@@ -959,10 +967,10 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
           parkedRealityMessagesRef.current.delete(msg_id);
           parkedRealityMessagesRef.current.set(msg_id, {
             ...parkedMessage,
-            pendingSegments: { content, segments },
+            pendingSegments: { content, segments, receivedAt: Date.now() },
           });
         } else {
-          parkPendingSegments(msg_id, { content, segments });
+          parkPendingSegments(msg_id, { content, segments, receivedAt: Date.now() });
         }
         console.log('[chat] appendSource: dream-segments-parked | msg_id:', msg_id, '| parkedWithChannel:', !!parkedMessage);
         return;
@@ -971,6 +979,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       // It only updates segmentedContent of existing bubbles via .map().
       const localIds = wsMsgIdToLocalIdsRef.current.get(msg_id);
       if (localIds && localIds.length > 0) {
+        pendingSegmentsByMsgIdRef.current.delete(msg_id);
         // Bubbles already exist — update their segmentedContent in place.
         // channel_message msg_id matches: this is the expected path.
         const strippedParts = splitReply(content);
@@ -996,7 +1005,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         const strippedParts = splitReply(content);
         const segContentHash = content.length > 0 ? content.slice(0, 32).replace(/\s+/g, ' ') : '(empty)';
         console.log('[chat] appendSource: segments-parked | msg_id:', msg_id, '| contentHash:', segContentHash, '| partsCount:', strippedParts.length, '| timestamp:', Date.now());
-        parkPendingSegments(msg_id, { content, segments });
+        parkPendingSegments(msg_id, { content, segments, receivedAt: Date.now() });
       }
     });
 
@@ -1019,7 +1028,12 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
     parkedRealityMessagesRef.current.clear();
     parkedMessages.forEach(message => {
       if (message.pendingSegments) {
-        pendingSegmentsByMsgIdRef.current.set(message.msg_id, message.pendingSegments);
+        setBoundedMapEntry(
+          pendingSegmentsByMsgIdRef.current,
+          message.msg_id,
+          { ...message.pendingSegments, receivedAt: Date.now() },
+          MAX_PARKED_REALITY_MESSAGES,
+        );
       }
       processRealityChannelMessage(message);
       // The normal render path consumes segments synchronously. Any remainder belongs
@@ -1083,7 +1097,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
           ...recentFallbacksRef.current.filter(r => now - r.renderedAt < 15000),
           { sourceKind: 'send' as const, msgId, normalizedHash, renderedAt: now, renderedMsgIds: fallbackIds },
         ];
-        if (msgId) wsMsgIdToLocalIdsRef.current.set(msgId, fallbackIds);
+        if (msgId) setBoundedMapEntry(wsMsgIdToLocalIdsRef.current, msgId, fallbackIds, MAX_WS_MSG_ID_MAPPINGS);
         console.log('[chat] appendSource: fallback | loadingSource: send | msg_id:', msgId ?? '(none)', '| contentHash:', contentHash, '| normalizedHash:', normalizedHash, '| partsCount:', parts.length, '| renderedMsgIds:', fallbackIds, '| timestamp:', now);
         setLoading(false);
         scheduleAssistantSegments(reply, undefined, fallbackIds);
@@ -1117,7 +1131,6 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
     setLoading(true);
     try {
       const resp = await uploadDocument(filePath, userMessage);
-      if (resp.turn_id) processedTurnIdsRef.current.add(resp.turn_id);
       // Defer render same as send() — WS channel_message is primary path.
       const reply = resp.reply;
       const msgId = responseMsgId(resp);
@@ -1149,7 +1162,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
           ...recentFallbacksRef.current.filter(r => now - r.renderedAt < 15000),
           { sourceKind: 'upload' as const, msgId, normalizedHash, renderedAt: now, renderedMsgIds: fallbackIds },
         ];
-        if (msgId) wsMsgIdToLocalIdsRef.current.set(msgId, fallbackIds);
+        if (msgId) setBoundedMapEntry(wsMsgIdToLocalIdsRef.current, msgId, fallbackIds, MAX_WS_MSG_ID_MAPPINGS);
         console.log('[chat] appendSource: fallback | loadingSource: upload | msg_id:', msgId ?? '(none)', '| contentHash:', contentHash, '| normalizedHash:', normalizedHash, '| partsCount:', parts.length, '| renderedMsgIds:', fallbackIds, '| timestamp:', now);
         setLoading(false);
         scheduleAssistantSegments(reply, undefined, fallbackIds);
