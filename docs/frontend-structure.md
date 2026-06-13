@@ -25,6 +25,7 @@
 - 创建并持有单个 `StateEngine`。
 - 管理 UI 状态：主题、侧栏开关、侧栏 tab、侧栏宽度、帮助面板、偏好面板、桌宠开关。
 - 管理 Dream UI v2 preview 的本地状态：Ribbon 入口打开 overlay，Esc / WAKE 关闭并显示 afterglow。
+- 订阅 WS `dream_invite` UI 事件；收到角色邀请时清除 afterglow 并打开 Dream overlay。
 - 布局三列：Ribbon、Sidebar、ChatPanel。
 - ActivityWindow 由 `src/main.tsx` 作为 overlay 覆盖；Activity 打开期间 ChatWindow / ChatPanel 保持挂载，WS 订阅不中断。
 - 负责偏好面板内的头像上传/裁剪入口。

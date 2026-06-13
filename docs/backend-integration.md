@@ -768,6 +768,7 @@ P-01 已接入的最小执行动作：
 | `open_url` | `{"url": "https://example.com"}` | `tauri-plugin-opener` 打开 http/https/mailto/tel URL |
 | `show_notify` | `{"text": "...", "title": "..."}` | `tauri-plugin-dialog` 信息对话框 fallback，并记录 log |
 | `media_play_pause` | `{}` | Windows 发送媒体播放/暂停键；非 Windows 记录 stub log |
+| `dream_invite` | `{}` | emit `dream_invite` UI 事件，由 ChatWindow 打开 Dream 窗口 |
 
 `sensor_aware` trigger 产出的 action 类型：
 
@@ -795,7 +796,7 @@ P-01 已接入的最小执行动作：
 | `action` | emit 给订阅者，异步 dispatch 到 Tauri action command，按执行结果 ack |
 | `ping` | 回 `pong` |
 
-注意：未知 action 不执行，并回 `ok:false`；这不改变后端协议，也不影响旧桌宠或 file fallback。
+注意：`dream_invite` 是 UI action，不调用 Tauri command；ChatWindow 收到事件后打开 Dream 窗口并正常回 ack。未知 action 不执行，并回 `ok:false`；这不改变后端协议，也不影响旧桌宠或 file fallback。
 
 ---
 

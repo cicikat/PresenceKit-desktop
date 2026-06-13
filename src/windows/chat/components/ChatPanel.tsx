@@ -3,7 +3,7 @@
  * Phase 2c+: 按日文件懒加载历史，滚顶继续往前拉
  * ============================================================ */
 
-import { useState, useEffect, useRef, useCallback, memo } from 'react';
+import { useState, useEffect, useRef, useCallback, memo, type ReactNode } from 'react';
 import { format, subDays, parseISO } from 'date-fns';
 import { Tag, Icon, Btn } from './UIKit';
 import { MOOD_HUE, MOOD_LABEL_EN, FOCUS_LABEL_EN } from './UIKit';
@@ -64,6 +64,10 @@ interface ChatMsg {
   turnId?: string;
   segments?: NarrativeSegment[];
   segmentedContent?: string;
+  // 流式气泡：token 逐字到达时为 true，canonical channel_message 到达后清除
+  isStreaming?: boolean;
+  // 流结束（stream_end 到达）但 canonical 尚未替换：光标关闭，内容仍为原始 token
+  streamingDone?: boolean;
 }
 
 interface FallbackRecord {
@@ -188,6 +192,62 @@ function iconForFilename(name: string): string {
   if (/\.(png|jpg|jpeg|gif|webp|bmp)$/.test(lower)) return 'attach';
   if (/\.(txt|md|docx|doc|pdf)$/.test(lower)) return 'attach';
   return 'attach';
+}
+
+// ── 流式气泡渲染 ─────────────────────────────────────────────────────────────
+
+function StreamTagBox({ raw, done }: { raw: string; done: boolean }) {
+  // 把 <say>, </do> 等标签以小徽章形式展示；half-tag（done=false）显示为待完成状态
+  const label = raw.replace(/^<\/?/, '').replace(/>$/, '');
+  return (
+    <span style={{
+      display: 'inline-block',
+      fontSize: '0.75em',
+      padding: '1px 5px',
+      margin: '0 2px',
+      borderRadius: 3,
+      background: done ? 'var(--paper-3)' : 'oklch(0.88 0.04 60 / 0.6)',
+      color: 'var(--ink-3)',
+      opacity: done ? 0.7 : 0.5,
+      fontFamily: 'var(--font-mono, monospace)',
+      letterSpacing: 0,
+      verticalAlign: 'middle',
+      animation: done ? undefined : 'streaming-pulse 1s ease-in-out infinite',
+    }}>{label}</span>
+  );
+}
+
+function renderStreamingContent(text: string, isDone: boolean): ReactNode {
+  if (!text) return isDone ? null : <TypingDots />;
+
+  const nodes: ReactNode[] = [];
+  let buf = '';
+  let inTag = false;
+  let tagBuf = '';
+  let key = 0;
+
+  for (const ch of text) {
+    if (!inTag && ch === '<') {
+      if (buf) { nodes.push(<span key={key++}>{buf}</span>); buf = ''; }
+      inTag = true; tagBuf = '<';
+    } else if (inTag && ch === '>') {
+      tagBuf += '>';
+      nodes.push(<StreamTagBox key={key++} raw={tagBuf} done />);
+      inTag = false; tagBuf = '';
+    } else if (inTag) {
+      tagBuf += ch;
+    } else {
+      buf += ch;
+    }
+  }
+
+  // 未闭合 tag（流还在进行中）→ 待完成占位框
+  if (inTag && tagBuf) nodes.push(<StreamTagBox key={key++} raw={tagBuf} done={false} />);
+  if (buf) nodes.push(<span key={key++}>{buf}</span>);
+  // 流式光标
+  if (!isDone) nodes.push(<span key="cur" style={{ opacity: 0.6, animation: 'streaming-cursor-blink 0.8s step-end infinite' }}>▌</span>);
+
+  return nodes;
 }
 
 function ChatAvatar({ hue, size = 40 }: any) {
@@ -362,7 +422,10 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
           {msg.deleted && (
             <div style={{ textDecoration: 'line-through', opacity: 0.45, fontSize: assistantFontSize - 1.5, marginBottom: 4 }}>{normalizeChatDisplayText(msg.deleted)}</div>
           )}
-          {normalizeChatDisplayText(msg.segmentedContent ?? msg.text)}
+          {msg.isStreaming
+            ? renderStreamingContent(msg.text, msg.streamingDone ?? false)
+            : normalizeChatDisplayText(msg.segmentedContent ?? msg.text)
+          }
           {msg.meta && (
             <div className="mono" style={{ fontSize: chatThemeFontSize(10), color: 'var(--ink-3)', marginTop: 6, letterSpacing: 0.8 }}>{msg.meta}</div>
           )}
@@ -406,6 +469,24 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
   const wsMsgIdToLocalIdsRef = useRef<Map<string, string[]>>(new Map());
   // message_segments 先于 channel_message 到达时的暂存
   const pendingSegmentsByMsgIdRef = useRef<Map<string, PendingRealitySegments>>(new Map());
+
+  // 流式气泡：msg_id → 本地 ChatMsg id 列表（按段落分气泡，随 \n 增量增长）
+  const streamingLocalIdRef = useRef<Map<string, string[]>>(new Map());
+  // 流式累计原始文本：msg_id → 已到达的 token 拼接（用于按 \n+ 实时切段）
+  const streamingTextRef = useRef<Map<string, string>>(new Map());
+
+  // 注入流式动画 keyframes（仅执行一次）
+  useEffect(() => {
+    const id = 'emerald-streaming-keyframes';
+    if (document.getElementById(id)) return;
+    const style = document.createElement('style');
+    style.id = id;
+    style.textContent = `
+      @keyframes streaming-cursor-blink { 0%,100%{opacity:.6} 50%{opacity:.15} }
+      @keyframes streaming-pulse { 0%,100%{opacity:.5} 50%{opacity:.25} }
+    `;
+    document.head.appendChild(style);
+  }, []);
 
   // Reality messages stay hidden during Dream, then re-enter the normal WS render path on wake.
   const parkedRealityMessagesRef = useRef<Map<string, ParkedRealityMessage>>(new Map());
@@ -839,6 +920,77 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
     }
   }, [engine]);
 
+  // Replace an in-flight streaming bubble with the canonical content, split into
+  // one bubble per paragraph (\n+). This converges the streaming path onto the
+  // same final layout as scheduleAssistantSegments / the non-streaming trigger
+  // path — fixing the "multi-paragraph reply collapses into one bubble" bug.
+  // The first part reuses the existing streaming bubble; the rest are inserted
+  // immediately after it, preserving order. All resulting localIds are registered
+  // under msgId so a (possibly already-parked) message_segments envelope can map
+  // per-index.
+  const replaceStreamingBubbleWithParts = useCallback((
+    msgId: string | undefined,
+    content: string,
+    normalizedHash: string,
+  ): void => {
+    const liveIds = (msgId ? streamingLocalIdRef.current.get(msgId) : undefined) ?? [];
+    if (liveIds.length === 0) return;
+
+    if (msgId) {
+      streamingLocalIdRef.current.delete(msgId);
+      streamingTextRef.current.delete(msgId);
+    }
+    recentWSContentHashesRef.current.set(normalizedHash, Date.now());
+
+    const parts = splitReply(content);
+    // Canonical empty after scrub → drop all live bubbles.
+    if (parts.length === 0) {
+      setMessages(prev => prev.filter(m => !liveIds.includes(m.id)));
+      console.log('[chat] stream-replace-empty | msg_id:', msgId ?? '(none)', '| liveBubbles:', liveIds.length);
+      return;
+    }
+
+    // Reuse the live bubble ids in order; the canonical split may have a
+    // different paragraph count than what streamed (scrub can merge/strip),
+    // so add new ids when longer and drop surplus when shorter — reused ids
+    // keep their React identity (no remount flash).
+    const localIds = parts.map((_, i) => liveIds[i] ?? newId());
+    if (msgId) setBoundedMapEntry(wsMsgIdToLocalIdsRef.current, msgId, localIds, MAX_WS_MSG_ID_MAPPINGS);
+
+    // message_segments may have arrived first; per-index mapping is valid only
+    // when both sides split into the same number of paragraphs.
+    const pending = msgId ? pendingSegmentsByMsgIdRef.current.get(msgId) : undefined;
+    const strippedParts = pending ? splitReply(pending.content) : null;
+    const segMatch = !!(strippedParts && strippedParts.length === parts.length);
+    if (pending && msgId) pendingSegmentsByMsgIdRef.current.delete(msgId);
+
+    setMessages(prev => {
+      const anchorIdx = prev.findIndex(m => m.id === liveIds[0]);
+      if (anchorIdx === -1) return prev;
+      const base = prev[anchorIdx];
+      const liveById = new Map(prev.filter(m => liveIds.includes(m.id)).map(m => [m.id, m] as const));
+      const rebuilt: ChatMsg[] = parts.map((text, i) => {
+        const reuse = liveById.get(localIds[i]) ?? base;
+        return {
+          ...reuse,
+          id: localIds[i],
+          text,
+          isStreaming: false,
+          streamingDone: false,
+          wsMsgId: msgId && i === 0 ? msgId : undefined,
+          segments: segMatch ? pending!.segments : liveById.get(localIds[i])?.segments,
+          segmentedContent: segMatch ? strippedParts![i] : undefined,
+        };
+      });
+      // Remove all old live bubbles, then splice the rebuilt run back in at the
+      // anchor's original position (robust to non-contiguous layouts).
+      const withoutLive = prev.filter(m => !liveIds.includes(m.id));
+      const insertAt = prev.slice(0, anchorIdx).filter(m => !liveIds.includes(m.id)).length;
+      return [...withoutLive.slice(0, insertAt), ...rebuilt, ...withoutLive.slice(insertAt)];
+    });
+    console.log('[chat] stream-replace-split | msg_id:', msgId ?? '(none)', '| liveBubbles:', liveIds.length, '| finalParts:', parts.length, '| segMatch:', segMatch);
+  }, []);
+
   useEffect(() => {
     publishPetSnapshot({ thinking: loading || wakeLoading });
   }, [loading, wakeLoading]);
@@ -967,6 +1119,17 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
 
       console.log('[chat] appendSource: ws | msg_id:', msg_id, '| source:', source ?? 'reality', '| contentHash:', contentHashRaw, '| partsCount:', partsCount, '| normalizedHash:', normalizedHash, '| duplicateDropped:', duplicateDropped, '| replacedFallback: false');
 
+      // 流式气泡替换：canonical channel_message 到达时用干净版替换临时气泡。
+      // 注意：必须在 scheduleAssistantSegments 之前处理，否则 wsMsgIdToLocalIdsRef 里
+      // 已存的 msg_id 会触发 duplicate-skip guard 而跳过渲染。
+      if (streamingLocalIdRef.current.has(msg_id)) {
+        // Reconcile the live streamed bubbles with the canonical (scrubbed)
+        // split. Also maps any already-parked message_segments per-index.
+        replaceStreamingBubbleWithParts(msg_id, content, normalizedHash);
+        console.log('[chat] appendSource: stream-replace | msg_id:', msg_id, '| contentHash:', contentHashRaw);
+        return;
+      }
+
       scheduleAssistantSegments(content, msg_id);
     };
 
@@ -1038,10 +1201,93 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       }
     });
 
+    // ── 流式事件订阅 ─────────────────────────────────────────────────────────
+
+    const unsubStreamStart = wsClient.on('message_stream_start', ({ msg_id }) => {
+      if (dreamActiveRef.current) return;
+      // 流开始即停 loading 状态（用户已能看到 token 到来，无需继续等）
+      setLoading(false);
+      const firstId = newId();
+      streamingLocalIdRef.current.set(msg_id, [firstId]);
+      streamingTextRef.current.set(msg_id, '');
+      const m = engine.get();
+      setMessages(prev => [...prev, {
+        id: firstId,
+        role: 'assistant' as const,
+        text: '',
+        moodHue: MOOD_HUE[m.mood],
+        moodLabel: MOOD_LABEL_EN[m.mood],
+        time: Date.now(),
+        wsMsgId: msg_id,
+        isStreaming: true,
+        streamingDone: false,
+      }]);
+      console.log('[chat] stream-start | msg_id:', msg_id, '| localId:', firstId);
+    });
+
+    const unsubStreamDelta = wsClient.on('message_stream_delta', ({ msg_id, delta }) => {
+      const ids = streamingLocalIdRef.current.get(msg_id);
+      if (!ids) return;
+      // Accumulate raw text and re-derive paragraph bubbles live: as soon as a
+      // \n boundary completes a paragraph, a new bubble appears mid-stream
+      // (instead of one bubble that splits all at once on stream-end).
+      const acc = (streamingTextRef.current.get(msg_id) ?? '') + delta;
+      streamingTextRef.current.set(msg_id, acc);
+      const parts = splitReply(acc);
+      const effParts = parts.length === 0 ? [''] : parts;
+      while (ids.length < effParts.length) ids.push(newId());
+      streamingLocalIdRef.current.set(msg_id, ids);
+      const lastIdx = effParts.length - 1;
+      const m = engine.get();
+      setMessages(prev => {
+        const present = new Set(prev.map(x => x.id));
+        // Update text + cursor flag of already-rendered live bubbles. Only the
+        // last bubble keeps the blinking cursor (streamingDone=false).
+        let next = prev.map(item => {
+          const i = ids.indexOf(item.id);
+          if (i === -1 || i >= effParts.length) return item;
+          return { ...item, text: effParts[i], isStreaming: true, streamingDone: i !== lastIdx };
+        });
+        // Append newly-needed bubbles after the last present live bubble.
+        const missing = ids.slice(0, effParts.length).filter(id => !present.has(id));
+        if (missing.length) {
+          const lastPresent = [...ids.slice(0, effParts.length)].reverse().find(id => present.has(id));
+          const insertAt = lastPresent ? next.findIndex(x => x.id === lastPresent) + 1 : next.length;
+          const added: ChatMsg[] = missing.map(id => {
+            const i = ids.indexOf(id);
+            return {
+              id,
+              role: 'assistant' as const,
+              text: effParts[i],
+              moodHue: MOOD_HUE[m.mood],
+              moodLabel: MOOD_LABEL_EN[m.mood],
+              time: Date.now(),
+              wsMsgId: i === 0 ? msg_id : undefined,
+              isStreaming: true,
+              streamingDone: i !== lastIdx,
+            };
+          });
+          next = [...next.slice(0, insertAt), ...added, ...next.slice(insertAt)];
+        }
+        return next;
+      });
+    });
+
+    const unsubStreamEnd = wsClient.on('message_stream_end', ({ msg_id }) => {
+      // 流结束：关闭所有气泡的打字光标，等待 canonical channel_message 替换
+      const ids = streamingLocalIdRef.current.get(msg_id);
+      if (!ids) return;
+      setMessages(prev => prev.map(m => ids.includes(m.id) ? { ...m, streamingDone: true } : m));
+      console.log('[chat] stream-end | msg_id:', msg_id, '| bubbles:', ids.length);
+    });
+
     return () => {
       mounted = false;
       unsubMsg();
       unsubSegs();
+      unsubStreamStart();
+      unsubStreamDelta();
+      unsubStreamEnd();
       if (processRealityChannelMessageRef.current === processRealityChannelMessage) {
         processRealityChannelMessageRef.current = null;
       }
@@ -1118,6 +1364,14 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
           console.log('[chat] appendSource: fallback-skipped | loadingSource: send | reason: ws-already-rendered | msg_id:', msgId ?? '(none)', '| normalizedHash:', normalizedHash);
           return;
         }
+        // 流式气泡存在（WS 流中途断开，canonical 未到达）→ 用完整 HTTP 文本替换临时气泡
+        if (msgId && streamingLocalIdRef.current.has(msgId)) {
+          replaceStreamingBubbleWithParts(msgId, reply, normalizedHash);
+          pendingSendReplyRef.current = null;
+          setLoading(false);
+          console.log('[chat] appendSource: stream-fallback-replace | loadingSource: send | msg_id:', msgId);
+          return;
+        }
         pendingSendReplyRef.current = null;
         const parts = splitReply(reply);
         const fallbackIds = parts.map(() => newId());
@@ -1181,6 +1435,14 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
           pendingSendReplyRef.current = null;
           setLoading(false);
           console.log('[chat] appendSource: fallback-skipped | loadingSource: upload | reason: ws-already-rendered | msg_id:', msgId ?? '(none)', '| normalizedHash:', normalizedHash);
+          return;
+        }
+        // 流式气泡存在（WS 流中途断开）→ 用完整 HTTP 文本替换临时气泡
+        if (msgId && streamingLocalIdRef.current.has(msgId)) {
+          replaceStreamingBubbleWithParts(msgId, reply, normalizedHash);
+          pendingSendReplyRef.current = null;
+          setLoading(false);
+          console.log('[chat] appendSource: stream-fallback-replace | loadingSource: upload | msg_id:', msgId);
           return;
         }
         pendingSendReplyRef.current = null;

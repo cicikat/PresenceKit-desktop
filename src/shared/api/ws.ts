@@ -14,6 +14,10 @@ type EventMap = {
   channel_message: { content: string; msg_id: string; source?: string };
   message_segments: { content: string; segments: NarrativeSegment[]; msg_id: string; source?: string };
   action: DesktopActionPayload;
+  dream_invite: Record<string, never>;
+  message_stream_start: { msg_id: string };
+  message_stream_delta: { msg_id: string; delta: string };
+  message_stream_end: { msg_id: string };
 };
 
 type NativeMessageEvent = { connectionId: number; data: string };
@@ -188,6 +192,15 @@ class WSClient {
       case 'ping':
         this._send({ type: 'pong' });
         break;
+      case 'message_stream_start':
+        this.emit('message_stream_start', { msg_id: msg.msg_id });
+        break;
+      case 'message_stream_delta':
+        this.emit('message_stream_delta', { msg_id: msg.msg_id, delta: msg.delta });
+        break;
+      case 'message_stream_end':
+        this.emit('message_stream_end', { msg_id: msg.msg_id });
+        break;
     }
   }
 
@@ -258,6 +271,9 @@ class WSClient {
       }
       case 'media_play_pause':
         await invoke('action_media_play_pause');
+        return;
+      case 'dream_invite':
+        this.emit('dream_invite', {});
         return;
       default:
         throw new Error(`unsupported action type: ${type}`);

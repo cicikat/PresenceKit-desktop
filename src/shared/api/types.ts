@@ -12,7 +12,10 @@ export type ServerMessage =
   | { type: 'channel_message'; content: string; msg_id: string; source?: string }
   | { type: 'message_segments'; content: string; segments: NarrativeSegment[]; msg_id: string; source?: string }
   | { type: 'action'; action: DesktopActionPayload; msg_id: string }
-  | { type: 'ping' };
+  | { type: 'ping' }
+  | { type: 'message_stream_start'; msg_id: string; source?: string }
+  | { type: 'message_stream_delta'; msg_id: string; delta: string }
+  | { type: 'message_stream_end'; msg_id: string };
 
 export type ClientMessage =
   | { type: 'hello'; client: string; version: string }
@@ -25,7 +28,8 @@ export type DesktopActionType =
   | 'minimize_window'
   | 'open_url'
   | 'show_notify'
-  | 'media_play_pause';
+  | 'media_play_pause'
+  | 'dream_invite';
 
 export type DesktopActionPayload = {
   type?: string;
@@ -208,6 +212,7 @@ export interface PromptAssetsResponse {
   characters: PromptAssetCharacter[];
   lorebooks: PromptAssetOption[];
   jailbreaks: PromptAssetOption[];
+  dream_presets: PromptAssetOption[];
   active: ActivePromptAssets;
 }
 

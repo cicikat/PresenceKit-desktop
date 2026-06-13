@@ -8,6 +8,7 @@ import { Icon, MicroLabel } from './components/UIKit';
 import { StateEngine } from '../../shared/state/store';
 import { avatarStore } from '../../shared/avatars/store';
 import { getPromptAssets, patchPromptAssets, getCharacterAvatar, uploadCharacterAvatar, deleteCharacterAvatar } from '../../shared/api/backend';
+import { wsClient } from '../../shared/api/ws';
 import type { PromptAssetsPatch, PromptAssetsResponse } from '../../shared/api/types';
 import { getUIPref, setUIPref } from '../../shared/uiPreferences';
 import {
@@ -800,6 +801,11 @@ export function ChatWindow({ onActivityOpen }: { onActivityOpen?: () => void } =
       setDreamWindowOpen(true);
     }
   }, [dreamWindowOpen]);
+
+  useEffect(() => wsClient.on('dream_invite', () => {
+    setDreamAfterglow(false);
+    setDreamWindowOpen(true);
+  }), []);
 
   const onSidebarTab = (tab: string) => { setSidebarTab(tab); setSidebarOpen(true); };
   const onCloseSidebar = () => setSidebarOpen(false);
