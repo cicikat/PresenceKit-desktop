@@ -121,6 +121,7 @@ function normalizePromptAssets(value: unknown): PromptAssetsResponse {
     characters: normalizePromptAssetCharacters(raw.characters),
     lorebooks: normalizePromptAssetOptions(raw.lorebooks),
     jailbreaks: normalizePromptAssetOptions(raw.jailbreaks),
+    dream_presets: normalizePromptAssetOptions(raw.dream_presets),
     active: normalizeActivePromptAssets(raw.active),
   };
 }

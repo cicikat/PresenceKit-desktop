@@ -609,7 +609,7 @@ async fn dream_update_settings(
     boundary_level: Option<String>,
     world_layer: Option<String>,
     lucid_mode: Option<String>,
-    jailbreak_preset: Option<String>,
+    jailbreak_presets: Option<Vec<String>>,
     display: Option<serde_json::Value>,
 ) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
@@ -621,7 +621,7 @@ async fn dream_update_settings(
     if let Some(v) = boundary_level  { body.insert("boundary_level".into(), v.into()); }
     if let Some(v) = world_layer     { body.insert("world_layer".into(), v.into()); }
     if let Some(v) = lucid_mode      { body.insert("lucid_mode".into(), v.into()); }
-    if let Some(v) = jailbreak_preset { body.insert("jailbreak_preset".into(), v.into()); }
+    if let Some(v) = jailbreak_presets { body.insert("jailbreak_presets".into(), serde_json::json!(v)); }
     if let Some(v) = display         { body.insert("display".into(), v); }
     let body_json = serde_json::Value::Object(body);
     let resp = authorized_request(&cfg, client.patch(&url))
@@ -912,6 +912,12 @@ struct GomokuChatPayload {
     message: String,
 }
 
+#[derive(serde::Deserialize, Debug)]
+struct DreamSeedChatPayload {
+    session_id: String,
+    message: String,
+}
+
 #[derive(serde::Deserialize)]
 struct ChessMovePayload {
     session_id: String,
@@ -1028,6 +1034,44 @@ async fn activity_chess_close(app: tauri::AppHandle, payload: ActivitySessionPay
     activity_post(&app, "/activity/chess/close", serde_json::json!({ "session_id": payload.session_id })).await
 }
 
+// ── Dream Seed ────────────────────────────────────────────────────────────────
+
+#[tauri::command]
+async fn activity_dream_seed_start(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    activity_post(&app, "/activity/dream_seed/start", serde_json::json!({})).await
+}
+
+#[tauri::command]
+async fn activity_dream_seed_state(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    activity_get(&app, "/activity/dream_seed/state").await
+}
+
+#[tauri::command]
+async fn activity_dream_seed_chat(app: tauri::AppHandle, payload: DreamSeedChatPayload) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = llm_http_client()?;
+    let resp = authorized_request(&cfg, client.post(backend_url(&cfg, "/activity/dream_seed/chat")))
+        .json(&serde_json::json!({ "session_id": payload.session_id, "message": payload.message }))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    let resp = require_success(resp).await?;
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn activity_dream_seed_close(app: tauri::AppHandle, payload: ActivitySessionPayload) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = llm_http_client()?;
+    let resp = authorized_request(&cfg, client.post(backend_url(&cfg, "/activity/dream_seed/close")))
+        .json(&serde_json::json!({ "session_id": payload.session_id }))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    let resp = require_success(resp).await?;
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -1128,6 +1172,10 @@ pub fn run() {
             activity_chess_move,
             activity_chess_legal_moves,
             activity_chess_close,
+            activity_dream_seed_start,
+            activity_dream_seed_state,
+            activity_dream_seed_chat,
+            activity_dream_seed_close,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

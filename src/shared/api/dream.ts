@@ -57,7 +57,7 @@ export async function dreamUpdateSettings(update: DreamSettingsUpdateRequest): P
     boundaryLevel: update.boundary_level ?? null,
     worldLayer: update.world_layer ?? null,
     lucidMode: update.lucid_mode ?? null,
-    jailbreakPreset: update.jailbreak_preset ?? null,
+    jailbreakPresets: update.jailbreak_presets ?? null,
     display: update.display ?? null,
   }));
 }

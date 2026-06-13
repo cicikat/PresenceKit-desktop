@@ -13,6 +13,8 @@ import {
   type DreamJailbreakPreset,
 } from '../../../shared/api/dream-types';
 import { dreamGetSettings, dreamUpdateSettings } from '../../../shared/api/dream';
+import { getPromptAssets } from '../../../shared/api/backend';
+import type { PromptAssetOption } from '../../../shared/api/types';
 import {
   avatarStore,
   type DreamBackgroundAsset,
@@ -49,11 +51,118 @@ const LUCID_MODE_LABELS: Record<LucidMode, string> = {
   non_lucid: '非清明',
 };
 
-const DREAM_JAILBREAK_PRESET_LABELS: Record<DreamJailbreakPreset, string> = {
-  default: '默认',
-  abo: 'ABO',
-  custom: '自定义',
-};
+function JailbreakMultiPicker({
+  selected,
+  available,
+  disabled,
+  onChange,
+}: {
+  selected: DreamJailbreakPreset[];
+  available: PromptAssetOption[];
+  disabled: boolean;
+  onChange: (presets: DreamJailbreakPreset[]) => void;
+}) {
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const unselected = available.filter(a => !selected.includes(a.id));
+
+  const remove = (id: string) => onChange(selected.filter(s => s !== id));
+  const add = (id: string) => { onChange([...selected, id]); setDropdownOpen(false); };
+
+  const labelOf = (id: string) => available.find(a => a.id === id)?.label ?? id;
+
+  const btnBase: React.CSSProperties = {
+    fontFamily: 'var(--font-mono)',
+    fontSize: 'calc(11px * var(--dream-theme-font-scale, 1))',
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    opacity: disabled ? 0.55 : 1,
+    border: '1px solid var(--dt-border-soft)',
+    borderRadius: 8,
+    background: 'var(--dt-surface-2)',
+    color: 'var(--dt-ink-3)',
+    padding: '3px 10px',
+    letterSpacing: 0.8,
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+      {selected.map(id => (
+        <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 'calc(11px * var(--dream-theme-font-scale, 1))',
+            letterSpacing: 0.8,
+            background: 'var(--dt-flower-dandelion)',
+            color: 'var(--dt-ink)',
+            padding: '3px 10px',
+            borderRadius: 8,
+            border: '1px solid transparent',
+          }}>
+            {labelOf(id)}
+          </span>
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => remove(id)}
+            style={{ ...btnBase, padding: '3px 8px', fontSize: 'calc(12px * var(--dream-theme-font-scale, 1))' }}
+            aria-label={`移除 ${labelOf(id)}`}
+          >×</button>
+        </div>
+      ))}
+      {unselected.length > 0 && (
+        <div style={{ position: 'relative', alignSelf: 'flex-start' }}>
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => setDropdownOpen(v => !v)}
+            style={{ ...btnBase }}
+          >+ 添加</button>
+          {dropdownOpen && (
+            <div style={{
+              position: 'absolute',
+              top: 'calc(100% + 4px)',
+              left: 0,
+              background: 'var(--dt-surface-2)',
+              border: '1px solid var(--dt-border-soft)',
+              borderRadius: 8,
+              padding: '4px 0',
+              zIndex: 20,
+              minWidth: 140,
+              boxShadow: '0 4px 16px rgba(0,0,0,0.25)',
+            }}>
+              {unselected.map(item => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => add(item.id)}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    textAlign: 'left',
+                    padding: '5px 14px',
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 'calc(11px * var(--dream-theme-font-scale, 1))',
+                    letterSpacing: 0.8,
+                    color: 'var(--dt-ink-2)',
+                  }}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      {selected.length === 0 && available.length === 0 && (
+        <span style={{ fontSize: 'calc(10px * var(--dream-theme-font-scale, 1))', color: 'var(--dt-ink-4)' }}>
+          读取中…
+        </span>
+      )}
+    </div>
+  );
+}
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 type DreamPrefsTab = 'status' | 'context' | 'system' | 'world';
@@ -65,10 +174,17 @@ const DREAM_PREF_TABS: Array<[DreamPrefsTab, string]> = [
   ['world', '4 · 世界'],
 ];
 
-function normalizeDreamSettings(settings: DreamSettings): DreamSettings {
+function normalizeDreamSettings(raw: DreamSettings): DreamSettings {
+  const settings = raw as DreamSettings & { jailbreak_preset?: string };
+  let jailbreak_presets = settings.jailbreak_presets;
+  if (!Array.isArray(jailbreak_presets) || jailbreak_presets.length === 0) {
+    const legacy = settings.jailbreak_preset;
+    jailbreak_presets = legacy ? [legacy] : DEFAULT_DREAM_SETTINGS.jailbreak_presets;
+  }
   return {
     ...DEFAULT_DREAM_SETTINGS,
     ...settings,
+    jailbreak_presets,
     display: {
       ...DEFAULT_DREAM_SETTINGS.display,
       ...settings.display,
@@ -338,6 +454,7 @@ export function DreamPrefsPane({
   const [fonts, setFonts] = useState<DreamFontOption[]>([]);
   const [fontLoadError, setFontLoadError] = useState<string | null>(null);
   const [backgrounds, setBackgrounds] = useState(() => avatarStore.get().dreamBackgrounds);
+  const [availablePresets, setAvailablePresets] = useState<PromptAssetOption[]>([]);
   const [backgroundCropSrc, setBackgroundCropSrc] = useState<string | null>(null);
   const [backgroundCropTone, setBackgroundCropTone] = useState<DreamBackgroundTone | null>(null);
   const [backgroundSaving, setBackgroundSaving] = useState(false);
@@ -375,6 +492,13 @@ export function DreamPrefsPane({
     listDreamFonts()
       .then(setFonts)
       .catch(error => setFontLoadError(String(error)));
+  }, [open, tab]);
+
+  useEffect(() => {
+    if (!open || tab !== 'world') return;
+    getPromptAssets()
+      .then(data => setAvailablePresets(data.dream_presets ?? []))
+      .catch(() => {});
   }, [open, tab]);
 
   const patch = useCallback(async (update: Partial<DreamSettings>) => {
@@ -811,14 +935,14 @@ export function DreamPrefsPane({
               <div className="dream-prefs__group">
                 <div className="dream-prefs__group-head">
                   <div className="dream-prefs__group-title">梦境破限</div>
-                  <div className="dream-prefs__group-hint">Dream 独立 D0 预设 · 不会写入 Reality prompt</div>
+                  <div className="dream-prefs__group-hint">Dream 独立 D0 预设 · 不会写入 Reality prompt · 支持多选叠加</div>
                 </div>
                 <SettingRow label="破限预设" deferred={isDreamActive}>
-                  <SelectPref<DreamJailbreakPreset>
-                    value={settings.jailbreak_preset}
-                    options={['default', 'abo', 'custom']}
-                    labels={DREAM_JAILBREAK_PRESET_LABELS}
-                    onChange={v => patch({ jailbreak_preset: v })}
+                  <JailbreakMultiPicker
+                    selected={settings.jailbreak_presets}
+                    available={availablePresets}
+                    disabled={isDreamActive}
+                    onChange={presets => patch({ jailbreak_presets: presets })}
                   />
                 </SettingRow>
               </div>

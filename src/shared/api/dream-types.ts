@@ -127,7 +127,7 @@ export const DEFAULT_DREAM_SETTINGS: DreamSettings = {
   boundary_level: 'body_perceptible',
   world_layer: 'reality_derived',
   lucid_mode: 'lucid_shared',
-  jailbreak_preset: 'default',
+  jailbreak_presets: ['default'],
   display: { physiological_arousal: false },
 };
 
@@ -137,7 +137,7 @@ export interface DreamSettings {
   boundary_level: BoundaryLevel;
   world_layer: WorldLayer;
   lucid_mode: LucidMode;
-  jailbreak_preset: DreamJailbreakPreset;
+  jailbreak_presets: DreamJailbreakPreset[];
   display?: { physiological_arousal?: boolean };
 }
 
@@ -147,7 +147,7 @@ export interface DreamSettingsUpdateRequest {
   boundary_level?: BoundaryLevel;
   world_layer?: WorldLayer;
   lucid_mode?: LucidMode;
-  jailbreak_preset?: DreamJailbreakPreset;
+  jailbreak_presets?: DreamJailbreakPreset[];
   display?: { physiological_arousal?: boolean };
 }
 
