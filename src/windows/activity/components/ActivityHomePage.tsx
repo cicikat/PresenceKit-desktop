@@ -11,6 +11,7 @@ const CARDS: ActivityCard[] = [
   { tab: 'reading', title: '一起看书', subtitle: '载入 PDF 或文本，逐页阅读。', icon: '📖' },
   { tab: 'gomoku',  title: '五子棋',   subtitle: '15×15 棋盘，五子连线获胜。', icon: '⚫' },
   { tab: 'chess',   title: '国际象棋', subtitle: '标准规则，点选移动棋子。',   icon: '♟' },
+  { tab: 'dream_seed', title: '梦境预构', subtitle: '睡前一起写下今晚梦的入口。', icon: '☾' },
 ];
 
 export function ActivityHomePage({ onSelect }: { onSelect: (tab: ActivityTab) => void }) {
