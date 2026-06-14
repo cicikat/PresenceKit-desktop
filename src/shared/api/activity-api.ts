@@ -146,6 +146,14 @@ export const gomokuApi = {
 
 export type ChessTurn = 'white' | 'black';
 
+export interface ChessMoveEntry {
+  move_no: number;
+  uci: string;
+  san: string;
+  player: ChessTurn;
+  fen_after: string;
+}
+
 export interface ChessState {
   session_id: string | null;
   fen: string;
@@ -153,24 +161,24 @@ export interface ChessState {
   result: string | null;
   termination: string | null;
   status: string;
-  board: (string | null)[][];
-  move_history: string[];
+  move_history: ChessMoveEntry[];
+  last_move: ChessMoveEntry | null;
 }
 
 export interface ChessMoveResult {
+  session_id: string;
   fen: string;
   turn: ChessTurn;
   result: string | null;
   termination: string | null;
   status: string;
-  board: (string | null)[][];
-  ai_move: string | null;
+  last_move: ChessMoveEntry;
 }
 
 export const chessApi = {
   start: (): Promise<ChessState> =>
     invokeActivity('activity_chess_start'),
-  state: (): Promise<ChessState> =>
+  state: (): Promise<ChessState | { active: false }> =>
     invokeActivity('activity_chess_state'),
   move: (session_id: string, uci: string): Promise<ChessMoveResult> =>
     invokeActivity('activity_chess_move', { payload: { session_id, uci } }),

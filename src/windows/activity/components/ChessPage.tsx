@@ -1,9 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
-import { chessApi, type ChessState, type ChessMoveResult, type ChessTurn } from '../../../shared/api/activity-api';
+import {
+  chessApi,
+  type ChessState,
+  type ChessMoveEntry,
+  type ChessMoveResult,
+  type ChessTurn,
+} from '../../../shared/api/activity-api';
 
 const SQUARE = 54; // px per square
-const BOARD_PX = SQUARE * 8;
-
 // piece notation → Unicode
 const PIECE_UNICODE: Record<string, string> = {
   K: '♔', Q: '♕', R: '♖', B: '♗', N: '♘', P: '♙',
@@ -15,6 +19,51 @@ function toSquareName(row: number, col: number): string {
   return String.fromCharCode(97 + col) + String(8 - row);
 }
 
+function fenToBoard(fen: string): (string | null)[][] {
+  const rows = fen.split(' ')[0]?.split('/') ?? [];
+  if (rows.length !== 8) return Array.from({ length: 8 }, () => Array(8).fill(null));
+
+  return rows.map(rank => {
+    const row: (string | null)[] = [];
+    for (const token of rank) {
+      if (/\d/.test(token)) {
+        row.push(...Array(Number(token)).fill(null));
+      } else {
+        row.push(token);
+      }
+    }
+    return row.length === 8 ? row : Array(8).fill(null);
+  });
+}
+
+function normalizeChessState(
+  raw: ChessState | ChessMoveResult,
+  previous?: ChessState | null,
+): ChessState {
+  const lastMove = raw.last_move ?? null;
+  const moveHistory = 'move_history' in raw
+    ? raw.move_history
+    : lastMove
+      ? [...(previous?.move_history ?? []), lastMove]
+      : previous?.move_history ?? [];
+
+  return {
+    session_id: raw.session_id ?? previous?.session_id ?? null,
+    fen: raw.fen,
+    turn: raw.turn,
+    result: raw.result ?? null,
+    termination: raw.termination ?? null,
+    status: raw.status,
+    move_history: moveHistory,
+    last_move: lastMove,
+  };
+}
+
+function isCurrentTurnPiece(piece: string | null, turn: ChessTurn): boolean {
+  if (!piece) return false;
+  return turn === 'white' ? piece === piece.toUpperCase() : piece === piece.toLowerCase();
+}
+
 function StatusTag({ text, ok }: { text: string; ok?: boolean }) {
   return (
     <span className="mono" style={{
@@ -22,7 +71,7 @@ function StatusTag({ text, ok }: { text: string; ok?: boolean }) {
       fontSize: 10, letterSpacing: 1.2, fontWeight: 700,
       background: ok ? 'oklch(0.38 0.13 145)' : 'var(--ink)',
       color: ok ? 'oklch(0.97 0.04 145)' : 'var(--paper)',
-      borderRadius: 3, textTransform: 'uppercase',
+      borderRadius: 'var(--radius-xs)', textTransform: 'uppercase',
     }}>{text}</span>
   );
 }
@@ -31,7 +80,7 @@ function Btn({ children, onClick, variant = 'ghost', disabled }: any) {
   return (
     <button onClick={onClick} disabled={disabled} style={{
       fontFamily: 'inherit', fontSize: 12.5,
-      padding: '7px 14px', borderRadius: 5,
+      padding: '7px 14px', borderRadius: 'var(--radius-sm)',
       display: 'inline-flex', alignItems: 'center', gap: 6,
       cursor: disabled ? 'not-allowed' : 'pointer',
       opacity: disabled ? 0.45 : 1,
@@ -63,7 +112,7 @@ function ChessBoard({
       gridTemplateColumns: `repeat(8, ${SQUARE}px)`,
       gridTemplateRows: `repeat(8, ${SQUARE}px)`,
       border: '2px solid var(--paper-edge)',
-      borderRadius: 4,
+      borderRadius: 'var(--radius-sm)',
       overflow: 'hidden',
       userSelect: 'none',
       flexShrink: 0,
@@ -76,9 +125,9 @@ function ChessBoard({
           const sqName = toSquareName(row, col);
           const isTarget = legalTargets.includes(sqName);
 
-          let bg = isLight ? '#f0d9b5' : '#b58863';
-          if (isSelected) bg = '#f6f669';
-          else if (isTarget) bg = isLight ? '#cdd16f' : '#aaa23a';
+          let bg = isLight ? 'var(--board-light)' : 'var(--board-dark)';
+          if (isSelected) bg = 'var(--board-select)';
+          else if (isTarget) bg = isLight ? 'var(--board-target-light)' : 'var(--board-target-dark)';
 
           return (
             <div
@@ -98,14 +147,14 @@ function ChessBoard({
                 <span style={{
                   position: 'absolute', top: 2, left: 3,
                   fontSize: 9, fontWeight: 700, fontFamily: 'var(--font-mono)',
-                  color: isLight ? '#b58863' : '#f0d9b5', lineHeight: 1,
+                  color: isLight ? 'var(--board-coord-light)' : 'var(--board-coord-dark)', lineHeight: 1,
                 }}>{8 - row}</span>
               )}
               {row === 7 && (
                 <span style={{
                   position: 'absolute', bottom: 2, right: 3,
                   fontSize: 9, fontWeight: 700, fontFamily: 'var(--font-mono)',
-                  color: isLight ? '#b58863' : '#f0d9b5', lineHeight: 1,
+                  color: isLight ? 'var(--board-coord-light)' : 'var(--board-coord-dark)', lineHeight: 1,
                 }}>{String.fromCharCode(97 + col)}</span>
               )}
 
@@ -146,8 +195,6 @@ function ChessBoard({
   );
 }
 
-type PageState = ChessState | (ChessMoveResult & { session_id: string | null; move_history: string[] });
-
 export function ChessPage() {
   const [gameState, setGameState] = useState<ChessState | null>(null);
   const [selected, setSelected] = useState<[number, number] | null>(null);
@@ -158,7 +205,11 @@ export function ChessPage() {
   const refreshState = useCallback(async () => {
     try {
       const s = await chessApi.state();
-      setGameState(s);
+      if ('active' in s && s.active === false) {
+        setGameState(null);
+      } else {
+        setGameState(normalizeChessState(s as ChessState));
+      }
     } catch {
       setGameState(null);
     }
@@ -171,7 +222,13 @@ export function ChessPage() {
     setSelected(null); setLegalTargets([]);
     try {
       const s = await chessApi.start();
-      setGameState(s);
+      setGameState(normalizeChessState({
+        ...s,
+        result: null,
+        termination: null,
+        move_history: [],
+        last_move: null,
+      }));
     } catch (e: any) {
       setError(String(e?.message ?? e));
     } finally {
@@ -197,12 +254,13 @@ export function ChessPage() {
   const handleSquareClick = async (row: number, col: number) => {
     if (!gameState || gameState.status !== 'active' || loading) return;
 
-    const piece = gameState.board[row]?.[col] ?? null;
+    const board = fenToBoard(gameState.fen);
+    const piece = board[row]?.[col] ?? null;
     const sqName = toSquareName(row, col);
 
     if (!selected) {
-      // first click — select a piece (only white pieces = user's side)
-      if (piece && piece === piece.toUpperCase()) {
+      // first click — select a piece belonging to the current side
+      if (isCurrentTurnPiece(piece, gameState.turn)) {
         setSelected([row, col]);
         // fetch legal moves for this piece
         try {
@@ -227,18 +285,14 @@ export function ChessPage() {
       setLoading(true); setError(null);
       try {
         const result = await chessApi.move(gameState.session_id!, uci);
-        setGameState(prev => prev ? {
-          ...prev,
-          ...result,
-          move_history: [...(prev.move_history ?? []), uci, ...(result.ai_move ? [result.ai_move] : [])],
-        } : null);
+        setGameState(prev => normalizeChessState(result, prev));
       } catch (e: any) {
         setError(String(e?.message ?? e));
       } finally {
         setLoading(false);
       }
-    } else if (piece && piece === piece.toUpperCase()) {
-      // reselect another white piece
+    } else if (isCurrentTurnPiece(piece, gameState.turn)) {
+      // reselect another piece belonging to the current side
       setSelected([row, col]);
       try {
         const { legal_moves } = await chessApi.legalMoves(gameState.session_id!);
@@ -257,18 +311,7 @@ export function ChessPage() {
   const isActive = gameState?.status === 'active';
   const isFinished = !isActive && !!gameState?.session_id;
 
-  const emptyBoard: (string | null)[][] = [
-    ['r','n','b','q','k','b','n','r'],
-    ['p','p','p','p','p','p','p','p'],
-    [null,null,null,null,null,null,null,null],
-    [null,null,null,null,null,null,null,null],
-    [null,null,null,null,null,null,null,null],
-    [null,null,null,null,null,null,null,null],
-    ['P','P','P','P','P','P','P','P'],
-    ['R','N','B','Q','K','B','N','R'],
-  ];
-
-  const displayBoard = gameState?.board ?? emptyBoard;
+  const displayBoard = fenToBoard(gameState?.fen ?? '8/8/8/8/8/8/8/8 w - - 0 1');
 
   return (
     <div style={{
@@ -296,7 +339,7 @@ export function ChessPage() {
       {error && (
         <div className="mono" style={{
           padding: '8px 12px', background: 'oklch(0.95 0.05 20)',
-          border: '1px solid oklch(0.80 0.10 20)', borderRadius: 5,
+          border: '1px solid oklch(0.80 0.10 20)', borderRadius: 'var(--radius-sm)',
           fontSize: 11, color: 'oklch(0.40 0.14 20)', letterSpacing: 0.5,
         }}>
           {error}
@@ -318,7 +361,7 @@ export function ChessPage() {
         )}
         {isActive && (
           <span className="mono" style={{ fontSize: 11.5, color: 'var(--ink-3)', letterSpacing: 0.8 }}>
-            回合：{gameState?.turn === 'white' ? '♔ 白方（你）' : '♚ 黑方（叶瑄）'}
+            当前回合：{gameState?.turn === 'white' ? '♔ 白方' : '♚ 黑方'}
             {loading && ' · 等待中…'}
           </span>
         )}
@@ -331,7 +374,7 @@ export function ChessPage() {
           selected={selected}
           legalTargets={legalTargets}
           onSquareClick={handleSquareClick}
-          disabled={!isActive || loading || gameState?.turn !== 'white'}
+          disabled={!isActive || loading}
         />
 
         {/* side panel */}
@@ -342,14 +385,14 @@ export function ChessPage() {
           {isActive && (
             <div style={{
               padding: '12px 14px',
-              background: 'var(--paper-2)', border: '1px solid var(--paper-edge)', borderRadius: 8,
+              background: 'var(--paper-2)', border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-md)',
             }}>
               <div className="mono" style={{ fontSize: 10, letterSpacing: 1.2, color: 'var(--ink-3)', fontWeight: 600, marginBottom: 8 }}>
                 操作说明
               </div>
               <div style={{ fontSize: 12, color: 'var(--ink-2)', lineHeight: 1.8 }}>
-                <div>你: ♔ 白方</div>
-                <div>叶瑄: ♚ 黑方</div>
+                <div>本地双人裁判模式</div>
+                <div>白方与黑方轮流走棋</div>
               </div>
               <div className="mono" style={{ marginTop: 10, fontSize: 10, color: 'var(--ink-3)', letterSpacing: 0.5 }}>
                 点击棋子选中，<br />再点击目标格移动。
@@ -361,21 +404,21 @@ export function ChessPage() {
           {gameState?.move_history && gameState.move_history.length > 0 && (
             <div style={{
               padding: '12px 14px',
-              background: 'var(--paper-2)', border: '1px solid var(--paper-edge)', borderRadius: 8,
+              background: 'var(--paper-2)', border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-md)',
               maxHeight: 200, overflowY: 'auto',
             }}>
               <div className="mono" style={{ fontSize: 10, letterSpacing: 1.2, color: 'var(--ink-3)', fontWeight: 600, marginBottom: 8 }}>
                 走棋记录
               </div>
               <div className="mono" style={{ fontSize: 11, color: 'var(--ink-2)', lineHeight: 1.9 }}>
-                {gameState.move_history.map((m, i) => (
+                {gameState.move_history.map((m: ChessMoveEntry, i) => (
                   <span key={i} style={{ marginRight: 6 }}>
                     {i % 2 === 0 && (
                       <span style={{ color: 'var(--ink-4)', marginRight: 2 }}>
                         {Math.floor(i / 2) + 1}.
                       </span>
                     )}
-                    {m}{' '}
+                    {m.san}{' '}
                   </span>
                 ))}
               </div>
