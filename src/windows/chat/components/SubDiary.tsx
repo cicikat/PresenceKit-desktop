@@ -1,9 +1,10 @@
-/* SubDiary — 日记面板 (Phase 2d.2) */
+/* SubDiary — 日记面板 (Phase 2d.2, char-tab) */
 
 import { useState, useEffect, useMemo } from 'react';
 import { Tag, Btn } from './UIKit';
-import { loadDiaryList, loadDiaryEntry } from '../../../shared/api/backend';
+import { loadDiaryList, loadDiaryEntry, getPromptAssets } from '../../../shared/api/backend';
 import type { DiaryListResponse, DiaryListItem, DiaryEntry } from '../../../shared/api/types';
+import type { PromptAssetCharacter } from '../../../shared/api/types';
 import { panesApi } from './Panes';
 import { chatThemeFontSize } from '../../../shared/chatAppearance';
 
@@ -58,15 +59,17 @@ function renderBody(body: string): React.ReactNode[] {
 }
 
 /* ── 日记详情浮窗内容 ── */
-function DiaryDetailPane({ date }: { date: string }) {
+function DiaryDetailPane({ date, charId }: { date: string; charId?: string }) {
   const [entry, setEntry] = useState<DiaryEntry | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadDiaryEntry(date)
+    setEntry(null);
+    setError(null);
+    loadDiaryEntry(date, charId)
       .then(setEntry)
       .catch((e: any) => setError(String(e)));
-  }, [date]);
+  }, [date, charId]);
 
   if (error) {
     return (
@@ -154,15 +157,29 @@ function DiaryListEntry({ item, onClick }: { item: DiaryListItem; onClick: () =>
 
 /* ── SubDiary 主组件 ── */
 export function SubDiary() {
+  const [characters, setCharacters] = useState<PromptAssetCharacter[]>([]);
+  const [activeCharId, setActiveCharId] = useState<string>('');
   const [data, setData] = useState<DiaryListResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeEmotion, setActiveEmotion] = useState<string>('全部');
 
-  const fetchList = async () => {
+  /* 拉角色列表，初始选 active 角色 */
+  useEffect(() => {
+    getPromptAssets()
+      .then(assets => {
+        setCharacters(assets.characters);
+        const active = assets.active?.active_character;
+        setActiveCharId(active && active.length > 0 ? active : (assets.characters[0]?.id ?? ''));
+      })
+      .catch(() => {
+        /* 角色列表加载失败时静默降级，使用 active 字符 */
+      });
+  }, []);
+
+  const fetchList = async (charId: string) => {
     setLoading(true);
     try {
-      const result = await loadDiaryList();
+      const result = await loadDiaryList(charId || undefined);
       setData(result);
       setError(null);
     } catch (e: any) {
@@ -173,30 +190,25 @@ export function SubDiary() {
     }
   };
 
-  useEffect(() => { fetchList(); }, []);
-
-  const emotionTabs = useMemo(() => {
-    if (!data) return [];
-    const seen = new Set<string>();
-    data.entries.forEach(e => { if (e.emotion !== null) seen.add(e.emotion); });
-    return Array.from(seen);
-  }, [data]);
+  useEffect(() => {
+    fetchList(activeCharId);
+  }, [activeCharId]);
 
   const filtered = useMemo(() => {
     if (!data) return [];
-    if (activeEmotion === '全部') return data.entries;
-    return data.entries.filter(e => e.emotion === activeEmotion);
-  }, [data, activeEmotion]);
+    return data.entries;
+  }, [data]);
 
   function openEntry(item: DiaryListItem) {
+    const charId = activeCharId || undefined;
     panesApi.openPane({
-      id: `diary-${item.date}`,
+      id: `diary-${activeCharId}-${item.date}`,
       title: `${formatDate(item.date)} · ${item.title}`,
       w: 520,
       h: 600,
       hue: item.emotion !== null ? emotionHue(item.emotion) : 168,
       replace: true,
-      render: () => <DiaryDetailPane date={item.date} />,
+      render: () => <DiaryDetailPane date={item.date} charId={charId} />,
     });
   }
 
@@ -217,31 +229,29 @@ export function SubDiary() {
         <span className="mono" style={{ fontSize: chatThemeFontSize(11), color: 'var(--on-forest-2)', letterSpacing: 1.2, textAlign: 'center' }}>
           {error || '无数据'}
         </span>
-        <Btn onClick={() => fetchList()}>重试</Btn>
+        <Btn onClick={() => fetchList(activeCharId)}>重试</Btn>
       </div>
     );
   }
 
-  const tabs = ['全部', ...emotionTabs];
-
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* filter bar */}
+      {/* 角色分类栏 */}
       <div style={{ padding: '10px 14px 6px', borderBottom: '1px solid var(--forest-line)' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, alignItems: 'center' }}>
-          {tabs.map(t => (
-            <button key={t} onClick={() => setActiveEmotion(t)} style={{
+          {characters.map(char => (
+            <button key={char.id} onClick={() => setActiveCharId(char.id)} style={{
               padding: '3px 9px', borderRadius: 3, fontSize: chatThemeFontSize(11),
-              background: activeEmotion === t ? 'var(--on-forest)' : 'transparent',
-              color: activeEmotion === t ? 'var(--forest)' : 'var(--on-forest-2)',
-              border: activeEmotion === t ? '1px solid var(--on-forest)' : '1px solid var(--forest-line)',
-              cursor: 'pointer', fontFamily: 'inherit', fontWeight: activeEmotion === t ? 600 : 500,
+              background: activeCharId === char.id ? 'var(--on-forest)' : 'transparent',
+              color: activeCharId === char.id ? 'var(--forest)' : 'var(--on-forest-2)',
+              border: activeCharId === char.id ? '1px solid var(--on-forest)' : '1px solid var(--forest-line)',
+              cursor: 'pointer', fontFamily: 'inherit', fontWeight: activeCharId === char.id ? 600 : 500,
               transition: 'all 0.15s',
-            }}>{t}</button>
+            }}>{char.label || char.id}</button>
           ))}
           <div style={{ flex: 1 }} />
           <button
-            onClick={() => fetchList()}
+            onClick={() => fetchList(activeCharId)}
             title="刷新"
             style={{
               width: 22, height: 22, borderRadius: 3,
@@ -253,7 +263,7 @@ export function SubDiary() {
           >↻</button>
         </div>
         <div className="mono" style={{ fontSize: chatThemeFontSize(9.5), color: 'var(--on-forest-2)', letterSpacing: 1.2, marginTop: 6 }}>
-          {filtered.length} ENTRIES · {activeEmotion === '全部' ? 'ALL' : activeEmotion.toUpperCase()}
+          {filtered.length} ENTRIES · {activeCharId.toUpperCase() || 'ALL'}
         </div>
       </div>
 

@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { ChatResponse, DesktopWakeResponse, GardenState, DiaryListResponse, DiaryEntry, ChatLogDatesResponse, ChatLogDay, MoodState, ActivityState, SensorRealtimeResponse, UploadIngestResponse, UploadError, PromptAssetsResponse, PromptAssetsPatch, PromptAssetsPatchResponse, HiddenStateDebugResponse, PromptAssetCharacter, PromptAssetOption, ActivePromptAssets } from './types';
+import type { ChatResponse, DesktopWakeResponse, GardenState, DiaryListResponse, DiaryEntry, ChatLogDatesResponse, ChatLogDay, MoodState, ActivityState, SensorRealtimeResponse, UploadIngestResponse, UploadError, PromptAssetsResponse, PromptAssetsPatch, PromptAssetsPatchResponse, HiddenStateDebugResponse, PromptAssetCharacter, PromptAssetOption, ActivePromptAssets, GroupSummary, GroupDetail, GroupSendResponse, GroupSettings } from './types';
 
 export async function sendChat(message: string): Promise<ChatResponse> {
   return invoke<ChatResponse>('send_chat', { message });
@@ -22,12 +22,12 @@ export async function loadGardenState(): Promise<GardenState> {
   return invoke<GardenState>('load_garden_state');
 }
 
-export async function loadDiaryList(): Promise<DiaryListResponse> {
-  return invoke<DiaryListResponse>('load_diary_list');
+export async function loadDiaryList(charId?: string): Promise<DiaryListResponse> {
+  return invoke<DiaryListResponse>('load_diary_list', charId ? { charId } : {});
 }
 
-export async function loadDiaryEntry(date: string): Promise<DiaryEntry> {
-  return invoke<DiaryEntry>('load_diary_entry', { date });
+export async function loadDiaryEntry(date: string, charId?: string): Promise<DiaryEntry> {
+  return invoke<DiaryEntry>('load_diary_entry', charId ? { date, charId } : { date });
 }
 
 export async function loadChatLogDates(): Promise<ChatLogDatesResponse> {
@@ -185,6 +185,46 @@ function normalizeStringArray(value: unknown): string[] {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+// ── Group Chat (spec-10) ──────────────────────────────────────────────────────
+
+export async function listGroups(): Promise<GroupSummary[]> {
+  return invoke<GroupSummary[]>('group_list');
+}
+
+export async function createGroup(
+  roster: string[],
+  domain: string,
+  settings?: Partial<GroupSettings>,
+  groupId?: string,
+): Promise<GroupDetail> {
+  return invoke<GroupDetail>('group_create', {
+    roster,
+    domain,
+    settings: settings ?? null,
+    groupId: groupId ?? null,
+  });
+}
+
+export async function getGroup(id: string): Promise<GroupDetail> {
+  return invoke<GroupDetail>('group_get', { id });
+}
+
+export async function groupSend(id: string, message: string): Promise<GroupSendResponse> {
+  return invoke<GroupSendResponse>('group_send', { id, message });
+}
+
+export async function groupHistory(id: string, before?: number): Promise<GroupDetail['recent']> {
+  return invoke<GroupDetail['recent']>('group_history', { id, before: before ?? null });
+}
+
+export async function getGroupSettings(id: string): Promise<GroupSettings> {
+  return invoke<GroupSettings>('group_settings_get', { id });
+}
+
+export async function patchGroupSettings(id: string, settings: Partial<GroupSettings>): Promise<GroupSettings> {
+  return invoke<GroupSettings>('group_settings_patch', { id, settings });
 }
 
 export async function uploadDocument(

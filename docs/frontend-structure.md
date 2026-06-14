@@ -36,7 +36,7 @@
 
 | state | 说明 |
 |---|---|
-| `theme` | `paper` / `dark`，写入 `document.documentElement[data-theme]` |
+| `theme` | 当前主题 id；通过主题注册中心注入 token 并持久化到 `chat.theme` |
 | `petVisible` | 当前只影响 Ribbon active 和 engine mode，没有真实桌宠窗口 |
 | `sidebarOpen` / `sidebarTab` | 控制左侧副栏 |
 | `sidebarWidth` | 可拖拽调整，范围 250-540 |
@@ -281,21 +281,23 @@ Ring buffer：`useState<{mood, aura}[]>` 长度 60；2s 采样；mood 轨迹柱�
 
 职责：
 
-- 在 Sidebar 的 `diary` tab 中展示叶瑄写的日记。
-- 挂载时调用 `loadDiaryList()` 读取轻量列表（date / title / emotion），不预拉正文。
-- 顶部 filter tabs：始终显示"全部"；扫描列表中出现过的非 null emotion，去重后作为额外 tab；全为 null 时只显示"全部"。
-- 时间线滚动，最新在前，每条显示完整日期 + title + em dash 占位。
-- 点击 entry 时懒加载正文：调 `loadDiaryEntry(date)` 并通过 `panesApi.openPane()` 打开浮动详情窗。
+- 在 Sidebar 的 `diary` tab 中展示各角色写的日记。
+- 挂载时调用 `getPromptAssets()` 拉角色列表，默认选中 active 角色。
+- 顶部角色分类栏：以 `getPromptAssets()` 返回的 characters 为 tab，显示名取 `label`（fallback `id`）；切换角色时重新拉该角色的日记列表。
+- 列表调用 `loadDiaryList(charId)` 读取轻量列表（date / title / emotion），不预拉正文。
+- 时间线滚动，最新在前，每条显示完整日期 + title + em dash 占位；emotion 非 null 时渲染标签。
+- 点击 entry 时懒加载正文：调 `loadDiaryEntry(date, charId)` 并通过 `panesApi.openPane()` 打开浮动详情窗，pane id 带 charId 避免串角色。
 - 详情窗正文做最简渲染：`\n\n` 切段落 → `<p>`，段内 `\n` → `<br/>`，行首 `## ` → `<h3>`，其他 markdown 原样。
 - 顶部有刷新按钮；错误时显示错误文本 + 重试按钮；空状态显示"他还没开始写日记。"
-- 不轮询；emotion 字段当前全为 null，遇 null 不渲染标签。
+- 不轮询；emotion 字段后端当前恒为 null，遇 null 不渲染标签（标签行为保留以备后端填充）。
 
 当前数据来源：
 
 | 来源 | 路径 | 说明 |
 |---|---|---|
-| 日记列表 | `loadDiaryList()` → Tauri `load_diary_list` | 从后端 `/diary/list` 读取 |
-| 日记正文 | `loadDiaryEntry(date)` → Tauri `load_diary_entry` | 从后端 `/diary/{date}` 懒加载 |
+| 角色列表 | `getPromptAssets()` → Tauri `get_prompt_assets` | 从后端 `/settings/prompt-assets` 读取 |
+| 日记列表 | `loadDiaryList(charId?)` → Tauri `load_diary_list` | 从后端 `/diary/list?char_id=<v>` 读取 |
+| 日记正文 | `loadDiaryEntry(date, charId?)` → Tauri `load_diary_entry` | 从后端 `/diary/{date}?char_id=<v>` 懒加载 |
 
 ---
 
@@ -449,13 +451,16 @@ Tauri 命令：
 
 ## Theme
 
-文件：`src/shared/theme/globals.css`
+主题系统位于 `src/shared/theme/`：
 
-主题通过 CSS variables 管理：
+- `contract.ts` 是核心、游戏、字体和 Dream token 的单一契约来源。
+- `builtinThemes.ts` 保存内置 `paper` / `dark` 数据。
+- `loader.ts` 通过 `document.documentElement.style.setProperty()` 运行期注入主题。
+- `registry.ts` 合并内置主题与 Tauri `list_themes` 扫描到的 `public/themes/*/theme.json`，校验必需 token、持久化 `chat.theme` 并通知订阅者。
+- `ThemePicker.tsx` 由 Chat 和 Activity 偏好页共用。
+- `globals.css` 只保留 paper FOUC 兜底和结构性样式。
 
-- `:root[data-theme="paper"]`
-- `:root[data-theme="dark"]`
-- Dream 夜间模式在 `features/dream/DreamTokens.css` 的 `.dream-theme--night` 下使用独立深蓝紫色板，并为面板、气泡和输入框保留半透明毛玻璃表面。
+所有窗口启动时由 `main.tsx` 调用 `initTheme()`；独立 Pet WebView 通过同一初始化和 localStorage `storage` 事件跟随切换。Dream token 可由主题选择性覆盖，`features/dream/DreamTokens.css` 继续提供默认值与 sRGB/OKLCH 渐进增强。
 
 ## Shared frontend helpers
 
@@ -463,7 +468,7 @@ Tauri 命令：
 - `src/shared/images/cropImageToBlob.ts`：AvatarCropper / DreamBackgroundCropper 共用 canvas 裁剪 helper；输出尺寸由调用方传入。
 - `src/shared/ui/TypingDots.tsx` / `TypingDots.css`：Chat / Dream 共用输入中视觉组件；颜色由各自主题变量传入。
 
-切换由 `ChatWindow` 设置 `document.documentElement.setAttribute("data-theme", theme)`。
+切换统一调用 `src/shared/theme/registry.ts` 的 `setTheme()`。
 
 ---
 
