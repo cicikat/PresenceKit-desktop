@@ -5,9 +5,12 @@ import type {
   DreamEnterResponse,
   DreamChatResponse,
   DreamExitResponse,
+  DreamWakeResponse,
+  DreamResumeResponse,
   DreamSettings,
   DreamSettingsResponse,
   DreamSettingsUpdateRequest,
+  DreamStats,
 } from './dream-types';
 
 const DREAM_SETTINGS_TIMEOUT_MS = 5000;
@@ -46,8 +49,22 @@ export async function dreamExit(): Promise<DreamExitResponse> {
   return invoke<DreamExitResponse>('dream_exit');
 }
 
+/** Soft retention gate — call instead of dreamExit() when user taps WAKE. */
+export async function dreamWake(): Promise<DreamWakeResponse> {
+  return invoke<DreamWakeResponse>('dream_wake');
+}
+
+/** Resume dream after soft retention — user chose to stay. */
+export async function dreamResume(): Promise<DreamResumeResponse> {
+  return invoke<DreamResumeResponse>('dream_resume');
+}
+
 export async function dreamGetSettings(): Promise<DreamSettings> {
   return withDreamSettingsTimeout(invoke<DreamSettings>('dream_get_settings'));
+}
+
+export async function dreamGetStats(): Promise<DreamStats> {
+  return invoke<DreamStats>('dream_get_stats');
 }
 
 export async function dreamUpdateSettings(update: DreamSettingsUpdateRequest): Promise<DreamSettingsResponse> {

@@ -1,6 +1,6 @@
 /* SubHiddenStatePanel — read-only Dream subconscious state panel (Phase 4.5) */
 
-import { useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { loadHiddenStateDebug } from '../../../shared/api/backend';
 import type {
   HiddenStateDebugResponse,
@@ -36,8 +36,30 @@ const BUCKET_HUE: Record<string, number> = {
   easy: 145,
 };
 
+// Sources that indicate no real-conversation writes have happened
+const PASSIVE_SOURCES = new Set([
+  'time_decay',
+  'init',
+  'consolidation',
+  'dream_afterglow',
+  'dream_impression',
+  'dream_body_event',
+]);
+
 function clampPercent(value: number, max = 100): number {
   return Math.max(0, Math.min(100, (value / max) * 100));
+}
+
+function deltaArrow(delta: number, threshold = 0.05): '↑' | '↓' | '→' {
+  if (delta > threshold) return '↑';
+  if (delta < -threshold) return '↓';
+  return '→';
+}
+
+function formatDelta(delta: number, threshold = 0.05): string {
+  const arrow = deltaArrow(delta, threshold);
+  const sign = delta >= 0 ? '+' : '';
+  return `${arrow} ${sign}${delta.toFixed(1)}`;
 }
 
 function SourceBadge({ source }: { source: string }) {
@@ -109,16 +131,40 @@ function SectionHeader({ label, tag }: { label: string; tag?: string }) {
   );
 }
 
-function MetricRow({ label, value, bar, hue }: { label: string; value: string | number; bar?: number; hue?: number }) {
+function MetricRow({
+  label,
+  value,
+  bar,
+  hue,
+  diff,
+}: {
+  label: string;
+  value: string | number;
+  bar?: number;
+  hue?: number;
+  diff?: number | null;
+}) {
+  const hasDiff = diff !== null && diff !== undefined && Math.abs(diff) > 0.05;
   return (
     <div style={{ marginBottom: 8 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 3 }}>
         <span className="mono" style={{ fontSize: chatThemeFontSize(9.5), color: 'var(--on-forest-2)', letterSpacing: 0.8 }}>
           {label}
         </span>
-        <span className="mono" style={{ fontSize: chatThemeFontSize(10.5), color: 'var(--on-forest)', fontWeight: 600 }}>
-          {typeof value === 'number' ? value.toFixed(1) : value}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {hasDiff && (
+            <span className="mono" style={{
+              fontSize: chatThemeFontSize(8.5),
+              color: diff! > 0 ? 'oklch(0.72 0.10 145)' : 'oklch(0.70 0.10 20)',
+              letterSpacing: 0.5,
+            }}>
+              {formatDelta(diff!)}
+            </span>
+          )}
+          <span className="mono" style={{ fontSize: chatThemeFontSize(10.5), color: 'var(--on-forest)', fontWeight: 600 }}>
+            {typeof value === 'number' ? value.toFixed(1) : value}
+          </span>
+        </div>
       </div>
       {bar !== undefined && <ScalarBar value={bar} hue={hue ?? 168} />}
     </div>
@@ -146,15 +192,89 @@ function BucketPill({ value }: { value: string }) {
   );
 }
 
-function DeveloperNotice() {
+// ── Source overview ─────────────────────────────────────────────────────────
+
+function SourceOverview({ data }: { data: HiddenStateDebugResponse }) {
+  const sources = [
+    { label: '敏感度', source: data.sensitivity.last_update_source },
+    { label: '触碰需求', source: data.touch_need.last_update_source },
+    { label: '放松度', source: data.embodied_ease.last_update_source },
+  ];
+  const allPassive = sources.every(s => PASSIVE_SOURCES.has(s.source));
+  const hasRealityWrite = sources.some(s => s.source === 'reality_behavior');
+
   return (
     <PanelCard>
-      <div className="serif" style={{ fontSize: chatThemeFontSize(12.5), lineHeight: 1.55, color: 'var(--on-forest-2)' }}>
-        更细的敏感度与触碰需求数值会跟随 Dream 系统设置里的开发者模式显示。
+      <SectionHeader label="驱动源" tag="SOURCE OVERVIEW" />
+      <div style={{ display: 'grid', gap: 6 }}>
+        {sources.map(({ label, source }) => (
+          <div key={label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <span className="mono" style={{ fontSize: chatThemeFontSize(9.5), color: 'var(--on-forest-2)', letterSpacing: 0.8 }}>
+              {label}
+            </span>
+            <SourceBadge source={source} />
+          </div>
+        ))}
       </div>
+      {allPassive && !hasRealityWrite && (
+        <div style={{
+          marginTop: 10,
+          padding: '6px 8px',
+          borderRadius: 4,
+          background: `oklch(0.26 0.04 72 / 0.6)`,
+          border: `1px solid oklch(0.42 0.08 72 / 0.5)`,
+          fontSize: chatThemeFontSize(9),
+          color: `oklch(0.82 0.08 72)`,
+          lineHeight: 1.55,
+          letterSpacing: 0.4,
+        }}>
+          当前仅由时间衰减驱动，现实对话从未写入此模块。
+          <br />
+          接线前的预期状态 — 见 known-issues.md §H1。
+        </div>
+      )}
+      {hasRealityWrite && (
+        <div style={{
+          marginTop: 10,
+          padding: '6px 8px',
+          borderRadius: 4,
+          background: `oklch(0.26 0.06 145 / 0.6)`,
+          border: `1px solid oklch(0.42 0.10 145 / 0.5)`,
+          fontSize: chatThemeFontSize(9),
+          color: `oklch(0.82 0.10 145)`,
+          letterSpacing: 0.4,
+        }}>
+          检测到现实行为写入 ✓
+        </div>
+      )}
     </PanelCard>
   );
 }
+
+// ── Prev-snapshot diff row ──────────────────────────────────────────────────
+
+function DiffRow({ label, curr, prev }: { label: string; curr: number; prev: number | undefined }) {
+  if (prev === undefined) return null;
+  const delta = curr - prev;
+  if (Math.abs(delta) < 0.05) {
+    return (
+      <div style={{ fontSize: chatThemeFontSize(8.5), color: 'var(--on-forest-2)', letterSpacing: 0.5, marginTop: 4 }}>
+        <span className="mono">{label}: </span>
+        <span style={{ color: 'var(--on-forest-2)', opacity: 0.6 }}>自上次刷新无变化</span>
+      </div>
+    );
+  }
+  const color = delta > 0 ? 'oklch(0.72 0.10 145)' : 'oklch(0.70 0.10 20)';
+  return (
+    <div style={{ fontSize: chatThemeFontSize(8.5), letterSpacing: 0.5, marginTop: 4 }}>
+      <span className="mono" style={{ color: 'var(--on-forest-2)' }}>{label}: </span>
+      <span className="mono" style={{ color, fontWeight: 700 }}>{formatDelta(delta)}</span>
+      <span style={{ color: 'var(--on-forest-2)', opacity: 0.6, marginLeft: 4 }}>自上次刷新</span>
+    </div>
+  );
+}
+
+// ── Body memory table ───────────────────────────────────────────────────────
 
 function BodyMemoryTable({ entries }: { entries: HiddenStateBodyMemoryEntry[] }) {
   if (entries.length === 0) {
@@ -221,16 +341,36 @@ function BodyMemoryTable({ entries }: { entries: HiddenStateBodyMemoryEntry[] })
   );
 }
 
+function DeveloperNotice() {
+  return (
+    <PanelCard>
+      <div className="serif" style={{ fontSize: chatThemeFontSize(12.5), lineHeight: 1.55, color: 'var(--on-forest-2)' }}>
+        更细的敏感度与触碰需求数值会跟随 Dream 系统设置里的开发者模式显示。
+      </div>
+    </PanelCard>
+  );
+}
+
+// ── Main component ──────────────────────────────────────────────────────────
+
 export function SubHiddenStatePanel() {
   const [data, setData] = useState<HiddenStateDebugResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Track the data from the previous fetch for diff display
+  const prevDataRef = useRef<HiddenStateDebugResponse | null>(null);
+  // Always points to the current data so fetchPanel closure can read it
+  const currentDataRef = useRef<HiddenStateDebugResponse | null>(null);
+
   const fetchPanel = async () => {
     setLoading(true);
     setError(null);
     try {
-      setData(await loadHiddenStateDebug());
+      const newData = await loadHiddenStateDebug();
+      prevDataRef.current = currentDataRef.current;
+      currentDataRef.current = newData;
+      setData(newData);
     } catch (e: unknown) {
       setError(String(e));
     } finally {
@@ -280,6 +420,18 @@ export function SubHiddenStatePanel() {
 
   const snap = data.dream_snapshot;
   const showDeveloperFields = data.display?.physiological_arousal === true;
+  const prev = prevDataRef.current;
+
+  // Deltas from previous fetch (null if this is the first load)
+  const sensDelta = prev ? data.sensitivity.current - prev.sensitivity.current : null;
+  const touchDelta = prev ? data.touch_need.deficit - prev.touch_need.deficit : null;
+  const easeDelta = prev ? data.embodied_ease.value - prev.embodied_ease.value : null;
+
+  // Delta from center (50) for ease
+  const easeFromCenter = data.embodied_ease.value - 50;
+
+  // Delta from baseline for sensitivity
+  const sensFromBaseline = data.sensitivity.current - data.sensitivity.baseline;
 
   return (
     <div style={{ padding: '10px 14px 20px', overflowY: 'auto', height: '100%' }}>
@@ -311,15 +463,32 @@ export function SubHiddenStatePanel() {
         </button>
       </div>
 
+      {/* Source overview — always visible, highlights "all time_decay" state */}
+      <SourceOverview data={data} />
+
       <PanelCard>
         <SectionHeader label="身体放松度" tag="EMBODIED EASE" />
-        <MetricRow label="当前读数" value={data.embodied_ease.value} bar={data.embodied_ease.value} hue={200} />
+        <MetricRow
+          label="当前读数"
+          value={data.embodied_ease.value}
+          bar={data.embodied_ease.value}
+          hue={200}
+          diff={easeDelta}
+        />
+        <MetricRow
+          label="偏离中心（50）"
+          value={`${easeFromCenter >= 0 ? '+' : ''}${easeFromCenter.toFixed(1)}`}
+          hue={easeFromCenter >= 0 ? 145 : 20}
+        />
         <div style={{ marginTop: 7, display: 'flex', alignItems: 'center', gap: 6 }}>
           <span className="mono" style={{ fontSize: chatThemeFontSize(8.5), color: 'var(--on-forest-2)', letterSpacing: 0.9 }}>
             最近来源
           </span>
           <SourceBadge source={data.embodied_ease.last_update_source} />
         </div>
+        {easeDelta !== null && (
+          <DiffRow label="放松度" curr={data.embodied_ease.value} prev={prev?.embodied_ease.value} />
+        )}
       </PanelCard>
 
       <PanelCard>
@@ -355,20 +524,48 @@ export function SubHiddenStatePanel() {
         <>
           <PanelCard>
             <SectionHeader label="即时敏感" tag="DEVELOPER" />
-            <MetricRow label="敏感基线" value={data.sensitivity.baseline} bar={data.sensitivity.baseline} hue={145} />
-            <MetricRow label="即时敏感" value={data.sensitivity.current} bar={data.sensitivity.current} hue={72} />
+            <MetricRow
+              label="敏感基线"
+              value={data.sensitivity.baseline}
+              bar={data.sensitivity.baseline}
+              hue={145}
+            />
+            <MetricRow
+              label="即时敏感"
+              value={data.sensitivity.current}
+              bar={data.sensitivity.current}
+              hue={72}
+              diff={sensDelta}
+            />
+            <MetricRow
+              label="偏离基线"
+              value={`${sensFromBaseline >= 0 ? '+' : ''}${sensFromBaseline.toFixed(1)}`}
+              hue={sensFromBaseline >= 0 ? 8 : 232}
+            />
             <div style={{ marginTop: 7 }}>
               <SourceBadge source={data.sensitivity.last_update_source} />
             </div>
+            {sensDelta !== null && (
+              <DiffRow label="即时敏感" curr={data.sensitivity.current} prev={prev?.sensitivity.current} />
+            )}
           </PanelCard>
 
           <PanelCard>
             <SectionHeader label="触碰亏缺" tag="DEVELOPER" />
             <MetricRow label="触碰需求基线" value={data.touch_need.baseline} bar={data.touch_need.baseline} hue={145} />
-            <MetricRow label="触碰亏缺" value={data.touch_need.deficit} bar={data.touch_need.deficit} hue={8} />
+            <MetricRow
+              label="触碰亏缺（Δ from 0）"
+              value={data.touch_need.deficit}
+              bar={data.touch_need.deficit}
+              hue={8}
+              diff={touchDelta}
+            />
             <div style={{ marginTop: 7 }}>
               <SourceBadge source={data.touch_need.last_update_source} />
             </div>
+            {touchDelta !== null && (
+              <DiffRow label="触碰亏缺" curr={data.touch_need.deficit} prev={prev?.touch_need.deficit} />
+            )}
           </PanelCard>
 
           <PanelCard>

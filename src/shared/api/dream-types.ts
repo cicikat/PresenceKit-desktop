@@ -114,6 +114,16 @@ export interface DreamExitResponse {
   exited: true;
 }
 
+/** Response from POST /dream/wake — soft retention gate. */
+export type DreamWakeResponse =
+  | { retained: false; exited: true }
+  | { retained: true; retention_text: string; dream_id: string };
+
+/** Response from POST /dream/resume — resume after soft retention. */
+export interface DreamResumeResponse {
+  ok: boolean;
+}
+
 export type MemoryAccess = 'card_only' | 'relationship_summary' | 'full_snapshot';
 export type BoundaryLevel = 'vague' | 'body_perceptible' | 'numbers_visible' | 'threshold_break';
 export type WorldLayer = 'reality_derived' | 'abo' | 'vampire' | 'cat' | 'flower_bud' | 'custom';
@@ -157,6 +167,12 @@ export interface DreamSettingsResponse {
 }
 
 import type { NarrativeSegment } from './types';
+
+export interface DreamStats {
+  total_valid: number;
+  total_archived: number;
+  last_dream_at: number | null;
+}
 
 export interface DreamMessage {
   id: string;

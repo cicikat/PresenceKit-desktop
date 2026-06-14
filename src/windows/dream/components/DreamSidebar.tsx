@@ -135,17 +135,17 @@ function HerBodyPanel({ body }: { body: { heat: number; sensitivity: number; ten
       <BodyAxisBar
         label="温度 HEAT"
         value={body.heat}
-        color="linear-gradient(90deg, var(--dt-flower-bluebell), #e96c6c)"
+        color="linear-gradient(90deg, var(--dt-flower-bluebell), var(--dt-accent-rose))"
       />
       <BodyAxisBar
         label="感知 SENS"
         value={body.sensitivity}
-        color="linear-gradient(90deg, var(--dt-flower-dandelion), #b97fe8)"
+        color="linear-gradient(90deg, var(--dt-flower-dandelion), var(--dt-accent-violet))"
       />
       <BodyAxisBar
         label="张力 TENS"
         value={body.tension}
-        color="linear-gradient(90deg, var(--dt-surface-2), #7fbfe8)"
+        color="linear-gradient(90deg, var(--dt-surface-2), var(--dt-accent-azure))"
       />
     </div>
   );

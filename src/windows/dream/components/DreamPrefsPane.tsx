@@ -6,13 +6,14 @@ import {
   type DreamMirrorCoreState,
   type DreamEntryMode,
   type DreamSettings,
+  type DreamStats,
   type MemoryAccess,
   type BoundaryLevel,
   type WorldLayer,
   type LucidMode,
   type DreamJailbreakPreset,
 } from '../../../shared/api/dream-types';
-import { dreamGetSettings, dreamUpdateSettings } from '../../../shared/api/dream';
+import { dreamGetSettings, dreamUpdateSettings, dreamGetStats } from '../../../shared/api/dream';
 import { getPromptAssets } from '../../../shared/api/backend';
 import type { PromptAssetOption } from '../../../shared/api/types';
 import {
@@ -449,6 +450,7 @@ export function DreamPrefsPane({
   const [settings, setSettings] = useState<DreamSettings | null>(null);
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [dreamStats, setDreamStats] = useState<DreamStats | null>(null);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [tab, setTab] = useState<DreamPrefsTab>('status');
   const [fonts, setFonts] = useState<DreamFontOption[]>([]);
@@ -481,6 +483,11 @@ export function DreamPrefsPane({
     if (!open || settings || settingsLoading) return;
     void loadSettings();
   }, [loadSettings, open, settings, settingsLoading]);
+
+  useEffect(() => {
+    if (!open) return;
+    dreamGetStats().then(setDreamStats).catch(() => {});
+  }, [open]);
 
   useEffect(() => avatarStore.subscribe(config => {
     setBackgrounds(config.dreamBackgrounds);
@@ -660,8 +667,8 @@ export function DreamPrefsPane({
                   />
                   <StatusItem
                     label="已经历"
-                    value="—"
-                    detail="待接入统计"
+                    value={dreamStats !== null ? String(dreamStats.total_valid) : '—'}
+                    detail="VALID DREAMS"
                   />
                   <StatusItem
                     label="Lorebook"

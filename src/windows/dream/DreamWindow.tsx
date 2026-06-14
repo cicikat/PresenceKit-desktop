@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, type CSSProperties } from 'react';
-import { dreamEnter, dreamExit } from '../../shared/api/dream';
+import { dreamEnter, dreamExit, dreamWake, dreamResume } from '../../shared/api/dream';
 import { useDreamState } from './hooks/useDreamState';
 import { useDreamChat } from './hooks/useDreamChat';
 import { DreamSidebar } from './components/DreamSidebar';
@@ -51,6 +51,8 @@ export function DreamWindow({ characterAvatarDataUrl = null, onClose }: DreamWin
   const [backgrounds, setBackgrounds] = useState(() => avatarStore.get().dreamBackgrounds);
   const [defaultHerAvatarDataUrl, setDefaultHerAvatarDataUrl] = useState(() => avatarStore.get().her.dataUrl);
   const [loadedFontFamily, setLoadedFontFamily] = useState<string | null>(null);
+  // Soft retention state: shown when backend returns retained=true from /dream/wake
+  const [retentionText, setRetentionText] = useState<string | null>(null);
   const shellRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef(false);
 
@@ -165,10 +167,46 @@ export function DreamWindow({ characterAvatarDataUrl = null, onClose }: DreamWin
     }
   };
 
-  const handleWake = useCallback(async () => {
-    try { await dreamExit(); } catch { /* dreamExit always succeeds per spec */ }
+  // Hard exit helper — always succeeds, closes window (Invariant D).
+  const handleForceExit = useCallback(async () => {
+    setRetentionText(null);
+    try { await dreamExit(); } catch { /* hard exit always succeeds per spec */ }
     onClose();
   }, [onClose]);
+
+  // WAKE button handler — routes through soft retention gate first.
+  // If backend retains: show retention text + stay/leave choice.
+  // If backend exits (gate not met / LLM fail / second tap): close window.
+  const handleWake = useCallback(async () => {
+    // If retention choice is already showing, second WAKE tap → hard exit
+    if (retentionText !== null) {
+      await handleForceExit();
+      return;
+    }
+    try {
+      const result = await dreamWake();
+      if (result.retained) {
+        // Show retention text as a character message; present stay/leave choice
+        addSystemMsg(result.retention_text);
+        setRetentionText(result.retention_text);
+      } else {
+        // Gate not met or LLM failed — backend already exited
+        onClose();
+      }
+    } catch {
+      // Network / unexpected error → fall back to hard exit
+      await handleForceExit();
+    }
+  }, [retentionText, handleForceExit, addSystemMsg, onClose]);
+
+  const handleRetentionStay = useCallback(async () => {
+    setRetentionText(null);
+    try { await dreamResume(); } catch { /* no-op on error; dream will still be active */ }
+  }, []);
+
+  const handleRetentionLeave = useCallback(async () => {
+    await handleForceExit();
+  }, [handleForceExit]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -343,14 +381,34 @@ export function DreamWindow({ characterAvatarDataUrl = null, onClose }: DreamWin
           )}
 
           {(phase === 'active' || phase === 'ended') && (
-            <DreamChatPanel
-              messages={messages}
-              loading={chatLoading}
-              inputDisabled={inputDisabled}
-              herDataUrl={herAvatarDataUrl}
-              onSend={send}
-              endedMessage={phase === 'ended' ? '梦境已关闭。按 WAKE 醒来。' : undefined}
-            />
+            <>
+              <DreamChatPanel
+                messages={messages}
+                loading={chatLoading}
+                inputDisabled={inputDisabled || retentionText !== null}
+                herDataUrl={herAvatarDataUrl}
+                onSend={send}
+                endedMessage={phase === 'ended' ? '梦境已关闭。按 WAKE 醒来。' : undefined}
+              />
+              {retentionText !== null && (
+                <div className="dream-theme__retention-bar">
+                  <button
+                    type="button"
+                    className="dream-theme__retention-btn dream-theme__retention-btn--stay"
+                    onClick={handleRetentionStay}
+                  >
+                    留下
+                  </button>
+                  <button
+                    type="button"
+                    className="dream-theme__retention-btn dream-theme__retention-btn--leave"
+                    onClick={handleRetentionLeave}
+                  >
+                    还是要醒来
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </section>
       </div>
