@@ -10,7 +10,7 @@ const buttonStyle = {
   border: '1px solid var(--ink)',
   background: 'var(--ink)',
   color: 'var(--paper)',
-  borderRadius: 5,
+  borderRadius: 'var(--radius-sm)',
   padding: '7px 14px',
   fontFamily: 'inherit',
   fontSize: 12,
@@ -108,7 +108,7 @@ export function DreamSeedPanel() {
         )}
         {seed && (
           <div style={{
-            marginTop: 22, padding: 14, borderRadius: 8,
+            marginTop: 22, padding: 14, borderRadius: 'var(--radius-md)',
             background: 'var(--paper-2)', border: '1px solid var(--paper-edge)',
             fontSize: 12.5, lineHeight: 1.7,
           }}>
@@ -123,7 +123,7 @@ export function DreamSeedPanel() {
 
       <section style={{
         flex: 1, minWidth: 320, display: 'flex', flexDirection: 'column',
-        border: '1px solid var(--paper-edge)', borderRadius: 9, overflow: 'hidden',
+        border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-lg)', overflow: 'hidden',
         background: 'var(--paper-2)',
       }}>
         <div ref={listRef} style={{ flex: 1, overflowY: 'auto', padding: 18, display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -159,7 +159,7 @@ export function DreamSeedPanel() {
             }}
             placeholder={sessionId ? '说说你想梦见什么……' : '请先开始预构'}
             style={{
-              flex: 1, minWidth: 0, padding: '7px 9px', borderRadius: 5,
+              flex: 1, minWidth: 0, padding: '7px 9px', borderRadius: 'var(--radius-sm)',
               border: '1px solid var(--paper-edge)', background: 'var(--paper)',
               color: 'var(--ink)', fontFamily: 'inherit', fontSize: 12.5,
             }}

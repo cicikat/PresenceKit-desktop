@@ -108,7 +108,7 @@ export function ActivityCompanionPanel({ sessionId, sessionActive, sessionFinish
       writingMode: 'horizontal-tb',
       width: '100%', minWidth: 280, minHeight: 360,
       background: 'var(--paper-2)', border: '1px solid var(--paper-edge)',
-      borderRadius: 8, overflow: 'hidden',
+      borderRadius: 'var(--radius-md)', overflow: 'hidden',
     }}>
       {/* header */}
       <div className="mono" style={{
@@ -194,7 +194,7 @@ export function ActivityCompanionPanel({ sessionId, sessionActive, sessionFinish
             disabled={!canSend}
             style={{
               flex: 1, fontFamily: 'inherit', fontSize: 12,
-              padding: '5px 8px', borderRadius: 4,
+              padding: '5px 8px', borderRadius: 'var(--radius-sm)',
               border: '1px solid var(--paper-edge)', background: 'var(--paper)',
               color: 'var(--ink)', outline: 'none',
               opacity: !canSend ? 0.5 : 1,
@@ -205,7 +205,7 @@ export function ActivityCompanionPanel({ sessionId, sessionActive, sessionFinish
             disabled={!canSend || !input.trim()}
             style={{
               fontFamily: 'inherit', fontSize: 12, padding: '5px 10px',
-              borderRadius: 4, border: '1px solid var(--ink)',
+              borderRadius: 'var(--radius-sm)', border: '1px solid var(--ink)',
               background: 'var(--ink)', color: 'var(--paper)',
               cursor: !canSend || !input.trim() ? 'not-allowed' : 'pointer',
               opacity: !canSend || !input.trim() ? 0.45 : 1,

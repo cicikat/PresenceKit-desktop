@@ -65,7 +65,7 @@ Rust/Tauri HTTP client 统一显式禁用代理并设置超时：普通请求 15
 | `src/shared/api/backend.ts` | `sendChat()`、`loadHistory()`、`loadGardenState()`、`loadDiaryList()`、`loadDiaryEntry()`、`loadSensorRealtime()`、`getPromptAssets()`、`patchPromptAssets()` |
 | `src/shared/api/ws.ts` | `wsClient.connect()`、通过 Tauri commands / events 完成 legacy WS 收发 |
 | `src-tauri/src/ws_bridge.rs` | 原生 WS 连接、Bearer header、URL 清洗与前端事件桥接 |
-| `src-tauri/src/lib.rs` | `send_chat`、`load_history`、`load_garden_state`、`load_diary_list`、`load_diary_entry`、`get_prompt_assets`、`patch_prompt_assets`、头像 / Dream 背景文件 commands、Dream 字体目录扫描 |
+| `src-tauri/src/lib.rs` | `send_chat`、`load_history`、`load_garden_state`、`load_diary_list`、`load_diary_entry`、`get_prompt_assets`、`patch_prompt_assets`、头像 / Dream 背景文件 commands、Dream 字体目录扫描、主题 Mod manifest 扫描 |
 | `src/windows/chat/components/ChatPanel.tsx` | 启动历史、发送消息、订阅 WS 主动消息 |
 | `src/windows/chat/components/Ribbon.tsx` | 读取 WS 连接状态 |
 | `src/windows/chat/components/SubGarden.tsx` | 读取并展示花园状态 |
@@ -855,6 +855,7 @@ v1 目标新增或替换：
 | `read_avatars_json()` | 前端 → Rust | 读取头像和 Dream 日间 / 夜间背景配置；旧 `dream_background` 字段由前端兼容为夜间背景 |
 | `write_avatars_json(json)` | 前端 → Rust | 写头像和 Dream 日间 / 夜间背景配置 |
 | `list_dream_fonts()` | 前端 → Rust | packaged 优先扫描 `resource_dir/fonts`，debug/dev 回退源码 `public/fonts/`；目录不可用时报明确错误 |
+| `list_themes()` | 前端 → Rust | packaged 优先扫描 `resource_dir/themes/*/theme.json`，debug/dev 回退源码 `public/themes/`；原样返回 manifest，由前端校验 token 契约 |
 | `dream_get_settings()` | 前端 → Rust → 后端 | GET `/dream/settings`；读取 Dream 上下文与 `display.physiological_arousal` |
 | `dream_update_settings(..., jailbreak_preset, display)` | 前端 → Rust → 后端 | PATCH `/dream/settings`；透传 Dream 独立 `jailbreak_preset`，`display` 可透传 `{ "physiological_arousal": boolean }` |
 | `greet(name)` | 前端 → Rust | Tauri 模板遗留，当前未使用 |

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Icon } from '../../chat/components/UIKit';
+import { ThemePicker } from '../../../shared/theme/ThemePicker';
 
 type SettingsTab = '外观' | '系统设置' | '其他';
 
@@ -30,7 +31,7 @@ function PlaceholderSelect({ label }: { label: string }) {
   return (
     <select disabled style={{
       fontFamily: 'var(--font-mono)', fontSize: 11.5,
-      padding: '5px 10px', borderRadius: 5,
+      padding: '5px 10px', borderRadius: 'var(--radius-sm)',
       background: 'var(--paper-2)', color: 'var(--ink-3)',
       border: '1px solid var(--paper-edge)',
       cursor: 'not-allowed', opacity: 0.6,
@@ -72,7 +73,7 @@ export function ActivityPreferencesPanel({ open, onClose }: { open: boolean; onC
         style={{
           margin: 'auto', width: 'min(540px, 92vw)',
           background: 'var(--paper)', border: '1px solid var(--paper-edge)',
-          borderRadius: 10, overflow: 'hidden',
+          borderRadius: 'var(--radius-lg)', overflow: 'hidden',
           boxShadow: '0 30px 80px var(--shadow-rgb-mix)',
         }}
       >
@@ -121,6 +122,15 @@ export function ActivityPreferencesPanel({ open, onClose }: { open: boolean; onC
           {tab === '外观' ? (
             <>
               <div>
+                <SectionLabel>主题</SectionLabel>
+                <SettingRow label="日间主题" hint="日间模式使用的主题">
+                  <ThemePicker slot="day" />
+                </SettingRow>
+                <SettingRow label="夜间主题" hint="19:00–6:00 夜间模式使用的主题">
+                  <ThemePicker slot="night" />
+                </SettingRow>
+              </div>
+              <div>
                 <SectionLabel>阅读</SectionLabel>
                 <SettingRow label="字体大小" hint="阅读页面的正文字号">
                   <PlaceholderSelect label="14px (默认)" />
@@ -148,7 +158,7 @@ export function ActivityPreferencesPanel({ open, onClose }: { open: boolean; onC
             </div>
           ) : (
             <div className="serif" style={{
-              padding: '20px 16px', border: '1px dashed var(--paper-edge)', borderRadius: 6,
+              padding: '20px 16px', border: '1px dashed var(--paper-edge)', borderRadius: 'var(--radius-md)',
               color: 'var(--ink-3)', fontSize: 13.5, fontStyle: 'italic', lineHeight: 1.7,
             }}>
               其他活动偏好待接入。
@@ -158,7 +168,7 @@ export function ActivityPreferencesPanel({ open, onClose }: { open: boolean; onC
           <div className="mono" style={{
             fontSize: 10.5, color: 'var(--ink-4)', letterSpacing: 0.5,
             padding: '10px 14px',
-            background: 'var(--paper-2)', border: '1px solid var(--paper-edge)', borderRadius: 6,
+            background: 'var(--paper-2)', border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-md)',
           }}>
             上述设置尚未实装，后续版本接入。
           </div>

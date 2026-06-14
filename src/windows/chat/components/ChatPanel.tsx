@@ -20,6 +20,7 @@ import { publishPetSnapshot, summarizePetReply } from '../../../shared/pet/bridg
 import { TypingDots } from '../../../shared/ui/TypingDots';
 import type { ChatLogEntry, UploadError, NarrativeSegment } from '../../../shared/api/types';
 import { normalizeChatDisplayText } from '../chatDisplay';
+import { renderInlineStyled } from '../inlineStyle';
 
 function splitReply(text: string): string[] {
   return text.split(/\n+/).map(s => s.trim()).filter(s => s.length > 0);
@@ -55,6 +56,7 @@ interface ChatMsg {
   role: 'user' | 'assistant' | 'system' | 'divider' | 'raw_fallback' | 'no_more';
   text: string;
   time: number;
+  speakerId?: string; // char_id; absent = owner (right bubble)
   moodHue?: number;
   moodLabel?: string;
   deleted?: string;
@@ -205,7 +207,7 @@ function StreamTagBox({ raw, done }: { raw: string; done: boolean }) {
       fontSize: '0.75em',
       padding: '1px 5px',
       margin: '0 2px',
-      borderRadius: 3,
+      borderRadius: 'var(--radius-xs)',
       background: done ? 'var(--paper-3)' : 'oklch(0.88 0.04 60 / 0.6)',
       color: 'var(--ink-3)',
       opacity: done ? 0.7 : 0.5,
@@ -218,7 +220,7 @@ function StreamTagBox({ raw, done }: { raw: string; done: boolean }) {
 }
 
 function renderStreamingContent(text: string, isDone: boolean): ReactNode {
-  if (!text) return isDone ? null : <TypingDots />;
+  if (!text) return isDone ? null : <TypingDots color="var(--ink-3)" />;
 
   const nodes: ReactNode[] = [];
   let buf = '';
@@ -232,7 +234,14 @@ function renderStreamingContent(text: string, isDone: boolean): ReactNode {
       inTag = true; tagBuf = '<';
     } else if (inTag && ch === '>') {
       tagBuf += '>';
-      nodes.push(<StreamTagBox key={key++} raw={tagBuf} done />);
+      // Inline style tags (<hl>, <big>, <sm>) are absorbed into the text buffer
+      // rather than shown as badge widgets — they'll be styled after streaming ends.
+      const tagLabel = tagBuf.replace(/^<\/?/, '').replace(/>$/, '').toLowerCase();
+      if (tagLabel === 'hl' || tagLabel === 'big' || tagLabel === 'sm') {
+        buf += tagBuf;
+      } else {
+        nodes.push(<StreamTagBox key={key++} raw={tagBuf} done />);
+      }
       inTag = false; tagBuf = '';
     } else if (inTag) {
       tagBuf += ch;
@@ -369,7 +378,7 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
                   display: 'flex', alignItems: 'center', gap: 8,
                   padding: '6px 10px',
                   background: 'oklch(0.95 0.02 60 / 0.25)',
-                  borderRadius: 4,
+                  borderRadius: 'var(--radius-sm)',
                   marginBottom: attachNote ? 6 : 0,
                 }}>
                   <Icon name={iconForFilename(attachFilename!)} size={16} />
@@ -424,7 +433,7 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
           )}
           {msg.isStreaming
             ? renderStreamingContent(msg.text, msg.streamingDone ?? false)
-            : normalizeChatDisplayText(msg.segmentedContent ?? msg.text)
+            : renderInlineStyled(normalizeChatDisplayText(msg.segmentedContent ?? msg.text))
           }
           {msg.meta && (
             <div className="mono" style={{ fontSize: chatThemeFontSize(10), color: 'var(--ink-3)', marginTop: 6, letterSpacing: 0.8 }}>{msg.meta}</div>
@@ -1705,7 +1714,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         {showAttachMenu && (
           <div style={{
             position: 'absolute', bottom: '100%', left: 18, marginBottom: 8,
-            background: 'var(--paper)', border: '1px solid var(--paper-edge)', borderRadius: 6,
+            background: 'var(--paper)', border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-md)',
             padding: 6, minWidth: 200,
             boxShadow: '0 12px 32px oklch(0.30 0.04 60 / 0.20)', zIndex: 10,
           }}>
@@ -1722,7 +1731,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
               } style={{
                 display: 'flex', alignItems: 'center', gap: 10, width: '100%',
                 padding: '8px 10px', background: 'transparent', border: 'none', cursor: 'pointer',
-                color: 'var(--ink)', textAlign: 'left', borderRadius: 4, fontFamily: 'inherit',
+                color: 'var(--ink)', textAlign: 'left', borderRadius: 'var(--radius-sm)', fontFamily: 'inherit',
               }}
                 onMouseEnter={e => (e.currentTarget as any).style.background = 'var(--paper-3)'}
                 onMouseLeave={e => (e.currentTarget as any).style.background = 'transparent'}>
@@ -1737,7 +1746,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         )}
         <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
           <button onClick={() => setShowAttachMenu(s => !s)} style={{
-            width: 40, height: 40, borderRadius: 6,
+            width: 40, height: 40, borderRadius: 'var(--radius-md)',
             background: showAttachMenu ? 'var(--ink)' : 'var(--paper)',
             color: showAttachMenu ? 'var(--paper)' : 'var(--ink)',
             border: '1px solid var(--paper-edge)',
@@ -1754,14 +1763,14 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
             rows={1}
             style={{
               flex: 1, resize: 'none', width: '100%', minWidth: 0,
-              padding: '11px 14px', borderRadius: 6,
+              padding: '11px 14px', borderRadius: 'var(--radius-md)',
               background: 'var(--paper)', border: '1px solid var(--paper-edge)',
               color: 'var(--ink)', fontSize: chatFontSize, fontFamily: 'var(--font-serif)',
               outline: 'none', minHeight: 40, maxHeight: 120, lineHeight: 1.5,
             }}
           />
           <button onClick={send} style={{
-            height: 40, padding: '0 18px', borderRadius: 6,
+            height: 40, padding: '0 18px', borderRadius: 'var(--radius-md)',
             background: 'var(--accent)', color: 'var(--paper)',
             border: 'none', fontWeight: 600, cursor: 'pointer',
             fontFamily: 'inherit', fontSize: chatThemeFontSize(13),

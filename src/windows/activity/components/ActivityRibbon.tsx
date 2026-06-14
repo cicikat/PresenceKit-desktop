@@ -91,7 +91,7 @@ interface ActivityRibbonProps {
   onTab: (tab: ActivityTab) => void;
   onClose: () => void;
   onOpenSettings: () => void;
-  theme: 'paper' | 'dark';
+  theme: string;
   onThemeToggle: () => void;
 }
 

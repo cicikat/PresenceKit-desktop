@@ -8,7 +8,7 @@ function StatusTag({ text, ok }: { text: string; ok?: boolean }) {
       fontSize: 10, letterSpacing: 1.2, fontWeight: 700,
       background: ok ? 'oklch(0.38 0.13 145)' : 'var(--ink)',
       color: ok ? 'oklch(0.97 0.04 145)' : 'var(--paper)',
-      borderRadius: 3, textTransform: 'uppercase',
+      borderRadius: 'var(--radius-xs)', textTransform: 'uppercase',
     }}>{text}</span>
   );
 }
@@ -20,7 +20,7 @@ function Btn({ children, onClick, variant = 'ghost', disabled }: any) {
       disabled={disabled}
       style={{
         fontFamily: 'inherit', fontSize: 12.5,
-        padding: '7px 14px', borderRadius: 5,
+        padding: '7px 14px', borderRadius: 'var(--radius-sm)',
         display: 'inline-flex', alignItems: 'center', gap: 6,
         cursor: disabled ? 'not-allowed' : 'pointer',
         letterSpacing: 0.3, transition: 'background 0.15s',
@@ -127,7 +127,7 @@ export function ReadingPage() {
       {error && (
         <div className="mono" style={{
           padding: '8px 12px', background: 'oklch(0.95 0.05 20)',
-          border: '1px solid oklch(0.80 0.10 20)', borderRadius: 5,
+          border: '1px solid oklch(0.80 0.10 20)', borderRadius: 'var(--radius-sm)',
           fontSize: 11, color: 'oklch(0.40 0.14 20)', letterSpacing: 0.5,
         }}>
           {error}
@@ -140,7 +140,7 @@ export function ReadingPage() {
           display: 'flex', flexDirection: 'column', gap: 12,
           maxWidth: 520,
           padding: 20, background: 'var(--paper-2)',
-          border: '1px solid var(--paper-edge)', borderRadius: 8,
+          border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-md)',
         }}>
           <div className="mono" style={{ fontSize: 11, letterSpacing: 1.2, color: 'var(--ink-3)', fontWeight: 600 }}>
             选择文件
@@ -153,7 +153,7 @@ export function ReadingPage() {
             placeholder="文件路径（PDF / TXT），例如 C:\books\sample.pdf"
             style={{
               fontFamily: 'var(--font-mono)', fontSize: 12,
-              padding: '8px 10px', borderRadius: 5,
+              padding: '8px 10px', borderRadius: 'var(--radius-sm)',
               background: 'var(--paper)', color: 'var(--ink)',
               border: '1px solid var(--paper-edge)',
               outline: 'none', width: '100%', boxSizing: 'border-box',
@@ -172,7 +172,7 @@ export function ReadingPage() {
           <div style={{
             display: 'flex', gap: 16, alignItems: 'center',
             padding: '10px 14px',
-            background: 'var(--paper-2)', border: '1px solid var(--paper-edge)', borderRadius: 6,
+            background: 'var(--paper-2)', border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-md)',
           }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div className="serif" style={{ fontSize: 15, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -189,7 +189,7 @@ export function ReadingPage() {
           <div style={{
             flex: 1, minHeight: 0,
             padding: '20px 24px',
-            background: 'var(--paper)', border: '1px solid var(--paper-edge)', borderRadius: 8,
+            background: 'var(--paper)', border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-md)',
             overflowY: 'auto',
             lineHeight: 1.85, fontSize: 14.5,
             fontFamily: 'var(--font-serif)',

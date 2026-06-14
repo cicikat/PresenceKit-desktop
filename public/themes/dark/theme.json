@@ -1,0 +1,21 @@
+{
+  "id": "dark",
+  "name": "深色护眼",
+  "author": "Emerald",
+  "version": "1.0.0",
+  "base": "dark",
+  "tokens": {
+    "--paper": "oklch(0.165 0.012 60)", "--paper-2": "oklch(0.205 0.014 60)", "--paper-3": "oklch(0.245 0.016 60)", "--paper-edge": "oklch(0.30 0.020 60)",
+    "--ink": "oklch(0.92 0.012 75)", "--ink-2": "oklch(0.72 0.015 75)", "--ink-3": "oklch(0.55 0.015 75)", "--ink-4": "oklch(0.40 0.015 75)",
+    "--forest": "oklch(0.21 0.04 168)", "--forest-1": "oklch(0.165 0.04 168)", "--forest-2": "oklch(0.31 0.05 168)", "--forest-3": "oklch(0.38 0.06 168)", "--forest-line": "oklch(0.33 0.04 168)",
+    "--on-forest": "oklch(0.92 0.025 95)", "--on-forest-2": "oklch(0.70 0.050 95)",
+    "--accent": "oklch(0.72 0.155 32)", "--accent-2": "oklch(0.78 0.130 78)", "--accent-3": "oklch(0.65 0.110 145)", "--danger": "oklch(0.70 0.180 25)",
+    "--paper-grain-1": "oklch(0.30 0.05 60 / 0.30)", "--paper-grain-2": "oklch(0.20 0.04 50 / 0.25)", "--shadow-rgb-mix": "oklch(0 0 0 / 0.55)",
+    "--board-light": "#b7a37f", "--board-dark": "#76583f", "--board-select": "#9b9842", "--board-target-light": "#858b50", "--board-target-dark": "#6d692d", "--board-coord-light": "#76583f", "--board-coord-dark": "#b7a37f",
+    "--goban-bg": "#8f713e", "--goban-line": "#44320d", "--stone-black-core": "#555", "--stone-black-edge": "#111", "--stone-white-core": "#fff", "--stone-white-edge": "#ccc", "--stone-black-border": "#000", "--stone-white-border": "#999",
+    "--status-connecting": "#f0b429", "--status-error": "#e53e3e",
+    "--flower-calm": "#d4a958", "--flower-bright": "#d97f3a", "--flower-low": "#5b9bd5", "--flower-yandere": "#c25a5a", "--flower-adrift": "#9a7fc4", "--flower-default": "#8a8a8a",
+    "--radius-xs": "3px", "--radius-sm": "5px", "--radius-md": "8px", "--radius-lg": "12px", "--radius-pill": "999px",
+    "--border-thin": "1px", "--border-regular": "2px"
+  }
+}

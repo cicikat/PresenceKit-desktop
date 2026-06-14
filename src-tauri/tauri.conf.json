@@ -39,7 +39,8 @@
     "active": true,
     "targets": "all",
     "resources": {
-      "../public/fonts/": "fonts/"
+      "../public/fonts/": "fonts/",
+      "../public/themes/": "themes/"
     },
     "icon": [
       "icons/32x32.png",

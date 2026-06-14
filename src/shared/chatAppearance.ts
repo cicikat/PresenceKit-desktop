@@ -11,6 +11,7 @@ export interface ChatAppearance {
   chatFontSize: number;
   themeFontSize: number;
   fontFile: string | null;
+  backgroundBlur: number;
 }
 
 const LEGACY_BUBBLE_FONT_SIZE: Record<string, number> = {
@@ -23,6 +24,7 @@ const DEFAULT_APPEARANCE: ChatAppearance = {
   chatFontSize: 14,
   themeFontSize: 14,
   fontFile: null,
+  backgroundBlur: 18,
 };
 
 function clamp(value: unknown, fallback: number, min: number, max: number): number {
@@ -38,6 +40,7 @@ export function loadChatAppearance(): ChatAppearance {
     chatFontSize: clamp(saved.chatFontSize, LEGACY_BUBBLE_FONT_SIZE[legacySize] ?? DEFAULT_APPEARANCE.chatFontSize, 11, 24),
     themeFontSize: clamp(saved.themeFontSize, DEFAULT_APPEARANCE.themeFontSize, 11, 22),
     fontFile: typeof saved.fontFile === 'string' ? saved.fontFile : null,
+    backgroundBlur: clamp(saved.backgroundBlur, DEFAULT_APPEARANCE.backgroundBlur, 0, 36),
   };
 }
 

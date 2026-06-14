@@ -45,7 +45,7 @@ function StatusTag({ text, ok }: { text: string; ok?: boolean }) {
       fontSize: 10, letterSpacing: 1.2, fontWeight: 700,
       background: ok ? 'oklch(0.38 0.13 145)' : 'var(--ink)',
       color: ok ? 'oklch(0.97 0.04 145)' : 'var(--paper)',
-      borderRadius: 3, textTransform: 'uppercase',
+      borderRadius: 'var(--radius-xs)', textTransform: 'uppercase',
     }}>{text}</span>
   );
 }
@@ -54,7 +54,7 @@ function Btn({ children, onClick, variant = 'ghost', disabled }: any) {
   return (
     <button onClick={onClick} disabled={disabled} style={{
       fontFamily: 'inherit', fontSize: 12.5,
-      padding: '7px 14px', borderRadius: 5,
+      padding: '7px 14px', borderRadius: 'var(--radius-sm)',
       display: 'inline-flex', alignItems: 'center', gap: 6,
       cursor: disabled ? 'not-allowed' : 'pointer',
       opacity: disabled ? 0.45 : 1,
@@ -80,7 +80,7 @@ function Select({ value, onChange, children, disabled }: {
       disabled={disabled}
       style={{
         fontFamily: 'inherit', fontSize: 12, padding: '5px 8px',
-        borderRadius: 4, border: '1px solid var(--paper-edge)',
+        borderRadius: 'var(--radius-sm)', border: '1px solid var(--paper-edge)',
         background: 'var(--paper-2)', color: 'var(--ink)',
         cursor: disabled ? 'not-allowed' : 'pointer',
         opacity: disabled ? 0.5 : 1,
@@ -104,9 +104,9 @@ function GomokuBoard({
     <div style={{
       position: 'relative',
       width: BOARD_PX, height: BOARD_PX,
-      background: '#dcb967',
-      border: '2px solid #8b6914',
-      borderRadius: 4,
+      background: 'var(--goban-bg)',
+      border: '2px solid var(--goban-line)',
+      borderRadius: 'var(--radius-sm)',
       userSelect: 'none',
       flexShrink: 0,
     }}>
@@ -119,19 +119,19 @@ function GomokuBoard({
             <line
               x1={PAD} y1={PAD + i * CELL}
               x2={PAD + (BOARD_SIZE - 1) * CELL} y2={PAD + i * CELL}
-              stroke="#8b6914" strokeWidth={0.8}
+              stroke="var(--goban-line)" strokeWidth={0.8}
             />
             <line
               x1={PAD + i * CELL} y1={PAD}
               x2={PAD + i * CELL} y2={PAD + (BOARD_SIZE - 1) * CELL}
-              stroke="#8b6914" strokeWidth={0.8}
+              stroke="var(--goban-line)" strokeWidth={0.8}
             />
           </g>
         ))}
         {[[3,3],[3,7],[3,11],[7,3],[7,7],[7,11],[11,3],[11,7],[11,11]].map(([r,c]) => (
           <circle key={`${r}-${c}`}
             cx={PAD + c * CELL} cy={PAD + r * CELL}
-            r={3} fill="#8b6914"
+            r={3} fill="var(--goban-line)"
           />
         ))}
         {lastMove && (
@@ -166,9 +166,9 @@ function GomokuBoard({
                   width: CELL - 6, height: CELL - 6,
                   borderRadius: '50%',
                   background: stone === 'black'
-                    ? 'radial-gradient(circle at 35% 35%, #555, #111)'
-                    : 'radial-gradient(circle at 35% 35%, #fff, #ccc)',
-                  border: stone === 'black' ? '1px solid #000' : '1px solid #999',
+                    ? 'radial-gradient(circle at 35% 35%, var(--stone-black-core), var(--stone-black-edge))'
+                    : 'radial-gradient(circle at 35% 35%, var(--stone-white-core), var(--stone-white-edge))',
+                  border: stone === 'black' ? '1px solid var(--stone-black-border)' : '1px solid var(--stone-white-border)',
                   boxShadow: '0 2px 4px rgba(0,0,0,0.45)',
                 }} />
               )}
@@ -301,7 +301,7 @@ export function GomokuPage() {
       {/* mode banner */}
       <div className="mono" style={{
         fontSize: 10.5, letterSpacing: 0.4,
-        padding: '5px 10px', borderRadius: 5,
+        padding: '5px 10px', borderRadius: 'var(--radius-sm)',
         display: 'inline-block', alignSelf: 'flex-start',
         ...(gameState
           ? isAIMode
@@ -324,7 +324,7 @@ export function GomokuPage() {
       {error && (
         <div className="mono" style={{
           padding: '8px 12px', background: 'oklch(0.95 0.05 20)',
-          border: '1px solid oklch(0.80 0.10 20)', borderRadius: 5,
+          border: '1px solid oklch(0.80 0.10 20)', borderRadius: 'var(--radius-sm)',
           fontSize: 11, color: 'oklch(0.40 0.14 20)', letterSpacing: 0.5,
         }}>
           {error}
@@ -336,7 +336,7 @@ export function GomokuPage() {
         <div style={{
           display: 'flex', flexDirection: 'column', gap: 12,
           padding: '14px 16px', background: 'var(--paper-2)',
-          border: '1px solid var(--paper-edge)', borderRadius: 8,
+          border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-md)',
           alignSelf: 'flex-start',
         }}>
           <div className="mono" style={{ fontSize: 10, letterSpacing: 1.2, color: 'var(--ink-3)', fontWeight: 600 }}>
@@ -401,7 +401,7 @@ export function GomokuPage() {
           {(isActive || isFinished) && (
             <div style={{
               padding: '14px 16px',
-              background: 'var(--paper-2)', border: '1px solid var(--paper-edge)', borderRadius: 8,
+              background: 'var(--paper-2)', border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-md)',
               width: '100%',
             }}>
               <div className="mono" style={{ fontSize: 10, letterSpacing: 1.2, color: 'var(--ink-3)', fontWeight: 600, marginBottom: 8 }}>

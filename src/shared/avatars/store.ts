@@ -4,6 +4,7 @@ export interface AvatarConfig {
   her: { path: string | null; dataUrl: string | null };
   you: { path: string | null; dataUrl: string | null; visible: boolean };
   dreamBackgrounds: Record<DreamBackgroundTone, DreamBackgroundAsset>;
+  chatBackground: { path: string | null; dataUrl: string | null };
 }
 
 export type DreamBackgroundTone = 'day' | 'night';
@@ -20,6 +21,7 @@ interface AvatarsJson {
   dream_background_night?: { path: string } | null;
   // Compatibility for the original single Dream background. It was designed against night mode.
   dream_background?: { path: string } | null;
+  chat_background?: { path: string } | null;
 }
 
 function blobToBase64(blob: Blob): Promise<string> {
@@ -42,6 +44,7 @@ class AvatarStore {
       day: { path: null, dataUrl: null },
       night: { path: null, dataUrl: null },
     },
+    chatBackground: { path: null, dataUrl: null },
   };
   private listeners = new Set<(c: AvatarConfig) => void>();
 
@@ -62,6 +65,7 @@ class AvatarStore {
         day: { ...this.config.dreamBackgrounds.day },
         night: { ...this.config.dreamBackgrounds.night },
       },
+      chatBackground: { ...this.config.chatBackground },
     };
     this.listeners.forEach(fn => fn(snap));
   }
@@ -84,6 +88,12 @@ class AvatarStore {
       }
       await this.loadDreamBackground('day', data.dream_background_day?.path);
       await this.loadDreamBackground('night', data.dream_background_night?.path ?? data.dream_background?.path);
+      if (data.chat_background?.path) {
+        try {
+          const dataUrl = await invoke<string>('load_avatar', { path: data.chat_background.path });
+          this.config.chatBackground = { path: data.chat_background.path, dataUrl };
+        } catch {}
+      }
     } catch {}
     this.emit();
   }
@@ -130,12 +140,28 @@ class AvatarStore {
     this.emit();
   }
 
+  async setChatBackground(blob: Blob): Promise<void> {
+    const b64 = await blobToBase64(blob);
+    const dataUrl = `data:image/png;base64,${b64}`;
+    const path = await invoke<string>('save_avatar', { role: 'chat_background', imageB64: b64 });
+    this.config.chatBackground = { path, dataUrl };
+    await this.saveJson();
+    this.emit();
+  }
+
+  async clearChatBackground(): Promise<void> {
+    this.config.chatBackground = { path: null, dataUrl: null };
+    await this.saveJson();
+    this.emit();
+  }
+
   private async saveJson(): Promise<void> {
     const data: AvatarsJson = {
       her: this.config.her.path ? { path: this.config.her.path } : null,
       you: { path: this.config.you.path, visible: this.config.you.visible },
       dream_background_day: this.config.dreamBackgrounds.day.path ? { path: this.config.dreamBackgrounds.day.path } : null,
       dream_background_night: this.config.dreamBackgrounds.night.path ? { path: this.config.dreamBackgrounds.night.path } : null,
+      chat_background: this.config.chatBackground.path ? { path: this.config.chatBackground.path } : null,
     };
     await invoke('write_avatars_json', { json: JSON.stringify(data) });
   }

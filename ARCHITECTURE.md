@@ -121,6 +121,7 @@ Tauri Rust 在 `src-tauri/src/lib.rs`：
 - `src-tauri/src/actions.rs`：执行 `minimize_window` / `open_url` / `show_notify` / `media_play_pause` 四类 desktop action。
 - `save_avatar` / `load_avatar` / `read_avatars_json` / `write_avatars_json`：本地头像和 Dream 背景持久化。
 - `list_dream_fonts`：打包后优先扫描 `resource_dir/fonts`，debug/dev 模式回退源码 `public/fonts/`；目录不可用时返回明确错误。
+- `list_themes`：扫描 `resource_dir/themes/*/theme.json`，debug/dev 模式回退源码 `public/themes/`；前端注册中心负责契约校验和内置主题合并。
 - sensor `title_sanitizer` 采用保守默认：Browser 仅返回域名，Editor 仅返回安全 basename，Chat / Other / 未知及文件查看类应用不返回 `title_hint`。
 
 ---
@@ -253,6 +254,7 @@ Dream 背景按 `day` / `night` 分开记录。旧版单字段 `dream_background
 | `src/shared/images/cropImageToBlob.ts` | 头像和 Dream 背景共用 canvas 裁剪 helper |
 | `src/shared/ui/TypingDots.tsx` / `TypingDots.css` | Chat / Dream 共用输入中视觉组件 |
 | `src/shared/theme/globals.css` | 全局主题变量 |
+| `src/shared/theme/contract.ts` / `registry.ts` | 主题 Mod token 契约、内置与磁盘主题注册、运行期注入 |
 | `src-tauri/src/lib.rs` | Tauri command 和 Rust HTTP 桥 |
 | `src-tauri/src/sensor/` | sensor 感知模块,嵌入 Tauri Rust 进程 |
 | `sensor-service/` | 已废弃,原 Python 独立进程方案 |

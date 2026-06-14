@@ -186,7 +186,7 @@ export function SubStatus({
           marginBottom: 10, padding: '8px 12px',
           background: 'oklch(0.26 0.04 30 / 0.40)',
           border: '1px solid oklch(0.45 0.08 30 / 0.50)',
-          borderRadius: 5,
+          borderRadius: 'var(--radius-sm)',
           display: 'flex', alignItems: 'center', gap: 10,
         }}>
           <span className="mono" style={{ flex: 1, fontSize: chatThemeFontSize(9.5), color: 'var(--on-forest-2)', letterSpacing: 1.1 }}>
@@ -195,7 +195,7 @@ export function SubStatus({
           <button
             onClick={() => { if (moodError) retryMood(); if (activityError) retryActivity(); }}
             style={{
-              fontSize: chatThemeFontSize(10), padding: '2px 8px', borderRadius: 3, cursor: 'pointer',
+              fontSize: chatThemeFontSize(10), padding: '2px 8px', borderRadius: 'var(--radius-xs)', cursor: 'pointer',
               background: 'transparent', border: '1px solid var(--forest-line)',
               color: 'var(--on-forest-2)', fontFamily: 'inherit',
             }}>
@@ -210,7 +210,7 @@ export function SubStatus({
         background: `radial-gradient(ellipse at 75% 25%, oklch(0.42 0.14 ${hue} / ${(aura / 100 * 0.55 + 0.06).toFixed(2)}), transparent 65%),
                      linear-gradient(160deg, var(--forest-1), var(--forest-2))`,
         border: `1px solid oklch(0.50 0.10 ${hue} / 0.30)`,
-        borderRadius: 8, marginBottom: 10,
+        borderRadius: 'var(--radius-md)', marginBottom: 10,
         position: 'relative', overflow: 'hidden',
         transition: 'background 3s ease, border-color 3s ease',
       }}>
@@ -280,7 +280,7 @@ export function SubStatus({
       <MicroLabel style={{ color: 'var(--on-forest-2)' }}>近 2 分钟 mood 轨迹</MicroLabel>
       <div style={{
         display: 'flex', gap: 1, height: 28, marginTop: 8,
-        borderRadius: 3, overflow: 'hidden',
+        borderRadius: 'var(--radius-xs)', overflow: 'hidden',
         background: 'oklch(0.22 0.03 168)',
         alignItems: 'flex-end',
       }}>
@@ -313,7 +313,7 @@ function ForestCard({ label, children }: { label: string; children: React.ReactN
       padding: '9px 11px',
       background: 'var(--forest-1)',
       border: '1px solid var(--forest-line)',
-      borderRadius: 5,
+      borderRadius: 'var(--radius-sm)',
     }}>
       <div className="mono" style={{ fontSize: chatThemeFontSize(9), letterSpacing: 1.4, color: 'var(--on-forest-2)', marginBottom: 5 }}>
         {label}
@@ -336,7 +336,7 @@ function SignalBar({ label, value, hue, transition }: {
         position: 'relative', height: 5,
         background: 'oklch(0.22 0.03 168)',
         border: '1px solid var(--forest-line)',
-        borderRadius: 3, overflow: 'hidden',
+        borderRadius: 'var(--radius-xs)', overflow: 'hidden',
       }}>
         <div style={{
           height: '100%',

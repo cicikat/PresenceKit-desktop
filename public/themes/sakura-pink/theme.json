@@ -1,0 +1,22 @@
+{
+  "id": "sakura-pink",
+  "name": "樱粉",
+  "author": "chacha",
+  "version": "1.0.0",
+  "base": "light",
+  "tokens": {
+    "--paper": "oklch(0.962 0.018 350)", "--paper-2": "oklch(0.936 0.026 350)", "--paper-3": "oklch(0.900 0.034 350)", "--paper-edge": "oklch(0.800 0.050 350)",
+    "--ink": "oklch(0.290 0.045 350)", "--ink-2": "oklch(0.430 0.050 350)", "--ink-3": "oklch(0.580 0.052 350)", "--ink-4": "oklch(0.720 0.048 350)",
+    "--forest": "oklch(0.400 0.110 350)", "--forest-1": "oklch(0.340 0.105 350)", "--forest-2": "oklch(0.480 0.125 350)", "--forest-3": "oklch(0.560 0.135 350)", "--forest-line": "oklch(0.500 0.095 350)",
+    "--on-forest": "oklch(0.965 0.020 350)", "--on-forest-2": "oklch(0.820 0.055 350)",
+    "--accent": "oklch(0.660 0.205 350)", "--accent-2": "oklch(0.780 0.140 30)", "--accent-3": "oklch(0.700 0.120 200)", "--danger": "oklch(0.600 0.190 25)",
+    "--paper-grain-1": "oklch(0.975 0.022 350 / 0.6)", "--paper-grain-2": "oklch(0.930 0.034 340 / 0.5)", "--shadow-rgb-mix": "oklch(0.400 0.060 350 / 0.18)",
+    "--board-light": "#f6dce8", "--board-dark": "#c77fa0", "--board-select": "#ffe680", "--board-target-light": "#e6b6cc", "--board-target-dark": "#b06a8c", "--board-coord-light": "#c77fa0", "--board-coord-dark": "#f6dce8",
+    "--goban-bg": "#ecbcd2", "--goban-line": "#9b3f6a", "--stone-black-core": "#5a4350", "--stone-black-edge": "#1a1016", "--stone-white-core": "#fff6fa", "--stone-white-edge": "#e8c9d8", "--stone-black-border": "#1a0f15", "--stone-white-border": "#c79bb0",
+    "--status-connecting": "#f0b429", "--status-error": "#e5566f",
+    "--flower-calm": "#e8a0c0", "--flower-bright": "#f07fa8", "--flower-low": "#7f9bd5", "--flower-yandere": "#d34d6e", "--flower-adrift": "#b88ed8", "--flower-default": "#b89aa8",
+    "--dt-accent-rose": "#ff8fb0", "--dt-accent-violet": "#c79bff", "--dt-accent-azure": "#9fcfff",
+    "--radius-xs": "3px", "--radius-sm": "5px", "--radius-md": "8px", "--radius-lg": "12px", "--radius-pill": "999px",
+    "--border-thin": "1px", "--border-regular": "2px"
+  }
+}

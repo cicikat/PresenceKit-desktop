@@ -44,7 +44,7 @@ export function Tag({ children, hue, variant = 'solid', size = 'sm' }: any) {
       <span className="mono" style={{
         display: 'inline-block', padding: pad, fontSize, letterSpacing: 1.2, fontWeight: 600,
         border: `1px solid ${hue ? `oklch(0.50 0.10 ${hue})` : 'var(--paper-edge)'}`,
-        borderRadius: 3,
+        borderRadius: 'var(--radius-xs)',
         color: hue ? `oklch(0.40 0.12 ${hue})` : 'var(--ink-2)',
         textTransform: 'uppercase' as const,
         background: 'transparent',
@@ -56,7 +56,7 @@ export function Tag({ children, hue, variant = 'solid', size = 'sm' }: any) {
       display: 'inline-block', padding: pad, fontSize, letterSpacing: 1.2, fontWeight: 700,
       background: hue ? `oklch(0.38 0.13 ${hue})` : 'var(--ink)',
       color: hue ? `oklch(0.97 0.04 ${hue})` : 'var(--paper)',
-      borderRadius: 3,
+      borderRadius: 'var(--radius-xs)',
       textTransform: 'uppercase' as const,
     }}>{children}</span>
   );
@@ -69,7 +69,7 @@ export function Card({ children, style, label, accent, dark }: any) {
       background: dark ? 'var(--ink)' : 'var(--paper-2)',
       color: dark ? 'var(--paper)' : 'var(--ink)',
       border: '1px solid var(--paper-edge)',
-      borderRadius: 6,
+      borderRadius: 'var(--radius-md)',
       padding: 14,
       boxShadow: '0 1px 0 oklch(0.86 0.03 65), 0 12px 28px -16px oklch(0.30 0.04 60 / 0.25)',
       ...style,
@@ -138,7 +138,7 @@ export function Btn({ children, onClick, variant = 'ghost', icon, dense, hue, ac
   const base: any = {
     fontFamily: 'inherit', fontSize: chatThemeFontSize(dense ? 11.5 : 12.5),
     padding: dense ? '5px 10px' : '7px 14px',
-    borderRadius: 5,
+    borderRadius: 'var(--radius-sm)',
     display: 'inline-flex', alignItems: 'center', gap: 6,
     cursor: 'pointer',
     letterSpacing: 0.3,
@@ -175,7 +175,7 @@ export function Meter({ value, max = 1, hue, label, ticks = true }: any) {
         position: 'relative', height: 6,
         background: 'var(--paper-3)',
         border: '1px solid var(--paper-edge)',
-        borderRadius: 3, overflow: 'hidden',
+        borderRadius: 'var(--radius-xs)', overflow: 'hidden',
       }}>
         <div style={{
           height: '100%', width: `${pct * 100}%`,

@@ -5,6 +5,7 @@ import { ChatWindow } from "./windows/chat/ChatWindow";
 import { PetWindow } from "./windows/pet/PetWindow";
 import { ActivityWindow } from "./windows/activity";
 import { avatarStore } from "./shared/avatars/store";
+import { initTheme } from "./shared/theme/registry";
 
 const isPetWindow = new URLSearchParams(window.location.search).get("window") === "pet";
 
@@ -19,6 +20,8 @@ function AppRoot() {
     </>
   );
 }
+
+initTheme().catch(error => console.warn("[theme] 初始化失败:", error));
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

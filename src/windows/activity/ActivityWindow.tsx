@@ -9,7 +9,7 @@
  *   只共享全局 CSS variables（--paper / --ink / --forest 等）。
  * ============================================================ */
 
-import { useState, type CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { ActivityRibbon, type ActivityTab } from './components/ActivityRibbon';
 import { ActivityHomePage } from './components/ActivityHomePage';
 import { ReadingPage } from './components/ReadingPage';
@@ -17,7 +17,8 @@ import { GomokuPage } from './components/GomokuPage';
 import { ChessPage } from './components/ChessPage';
 import { DreamSeedPanel } from './components/DreamSeedPanel';
 import { ActivityPreferencesPanel } from './components/ActivitySettingsPage';
-import { getUIPref, setUIPref } from '../../shared/uiPreferences';
+import { getUIPref } from '../../shared/uiPreferences';
+import { listThemes, setTheme as applyRegisteredTheme, subscribe as subscribeTheme } from '../../shared/theme/registry';
 
 interface ActivityWindowProps {
   onClose: () => void;
@@ -26,17 +27,18 @@ interface ActivityWindowProps {
 export function ActivityWindow({ onClose }: ActivityWindowProps) {
   const [activeTab, setActiveTab] = useState<ActivityTab>('home');
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [theme, setTheme] = useState<'paper' | 'dark'>(() => getUIPref('chat.theme', 'paper'));
+  const [theme, setTheme] = useState(() => getUIPref('chat.theme', 'paper'));
 
   const handleTab = (tab: ActivityTab) => setActiveTab(tab);
 
-  const handleThemeToggle = () => {
-    setTheme(t => {
-      const next = t === 'dark' ? 'paper' : 'dark';
-      document.documentElement.setAttribute('data-theme', next);
-      setUIPref('chat.theme', next);
-      return next;
-    });
+  useEffect(() => subscribeTheme(() => setTheme(getUIPref('chat.theme', 'paper'))), []);
+
+  const handleThemeToggle = async () => {
+    const themes = await listThemes();
+    const index = themes.findIndex(record => record.manifest.id === theme);
+    const next = themes[(index + 1) % themes.length]?.manifest.id ?? 'paper';
+    await applyRegisteredTheme(next);
+    setTheme(next);
   };
 
   return (

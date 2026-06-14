@@ -7,11 +7,11 @@ import type { GardenState, GardenSlot } from '../../../shared/api/types';
 import { chatThemeFontSize } from '../../../shared/chatAppearance';
 
 const FLOWER_COLOR: Record<string, string> = {
-  calm:    '#d4a958',
-  bright:  '#d97f3a',
-  low:     '#5b9bd5',
-  yandere: '#c25a5a',
-  adrift:  '#9a7fc4',
+  calm:    'var(--flower-calm)',
+  bright:  'var(--flower-bright)',
+  low:     'var(--flower-low)',
+  yandere: 'var(--flower-yandere)',
+  adrift:  'var(--flower-adrift)',
 };
 
 const FLOWER_HUE: Record<string, number> = {
@@ -86,7 +86,7 @@ export function SubGarden() {
 }
 
 function SlotCard({ slot }: { slot: GardenSlot }) {
-  const color = FLOWER_COLOR[slot.slot_key] ?? '#8a8a8a';
+  const color = FLOWER_COLOR[slot.slot_key] ?? 'var(--flower-default)';
   const hue = FLOWER_HUE[slot.slot_key];
   const isBloom = slot.stage === 'bloom';
 
