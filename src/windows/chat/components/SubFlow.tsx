@@ -54,8 +54,22 @@ export function SubFlow({ engine }: { engine: any }) {
   const [state, setState] = useState(engine.get());
   useEffect(() => engine.subscribe(setState), [engine]);
 
-  // ── ring buffer ───────────────────────────────────────────────────────────
-  const [timeline, setTimeline] = useState<FlowEntry[]>([]);
+  // ── persistent timeline (localStorage, 8-hour window) ────────────────────
+  const EIGHT_HOURS = 8 * 3_600_000;
+  const STORAGE_KEY = 'subflow_timeline';
+
+  function loadTimeline(): FlowEntry[] {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return [];
+      const parsed: FlowEntry[] = JSON.parse(raw);
+      return parsed.filter(e => Date.now() - e.timestamp < EIGHT_HOURS);
+    } catch {
+      return [];
+    }
+  }
+
+  const [timeline, setTimeline] = useState<FlowEntry[]>(loadTimeline);
   const lastKeyRef = useRef('');
 
   useEffect(() => {
@@ -65,10 +79,14 @@ export function SubFlow({ engine }: { engine: any }) {
     const key = `${entryText}|${state.mood}`;
     if (key === lastKeyRef.current) return;
     lastKeyRef.current = key;
-    setTimeline(prev => [
-      { id: String(Date.now()), text: entryText, mood: state.mood as Mood, timestamp: Date.now() },
-      ...prev,
-    ].slice(0, 10));
+    setTimeline(prev => {
+      const next = [
+        { id: String(Date.now()), text: entryText, mood: state.mood as Mood, timestamp: Date.now() },
+        ...prev.filter(e => Date.now() - e.timestamp < EIGHT_HOURS),
+      ];
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
   }, [state.activity, state.mood, state.focus]);
 
   // ── 30s tick so relative timestamps stay live ─────────────────────────────
@@ -136,7 +154,7 @@ export function SubFlow({ engine }: { engine: any }) {
       </div>
 
       <div style={{ display: 'grid', gap: 0 }}>
-        {timeline.length === 0 && (
+        {timeline.filter(e => Date.now() - e.timestamp < EIGHT_HOURS).length === 0 && (
           <div className="serif" style={{
             fontSize: chatThemeFontSize(13), color: 'var(--on-forest-2)',
             fontStyle: 'italic', padding: '6px 4px',
@@ -144,7 +162,7 @@ export function SubFlow({ engine }: { engine: any }) {
             暂无记录
           </div>
         )}
-        {timeline.map((e, i) => {
+        {timeline.filter(e => Date.now() - e.timestamp < EIGHT_HOURS).map((e, i) => {
           const ehue = MOOD_HUE[e.mood] ?? 70;
           return (
             <div key={e.id} style={{

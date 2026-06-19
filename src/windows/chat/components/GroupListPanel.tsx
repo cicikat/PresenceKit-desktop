@@ -5,7 +5,7 @@
  * ============================================================ */
 
 import { useState, useEffect, useCallback } from 'react';
-import { listGroups, createGroup, getPromptAssets } from '../../../shared/api/backend';
+import { listGroups, createGroup, getPromptAssets, deleteGroup } from '../../../shared/api/backend';
 import { chatThemeFontSize } from '../../../shared/chatAppearance';
 import type { GroupSummary, PromptAssetCharacter } from '../../../shared/api/types';
 
@@ -175,6 +175,7 @@ export function GroupListPanel({
   const [showCreate, setShowCreate] = useState(false);
   const [characters, setCharacters] = useState<PromptAssetCharacter[]>([]);
   const [charsLoading, setCharsLoading] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -207,6 +208,20 @@ export function GroupListPanel({
   const handleCreated = (groupId: string) => {
     setShowCreate(false);
     onSelectGroup(groupId);
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!window.confirm(`删除「${name}」？聊天记录一并清除，不可恢复。`)) return;
+    setDeletingId(id);
+    setError(null);
+    try {
+      await deleteGroup(id);
+      await load();
+    } catch (err) {
+      setError(`删除失败：${String(err)}`);
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   return (
@@ -286,30 +301,50 @@ export function GroupListPanel({
             )}
 
             {groups.map(g => (
-              <button
+              <div
                 key={g.group_id}
+                role="button"
+                tabIndex={0}
                 onClick={() => onSelectGroup(g.group_id)}
+                onKeyDown={e => { if (e.key === 'Enter') onSelectGroup(g.group_id); }}
                 style={{
                   width: '100%', padding: '12px 14px', marginBottom: 6,
                   borderRadius: 'var(--radius-md)', border: '1px solid var(--paper-edge)',
                   background: 'var(--paper-2)',
                   cursor: 'pointer', textAlign: 'left',
-                  display: 'flex', flexDirection: 'column', gap: 4,
+                  display: 'flex', alignItems: 'center', gap: 8,
                   transition: 'background 0.12s',
+                  boxSizing: 'border-box',
                 }}
                 onMouseEnter={e => (e.currentTarget.style.background = 'var(--paper-3)')}
                 onMouseLeave={e => (e.currentTarget.style.background = 'var(--paper-2)')}
               >
-                <div className="serif" style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ink)' }}>
-                  {g.title || g.group_id}
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+                  <div className="serif" style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ink)' }}>
+                    {g.title || g.group_id}
+                  </div>
+                  <div className="mono" style={{ fontSize: chatThemeFontSize(9.5), color: 'var(--ink-3)', letterSpacing: 0.8 }}>
+                    {g.roster.map(r => r.label).join(' · ')}
+                  </div>
+                  <div className="mono" style={{ fontSize: chatThemeFontSize(9), color: 'var(--ink-4)', letterSpacing: 0.6 }}>
+                    {g.domain.toUpperCase()} · {g.group_id}
+                  </div>
                 </div>
-                <div className="mono" style={{ fontSize: chatThemeFontSize(9.5), color: 'var(--ink-3)', letterSpacing: 0.8 }}>
-                  {g.roster.map(r => r.label).join(' · ')}
-                </div>
-                <div className="mono" style={{ fontSize: chatThemeFontSize(9), color: 'var(--ink-4)', letterSpacing: 0.6 }}>
-                  {g.domain.toUpperCase()} · {g.group_id}
-                </div>
-              </button>
+                <button
+                  onClick={e => { e.stopPropagation(); void handleDelete(g.group_id, g.title || g.group_id); }}
+                  disabled={deletingId === g.group_id}
+                  style={{
+                    padding: '4px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid transparent',
+                    cursor: deletingId === g.group_id ? 'not-allowed' : 'pointer',
+                    fontFamily: 'inherit', fontSize: 11, fontWeight: 500,
+                    opacity: deletingId === g.group_id ? 0.5 : 0.75,
+                    background: 'oklch(0.55 0.16 25)', color: 'var(--paper)',
+                    flexShrink: 0, transition: 'opacity 0.15s',
+                  }}
+                >
+                  {deletingId === g.group_id ? '…' : '删除'}
+                </button>
+              </div>
             ))}
           </>
         )}

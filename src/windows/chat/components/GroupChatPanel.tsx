@@ -7,11 +7,12 @@
 import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { getClientConfig } from '../../../shared/api/config';
 import { wsClient } from '../../../shared/api/ws';
-import { getGroup, groupSend, getCharacterAvatar } from '../../../shared/api/backend';
+import { notifyOnMessage } from '../../../shared/api/notify';
+import { getGroup, groupSend, getCharacterAvatar, getPromptAssets, patchGroupRoster, patchGroupSettings } from '../../../shared/api/backend';
 import { TypingDots } from '../../../shared/ui/TypingDots';
 import { normalizeChatDisplayText } from '../chatDisplay';
 import { chatThemeFontSize } from '../../../shared/chatAppearance';
-import type { GroupDetail } from '../../../shared/api/types';
+import type { GroupDetail, PromptAssetCharacter } from '../../../shared/api/types';
 
 // ── Helpers (mirrors ChatPanel) ───────────────────────────────────────────────
 
@@ -86,6 +87,186 @@ function CharAvatar({ entry, size = 32 }: { entry: RosterEntry | undefined; size
       fontFamily: 'var(--font-serif)',
     }}>
       {initial}
+    </div>
+  );
+}
+
+// ── Group Settings Panel ──────────────────────────────────────────────────────
+
+function GroupSettingsPanel({
+  groupId,
+  detail,
+  onClose,
+  onSaved,
+}: {
+  groupId: string;
+  detail: GroupDetail;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [characters, setCharacters] = useState<PromptAssetCharacter[]>([]);
+  const [charsLoading, setCharsLoading] = useState(true);
+  const [roster, setRoster] = useState<string[]>(() => detail.roster.map(m => m.char_id));
+  const [minR, setMinR] = useState(detail.settings.min_responders);
+  const [maxR, setMaxR] = useState(detail.settings.max_responders);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getPromptAssets().then(a => setCharacters(a.characters)).catch(() => setCharacters([])).finally(() => setCharsLoading(false));
+  }, []);
+
+  const toggleMember = (id: string) =>
+    setRoster(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+
+  const effectiveMax = Math.min(Math.max(minR, maxR), Math.max(1, roster.length));
+  const rosterLimit = Math.min(Math.max(1, roster.length), 6);
+
+  const handleSave = async () => {
+    if (roster.length < 1) { setError('至少保留 1 位成员'); return; }
+    setSaving(true);
+    setError(null);
+    try {
+      const origRoster = detail.roster.map(m => m.char_id);
+      const rosterChanged = JSON.stringify([...roster].sort()) !== JSON.stringify([...origRoster].sort());
+      const settingsChanged = minR !== detail.settings.min_responders || effectiveMax !== detail.settings.max_responders;
+
+      if (rosterChanged) await patchGroupRoster(groupId, roster);
+      if (settingsChanged) await patchGroupSettings(groupId, { min_responders: minR, max_responders: effectiveMax });
+
+      onSaved();
+    } catch (err) {
+      setError(`保存失败：${String(err)}`);
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{
+      position: 'absolute', inset: 0, zIndex: 10,
+      background: 'var(--paper)',
+      display: 'flex', flexDirection: 'column',
+    }}>
+      {/* Header */}
+      <div style={{
+        padding: '10px 16px', borderBottom: '1px solid var(--paper-edge)',
+        display: 'flex', alignItems: 'center', gap: 10,
+        background: 'var(--paper-2)', flexShrink: 0,
+      }}>
+        <button
+          onClick={onClose}
+          style={{
+            background: 'transparent', border: 'none', cursor: 'pointer',
+            color: 'var(--ink-3)', fontSize: 20, padding: '0 4px', lineHeight: 1,
+            display: 'flex', alignItems: 'center',
+          }}
+        >‹</button>
+        <div className="serif" style={{ flex: 1, fontSize: 15, fontWeight: 600, color: 'var(--ink)' }}>群设置</div>
+        <div className="mono" style={{ fontSize: chatThemeFontSize(9), color: 'var(--ink-3)', letterSpacing: 1.3 }}>GROUP SETTINGS</div>
+      </div>
+
+      {/* Body */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'grid', gap: 20, alignContent: 'start' }}>
+        {/* Member management */}
+        <div>
+          <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink)', marginBottom: 2 }}>成员管理</div>
+          <div className="mono" style={{ fontSize: chatThemeFontSize(9.5), color: 'var(--ink-3)', letterSpacing: 1.1, marginBottom: 10 }}>
+            已选 {roster.length} 位 · 至少保留 1 位
+          </div>
+          {charsLoading ? (
+            <div className="mono" style={{ color: 'var(--ink-4)', fontSize: 11, letterSpacing: 1.2 }}>正在读取角色列表…</div>
+          ) : characters.length === 0 ? (
+            <div className="serif" style={{ color: 'var(--ink-3)', fontSize: 13, fontStyle: 'italic' }}>暂无可用角色</div>
+          ) : (
+            <div style={{ display: 'grid', gap: 6 }}>
+              {characters.map(c => (
+                <label
+                  key={c.id}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '7px 10px',
+                    borderRadius: 'var(--radius-sm)',
+                    border: `1px solid ${roster.includes(c.id) ? 'oklch(0.55 0.13 210)' : 'var(--paper-edge)'}`,
+                    background: roster.includes(c.id) ? 'oklch(0.95 0.04 210 / 0.4)' : 'var(--paper-2)',
+                    cursor: 'pointer', transition: 'all 0.12s',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={roster.includes(c.id)}
+                    onChange={() => toggleMember(c.id)}
+                    style={{ accentColor: 'oklch(0.55 0.13 210)', width: 14, height: 14 }}
+                  />
+                  <span style={{ flex: 1, fontSize: 13, color: 'var(--ink-2)', fontFamily: 'var(--font-serif)' }}>{c.label}</span>
+                  <span className="mono" style={{ fontSize: chatThemeFontSize(9), color: 'var(--ink-4)', letterSpacing: 0.8 }}>{c.id}</span>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* N/M sliders */}
+        <div style={{ display: 'grid', gap: 12 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink)' }}>回应人数</div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink)', marginBottom: 6 }}>
+              N 最少 <span className="mono" style={{ fontWeight: 700, color: 'oklch(0.50 0.13 210)' }}>{minR}</span>
+            </div>
+            <input
+              type="range" min={1} max={rosterLimit} value={minR}
+              onChange={e => { const v = Number(e.target.value); setMinR(v); if (maxR < v) setMaxR(v); }}
+              style={{ width: '100%' }}
+            />
+          </div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink)', marginBottom: 6 }}>
+              M 最多 <span className="mono" style={{ fontWeight: 700, color: 'oklch(0.50 0.13 210)' }}>{effectiveMax}</span>
+            </div>
+            <input
+              type="range" min={minR} max={rosterLimit} value={effectiveMax}
+              onChange={e => setMaxR(Number(e.target.value))}
+              style={{ width: '100%' }}
+            />
+          </div>
+          <div className="mono" style={{ fontSize: chatThemeFontSize(9.5), color: 'var(--ink-3)', letterSpacing: 0.8 }}>
+            每轮 {minR}–{effectiveMax} 位成员回应
+          </div>
+        </div>
+
+        {error && (
+          <div className="mono" style={{ color: 'var(--danger)', fontSize: chatThemeFontSize(10), letterSpacing: 0.8 }}>
+            {error}
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div style={{
+        padding: '10px 16px', borderTop: '1px solid var(--paper-edge)',
+        display: 'flex', gap: 8, justifyContent: 'flex-end',
+        background: 'var(--paper-2)', flexShrink: 0,
+      }}>
+        <button
+          onClick={onClose}
+          disabled={saving}
+          style={{
+            padding: '7px 16px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--paper-edge)',
+            cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 500,
+            opacity: saving ? 0.5 : 1, background: 'var(--paper-2)', color: 'var(--ink-2)',
+          }}
+        >取消</button>
+        <button
+          onClick={() => void handleSave()}
+          disabled={saving || roster.length === 0}
+          style={{
+            padding: '7px 16px', borderRadius: 'var(--radius-sm)', border: '1px solid transparent',
+            cursor: (saving || roster.length === 0) ? 'not-allowed' : 'pointer',
+            fontFamily: 'inherit', fontSize: 12, fontWeight: 500,
+            opacity: (saving || roster.length === 0) ? 0.5 : 1,
+            background: 'var(--ink)', color: 'var(--paper)',
+          }}
+        >{saving ? '保存中…' : '保存'}</button>
+      </div>
     </div>
   );
 }
@@ -178,6 +359,7 @@ export function GroupChatPanel({
   const [sending, setSending] = useState(false);
   const [detail, setDetail] = useState<GroupDetail | null>(null);
   const [rosterMap, setRosterMap] = useState<Record<string, RosterEntry>>({});
+  const [showSettings, setShowSettings] = useState(false);
 
   // Streaming refs — same pattern as ChatPanel
   const streamingLocalIdRef = useRef<Map<string, string[]>>(new Map());
@@ -324,6 +506,7 @@ export function GroupChatPanel({
         wsMsgId: i === 0 ? msg_id : undefined,
         speakerId: char_id,
       }))]);
+      void notifyOnMessage(msg_id, char_id, content);
     });
 
     // stream_start{char_id} → create streaming bubble with speakerId
@@ -378,6 +561,7 @@ export function GroupChatPanel({
       const ids = streamingLocalIdRef.current.get(msg_id);
       if (!ids) return;
       setMessages(prev => prev.map(m => ids.includes(m.id) ? { ...m, streamingDone: true } : m));
+      void notifyOnMessage(msg_id, '叶瑄', streamingTextRef.current.get(msg_id) ?? '');
     });
 
     // group_round_start → lock input; timeout fallback 30s
@@ -426,6 +610,24 @@ export function GroupChatPanel({
     }
   };
 
+  const handleSettingsSaved = useCallback(async () => {
+    setShowSettings(false);
+    try {
+      const d = await getGroup(groupId);
+      setDetail(d);
+      const newMap: Record<string, RosterEntry> = {};
+      for (const m of d.roster) newMap[m.char_id] = { label: m.label, avatarDataUrl: null };
+      setRosterMap(newMap);
+      for (const m of d.roster) {
+        if (m.avatar_url) {
+          getCharacterAvatar(m.char_id).then(dataUrl => {
+            if (dataUrl) setRosterMap(prev => ({ ...prev, [m.char_id]: { ...prev[m.char_id], avatarDataUrl: dataUrl } }));
+          }).catch(() => {});
+        }
+      }
+    } catch { /* ignore — detail stays as-is */ }
+  }, [groupId]);
+
   // Compute which assistant bubbles show speaker label (only on speaker change)
   const showLabelSet = new Set<string>();
   {
@@ -446,7 +648,7 @@ export function GroupChatPanel({
     : '';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--paper)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--paper)', position: 'relative' }}>
       {/* Header */}
       <div style={{
         padding: '10px 16px', borderBottom: '1px solid var(--paper-edge)',
@@ -481,6 +683,18 @@ export function GroupChatPanel({
               </div>
             ))}
           </div>
+        )}
+        {/* Settings gear */}
+        {detail && (
+          <button
+            onClick={() => setShowSettings(true)}
+            title="群设置"
+            style={{
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              color: 'var(--ink-3)', fontSize: 16, padding: '0 4px', lineHeight: 1,
+              display: 'flex', alignItems: 'center',
+            }}
+          >⚙</button>
         )}
       </div>
 
@@ -565,6 +779,16 @@ export function GroupChatPanel({
           {sending ? '…' : '发送'}
         </button>
       </div>
+
+      {/* Group settings overlay */}
+      {showSettings && detail && (
+        <GroupSettingsPanel
+          groupId={groupId}
+          detail={detail}
+          onClose={() => setShowSettings(false)}
+          onSaved={() => void handleSettingsSaved()}
+        />
+      )}
     </div>
   );
 }

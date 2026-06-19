@@ -9,19 +9,29 @@ import { wsClient } from '../../../shared/api/ws';
 import type { ConnectionState } from '../../../shared/api/types';
 import { DreamEntryButton } from '../../../features/dream';
 import { chatThemeFontSize } from '../../../shared/chatAppearance';
+import { getDayNight, subscribe as subscribeTheme, toggleDayNight } from '../../../shared/theme/registry';
 
 function Sep() {
   return <div style={{ width: 24, height: 1, background: 'var(--forest-line)', margin: '6px 0' }} />;
 }
 
-function RibBtn({ icon, label, active, onClick }: any) {
+function HeartIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 20s-7-4.6-7-9.5A3.5 3.5 0 0 1 12 7a3.5 3.5 0 0 1 7 3.5C19 15.4 12 20 12 20z" />
+    </svg>
+  );
+}
+
+function RibBtn({ icon, label, active, onClick, customIcon }: any) {
   const [hover, setHover] = useState(false);
   return (
     <div style={{ position: 'relative' }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}>
       <button onClick={onClick} style={{
-        width: 38, height: 38, borderRadius: 6,
+        width: 38, height: 38, borderRadius: 'var(--radius-md)',
         background: active ? 'var(--on-forest)' : 'transparent',
         color: active ? 'var(--forest)' : 'var(--on-forest-2)',
         border: 'none', cursor: 'pointer',
@@ -29,7 +39,7 @@ function RibBtn({ icon, label, active, onClick }: any) {
         position: 'relative',
         transition: 'background 0.15s, color 0.15s',
       }}>
-        <Icon name={icon} size={18} strokeWidth={1.6} />
+        {customIcon ?? <Icon name={icon} size={18} strokeWidth={1.6} />}
         {active && (
           <span style={{
             position: 'absolute', left: -10, top: 9, bottom: 9,
@@ -43,7 +53,7 @@ function RibBtn({ icon, label, active, onClick }: any) {
           position: 'absolute', left: 46, top: '50%', transform: 'translateY(-50%)',
           padding: '3px 8px',
           background: 'var(--ink)', color: 'var(--paper)',
-          borderRadius: 4,
+          borderRadius: 'var(--radius-sm)',
           fontSize: chatThemeFontSize(10), letterSpacing: 1.2, fontWeight: 600,
           whiteSpace: 'nowrap', pointerEvents: 'none',
           zIndex: 200,
@@ -57,13 +67,17 @@ function RibBtn({ icon, label, active, onClick }: any) {
 export function Ribbon({
   sidebarOpen, sidebarTab, onSidebarTab, onCloseSidebar,
   petVisible, onPetToggle,
-  theme, onThemeToggle,
   onOpenSpec, onOpenPrefs,
   dreamWindowOpen, onDreamToggle,
   onActivityOpen,
+  onToyOpen,
+  playModeEnabled,
+  onGroupOpen,
 }: any) {
   const [connState, setConnState] = useState<ConnectionState>(wsClient.getState());
+  const [dayNightActive, setDayNightActive] = useState<'day' | 'night'>(() => getDayNight().active);
   useEffect(() => wsClient.on('state', setConnState), []);
+  useEffect(() => subscribeTheme(() => setDayNightActive(getDayNight().active)), []);
 
   return (
     <div style={{
@@ -77,7 +91,7 @@ export function Ribbon({
       {/* logo + 连接状态角标 */}
       <div style={{ position: 'relative', marginBottom: 6 }}>
         <div style={{
-          width: 32, height: 32, borderRadius: 6,
+          width: 32, height: 32, borderRadius: 'var(--radius-md)',
           background: 'var(--on-forest)', color: 'var(--forest)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
@@ -95,7 +109,7 @@ export function Ribbon({
             style={{
               position: 'absolute', bottom: -2, right: -2,
               width: 8, height: 8, borderRadius: '50%',
-              background: connState === 'connecting' ? '#f0b429' : '#e53e3e',
+              background: connState === 'connecting' ? 'var(--status-connecting)' : 'var(--status-error)',
               border: '1.5px solid var(--forest)',
             }}
           />
@@ -117,15 +131,19 @@ export function Ribbon({
       <Sep />
       <DreamEntryButton active={dreamWindowOpen} onToggle={onDreamToggle} />
       <RibBtn icon="grid2" label="一起做事" onClick={onActivityOpen} />
+      {playModeEnabled && (
+        <RibBtn label="玩耍模式" customIcon={<HeartIcon />} onClick={onToyOpen} />
+      )}
+      <RibBtn icon="chat"  label="群聊"    onClick={onGroupOpen} />
       <RibBtn icon="pet" label="桌宠" active={petVisible} onClick={onPetToggle} />
       <div style={{ flex: 1 }} />
       <RibBtn icon="settings" label="偏好" onClick={onOpenPrefs} />
       <RibBtn icon="spec"     label="帮助" onClick={onOpenSpec} />
       <Sep />
       <RibBtn
-        icon={theme === 'dark' ? 'sparkle' : 'mood'}
-        label={theme === 'dark' ? '日间' : '夜间'}
-        onClick={onThemeToggle} />
+        icon={dayNightActive === 'night' ? 'mood' : 'sparkle'}
+        label={dayNightActive === 'night' ? '日间' : '夜间'}
+        onClick={() => toggleDayNight().catch(console.warn)} />
     </div>
   );
 }

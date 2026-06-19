@@ -5,7 +5,7 @@ import { Tag, Btn } from './UIKit';
 import { loadDiaryList, loadDiaryEntry, getPromptAssets } from '../../../shared/api/backend';
 import type { DiaryListResponse, DiaryListItem, DiaryEntry } from '../../../shared/api/types';
 import type { PromptAssetCharacter } from '../../../shared/api/types';
-import { panesApi } from './Panes';
+import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { chatThemeFontSize } from '../../../shared/chatAppearance';
 
 /* emotion → hue 映射，emotion 为 null 时整个标签不渲染 */
@@ -59,7 +59,7 @@ function renderBody(body: string): React.ReactNode[] {
 }
 
 /* ── 日记详情浮窗内容 ── */
-function DiaryDetailPane({ date, charId }: { date: string; charId?: string }) {
+export function DiaryDetailPane({ date, charId }: { date: string; charId?: string }) {
   const [entry, setEntry] = useState<DiaryEntry | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -200,15 +200,22 @@ export function SubDiary() {
   }, [data]);
 
   function openEntry(item: DiaryListItem) {
-    const charId = activeCharId || undefined;
-    panesApi.openPane({
-      id: `diary-${activeCharId}-${item.date}`,
+    const charId = activeCharId || '';
+    const label = `diary-detail-${charId}-${item.date}`;
+    const params = new URLSearchParams({ window: 'diary-detail', date: item.date, char: charId });
+    const existing = WebviewWindow.getByLabel(label);
+    if (existing) {
+      existing.then(w => w?.setFocus()).catch(() => {});
+      return;
+    }
+    new WebviewWindow(label, {
+      url: `index.html?${params.toString()}`,
       title: `${formatDate(item.date)} · ${item.title}`,
-      w: 520,
-      h: 600,
-      hue: item.emotion !== null ? emotionHue(item.emotion) : 168,
-      replace: true,
-      render: () => <DiaryDetailPane date={item.date} charId={charId} />,
+      width: 520,
+      height: 600,
+      decorations: false,
+      resizable: true,
+      focus: true,
     });
   }
 

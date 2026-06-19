@@ -4,6 +4,7 @@
  * ============================================================ */
 
 import { useState, useEffect, useRef, useCallback, type CSSProperties } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { Icon, MicroLabel } from './components/UIKit';
 import { StateEngine } from '../../shared/state/store';
 import { avatarStore } from '../../shared/avatars/store';
@@ -11,11 +12,19 @@ import { getPromptAssets, patchPromptAssets, getCharacterAvatar, uploadCharacter
 import { wsClient } from '../../shared/api/ws';
 import type { PromptAssetsPatch, PromptAssetsResponse } from '../../shared/api/types';
 import { getUIPref, setUIPref } from '../../shared/uiPreferences';
+import { isPresenceNagEnabled, patchPresenceNagEnabled } from '../../shared/presenceNag';
+import { isPlayModeEnabled, setPlayModeEnabled } from '../../shared/playMode';
 import {
   publishPetSnapshot,
   setPetWindowVisible,
   startPetSnapshotResponder,
 } from '../../shared/pet/bridge';
+import {
+  loadPetMouseSettings,
+  savePetMouseSettings,
+  subscribePetMouseSettings,
+  type PetMouseSettings,
+} from '../../shared/pet/mouseSettings';
 import {
   chatFontFamily,
   chatFontUrl,
@@ -26,28 +35,41 @@ import {
   type ChatFontOption,
 } from '../../shared/chatAppearance';
 import { AvatarCropper } from './components/AvatarCropper';
+import { DreamBackgroundCropper } from '../dream/components/DreamBackgroundCropper';
 import { Ribbon } from './components/Ribbon';
 import { SidebarPanel } from './components/Sidebar';
 import { ChatPanel } from './components/ChatPanel';
+import { GroupChatPanel } from './components/GroupChatPanel';
+import { GroupListPanel } from './components/GroupListPanel';
 import { PaneHost } from './components/Panes';
 import { SpecPanel } from './components/SpecPanel';
 import { DreamAfterglowBanner } from '../dream/components/DreamAfterglowBanner';
 import { DreamWindow } from '../dream/DreamWindow';
+import { ThemePicker } from '../../shared/theme/ThemePicker';
+import {
+  getDayNight,
+  setTheme as applyRegisteredTheme,
+  setThemeMode,
+  subscribe as subscribeTheme,
+} from '../../shared/theme/registry';
 
 const SIDEBAR_MIN     = 250;
 const SIDEBAR_MAX     = 540;
 const SIDEBAR_DEFAULT = 340;
 
 /* ── 偏好面板 ── */
-function PreferencesPanel({ open, onClose, theme, onThemeChange, chatHeaderVisible, onChatHeaderToggle, appearance, onAppearanceChange, onCharacterAvatarChange }: any) {
+function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHeaderVisible, onChatHeaderToggle, appearance, onAppearanceChange, onCharacterAvatarChange, petMouseSettings, onPetMouseSettingsChange, presenceNagEnabled, onPresenceNagToggle, playModeEnabled, onPlayModeToggle }: any) {
   const [avatars, setAvatars] = useState(avatarStore.get());
   const [tab, setTab] = useState<'appearance' | 'world' | 'other'>('appearance');
   const [cropSrc, setCropSrc] = useState<string | null>(null);
   const [cropRole, setCropRole] = useState<'her' | 'you' | null>(null);
+  const [bgCropSrc, setBgCropSrc] = useState<string | null>(null);
+  const [bgSaving, setBgSaving] = useState(false);
   const [fonts, setFonts] = useState<ChatFontOption[]>([]);
   const [fontLoadError, setFontLoadError] = useState<string | null>(null);
   const herFileRef = useRef<HTMLInputElement>(null);
   const youFileRef = useRef<HTMLInputElement>(null);
+  const bgFileRef = useRef<HTMLInputElement>(null);
   useEffect(() => avatarStore.subscribe(setAvatars), []);
   useEffect(() => {
     if (!open) return;
@@ -79,15 +101,37 @@ function PreferencesPanel({ open, onClose, theme, onThemeChange, chatHeaderVisib
     setCropRole(null);
   };
 
+  const handleBgFileChange = (file: File) => {
+    setBgCropSrc(URL.createObjectURL(file));
+  };
+  const handleBgCropConfirm = async (blob: Blob) => {
+    setBgSaving(true);
+    try { await avatarStore.setChatBackground(blob); } catch (e) { console.warn('[bg] 保存失败:', e); }
+    if (bgCropSrc) URL.revokeObjectURL(bgCropSrc);
+    setBgCropSrc(null);
+    setBgSaving(false);
+  };
+  const handleBgCropCancel = () => {
+    if (bgCropSrc) URL.revokeObjectURL(bgCropSrc);
+    setBgCropSrc(null);
+  };
+
   return (
     <>
       {cropSrc && (
         <AvatarCropper imageSrc={cropSrc} onConfirm={handleCropConfirm} onCancel={handleCropCancel} />
       )}
+      {bgCropSrc && (
+        <div onClick={e => e.stopPropagation()} style={{ position: 'fixed', inset: 0, zIndex: 120 }}>
+          <DreamBackgroundCropper imageSrc={bgCropSrc} onConfirm={handleBgCropConfirm} onCancel={handleBgCropCancel} />
+        </div>
+      )}
       <input ref={herFileRef} type="file" accept="image/jpeg,image/png" style={{ display: 'none' }}
         onChange={e => { const f = e.target.files?.[0]; if (f) handleFileChange('her', f); e.target.value = ''; }} />
       <input ref={youFileRef} type="file" accept="image/jpeg,image/png" style={{ display: 'none' }}
         onChange={e => { const f = e.target.files?.[0]; if (f) handleFileChange('you', f); e.target.value = ''; }} />
+      <input ref={bgFileRef} type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }}
+        onChange={e => { const f = e.target.files?.[0]; if (f) handleBgFileChange(f); e.target.value = ''; }} />
       <div onClick={onClose} style={{
         position: 'fixed', inset: 0, background: 'oklch(0.20 0.04 60 / 0.45)',
         backdropFilter: 'blur(6px)', zIndex: 110, display: 'flex',
@@ -95,7 +139,7 @@ function PreferencesPanel({ open, onClose, theme, onThemeChange, chatHeaderVisib
         <div onClick={e => e.stopPropagation()} style={{
           margin: 'auto', width: 'min(540px, 92vw)',
           background: 'var(--paper)', border: '1px solid var(--paper-edge)',
-          borderRadius: 10, overflow: 'hidden',
+          borderRadius: 'var(--radius-lg)', overflow: 'hidden',
           boxShadow: '0 30px 80px var(--shadow-rgb-mix)',
         }}>
           <div style={{
@@ -126,11 +170,14 @@ function PreferencesPanel({ open, onClose, theme, onThemeChange, chatHeaderVisib
           <div style={{ padding: '18px 22px', display: 'grid', gap: 18 }}>
             {tab === 'appearance' ? (
               <>
-                <PrefRow label="外观主题" hint="paper · 复古信纸 / dark · 深色护眼">
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <PrefSeg active={theme === 'paper'} onClick={() => onThemeChange('paper')}>信纸</PrefSeg>
-                    <PrefSeg active={theme === 'dark'}  onClick={() => onThemeChange('dark')}>夜间</PrefSeg>
-                  </div>
+                <PrefRow label="日间主题" hint="手动切换至日间或自动模式日间时段使用的主题">
+                  <ThemePicker slot="day" />
+                </PrefRow>
+                <PrefRow label="夜间主题" hint="手动切换至夜间或 19:00–6:00 自动时段使用的主题">
+                  <ThemePicker slot="night" />
+                </PrefRow>
+                <PrefRow label="按时间自动切换" hint="启用后每隔 10 分钟检查时段，19:00–6:00 自动切换夜间主题">
+                  <PrefSwitch active={themeMode === 'auto'} onClick={onThemeModeChange} />
                 </PrefRow>
                 <PrefRow label="对话信息栏" hint="顶部状态条 (mood / activity / 时段)">
                   <PrefSwitch active={chatHeaderVisible} onClick={onChatHeaderToggle} />
@@ -158,7 +205,7 @@ function PreferencesPanel({ open, onClose, theme, onThemeChange, chatHeaderVisib
                       onChange={event => onAppearanceChange({ fontFile: event.target.value || null })}
                       style={{
                         width: '100%', padding: '6px 9px',
-                        border: '1px solid var(--paper-edge)', borderRadius: 4,
+                        border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-sm)',
                         background: 'var(--paper-2)', color: 'var(--ink-2)',
                         fontFamily: 'inherit', fontSize: 11,
                       }}
@@ -174,6 +221,44 @@ function PreferencesPanel({ open, onClose, theme, onThemeChange, chatHeaderVisib
                       </div>
                     )}
                   </div>
+                </PrefRow>
+                <PrefRow label="聊天背景" hint="聊天区域的背景图（16:9，自动模糊）">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {avatars.chatBackground.dataUrl ? (
+                      <div style={{
+                        width: 56, height: 32, borderRadius: 'var(--radius-xs)', overflow: 'hidden', flexShrink: 0,
+                        backgroundImage: `url("${avatars.chatBackground.dataUrl}")`,
+                        backgroundSize: 'cover', backgroundPosition: 'center',
+                        border: '1px solid var(--paper-edge)',
+                      }} />
+                    ) : (
+                      <div style={{
+                        width: 56, height: 32, borderRadius: 'var(--radius-xs)', flexShrink: 0,
+                        background: 'var(--paper-3)', border: '1px solid var(--paper-edge)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        <span style={{ fontSize: 9, color: 'var(--ink-4)', fontFamily: 'var(--font-mono)' }}>无</span>
+                      </div>
+                    )}
+                    <button onClick={() => bgFileRef.current?.click()} disabled={bgSaving} style={prefActionButtonStyle}>
+                      {bgSaving ? '处理中…' : '更换'}
+                    </button>
+                    {avatars.chatBackground.dataUrl && (
+                      <button
+                        onClick={() => avatarStore.clearChatBackground().catch(console.warn)}
+                        style={{ ...prefActionButtonStyle, color: 'var(--danger)', borderColor: 'var(--danger)' }}>
+                        清除
+                      </button>
+                    )}
+                  </div>
+                </PrefRow>
+                <PrefRow label="背景模糊" hint="0 为清晰原图，36 为最大模糊">
+                  <PrefRange
+                    min={0}
+                    max={36}
+                    value={appearance.backgroundBlur}
+                    onChange={(value: number) => onAppearanceChange({ backgroundBlur: value })}
+                  />
                 </PrefRow>
                 <div style={{ height: 1, background: 'var(--paper-edge)' }} />
                 {/* 头像分区 */}
@@ -208,7 +293,7 @@ function PreferencesPanel({ open, onClose, theme, onThemeChange, chatHeaderVisib
                       </div>
                       <span className="mono" style={{ fontSize: 10, letterSpacing: 1.4, color: 'var(--ink-3)', flex: 1 }}>HER</span>
                       <button onClick={() => herFileRef.current?.click()} style={{
-                        padding: '6px 14px', borderRadius: 4, fontSize: 12,
+                        padding: '6px 14px', borderRadius: 'var(--radius-sm)', fontSize: 12,
                         background: 'var(--paper-2)', border: '1px solid var(--paper-edge)',
                         color: 'var(--ink-2)', cursor: 'pointer', fontFamily: 'inherit',
                       }}>更换</button>
@@ -229,7 +314,7 @@ function PreferencesPanel({ open, onClose, theme, onThemeChange, chatHeaderVisib
                       </div>
                       <span className="mono" style={{ fontSize: 10, letterSpacing: 1.4, color: 'var(--ink-3)', flex: 1 }}>YOU</span>
                       <button onClick={() => youFileRef.current?.click()} style={{
-                        padding: '6px 14px', borderRadius: 4, fontSize: 12,
+                        padding: '6px 14px', borderRadius: 'var(--radius-sm)', fontSize: 12,
                         background: 'var(--paper-2)', border: '1px solid var(--paper-edge)',
                         color: 'var(--ink-2)', cursor: 'pointer', fontFamily: 'inherit',
                       }}>更换</button>
@@ -252,7 +337,7 @@ function PreferencesPanel({ open, onClose, theme, onThemeChange, chatHeaderVisib
                   <MicroLabel>未来主题接入接口</MicroLabel>
                   <div className="serif" style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6, marginTop: 6, fontStyle: 'italic' }}>
                     所有颜色都用 CSS 变量管理。要加新主题，复制{' '}
-                    <code style={{ fontFamily: 'var(--font-mono)', background: 'var(--paper-3)', padding: '1px 5px', borderRadius: 3 }}>:root[data-theme="paper"]</code>{' '}
+                    <code style={{ fontFamily: 'var(--font-mono)', background: 'var(--paper-3)', padding: '1px 5px', borderRadius: 'var(--radius-xs)' }}>:root[data-theme="paper"]</code>{' '}
                     这块改值即可。
                   </div>
                 </div>
@@ -260,12 +345,45 @@ function PreferencesPanel({ open, onClose, theme, onThemeChange, chatHeaderVisib
             ) : tab === 'world' ? (
               <PromptAssetsSettings onCharacterAvatarChange={onCharacterAvatarChange} />
             ) : (
-              <div className="serif" style={{
-                padding: '20px 16px', border: '1px dashed var(--paper-edge)', borderRadius: 6,
-                color: 'var(--ink-3)', fontSize: 13.5, fontStyle: 'italic', lineHeight: 1.7,
-              }}>
-                其他聊天偏好待导入。
-              </div>
+              <>
+                <div>
+                  <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink)', marginBottom: 2 }}>桌宠鼠标交互</div>
+                  <div className="mono" style={{ fontSize: 9.5, color: 'var(--ink-3)', letterSpacing: 1.1 }}>
+                    控制害羞躲避、随机靠近与 Ctrl 钉住
+                  </div>
+                </div>
+                <PrefRow label="启用鼠标交互" hint="关闭后桌宠不再自动躲避或靠近鼠标">
+                  <PrefSwitch
+                    active={petMouseSettings.enabled}
+                    onClick={() => onPetMouseSettingsChange({ enabled: !petMouseSettings.enabled })}
+                  />
+                </PrefRow>
+                <PrefRow label="随机靠近间隔" hint="每次靠近后重新随机；Ctrl 按住时会跳过">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <MinuteSelect
+                      value={petMouseSettings.botherMinMinutes}
+                      onChange={(value: number) => onPetMouseSettingsChange({ botherMinMinutes: value })}
+                    />
+                    <span className="mono" style={{ color: 'var(--ink-3)', fontSize: 10 }}>至</span>
+                    <MinuteSelect
+                      value={petMouseSettings.botherMaxMinutes}
+                      onChange={(value: number) => onPetMouseSettingsChange({ botherMaxMinutes: value })}
+                    />
+                  </div>
+                </PrefRow>
+                <PrefRow label="允许存在感弹窗" hint="开启后，叶瑄被冷落久了会用带头像的弹窗找你；默认关闭">
+                  <PrefSwitch active={presenceNagEnabled} onClick={onPresenceNagToggle} />
+                </PrefRow>
+                <PrefRow label="玩耍模式" hint="开启后，叶瑄在对话里表达想一起玩 toy 时会自动进入玩耍模式；Ribbon 也会出现手动入口。默认关闭">
+                  <PrefSwitch active={playModeEnabled} onClick={onPlayModeToggle} />
+                </PrefRow>
+                <div className="serif" style={{
+                  padding: '14px 16px', border: '1px dashed var(--paper-edge)', borderRadius: 'var(--radius-md)',
+                  color: 'var(--ink-3)', fontSize: 12.5, lineHeight: 1.7,
+                }}>
+                  当前由「惊讶」情绪触发害羞躲避。按住 Ctrl 可临时钉住桌宠并稳定拖动。
+                </div>
+              </>
             )}
           </div>
         </div>
@@ -573,7 +691,7 @@ const prefSelectStyle: CSSProperties = {
   width: '100%',
   padding: '6px 9px',
   border: '1px solid var(--paper-edge)',
-  borderRadius: 4,
+  borderRadius: 'var(--radius-sm)',
   background: 'var(--paper-2)',
   color: 'var(--ink-2)',
   fontFamily: 'inherit',
@@ -583,7 +701,7 @@ const prefSelectStyle: CSSProperties = {
 const prefActionButtonStyle: CSSProperties = {
   justifySelf: 'start',
   padding: '6px 14px',
-  borderRadius: 4,
+  borderRadius: 'var(--radius-sm)',
   fontSize: 12,
   background: 'var(--paper-2)',
   border: '1px solid var(--paper-edge)',
@@ -622,18 +740,6 @@ function PrefRange({ min, max, value, onChange }: any) {
   );
 }
 
-function PrefSeg({ active, onClick, children }: any) {
-  return (
-    <button onClick={onClick} style={{
-      padding: '6px 12px', borderRadius: 4, fontSize: 12,
-      background: active ? 'var(--ink)' : 'var(--paper-2)',
-      color: active ? 'var(--paper)' : 'var(--ink-2)',
-      border: '1px solid var(--paper-edge)',
-      cursor: 'pointer', fontFamily: 'inherit', fontWeight: active ? 600 : 500,
-    }}>{children}</button>
-  );
-}
-
 function PrefSwitch({ active, onClick }: any) {
   return (
     <button onClick={onClick} style={{
@@ -652,6 +758,20 @@ function PrefSwitch({ active, onClick }: any) {
   );
 }
 
+function MinuteSelect({ value, onChange }: { value: number; onChange: (value: number) => void }) {
+  return (
+    <select
+      value={value}
+      onChange={event => onChange(Number(event.target.value))}
+      style={{ ...prefSelectStyle, width: 76 }}
+    >
+      {[0.25, 0.5, 1, 2, 3, 5, 10, 15, 30].map(minutes => (
+        <option key={minutes} value={minutes}>{minutes < 1 ? `${minutes * 60}秒` : `${minutes}分`}</option>
+      ))}
+    </select>
+  );
+}
+
 /* ── 分隔条 ── */
 function Divider({ onDrag }: any) {
   const draggingRef = useRef(false);
@@ -667,38 +787,48 @@ function Divider({ onDrag }: any) {
       onMouseDown={() => { draggingRef.current = true; document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'; }}
       style={{ width: 5, flexShrink: 0, cursor: 'col-resize', position: 'relative', zIndex: 2 }}>
       <div style={{ position: 'absolute', left: 2, top: 0, bottom: 0, width: 1, background: 'var(--paper-edge)' }} />
-      <div style={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)', width: 5, height: 36, borderRadius: 3, background: 'var(--paper-edge)', opacity: 0.5 }} />
+      <div style={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)', width: 5, height: 36, borderRadius: 'var(--radius-xs)', background: 'var(--paper-edge)', opacity: 0.5 }} />
     </div>
   );
 }
 
 /* ── ChatWindow (App) ── */
-export function ChatWindow({ onActivityOpen }: { onActivityOpen?: () => void } = {}) {
+export function ChatWindow({ onActivityOpen, onToyOpen }: { onActivityOpen?: () => void; onToyOpen?: () => void } = {}) {
   const engineRef = useRef<StateEngine | null>(null);
   if (!engineRef.current) engineRef.current = new StateEngine();
   const engine = engineRef.current;
 
   const [theme, setTheme]                         = useState(() => getUIPref('chat.theme', 'paper'));
+  const [themeMode, setThemeMode_]               = useState<'manual' | 'auto'>(() => getDayNight().mode);
+  const [chatBackground, setChatBackground]        = useState(() => avatarStore.get().chatBackground);
   const [petVisible, setPetVisible]               = useState(false);
   const [sidebarOpen, setSidebarOpen]             = useState(true);
   const [sidebarTab, setSidebarTab]               = useState('flow');
   const [sidebarWidth, setSidebarWidth]           = useState(() => getUIPref('chat.sidebarWidth', SIDEBAR_DEFAULT));
   const [chatHeaderVisible, setChatHeaderVisible] = useState(() => getUIPref('chat.headerVisible', true));
   const [appearance, setAppearance]               = useState<ChatAppearance>(() => loadChatAppearance());
+  const [petMouseSettings, setPetMouseSettings]   = useState<PetMouseSettings>(() => loadPetMouseSettings());
+  const [presenceNagEnabled, setPresenceNagEnabledState] = useState(() => isPresenceNagEnabled());
+  const [playModeEnabled, setPlayModeEnabledState] = useState(() => isPlayModeEnabled());
   const [loadedFontFamily, setLoadedFontFamily]   = useState<string | null>(null);
   const [specOpen, setSpecOpen]                   = useState(false);
   const [prefsOpen, setPrefsOpen]                 = useState(false);
   const [dreamWindowOpen, setDreamWindowOpen]     = useState(false);
   const [dreamAfterglow, setDreamAfterglow]       = useState(false);
   const [characterAvatarDataUrl, setCharacterAvatarDataUrl] = useState<string | null>(null);
+  // null = 1v1 chat | 'list' = group list | string = group_id
+  const [groupView, setGroupView]                 = useState<null | 'list' | string>(null);
 
-  // Sets data-theme on <html> — this is a GLOBAL appearance switch, not Chat-only.
-  // All windows (Activity, Dream) inherit theme via CSS variables on :root.
-  // Preference key 'chat.theme' is a legacy namespace; the effect is app-wide.
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    setUIPref('chat.theme', theme);
+    applyRegisteredTheme(theme).catch(error => console.warn('[theme] 切换失败:', error));
   }, [theme]);
+
+  useEffect(() => subscribeTheme(() => {
+    setTheme(getUIPref('chat.theme', 'paper'));
+    setThemeMode_(getDayNight().mode);
+  }), []);
+  useEffect(() => avatarStore.subscribe(c => setChatBackground(c.chatBackground)), []);
+  useEffect(() => subscribePetMouseSettings(setPetMouseSettings), []);
 
   useEffect(() => {
     const publishEngineSnapshot = () => {
@@ -727,6 +857,10 @@ export function ChatWindow({ onActivityOpen }: { onActivityOpen?: () => void } =
       saveChatAppearance(next);
       return next;
     });
+  }, []);
+
+  const updatePetMouseSettings = useCallback((patch: Partial<PetMouseSettings>) => {
+    setPetMouseSettings(savePetMouseSettings(patch));
   }, []);
 
   const loadCharacterAvatar = useCallback(async (charId: string | null) => {
@@ -807,6 +941,11 @@ export function ChatWindow({ onActivityOpen }: { onActivityOpen?: () => void } =
     setDreamWindowOpen(true);
   }), []);
 
+  // 玩耍模式邀请：仅在开关开启时自动开窗，关闭时忽略（仍正常 ack）。
+  useEffect(() => wsClient.on('toy_invite', () => {
+    if (isPlayModeEnabled()) onToyOpen?.();
+  }), [onToyOpen]);
+
   const onSidebarTab = (tab: string) => { setSidebarTab(tab); setSidebarOpen(true); };
   const onCloseSidebar = () => setSidebarOpen(false);
 
@@ -843,15 +982,21 @@ export function ChatWindow({ onActivityOpen }: { onActivityOpen?: () => void } =
           onCloseSidebar={onCloseSidebar}
           petVisible={petVisible}
           onPetToggle={onPetToggle}
-          theme={theme}
-          onThemeToggle={() => setTheme(t => t === 'dark' ? 'paper' : 'dark')}
           onOpenSpec={() => setSpecOpen(true)}
           onOpenPrefs={() => setPrefsOpen(true)}
           dreamWindowOpen={dreamWindowOpen}
           onDreamToggle={toggleDreamWindow}
           onActivityOpen={onActivityOpen}
+          onToyOpen={onToyOpen}
+          playModeEnabled={playModeEnabled}
+          onGroupOpen={() => setGroupView('list')}
         />
-        <div ref={bodyRef} style={{ flex: 1, display: 'flex', minHeight: 0, minWidth: 0, position: 'relative' }}>
+        <div ref={bodyRef} className="chat-ui__body" style={{ flex: 1, display: 'flex', minHeight: 0, minWidth: 0, position: 'relative', '--chat-background-blur': `${appearance.backgroundBlur}px` } as CSSProperties}>
+          {chatBackground.dataUrl && (
+            <div className="chat-ui__background"
+                 style={{ backgroundImage: `url("${chatBackground.dataUrl}")` } as CSSProperties}
+                 aria-hidden="true" />
+          )}
           {sidebarOpen && (
             <>
               <div style={{ width: sidebarWidth, flexShrink: 0 }}>
@@ -865,12 +1010,23 @@ export function ChatWindow({ onActivityOpen }: { onActivityOpen?: () => void } =
             </>
           )}
           <div style={{ flex: 1, minWidth: 0 }}>
-            <ChatPanel engine={engine} chatRectRef={chatRectRef} headerVisible={chatHeaderVisible} chatFontSize={appearance.chatFontSize} dreamActive={dreamWindowOpen} characterAvatarDataUrl={characterAvatarDataUrl} />
+            {groupView === null ? (
+              <ChatPanel engine={engine} chatRectRef={chatRectRef} headerVisible={chatHeaderVisible} chatFontSize={appearance.chatFontSize} dreamActive={dreamWindowOpen} characterAvatarDataUrl={characterAvatarDataUrl} />
+            ) : groupView === 'list' ? (
+              <GroupListPanel
+                onSelectGroup={id => setGroupView(id)}
+                onBack={() => setGroupView(null)}
+              />
+            ) : (
+              <GroupChatPanel
+                groupId={groupView}
+                onBack={() => setGroupView('list')}
+                fontSize={appearance.chatFontSize}
+              />
+            )}
           </div>
         </div>
       </div>
-
-      {/* TODO: Phase-2 — 桌宠窗口 <PetWindow> */}
 
       {dreamWindowOpen && (
         <DreamWindow
@@ -890,12 +1046,34 @@ export function ChatWindow({ onActivityOpen }: { onActivityOpen?: () => void } =
       <PreferencesPanel
         open={prefsOpen}
         onClose={() => setPrefsOpen(false)}
-        theme={theme}
-        onThemeChange={setTheme}
+        themeMode={themeMode}
+        onThemeModeChange={() => {
+          const next = themeMode === 'auto' ? 'manual' : 'auto';
+          setThemeMode_(next);
+          setThemeMode(next).catch(console.warn);
+        }}
         chatHeaderVisible={chatHeaderVisible}
         onChatHeaderToggle={() => setChatHeaderVisible(v => { const next = !v; setUIPref('chat.headerVisible', next); return next; })}
         appearance={appearance}
         onAppearanceChange={updateAppearance}
+        petMouseSettings={petMouseSettings}
+        onPetMouseSettingsChange={updatePetMouseSettings}
+        presenceNagEnabled={presenceNagEnabled}
+        onPresenceNagToggle={() => {
+          const next = !presenceNagEnabled;
+          void patchPresenceNagEnabled(next)
+            .then(() => {
+              setPresenceNagEnabledState(next);
+              if (!next) void invoke('presence_nag_close_all').catch(error => console.warn('[presence_nag] 全部关闭失败:', error));
+            })
+            .catch(error => console.warn('[presence_nag] 切换失败:', error));
+        }}
+        playModeEnabled={playModeEnabled}
+        onPlayModeToggle={() => {
+          const next = !playModeEnabled;
+          setPlayModeEnabled(next);
+          setPlayModeEnabledState(next);
+        }}
         onCharacterAvatarChange={setCharacterAvatarDataUrl} />
     </div>
   );

@@ -15,6 +15,7 @@ import { sendChat, uploadDocument, desktopWake } from '../../../shared/api/backe
 import { loadChatLogDates, loadChatLogDay } from '../../../shared/api/backend';
 import { getClientConfig } from '../../../shared/api/config';
 import { wsClient } from '../../../shared/api/ws';
+import { notifyOnMessage } from '../../../shared/api/notify';
 import { chatThemeFontSize } from '../../../shared/chatAppearance';
 import { publishPetSnapshot, summarizePetReply } from '../../../shared/pet/bridge';
 import { TypingDots } from '../../../shared/ui/TypingDots';
@@ -1152,6 +1153,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         return;
       }
       processRealityChannelMessage(message);
+      void notifyOnMessage(message.msg_id, '叶瑄', message.content);
     });
 
     const unsubSegs = wsClient.on('message_segments', ({ content, segments, msg_id, source }) => {
@@ -1287,6 +1289,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       const ids = streamingLocalIdRef.current.get(msg_id);
       if (!ids) return;
       setMessages(prev => prev.map(m => ids.includes(m.id) ? { ...m, streamingDone: true } : m));
+      void notifyOnMessage(msg_id, '叶瑄', streamingTextRef.current.get(msg_id) ?? '');
       console.log('[chat] stream-end | msg_id:', msg_id, '| bubbles:', ids.length);
     });
 
