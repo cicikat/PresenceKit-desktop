@@ -1,5 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
-import { readingApi, type ReadingState, type ReadingPageResult } from '../../../shared/api/activity-api';
+import { open } from '@tauri-apps/plugin-dialog';
+import {
+  readingApi,
+  type ReadingState, type ReadingPageResult, type ReadingLibraryBook,
+} from '../../../shared/api/activity-api';
+import { ActivityCompanionPanel } from './ActivityCompanionPanel';
+import { getUIPref, onUIPrefChange } from '../../../shared/uiPreferences';
 
 function StatusTag({ text, ok }: { text: string; ok?: boolean }) {
   return (
@@ -42,12 +48,77 @@ function Btn({ children, onClick, variant = 'ghost', disabled }: any) {
   );
 }
 
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function BookListItem({ book, onRead, disabled }: { book: ReadingLibraryBook; onRead: () => void; disabled: boolean }) {
+  const [hover, setHover] = useState(false);
+  const name = book.filename.replace(/\.pdf$/i, '');
+  return (
+    <div
+      onClick={disabled ? undefined : onRead}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        padding: '10px 14px',
+        borderRadius: 'var(--radius-sm)',
+        background: hover ? 'var(--paper-3, var(--paper-edge))' : 'transparent',
+        border: '1px solid ' + (hover ? 'var(--accent, var(--paper-edge))' : 'var(--paper-edge)'),
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.5 : 1,
+        transition: 'background 0.12s, border-color 0.12s',
+        display: 'flex', alignItems: 'center', gap: 10,
+      }}
+    >
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="serif" style={{
+          fontSize: 14, fontWeight: 600, color: 'var(--ink)',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          {name}
+        </div>
+        <div className="mono" style={{ fontSize: 10, color: 'var(--ink-3)', marginTop: 2, letterSpacing: 0.5 }}>
+          {formatBytes(book.size_bytes)}
+        </div>
+      </div>
+      <div style={{
+        fontSize: 11, color: 'var(--ink-3)', flexShrink: 0,
+        fontFamily: 'var(--font-mono)',
+      }}>
+        阅读 →
+      </div>
+    </div>
+  );
+}
+
 export function ReadingPage() {
   const [state, setState] = useState<ReadingState | null>(null);
   const [page, setPage] = useState<ReadingPageResult | null>(null);
-  const [filePath, setFilePath] = useState('');
+  const [books, setBooks] = useState<ReadingLibraryBook[]>([]);
   const [loading, setLoading] = useState(false);
+  const [addingBook, setAddingBook] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fontSize, setFontSize] = useState(() => getUIPref('activity.reading.fontSize', 16));
+  const [maxWidth, setMaxWidth] = useState(() => getUIPref('activity.reading.maxWidth', 760));
+  const [showDebug, setShowDebug] = useState(() => getUIPref('activity.debug', false));
+
+  useEffect(() => onUIPrefChange(key => {
+    if (key === 'activity.reading.fontSize') setFontSize(getUIPref('activity.reading.fontSize', 16));
+    if (key === 'activity.reading.maxWidth') setMaxWidth(getUIPref('activity.reading.maxWidth', 760));
+    if (key === 'activity.debug') setShowDebug(getUIPref('activity.debug', false));
+  }), []);
+
+  const refreshLibrary = useCallback(async () => {
+    try {
+      const result = await readingApi.library();
+      setBooks(result.books);
+    } catch {
+      // 书库为空或后端未运行时静默
+    }
+  }, []);
 
   const refreshState = useCallback(async () => {
     try {
@@ -59,24 +130,45 @@ export function ReadingPage() {
       } else {
         setPage(null);
       }
-    } catch (e) {
-      // no active session is normal
+    } catch {
       setState(null);
     }
   }, []);
 
-  useEffect(() => { refreshState(); }, [refreshState]);
+  useEffect(() => {
+    refreshState();
+    refreshLibrary();
+  }, [refreshState, refreshLibrary]);
 
-  const handleStart = async () => {
-    if (!filePath.trim()) return;
+  const handleReadBook = async (book: ReadingLibraryBook) => {
     setLoading(true); setError(null);
     try {
-      await readingApi.start(filePath.trim());
+      await readingApi.startFromLibrary(book.book_id);
       await refreshState();
     } catch (e: any) {
       setError(String(e?.message ?? e));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAddBook = async () => {
+    const selected = await open({
+      multiple: false,
+      filters: [{ name: 'PDF 文件', extensions: ['pdf'] }],
+    });
+    if (!selected) return;
+    const path = typeof selected === 'string' ? selected : selected[0];
+    if (!path) return;
+
+    setAddingBook(true); setError(null);
+    try {
+      await readingApi.addBook(path);
+      await refreshLibrary();
+    } catch (e: any) {
+      setError(String(e?.message ?? e));
+    } finally {
+      setAddingBook(false);
     }
   };
 
@@ -97,7 +189,8 @@ export function ReadingPage() {
     setLoading(true); setError(null);
     try {
       await readingApi.close(state!.session_id!);
-      setState(null); setPage(null); setFilePath('');
+      setState(null); setPage(null);
+      await refreshLibrary();
     } catch (e: any) {
       setError(String(e?.message ?? e));
     } finally {
@@ -135,38 +228,45 @@ export function ReadingPage() {
       )}
 
       {!isActive ? (
-        /* ── start reading ── */
-        <div style={{
-          display: 'flex', flexDirection: 'column', gap: 12,
-          maxWidth: 520,
-          padding: 20, background: 'var(--paper-2)',
-          border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-md)',
-        }}>
-          <div className="mono" style={{ fontSize: 11, letterSpacing: 1.2, color: 'var(--ink-3)', fontWeight: 600 }}>
-            选择文件
-          </div>
-          <input
-            type="text"
-            value={filePath}
-            onChange={e => setFilePath(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') handleStart(); }}
-            placeholder="文件路径（PDF / TXT），例如 C:\books\sample.pdf"
-            style={{
-              fontFamily: 'var(--font-mono)', fontSize: 12,
-              padding: '8px 10px', borderRadius: 'var(--radius-sm)',
-              background: 'var(--paper)', color: 'var(--ink)',
-              border: '1px solid var(--paper-edge)',
-              outline: 'none', width: '100%', boxSizing: 'border-box',
-            }}
-          />
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Btn variant="solid" onClick={handleStart} disabled={loading || !filePath.trim()}>
-              {loading ? '加载中…' : '开始阅读'}
-            </Btn>
+        /* ── 书库选书 ── */
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 560 }}>
+          {/* 书库列表 */}
+          <div style={{
+            padding: 16,
+            background: 'var(--paper-2)', border: '1px solid var(--paper-edge)',
+            borderRadius: 'var(--radius-md)',
+            display: 'flex', flexDirection: 'column', gap: 8,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <div className="mono" style={{ fontSize: 11, letterSpacing: 1.2, color: 'var(--ink-3)', fontWeight: 600 }}>
+                书库
+              </div>
+              <Btn onClick={handleAddBook} disabled={addingBook || loading}>
+                {addingBook ? '添加中…' : '+ 添加书籍'}
+              </Btn>
+            </div>
+
+            {books.length === 0 ? (
+              <div className="serif" style={{
+                padding: '20px 0', textAlign: 'center',
+                fontSize: 13, color: 'var(--ink-3)', fontStyle: 'italic',
+              }}>
+                书库还是空的，先添加一本 PDF 吧。
+              </div>
+            ) : (
+              books.map(book => (
+                <BookListItem
+                  key={book.book_id}
+                  book={book}
+                  onRead={() => handleReadBook(book)}
+                  disabled={loading}
+                />
+              ))
+            )}
           </div>
         </div>
       ) : (
-        /* ── active session ── */
+        /* ── 阅读中 ── */
         <>
           {/* session info */}
           <div style={{
@@ -188,18 +288,32 @@ export function ReadingPage() {
           {/* page content */}
           <div style={{
             flex: 1, minHeight: 0,
-            padding: '20px 24px',
             background: 'var(--paper)', border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-md)',
             overflowY: 'auto',
-            lineHeight: 1.85, fontSize: 14.5,
-            fontFamily: 'var(--font-serif)',
-            whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-            color: 'var(--ink)',
           }}>
-            {page ? page.text : (
-              <span style={{ color: 'var(--ink-3)', fontStyle: 'italic' }}>加载页面内容…</span>
-            )}
+            <div style={{
+              maxWidth: maxWidth, margin: '0 auto',
+              padding: '20px 24px',
+              lineHeight: 1.85, fontSize: fontSize,
+              fontFamily: 'var(--font-serif)',
+              whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+              color: 'var(--ink)',
+            }}>
+              {page ? page.text : (
+                <span style={{ color: 'var(--ink-3)', fontStyle: 'italic' }}>加载页面内容…</span>
+              )}
+            </div>
           </div>
+
+          {showDebug && (
+            <div className="mono" style={{
+              padding: '8px 12px', background: 'var(--paper-2)',
+              border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-sm)',
+              fontSize: 10.5, color: 'var(--ink-3)', letterSpacing: 0.5,
+            }}>
+              session_id: {state?.session_id ?? '—'} · page: {state?.current_page ?? '—'} / {state?.total_pages ?? '—'}
+            </div>
+          )}
 
           {/* navigation */}
           <div style={{ display: 'flex', gap: 10, paddingBottom: 4 }}>
@@ -210,6 +324,13 @@ export function ReadingPage() {
               下一页 →
             </Btn>
           </div>
+
+          <ActivityCompanionPanel
+            activityId="reading"
+            sessionId={state?.session_id ?? null}
+            sessionActive={isActive}
+            sessionFinished={false}
+          />
         </>
       )}
     </div>

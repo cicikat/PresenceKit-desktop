@@ -14,9 +14,11 @@ function parseActivityError(err: unknown): Error {
     return new Error(`前端调用参数错误：${msg}`);
   }
   if (import.meta.env.DEV) {
-    console.error('[activity] network error:', msg);
+    console.error('[activity] rust error:', msg);
   }
-  return new Error('无法连接后端，请确认后端已启动');
+  // 透出 Rust 层真实错误（读文件失败 / 无法解析文件名 / 上传请求失败等），
+  // 不再用兜底文案掩盖，方便用户看到真因。
+  return new Error(msg);
 }
 
 async function invokeActivity<T>(command: string, args?: Record<string, unknown>): Promise<T> {
@@ -52,6 +54,30 @@ export interface ReadingPageResult {
   text: string;
 }
 
+export interface ReadingGroundingFacts {
+  current_page?: number;
+  total_pages?: number;
+  progress_pct?: number;
+  filename?: string;
+}
+
+export interface ReadingChatResult {
+  session_id: string;
+  reply: string;
+  control?: Record<string, unknown>;
+  grounding?: ReadingGroundingFacts;
+}
+
+export interface ReadingLibraryBook {
+  book_id: string;
+  filename: string;
+  size_bytes: number;
+}
+
+export interface ReadingLibraryResult {
+  books: ReadingLibraryBook[];
+}
+
 export const readingApi = {
   start: (file_path: string): Promise<ReadingStartResult> =>
     invokeActivity('activity_reading_start', { filePath: file_path }),
@@ -63,6 +89,14 @@ export const readingApi = {
     invokeActivity('activity_reading_turn_page', { payload: { session_id, direction } }),
   close: (session_id: string): Promise<{ status: string }> =>
     invokeActivity('activity_reading_close', { payload: { session_id } }),
+  chat: (params: { session_id: string; message: string }): Promise<ReadingChatResult> =>
+    invokeActivity('activity_reading_chat', { payload: { session_id: params.session_id, message: params.message } }),
+  library: (): Promise<ReadingLibraryResult> =>
+    invokeActivity('activity_reading_library'),
+  addBook: (filePath: string): Promise<ReadingLibraryBook> =>
+    invokeActivity('activity_reading_add_book', { filePath }),
+  startFromLibrary: (book_id: string, start_page = 1): Promise<ReadingStartResult> =>
+    invokeActivity('activity_reading_start_from_library', { payload: { book_id, start_page } }),
 };
 
 // ── Gomoku ────────────────────────────────────────────────────────────────────
@@ -145,6 +179,8 @@ export const gomokuApi = {
 // ── Chess ─────────────────────────────────────────────────────────────────────
 
 export type ChessTurn = 'white' | 'black';
+export type ChessOpponent = 'human' | 'yexuan_ai';
+export type ChessAiStyle = 'balanced' | 'gentle' | 'serious' | 'teaching';
 
 export interface ChessMoveEntry {
   move_no: number;
@@ -163,6 +199,15 @@ export interface ChessState {
   status: string;
   move_history: ChessMoveEntry[];
   last_move: ChessMoveEntry | null;
+  opponent?: ChessOpponent | null;
+  ai_player?: ChessTurn | null;
+  ai_style?: ChessAiStyle | null;
+  pending_ai_turn?: boolean;
+}
+
+export interface ChessStartRequest {
+  opponent?: ChessOpponent;
+  ai_style?: ChessAiStyle;
 }
 
 export interface ChessMoveResult {
@@ -173,11 +218,33 @@ export interface ChessMoveResult {
   termination: string | null;
   status: string;
   last_move: ChessMoveEntry;
+  opponent?: ChessOpponent | null;
+  ai_player?: ChessTurn | null;
+  pending_ai_turn?: boolean;
+}
+
+export interface ChessGroundingFacts {
+  last_san?: string | null;
+  move_hint?: string;
+  is_check?: boolean;
+  captured_piece?: string | null;
+  material_balance_desc?: string;
+  turn?: string;
+}
+
+export interface ChessChatResult {
+  session_id: string;
+  reply: string;
+  control?: Record<string, unknown>;
+  grounding?: ChessGroundingFacts;
 }
 
 export const chessApi = {
-  start: (): Promise<ChessState> =>
-    invokeActivity('activity_chess_start'),
+  start: (req?: ChessStartRequest): Promise<ChessState> =>
+    invokeActivity('activity_chess_start', {
+      opponent: req?.opponent ?? null,
+      aiStyle: req?.ai_style ?? null,
+    }),
   state: (): Promise<ChessState | { active: false }> =>
     invokeActivity('activity_chess_state'),
   move: (session_id: string, uci: string): Promise<ChessMoveResult> =>
@@ -186,6 +253,10 @@ export const chessApi = {
     invokeActivity('activity_chess_legal_moves', { payload: { session_id } }),
   close: (session_id: string): Promise<{ status: string }> =>
     invokeActivity('activity_chess_close', { payload: { session_id } }),
+  chat: (params: { session_id: string; message: string }): Promise<ChessChatResult> =>
+    invokeActivity('activity_chess_chat', { payload: { session_id: params.session_id, message: params.message } }),
+  aiMove: (session_id: string): Promise<ChessMoveResult> =>
+    invokeActivity('activity_chess_ai_move', { payload: { session_id } }),
 };
 
 // ── Dream Seed ────────────────────────────────────────────────────────────────

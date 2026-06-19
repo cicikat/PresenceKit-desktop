@@ -1,12 +1,24 @@
 import { useState, useEffect, useRef } from 'react';
-import { gomokuApi, type GomokuGroundingFacts, type GomokuUserMoveFacts } from '../../../shared/api/activity-api';
+import {
+  gomokuApi, chessApi, readingApi,
+  type GomokuGroundingFacts, type GomokuUserMoveFacts,
+  type ChessGroundingFacts,
+  type ReadingGroundingFacts,
+} from '../../../shared/api/activity-api';
+import { getUIPref, setUIPref } from '../../../shared/uiPreferences';
+
+type ActivityId = 'gomoku' | 'chess' | 'reading';
+
+type AnyGrounding = GomokuGroundingFacts | ChessGroundingFacts | ReadingGroundingFacts;
 
 interface ChatMessage {
   role: 'user' | 'yexuan';
   text: string;
   error?: boolean;
-  grounding?: GomokuGroundingFacts;
+  grounding?: AnyGrounding;
 }
+
+// ── Grounding hint renderers ────────────────────────────────────────────────
 
 function buildUserMoveHint(f: GomokuUserMoveFacts): string | null {
   if (f.summary) return `依据：${f.summary}`;
@@ -24,9 +36,48 @@ function GomokuGroundingHint({ grounding }: { grounding?: GomokuGroundingFacts }
   const aiHint = grounding?.last_ai_move_facts?.summary
     ? `叶瑄上一手：${grounding.last_ai_move_facts.summary}`
     : null;
-
   const hasContent = userHint || aiHint;
+  return (
+    <GroundingHintBox hasContent={!!hasContent}>
+      {hasContent ? (
+        <>
+          {userHint && <div>{userHint}</div>}
+          {aiHint && <div>{aiHint}</div>}
+        </>
+      ) : (
+        <div>这句是陪聊，不是棋局判断。</div>
+      )}
+    </GroundingHintBox>
+  );
+}
 
+function ChessGroundingHint({ grounding }: { grounding?: ChessGroundingFacts }) {
+  const parts: string[] = [];
+  if (grounding?.is_check) parts.push('将军');
+  if (grounding?.move_hint && grounding.move_hint !== '普通走法') parts.push(grounding.move_hint);
+  if (grounding?.captured_piece) parts.push(`吃了${grounding.captured_piece}`);
+  if (grounding?.last_san) parts.push(`上一手：${grounding.last_san}`);
+  if (grounding?.material_balance_desc) parts.push(grounding.material_balance_desc);
+  const hint = parts.length > 0 ? `依据：${parts.join('，')}。` : null;
+  return (
+    <GroundingHintBox hasContent={!!hint}>
+      {hint ? <div>{hint}</div> : <div>这句是陪聊，不是棋局判断。</div>}
+    </GroundingHintBox>
+  );
+}
+
+function ReadingGroundingHint({ grounding }: { grounding?: ReadingGroundingFacts }) {
+  const hint = grounding?.current_page != null && grounding?.total_pages != null
+    ? `读到第 ${grounding.current_page} / ${grounding.total_pages} 页（约 ${grounding.progress_pct ?? 0}%）`
+    : null;
+  return (
+    <GroundingHintBox hasContent={!!hint}>
+      {hint ? <div>依据：{hint}</div> : <div>这句是陪聊，不关联页面内容。</div>}
+    </GroundingHintBox>
+  );
+}
+
+function GroundingHintBox({ hasContent, children }: { hasContent: boolean; children: React.ReactNode }) {
   return (
     <div style={{
       marginTop: 5,
@@ -37,30 +88,65 @@ function GomokuGroundingHint({ grounding }: { grounding?: GomokuGroundingFacts }
       maxWidth: '100%',
       wordBreak: 'break-word',
     }}>
-      {hasContent ? (
-        <>
-          {userHint && <div>{userHint}</div>}
-          {aiHint && <div>{aiHint}</div>}
-        </>
-      ) : (
-        <div>这句是陪聊，不是棋局判断。</div>
-      )}
+      {children}
     </div>
   );
 }
 
+function GroundingHint({ activityId, grounding }: { activityId: ActivityId; grounding?: AnyGrounding }) {
+  if (activityId === 'gomoku') return <GomokuGroundingHint grounding={grounding as GomokuGroundingFacts} />;
+  if (activityId === 'chess') return <ChessGroundingHint grounding={grounding as ChessGroundingFacts} />;
+  return <ReadingGroundingHint grounding={grounding as ReadingGroundingFacts} />;
+}
+
+// ── API dispatch ────────────────────────────────────────────────────────────
+
+async function callChat(
+  activityId: ActivityId,
+  sessionId: string,
+  message: string,
+): Promise<{ reply: string; control?: Record<string, unknown>; grounding?: AnyGrounding }> {
+  if (activityId === 'chess') return chessApi.chat({ session_id: sessionId, message });
+  if (activityId === 'reading') return readingApi.chat({ session_id: sessionId, message });
+  return gomokuApi.chat({ session_id: sessionId, message });
+}
+
+// ── Status text ─────────────────────────────────────────────────────────────
+
+const STATUS_IDLE: Record<ActivityId, string> = {
+  gomoku: '请先开始棋局',
+  chess: '请先开始棋局',
+  reading: '请先开始阅读',
+};
+
+const STATUS_FINISHED: Record<ActivityId, string> = {
+  gomoku: '这局已经结束',
+  chess: '这局已经结束',
+  reading: '阅读已关闭',
+};
+
+// ── Panel ───────────────────────────────────────────────────────────────────
+
 interface Props {
+  activityId: ActivityId;
   sessionId: string | null;
   sessionActive: boolean;
   sessionFinished: boolean;
 }
 
-export function ActivityCompanionPanel({ sessionId, sessionActive, sessionFinished }: Props) {
+export function ActivityCompanionPanel({ activityId, sessionId, sessionActive, sessionFinished }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => getUIPref('activity.companion.collapsed', false));
   const listRef = useRef<HTMLDivElement>(null);
   const prevSessionId = useRef<string | null>(null);
+
+  const toggleCollapsed = () => {
+    const next = !collapsed;
+    setCollapsed(next);
+    setUIPref('activity.companion.collapsed', next);
+  };
 
   useEffect(() => {
     if (sessionId !== prevSessionId.current) {
@@ -85,9 +171,9 @@ export function ActivityCompanionPanel({ sessionId, sessionActive, sessionFinish
     setMessages(prev => [...prev, { role: 'user', text }]);
     setSending(true);
     try {
-      const result = await gomokuApi.chat({ session_id: sessionId, message: text });
-      console.debug('[gomoku-chat] control', result.control);
-      console.debug('[gomoku-chat] grounding', result.grounding);
+      const result = await callChat(activityId, sessionId, text);
+      console.debug(`[${activityId}-chat] control`, result.control);
+      console.debug(`[${activityId}-chat] grounding`, result.grounding);
       setMessages(prev => [...prev, { role: 'yexuan', text: result.reply, grounding: result.grounding }]);
     } catch (e: any) {
       setMessages(prev => [...prev, { role: 'yexuan', text: String(e?.message ?? e), error: true }]);
@@ -97,10 +183,38 @@ export function ActivityCompanionPanel({ sessionId, sessionActive, sessionFinish
   };
 
   const statusText = !sessionId
-    ? '请先开始棋局'
+    ? STATUS_IDLE[activityId]
     : sessionFinished
-    ? '这局已经结束'
+    ? STATUS_FINISHED[activityId]
     : null;
+
+  if (collapsed) {
+    return (
+      <div style={{
+        writingMode: 'horizontal-tb',
+        width: '100%',
+        background: 'var(--paper-2)', border: '1px solid var(--paper-edge)',
+        borderRadius: 'var(--radius-md)', overflow: 'hidden',
+        display: 'flex', alignItems: 'center',
+        padding: '9px 14px',
+      }}>
+        <div className="mono" style={{
+          flex: 1, fontSize: 10, letterSpacing: 1.2, fontWeight: 600, color: 'var(--ink-3)',
+        }}>
+          和叶瑄说说
+        </div>
+        <button
+          onClick={toggleCollapsed}
+          title="展开"
+          style={{
+            border: 'none', background: 'transparent', cursor: 'pointer',
+            color: 'var(--ink-3)', fontSize: 14, lineHeight: 1,
+            padding: '0 2px', display: 'flex', alignItems: 'center',
+          }}
+        >«</button>
+      </div>
+    );
+  }
 
   return (
     <div style={{
@@ -115,8 +229,18 @@ export function ActivityCompanionPanel({ sessionId, sessionActive, sessionFinish
         padding: '9px 14px', borderBottom: '1px solid var(--paper-edge)',
         fontSize: 10, letterSpacing: 1.2, fontWeight: 600, color: 'var(--ink-3)',
         flexShrink: 0,
+        display: 'flex', alignItems: 'center',
       }}>
-        和叶瑄说说
+        <span style={{ flex: 1 }}>和叶瑄说说</span>
+        <button
+          onClick={toggleCollapsed}
+          title="收起"
+          style={{
+            border: 'none', background: 'transparent', cursor: 'pointer',
+            color: 'var(--ink-3)', fontSize: 14, lineHeight: 1,
+            padding: '0 2px', display: 'flex', alignItems: 'center',
+          }}
+        >»</button>
       </div>
 
       {/* messages */}
@@ -130,7 +254,7 @@ export function ActivityCompanionPanel({ sessionId, sessionActive, sessionFinish
             fontSize: 11, color: 'var(--ink-3)', textAlign: 'center', lineHeight: 1.7,
             writingMode: 'horizontal-tb', whiteSpace: 'normal',
           }}>
-            棋局里的话只留在这局里。
+            活动里的话只留在这里。
           </div>
         )}
         {messages.map((msg, i) => (
@@ -154,7 +278,7 @@ export function ActivityCompanionPanel({ sessionId, sessionActive, sessionFinish
               {msg.text}
             </div>
             {msg.role === 'yexuan' && !msg.error && (
-              <GomokuGroundingHint grounding={msg.grounding} />
+              <GroundingHint activityId={activityId} grounding={msg.grounding} />
             )}
           </div>
         ))}

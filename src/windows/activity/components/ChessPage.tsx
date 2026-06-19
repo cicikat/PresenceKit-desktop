@@ -1,11 +1,28 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type CSSProperties } from 'react';
 import {
   chessApi,
   type ChessState,
   type ChessMoveEntry,
   type ChessMoveResult,
   type ChessTurn,
+  type ChessOpponent,
+  type ChessAiStyle,
 } from '../../../shared/api/activity-api';
+import { ActivityCompanionPanel } from './ActivityCompanionPanel';
+import { getUIPref, onUIPrefChange } from '../../../shared/uiPreferences';
+
+const BOARD_THEMES: Record<string, Record<string, string>> = {
+  classic_wood: {},
+  cool_grey: {
+    '--board-light': '#dee3e6',
+    '--board-dark': '#8ca2ad',
+    '--board-select': '#f0f070',
+    '--board-target-light': '#b8c060',
+    '--board-target-dark': '#8a8e3a',
+    '--board-coord-light': '#8ca2ad',
+    '--board-coord-dark': '#dee3e6',
+  },
+};
 
 const SQUARE = 54; // px per square
 // piece notation → Unicode
@@ -56,6 +73,10 @@ function normalizeChessState(
     status: raw.status,
     move_history: moveHistory,
     last_move: lastMove,
+    opponent: ('opponent' in raw ? raw.opponent : undefined) ?? previous?.opponent ?? null,
+    ai_player: ('ai_player' in raw ? raw.ai_player : undefined) ?? previous?.ai_player ?? null,
+    ai_style: previous?.ai_style ?? null,
+    pending_ai_turn: ('pending_ai_turn' in raw ? raw.pending_ai_turn : undefined) ?? false,
   };
 }
 
@@ -99,12 +120,14 @@ function ChessBoard({
   legalTargets,
   onSquareClick,
   disabled,
+  pieceStyle,
 }: {
   board: (string | null)[][];
   selected: [number, number] | null;
   legalTargets: string[];
   onSquareClick: (row: number, col: number) => void;
   disabled: boolean;
+  pieceStyle: string;
 }) {
   return (
     <div style={{
@@ -165,8 +188,16 @@ function ChessBoard({
                   lineHeight: 1,
                   userSelect: 'none',
                   filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.35))',
+                  ...(pieceStyle === 'letter' ? {
+                    fontFamily: 'var(--font-mono)',
+                    fontWeight: 700,
+                    color: piece === piece.toUpperCase() ? '#fff' : '#111',
+                    textShadow: piece === piece.toUpperCase()
+                      ? '0 0 3px #000, 0 1px 3px #000'
+                      : '0 0 2px #fff, 0 1px 2px #fff',
+                  } : {}),
                 }}>
-                  {PIECE_UNICODE[piece] ?? piece}
+                  {pieceStyle === 'letter' ? piece.toUpperCase() : (PIECE_UNICODE[piece] ?? piece)}
                 </span>
               )}
 
@@ -201,6 +232,17 @@ export function ChessPage() {
   const [legalTargets, setLegalTargets] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [boardTheme, setBoardTheme] = useState(() => getUIPref('activity.board.theme', 'classic_wood'));
+  const [pieceStyle, setPieceStyle] = useState(() => getUIPref('activity.chess.pieceStyle', 'unicode'));
+  const [showDebug, setShowDebug] = useState(() => getUIPref('activity.debug', false));
+  const [opponent, setOpponent] = useState<ChessOpponent>('human');
+  const [aiStyle, setAiStyle] = useState<ChessAiStyle>('balanced');
+
+  useEffect(() => onUIPrefChange(key => {
+    if (key === 'activity.board.theme') setBoardTheme(getUIPref('activity.board.theme', 'classic_wood'));
+    if (key === 'activity.chess.pieceStyle') setPieceStyle(getUIPref('activity.chess.pieceStyle', 'unicode'));
+    if (key === 'activity.debug') setShowDebug(getUIPref('activity.debug', false));
+  }), []);
 
   const refreshState = useCallback(async () => {
     try {
@@ -217,11 +259,22 @@ export function ChessPage() {
 
   useEffect(() => { refreshState(); }, [refreshState]);
 
+  const triggerAiMove = useCallback(async (sessionId: string) => {
+    try {
+      const result = await chessApi.aiMove(sessionId);
+      setGameState(prev => normalizeChessState(result, prev));
+    } catch (e: any) {
+      setError(String(e?.message ?? e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const handleStart = async () => {
     setLoading(true); setError(null);
     setSelected(null); setLegalTargets([]);
     try {
-      const s = await chessApi.start();
+      const s = await chessApi.start({ opponent, ai_style: aiStyle });
       setGameState(normalizeChessState({
         ...s,
         result: null,
@@ -253,6 +306,7 @@ export function ChessPage() {
 
   const handleSquareClick = async (row: number, col: number) => {
     if (!gameState || gameState.status !== 'active' || loading) return;
+    if (gameState.turn === gameState.ai_player) return;
 
     const board = fenToBoard(gameState.fen);
     const piece = board[row]?.[col] ?? null;
@@ -281,11 +335,17 @@ export function ChessPage() {
     const fromSq = toSquareName(selected[0], selected[1]);
     if (legalTargets.includes(sqName)) {
       const uci = fromSq + sqName;
+      const sid = gameState.session_id!;
       setSelected(null); setLegalTargets([]);
       setLoading(true); setError(null);
       try {
-        const result = await chessApi.move(gameState.session_id!, uci);
+        const result = await chessApi.move(sid, uci);
         setGameState(prev => normalizeChessState(result, prev));
+        if (result.pending_ai_turn) {
+          // keep loading=true while AI is thinking
+          await triggerAiMove(sid);
+          return;
+        }
       } catch (e: any) {
         setError(String(e?.message ?? e));
       } finally {
@@ -347,11 +407,41 @@ export function ChessPage() {
       )}
 
       {/* controls */}
-      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
         {!isActive && !isFinished && (
-          <Btn variant="solid" onClick={handleStart} disabled={loading}>
-            {loading ? '准备中…' : '开始对局'}
-          </Btn>
+          <>
+            <select
+              value={opponent}
+              onChange={e => setOpponent(e.target.value as ChessOpponent)}
+              style={{
+                fontFamily: 'inherit', fontSize: 12, padding: '6px 10px',
+                borderRadius: 'var(--radius-sm)', border: '1px solid var(--paper-edge)',
+                background: 'var(--paper-2)', color: 'var(--ink)', cursor: 'pointer',
+              }}
+            >
+              <option value="human">本地双人</option>
+              <option value="yexuan_ai">叶瑄执黑 / AI 对手</option>
+            </select>
+            {opponent === 'yexuan_ai' && (
+              <select
+                value={aiStyle}
+                onChange={e => setAiStyle(e.target.value as ChessAiStyle)}
+                style={{
+                  fontFamily: 'inherit', fontSize: 12, padding: '6px 10px',
+                  borderRadius: 'var(--radius-sm)', border: '1px solid var(--paper-edge)',
+                  background: 'var(--paper-2)', color: 'var(--ink)', cursor: 'pointer',
+                }}
+              >
+                <option value="balanced">均衡</option>
+                <option value="gentle">温和</option>
+                <option value="serious">严肃</option>
+                <option value="teaching">教学</option>
+              </select>
+            )}
+            <Btn variant="solid" onClick={handleStart} disabled={loading}>
+              {loading ? '准备中…' : '开始对局'}
+            </Btn>
+          </>
         )}
         {(isActive || isFinished) && (
           <>
@@ -362,25 +452,30 @@ export function ChessPage() {
         {isActive && (
           <span className="mono" style={{ fontSize: 11.5, color: 'var(--ink-3)', letterSpacing: 0.8 }}>
             当前回合：{gameState?.turn === 'white' ? '♔ 白方' : '♚ 黑方'}
-            {loading && ' · 等待中…'}
+            {loading && gameState?.opponent === 'yexuan_ai' && gameState?.turn === gameState?.ai_player
+              ? ' · AI 思考中…'
+              : loading ? ' · 等待中…' : ''}
           </span>
         )}
       </div>
 
       {/* board + info */}
-      <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-        <ChessBoard
-          board={displayBoard}
-          selected={selected}
-          legalTargets={legalTargets}
-          onSquareClick={handleSquareClick}
-          disabled={!isActive || loading}
-        />
+      <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+        <div style={BOARD_THEMES[boardTheme] as CSSProperties}>
+          <ChessBoard
+            board={displayBoard}
+            selected={selected}
+            legalTargets={legalTargets}
+            onSquareClick={handleSquareClick}
+            disabled={!isActive || loading || gameState?.turn === gameState?.ai_player}
+            pieceStyle={pieceStyle}
+          />
+        </div>
 
         {/* side panel */}
         <div style={{
           display: 'flex', flexDirection: 'column', gap: 12,
-          minWidth: 160, maxWidth: 220,
+          width: 300, flexShrink: 0,
         }}>
           {isActive && (
             <div style={{
@@ -391,8 +486,17 @@ export function ChessPage() {
                 操作说明
               </div>
               <div style={{ fontSize: 12, color: 'var(--ink-2)', lineHeight: 1.8 }}>
-                <div>本地双人裁判模式</div>
-                <div>白方与黑方轮流走棋</div>
+                {gameState?.opponent === 'yexuan_ai' ? (
+                  <>
+                    <div>你执白，叶瑄执黑</div>
+                    <div>走完白方等 AI 应手</div>
+                  </>
+                ) : (
+                  <>
+                    <div>本地双人裁判模式</div>
+                    <div>白方与黑方轮流走棋</div>
+                  </>
+                )}
               </div>
               <div className="mono" style={{ marginTop: 10, fontSize: 10, color: 'var(--ink-3)', letterSpacing: 0.5 }}>
                 点击棋子选中，<br />再点击目标格移动。
@@ -424,8 +528,25 @@ export function ChessPage() {
               </div>
             </div>
           )}
+
+          <ActivityCompanionPanel
+            activityId="chess"
+            sessionId={gameState?.session_id ?? null}
+            sessionActive={isActive}
+            sessionFinished={isFinished}
+          />
         </div>
       </div>
+
+      {showDebug && gameState && (
+        <div className="mono" style={{
+          padding: '8px 12px', background: 'var(--paper-2)',
+          border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-sm)',
+          fontSize: 10.5, color: 'var(--ink-3)', letterSpacing: 0.5,
+        }}>
+          session_id: {gameState.session_id ?? '—'} · FEN: {gameState.fen}
+        </div>
+      )}
     </div>
   );
 }

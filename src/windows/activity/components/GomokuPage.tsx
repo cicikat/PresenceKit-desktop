@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type CSSProperties } from 'react';
 import {
   gomokuApi,
   type GomokuState,
@@ -8,6 +8,15 @@ import {
   type GomokuAiStyle,
 } from '../../../shared/api/activity-api';
 import { ActivityCompanionPanel } from './ActivityCompanionPanel';
+import { getUIPref, onUIPrefChange } from '../../../shared/uiPreferences';
+
+const BOARD_THEMES: Record<string, Record<string, string>> = {
+  classic_wood: {},
+  cool_grey: {
+    '--goban-bg': '#c8d0d8',
+    '--goban-line': '#7a8a94',
+  },
+};
 
 const BOARD_SIZE = 15;
 const CELL = 34;
@@ -188,6 +197,13 @@ export function GomokuPage() {
   // Selected options (shown in pre-game panel; after start, read from gameState)
   const [selectedOpponent, setSelectedOpponent] = useState<GomokuOpponent>('yexuan_ai');
   const [selectedStyle, setSelectedStyle] = useState<GomokuAiStyle>('balanced');
+  const [boardTheme, setBoardTheme] = useState(() => getUIPref('activity.board.theme', 'classic_wood'));
+  const [showDebug, setShowDebug] = useState(() => getUIPref('activity.debug', false));
+
+  useEffect(() => onUIPrefChange(key => {
+    if (key === 'activity.board.theme') setBoardTheme(getUIPref('activity.board.theme', 'classic_wood'));
+    if (key === 'activity.debug') setShowDebug(getUIPref('activity.debug', false));
+  }), []);
 
   const refreshState = useCallback(async () => {
     try {
@@ -388,12 +404,14 @@ export function GomokuPage() {
 
       {/* board + right column */}
       <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
-        <GomokuBoard
-          board={gameState?.board ?? emptyBoard}
-          lastMove={gameState?.last_move ?? null}
-          onPlace={handlePlace}
-          disabled={boardDisabled}
-        />
+        <div style={BOARD_THEMES[boardTheme] as CSSProperties}>
+          <GomokuBoard
+            board={gameState?.board ?? emptyBoard}
+            lastMove={gameState?.last_move ?? null}
+            onPlace={handlePlace}
+            disabled={boardDisabled}
+          />
+        </div>
 
         {/* right column: info panel + companion chat */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: 300, flexShrink: 0 }}>
@@ -426,12 +444,23 @@ export function GomokuPage() {
           )}
 
           <ActivityCompanionPanel
+            activityId="gomoku"
             sessionId={gameState?.session_id ?? null}
             sessionActive={isActive}
             sessionFinished={isFinished}
           />
         </div>
       </div>
+
+      {showDebug && gameState && (
+        <div className="mono" style={{
+          padding: '8px 12px', background: 'var(--paper-2)',
+          border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-sm)',
+          fontSize: 10.5, color: 'var(--ink-3)', letterSpacing: 0.5,
+        }}>
+          session_id: {gameState.session_id ?? '—'} · turn: {gameState.current_turn} · status: {gameState.status}
+        </div>
+      )}
     </div>
   );
 }

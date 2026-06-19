@@ -1,8 +1,11 @@
-import { useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import { useEffect, useState } from 'react';
 import { Icon } from '../../chat/components/UIKit';
 import { ThemePicker } from '../../../shared/theme/ThemePicker';
+import { getUIPref, setUIPref } from '../../../shared/uiPreferences';
 
 type SettingsTab = '外观' | '系统设置' | '其他';
+type MetaMode = { mode: 'safe' | 'danger'; expires_at: number | null };
 
 const TABS: { key: SettingsTab; label: string }[] = [
   { key: '外观',   label: '1 · 外观' },
@@ -27,17 +30,19 @@ function SettingRow({ label, hint, children }: { label: string; hint?: string; c
   );
 }
 
-function PlaceholderSelect({ label }: { label: string }) {
+function PrefSelect({ value, onChange, children }: { value: string; onChange: (v: string) => void; children: React.ReactNode }) {
   return (
-    <select disabled style={{
-      fontFamily: 'var(--font-mono)', fontSize: 11.5,
-      padding: '5px 10px', borderRadius: 'var(--radius-sm)',
-      background: 'var(--paper-2)', color: 'var(--ink-3)',
-      border: '1px solid var(--paper-edge)',
-      cursor: 'not-allowed', opacity: 0.6,
-    }}>
-      <option>{label}</option>
-    </select>
+    <select
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      style={{
+        fontFamily: 'var(--font-mono)', fontSize: 11.5,
+        padding: '5px 10px', borderRadius: 'var(--radius-sm)',
+        background: 'var(--paper-2)', color: 'var(--ink)',
+        border: '1px solid var(--paper-edge)',
+        cursor: 'pointer',
+      }}
+    >{children}</select>
   );
 }
 
@@ -52,8 +57,66 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
+function formatRemaining(expiresAt: number | null, now: number) {
+  if (!expiresAt) return '';
+  const seconds = Math.max(0, Math.ceil(expiresAt - now / 1000));
+  const minutes = Math.ceil(seconds / 60);
+  if (minutes >= 60) return `${Math.floor(minutes / 60)} 小时 ${minutes % 60} 分钟`;
+  return `${minutes} 分钟`;
+}
+
 export function ActivityPreferencesPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [tab, setTab] = useState<SettingsTab>('外观');
+  const [metaMode, setMetaMode] = useState<MetaMode | null>(null);
+  const [modeBusy, setModeBusy] = useState(false);
+  const [modeError, setModeError] = useState('');
+  const [now, setNow] = useState(Date.now());
+
+  const [fontSize, setFontSize] = useState(() => getUIPref('activity.reading.fontSize', 16));
+  const [maxWidth, setMaxWidth] = useState(() => getUIPref('activity.reading.maxWidth', 760));
+  const [boardTheme, setBoardTheme] = useState(() => getUIPref('activity.board.theme', 'classic_wood'));
+  const [pieceStyle, setPieceStyle] = useState(() => getUIPref('activity.chess.pieceStyle', 'unicode'));
+  const [showDebug, setShowDebug] = useState(() => getUIPref('activity.debug', false));
+
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    setModeError('');
+    void invoke<MetaMode>('get_meta_mode')
+      .then(mode => {
+        if (active) setMetaMode(mode);
+      })
+      .catch(error => {
+        if (active) setModeError(`读取安全模式失败：${String(error)}`);
+      });
+    const timer = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [open]);
+
+  const dangerActive = metaMode?.mode === 'danger'
+    && (!metaMode.expires_at || metaMode.expires_at > now / 1000);
+  const remaining = dangerActive ? formatRemaining(metaMode?.expires_at ?? null, now) : '';
+
+  async function toggleDangerMode() {
+    setModeBusy(true);
+    setModeError('');
+    try {
+      const nextMode = dangerActive ? 'safe' : 'danger';
+      const updated = await invoke<MetaMode>('patch_meta_mode', {
+        mode: nextMode,
+        ttlSeconds: nextMode === 'danger' ? 7200 : null,
+      });
+      setMetaMode(updated);
+      setNow(Date.now());
+    } catch (error) {
+      setModeError(`切换安全模式失败：${String(error)}`);
+    } finally {
+      setModeBusy(false);
+    }
+  }
 
   if (!open) return null;
 
@@ -133,29 +196,123 @@ export function ActivityPreferencesPanel({ open, onClose }: { open: boolean; onC
               <div>
                 <SectionLabel>阅读</SectionLabel>
                 <SettingRow label="字体大小" hint="阅读页面的正文字号">
-                  <PlaceholderSelect label="14px (默认)" />
+                  <PrefSelect value={String(fontSize)} onChange={v => {
+                    const n = Number(v);
+                    setFontSize(n);
+                    setUIPref('activity.reading.fontSize', n);
+                  }}>
+                    <option value="14">14px（小）</option>
+                    <option value="16">16px（默认）</option>
+                    <option value="18">18px（大）</option>
+                  </PrefSelect>
                 </SettingRow>
                 <SettingRow label="页面宽度" hint="文字区域最大宽度">
-                  <PlaceholderSelect label="640px (默认)" />
+                  <PrefSelect value={String(maxWidth)} onChange={v => {
+                    const n = Number(v);
+                    setMaxWidth(n);
+                    setUIPref('activity.reading.maxWidth', n);
+                  }}>
+                    <option value="640">640px（窄）</option>
+                    <option value="760">760px（默认）</option>
+                    <option value="900">900px（宽）</option>
+                  </PrefSelect>
                 </SettingRow>
               </div>
               <div>
                 <SectionLabel>棋盘游戏</SectionLabel>
                 <SettingRow label="棋盘颜色" hint="五子棋 / 国际象棋棋盘配色">
-                  <PlaceholderSelect label="经典木质" />
+                  <PrefSelect value={boardTheme} onChange={v => {
+                    setBoardTheme(v);
+                    setUIPref('activity.board.theme', v);
+                  }}>
+                    <option value="classic_wood">经典木质</option>
+                    <option value="cool_grey">冷灰</option>
+                  </PrefSelect>
                 </SettingRow>
                 <SettingRow label="棋子样式" hint="国际象棋棋子渲染风格">
-                  <PlaceholderSelect label="Unicode 符号" />
+                  <PrefSelect value={pieceStyle} onChange={v => {
+                    setPieceStyle(v);
+                    setUIPref('activity.chess.pieceStyle', v);
+                  }}>
+                    <option value="unicode">Unicode 符号</option>
+                    <option value="letter">字母</option>
+                  </PrefSelect>
                 </SettingRow>
               </div>
             </>
           ) : tab === '系统设置' ? (
-            <div>
-              <SectionLabel>调试</SectionLabel>
-              <SettingRow label="显示调试信息" hint="在活动页面显示 session_id / FEN 等原始数据">
-                <PlaceholderSelect label="关闭 (默认)" />
-              </SettingRow>
-            </div>
+            <>
+              <div>
+                <SectionLabel>电脑操作权限</SectionLabel>
+                <SettingRow
+                  label={dangerActive ? '危险模式已开启' : '安全模式'}
+                  hint={dangerActive
+                    ? `允许叶瑄操作电脑${remaining ? `，将在 ${remaining} 后自动收回` : ''}`
+                    : '叶瑄不能打开网页、播放歌曲、最小化窗口或发送系统通知'}
+                >
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={dangerActive}
+                    disabled={modeBusy || metaMode === null}
+                    onClick={() => void toggleDangerMode()}
+                    style={{
+                      minWidth: 94, padding: '7px 12px',
+                      borderRadius: 'var(--radius-sm)',
+                      border: `1px solid ${dangerActive ? 'var(--accent)' : 'var(--paper-edge)'}`,
+                      background: dangerActive ? 'var(--accent)' : 'var(--paper-2)',
+                      color: dangerActive ? 'white' : 'var(--ink-2)',
+                      fontFamily: 'inherit', fontSize: 11.5, fontWeight: 600,
+                      cursor: modeBusy || metaMode === null ? 'wait' : 'pointer',
+                      opacity: modeBusy || metaMode === null ? 0.6 : 1,
+                    }}
+                  >
+                    {modeBusy ? '切换中…' : dangerActive ? '关闭危险模式' : '开启危险模式'}
+                  </button>
+                </SettingRow>
+                <div style={{
+                  marginTop: 10, padding: '10px 12px',
+                  border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-md)',
+                  background: dangerActive ? 'oklch(0.95 0.04 35)' : 'var(--paper-2)',
+                  color: dangerActive ? 'oklch(0.42 0.12 35)' : 'var(--ink-3)',
+                  fontSize: 11.5, lineHeight: 1.65,
+                }}>
+                  危险模式允许叶瑄操作你的电脑，包括开浏览器、放歌、最小化窗口和通知。
+                  开启后 2 小时自动回到安全模式；关机和睡眠仍需单独确认。
+                </div>
+                {modeError && (
+                  <div style={{ marginTop: 8, color: 'var(--danger, #a33)', fontSize: 11.5 }}>
+                    {modeError}
+                  </div>
+                )}
+              </div>
+              <div>
+                <SectionLabel>调试</SectionLabel>
+                <SettingRow label="显示调试信息" hint="在活动页面显示 session_id / FEN 等原始数据">
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={showDebug}
+                    onClick={() => {
+                      const next = !showDebug;
+                      setShowDebug(next);
+                      setUIPref('activity.debug', next);
+                    }}
+                    style={{
+                      minWidth: 60, padding: '7px 12px',
+                      borderRadius: 'var(--radius-sm)',
+                      border: `1px solid ${showDebug ? 'var(--accent)' : 'var(--paper-edge)'}`,
+                      background: showDebug ? 'var(--accent)' : 'var(--paper-2)',
+                      color: showDebug ? 'white' : 'var(--ink-2)',
+                      fontFamily: 'inherit', fontSize: 11.5, fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {showDebug ? '开启' : '关闭'}
+                  </button>
+                </SettingRow>
+              </div>
+            </>
           ) : (
             <div className="serif" style={{
               padding: '20px 16px', border: '1px dashed var(--paper-edge)', borderRadius: 'var(--radius-md)',
@@ -164,14 +321,6 @@ export function ActivityPreferencesPanel({ open, onClose }: { open: boolean; onC
               其他活动偏好待接入。
             </div>
           )}
-
-          <div className="mono" style={{
-            fontSize: 10.5, color: 'var(--ink-4)', letterSpacing: 0.5,
-            padding: '10px 14px',
-            background: 'var(--paper-2)', border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-md)',
-          }}>
-            上述设置尚未实装，后续版本接入。
-          </div>
         </div>
       </div>
     </div>
