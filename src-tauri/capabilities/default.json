@@ -7,8 +7,12 @@
     "core:default",
     "core:window:allow-show",
     "core:window:allow-hide",
+    "core:window:allow-request-user-attention",
+    "core:window:allow-is-focused",
+    "core:webview:allow-create-webview-window",
     "opener:default",
     "dialog:allow-open",
+    "notification:default",
     {
       "identifier": "http:default",
       "allow": [

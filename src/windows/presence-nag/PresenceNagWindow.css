@@ -1,0 +1,199 @@
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+button {
+  font: inherit;
+}
+
+.presence-nag {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  padding: 12px;
+  font-family: var(--font-sans, "Segoe UI", sans-serif);
+  color: oklch(0.91 0.025 285);
+  user-select: none;
+}
+
+.presence-nag__dialog {
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid oklch(0.72 0.15 300 / 0.8);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 14% 0%, oklch(0.48 0.18 315 / 0.32), transparent 38%),
+    linear-gradient(145deg, oklch(0.20 0.055 285 / 0.98), oklch(0.13 0.04 265 / 0.98));
+  box-shadow:
+    0 0 0 1px oklch(0.93 0.05 305 / 0.08) inset,
+    0 24px 60px oklch(0.08 0.04 280 / 0.75),
+    0 0 32px oklch(0.62 0.18 305 / 0.22);
+}
+
+.presence-nag__titlebar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid oklch(0.76 0.12 300 / 0.2);
+  background: oklch(0.24 0.07 295 / 0.7);
+}
+
+.presence-nag__signal {
+  width: 25px;
+  height: 25px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 1px solid oklch(0.80 0.18 75 / 0.85);
+  border-radius: 8px;
+  color: oklch(0.90 0.16 82);
+  background: oklch(0.44 0.12 70 / 0.22);
+  font-weight: 800;
+}
+
+.presence-nag__title {
+  font-family: var(--font-serif, Georgia, serif);
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+}
+
+.presence-nag__subtitle,
+.presence-nag__code,
+.presence-nag__all-close {
+  font-family: var(--font-mono, Consolas, monospace);
+}
+
+.presence-nag__subtitle {
+  margin-top: 2px;
+  color: oklch(0.72 0.07 290);
+  font-size: 8px;
+  letter-spacing: 0.18em;
+}
+
+.presence-nag__close {
+  margin-left: auto;
+  padding: 2px 7px;
+  border: 0;
+  border-radius: 7px;
+  color: oklch(0.78 0.06 295);
+  background: transparent;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.presence-nag__close:hover {
+  color: white;
+  background: oklch(0.52 0.17 25 / 0.55);
+}
+
+.presence-nag__body {
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 17px 19px 12px;
+  flex: 1;
+}
+
+.presence-nag__avatar {
+  width: 62px;
+  height: 62px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border: 1px solid oklch(0.80 0.13 310 / 0.75);
+  border-radius: 50%;
+  color: oklch(0.90 0.08 305);
+  background: linear-gradient(145deg, oklch(0.48 0.16 315), oklch(0.26 0.10 275));
+  box-shadow: 0 0 20px oklch(0.68 0.18 310 / 0.3);
+  font-family: var(--font-serif, Georgia, serif);
+  font-size: 25px;
+}
+
+.presence-nag__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.presence-nag__content {
+  min-width: 0;
+}
+
+.presence-nag__name {
+  color: oklch(0.82 0.12 310);
+  font-family: var(--font-serif, Georgia, serif);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.presence-nag__content p {
+  min-height: 38px;
+  margin: 5px 0 7px;
+  color: oklch(0.94 0.025 290);
+  font-family: var(--font-serif, Georgia, serif);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.presence-nag__code {
+  color: oklch(0.70 0.08 290);
+  font-size: 8px;
+  letter-spacing: 0.12em;
+}
+
+.presence-nag__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px 13px;
+  border-top: 1px solid oklch(0.76 0.12 300 / 0.14);
+}
+
+.presence-nag__button {
+  padding: 7px 12px;
+  border: 1px solid oklch(0.70 0.11 300 / 0.48);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.presence-nag__button--ghost {
+  color: oklch(0.76 0.05 295);
+  background: oklch(0.26 0.04 285 / 0.6);
+}
+
+.presence-nag__button--primary {
+  color: oklch(0.97 0.02 300);
+  background: linear-gradient(135deg, oklch(0.53 0.18 315), oklch(0.44 0.16 285));
+  box-shadow: 0 0 16px oklch(0.62 0.18 305 / 0.2);
+}
+
+.presence-nag__all-close {
+  margin-left: auto;
+  padding: 5px 0;
+  border: 0;
+  color: oklch(0.66 0.07 290);
+  background: transparent;
+  cursor: pointer;
+  font-size: 8px;
+  letter-spacing: 0.1em;
+}
+

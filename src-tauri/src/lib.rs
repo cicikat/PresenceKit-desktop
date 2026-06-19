@@ -1,8 +1,10 @@
 // NOTE(endpoint-literals): 本文件中的后端路径（/desktop/chat、/desktop/wake、/desktop/activate、
 // /memory/…、/garden/state、/diary/…、/chat-log/…、/mood/state、/activity/current、
 // /sensor/realtime、/upload/ingest、/dream/state|enter|chat|exit|settings、
-// /settings/prompt-assets、/debug/user-hidden-state、
-// /activity/reading/…(5)、/activity/gomoku/…(5)、/activity/chess/…(5)，共 34 个不同路径）均为字面量硬编码。
+// /settings/prompt-assets、/debug/user-hidden-state、/hardware/devices|connect、
+// /activity/reading/…(5)、/activity/gomoku/…(5)、/activity/chess/…(5)、
+// /group/list|create|{id}|{id}/send|{id}/history|{id}/settings|{id}/roster(7)、
+// /system/meta-mode，共 43 个不同路径）均为字面量硬编码。
 // publisher.rs 另有 /sensor/realtime。后端路由变更时需手动同步这两个文件。
 mod actions;
 mod client_config;
@@ -72,7 +74,7 @@ fn avatar_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 fn is_known_avatar_role(role: &str) -> bool {
     matches!(
         role,
-        "her" | "you" | "dream_background_day" | "dream_background_night"
+        "her" | "you" | "dream_background_day" | "dream_background_night" | "chat_background"
     )
 }
 
@@ -196,6 +198,92 @@ fn list_dream_fonts(app: tauri::AppHandle) -> Result<serde_json::Value, String> 
     list_dream_fonts_in_dir(&font_dir)
 }
 
+fn themes_dev_dir() -> Result<PathBuf, String> {
+    Ok(PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .ok_or_else(|| "无法定位项目根目录".to_string())?
+        .join("public")
+        .join("themes"))
+}
+
+fn themes_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let mut checked = Vec::new();
+
+    match app.path().resource_dir() {
+        Ok(resource_dir) => {
+            let theme_dir = resource_dir.join("themes");
+            if theme_dir.is_dir() {
+                return Ok(theme_dir);
+            }
+            checked.push(theme_dir);
+        }
+        Err(error) => eprintln!("[themes] 无法定位运行期资源目录: {error}"),
+    }
+
+    if cfg!(debug_assertions) {
+        let dev_dir = themes_dev_dir()?;
+        if dev_dir.is_dir() {
+            eprintln!(
+                "[themes] 运行期主题资源不可用，使用开发环境 fallback: {}",
+                dev_dir.display()
+            );
+            return Ok(dev_dir);
+        }
+        checked.push(dev_dir);
+    }
+
+    let checked_paths = checked
+        .iter()
+        .map(|path| path.display().to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let message = format!("无法定位主题目录，已检查: {checked_paths}");
+    eprintln!("[themes] {message}");
+    Err(message)
+}
+
+fn list_themes_in_dir(theme_dir: &Path) -> Result<serde_json::Value, String> {
+    let mut themes = Vec::new();
+    for entry in fs::read_dir(theme_dir)
+        .map_err(|e| format!("无法读取主题目录 {}: {e}", theme_dir.display()))?
+    {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let manifest_path = path.join("theme.json");
+        if !manifest_path.is_file() {
+            continue;
+        }
+        match fs::read_to_string(&manifest_path)
+            .map_err(|e| e.to_string())
+            .and_then(|raw| {
+                serde_json::from_str::<serde_json::Value>(&raw).map_err(|e| e.to_string())
+            }) {
+            Ok(value) if value.is_object() => themes.push(value),
+            Ok(_) => eprintln!("[themes] 忽略非对象 manifest: {}", manifest_path.display()),
+            Err(error) => eprintln!(
+                "[themes] 忽略无法解析的 manifest {}: {error}",
+                manifest_path.display()
+            ),
+        }
+    }
+    themes.sort_by(|a, b| {
+        a["id"]
+            .as_str()
+            .unwrap_or_default()
+            .cmp(b["id"].as_str().unwrap_or_default())
+    });
+    Ok(serde_json::Value::Array(themes))
+}
+
+#[tauri::command]
+fn list_themes(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let theme_dir = themes_dir(&app)?;
+    list_themes_in_dir(&theme_dir)
+}
+
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
@@ -265,12 +353,17 @@ async fn load_garden_state(app: tauri::AppHandle) -> Result<serde_json::Value, S
 }
 
 #[tauri::command]
-async fn load_diary_list(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+async fn load_diary_list(app: tauri::AppHandle, char_id: Option<String>) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
     let client = http_client()?;
 
+    let base = backend_url(&cfg, "/diary/list");
+    let url = match char_id.as_deref() {
+        Some(cid) if !cid.is_empty() => format!("{}?char_id={}", base, cid),
+        _ => base,
+    };
     let resp = client
-        .get(backend_url(&cfg, "/diary/list"))
+        .get(&url)
         .bearer_auth(cfg.admin_token)
         .send()
         .await
@@ -286,11 +379,15 @@ async fn load_diary_list(app: tauri::AppHandle) -> Result<serde_json::Value, Str
 }
 
 #[tauri::command]
-async fn load_diary_entry(app: tauri::AppHandle, date: String) -> Result<serde_json::Value, String> {
+async fn load_diary_entry(app: tauri::AppHandle, date: String, char_id: Option<String>) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
     let client = http_client()?;
 
-    let url = backend_url(&cfg, &format!("/diary/{}", date));
+    let base = backend_url(&cfg, &format!("/diary/{}", date));
+    let url = match char_id.as_deref() {
+        Some(cid) if !cid.is_empty() => format!("{}?char_id={}", base, cid),
+        _ => base,
+    };
     let resp = client
         .get(&url)
         .bearer_auth(cfg.admin_token)
@@ -538,6 +635,44 @@ async fn dream_get_state(app: tauri::AppHandle) -> Result<serde_json::Value, Str
 }
 
 #[tauri::command]
+async fn hardware_get_devices(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let resp = authorized_request(&cfg, client.get(backend_url(&cfg, "/hardware/devices")))
+        .send()
+        .await
+        .map_err(|_| "Hardware devices 请求失败".to_string())?;
+    let resp = require_success(resp).await?;
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn hardware_connect(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    // Intiface scan + connect can take a couple seconds; use the longer client.
+    let client = llm_http_client()?;
+    let resp = authorized_request(&cfg, client.post(backend_url(&cfg, "/hardware/connect")))
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .map_err(|_| "Hardware connect 请求失败".to_string())?;
+    let resp = require_success(resp).await?;
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn dream_get_stats(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let resp = authorized_request(&cfg, client.get(backend_url(&cfg, "/dream/stats")))
+        .send()
+        .await
+        .map_err(|_| "Dream stats 请求失败".to_string())?;
+    let resp = require_success(resp).await?;
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 async fn dream_enter(
     app: tauri::AppHandle,
     entry_reason: Option<String>,
@@ -581,6 +716,32 @@ async fn dream_exit(app: tauri::AppHandle) -> Result<serde_json::Value, String> 
         .send()
         .await
         .map_err(|_| "Dream exit 请求失败".to_string())?;
+    let resp = require_success(resp).await?;
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn dream_wake(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = llm_http_client()?;
+    let resp = authorized_request(&cfg, client.post(backend_url(&cfg, "/dream/wake")))
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .map_err(|_| "Dream wake 请求失败".to_string())?;
+    let resp = require_success(resp).await?;
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn dream_resume(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = llm_http_client()?;
+    let resp = authorized_request(&cfg, client.post(backend_url(&cfg, "/dream/resume")))
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .map_err(|_| "Dream resume 请求失败".to_string())?;
     let resp = require_success(resp).await?;
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
@@ -940,7 +1101,37 @@ struct ReadingTurnPagePayload {
 
 #[tauri::command]
 async fn activity_reading_start(app: tauri::AppHandle, file_path: String) -> Result<serde_json::Value, String> {
-    activity_post(&app, "/activity/reading/start", serde_json::json!({ "file_path": file_path })).await
+    let cfg = load_client_config(&app);
+
+    let bytes = std::fs::read(&file_path).map_err(|e| format!("读文件失败: {}", e))?;
+
+    let filename = std::path::Path::new(&file_path)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| "无法解析文件名".to_string())?
+        .to_string();
+
+    let part = reqwest::multipart::Part::bytes(bytes)
+        .file_name(filename);
+    let form = reqwest::multipart::Form::new()
+        .part("file", part)
+        .text("start_page", "1");
+
+    let client = http_client()?;
+    let resp = authorized_request(&cfg, client.post(backend_url(&cfg, "/activity/reading/start")))
+        .multipart(form)
+        .send()
+        .await
+        .map_err(|_| "上传请求失败".to_string())?;
+
+    let status = resp.status();
+    if !status.is_success() {
+        return Err(safe_http_error(status));
+    }
+
+    resp.json::<serde_json::Value>()
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1008,8 +1199,18 @@ async fn activity_gomoku_ai_move(app: tauri::AppHandle, payload: ActivitySession
 // ── Chess ─────────────────────────────────────────────────────────────────────
 
 #[tauri::command]
-async fn activity_chess_start(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
-    activity_post(&app, "/activity/chess/start", serde_json::json!({})).await
+async fn activity_chess_start(
+    app: tauri::AppHandle,
+    opponent: Option<String>,
+    ai_style: Option<String>,
+) -> Result<serde_json::Value, String> {
+    let actual_opponent = opponent.as_deref().unwrap_or("human");
+    let body = if let Some(style) = &ai_style {
+        serde_json::json!({"opponent": actual_opponent, "ai_style": style})
+    } else {
+        serde_json::json!({"opponent": actual_opponent})
+    };
+    activity_post(&app, "/activity/chess/start", body).await
 }
 
 #[tauri::command]
@@ -1032,6 +1233,261 @@ async fn activity_chess_legal_moves(app: tauri::AppHandle, payload: ActivitySess
 #[tauri::command]
 async fn activity_chess_close(app: tauri::AppHandle, payload: ActivitySessionPayload) -> Result<serde_json::Value, String> {
     activity_post(&app, "/activity/chess/close", serde_json::json!({ "session_id": payload.session_id })).await
+}
+
+#[tauri::command]
+async fn activity_chess_chat(app: tauri::AppHandle, payload: GomokuChatPayload) -> Result<serde_json::Value, String> {
+    activity_post(&app, "/activity/chess/chat", serde_json::json!({ "session_id": payload.session_id, "message": payload.message })).await
+}
+
+#[tauri::command]
+async fn activity_chess_ai_move(app: tauri::AppHandle, payload: ActivitySessionPayload) -> Result<serde_json::Value, String> {
+    activity_post(&app, "/activity/chess/ai_move", serde_json::json!({ "session_id": payload.session_id })).await
+}
+
+#[tauri::command]
+async fn activity_reading_chat(app: tauri::AppHandle, payload: GomokuChatPayload) -> Result<serde_json::Value, String> {
+    activity_post(&app, "/activity/reading/chat", serde_json::json!({ "session_id": payload.session_id, "message": payload.message })).await
+}
+
+#[tauri::command]
+async fn activity_reading_library(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    activity_get(&app, "/activity/reading/library").await
+}
+
+#[tauri::command]
+async fn activity_reading_add_book(app: tauri::AppHandle, file_path: String) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+
+    let bytes = std::fs::read(&file_path).map_err(|e| format!("读文件失败: {}", e))?;
+
+    let filename = std::path::Path::new(&file_path)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| "无法解析文件名".to_string())?
+        .to_string();
+
+    let part = reqwest::multipart::Part::bytes(bytes).file_name(filename);
+    let form = reqwest::multipart::Form::new().part("file", part);
+
+    let client = http_client()?;
+    let resp = authorized_request(&cfg, client.post(backend_url(&cfg, "/activity/reading/library/add")))
+        .multipart(form)
+        .send()
+        .await
+        .map_err(|_| "上传请求失败".to_string())?;
+
+    let status = resp.status();
+    if !status.is_success() {
+        return Err(safe_http_error(status));
+    }
+
+    resp.json::<serde_json::Value>()
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[derive(serde::Deserialize)]
+struct ReadingStartFromLibraryPayload {
+    book_id: String,
+    start_page: Option<i64>,
+}
+
+#[tauri::command]
+async fn activity_reading_start_from_library(app: tauri::AppHandle, payload: ReadingStartFromLibraryPayload) -> Result<serde_json::Value, String> {
+    let body = serde_json::json!({
+        "book_id": payload.book_id,
+        "start_page": payload.start_page.unwrap_or(1),
+    });
+    activity_post(&app, "/activity/reading/start_from_library", body).await
+}
+
+// ── Group Chat ────────────────────────────────────────────────────────────────
+
+#[tauri::command]
+async fn group_list(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let resp = authorized_request(&cfg, client.get(backend_url(&cfg, "/group/list")))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !resp.status().is_success() { return Err(safe_http_error(resp.status())); }
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn group_create(
+    app: tauri::AppHandle,
+    roster: Vec<String>,
+    domain: String,
+    settings: Option<serde_json::Value>,
+    group_id: Option<String>,
+) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let mut body = serde_json::Map::new();
+    body.insert("roster".into(), serde_json::json!(roster));
+    body.insert("domain".into(), domain.into());
+    if let Some(v) = settings { body.insert("settings".into(), v); }
+    if let Some(v) = group_id { body.insert("group_id".into(), v.into()); }
+    let resp = authorized_request(&cfg, client.post(backend_url(&cfg, "/group/create")))
+        .json(&serde_json::Value::Object(body))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !resp.status().is_success() { return Err(safe_http_error(resp.status())); }
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn group_get(app: tauri::AppHandle, id: String) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let url = backend_url(&cfg, &format!("/group/{}", id));
+    let resp = authorized_request(&cfg, client.get(&url))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !resp.status().is_success() { return Err(safe_http_error(resp.status())); }
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn group_send(app: tauri::AppHandle, id: String, message: String) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let url = backend_url(&cfg, &format!("/group/{}/send", id));
+    let resp = authorized_request(&cfg, client.post(&url))
+        .json(&serde_json::json!({ "message": message }))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !resp.status().is_success() { return Err(safe_http_error(resp.status())); }
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn group_history(app: tauri::AppHandle, id: String, before: Option<f64>) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let path = if let Some(ts) = before {
+        format!("/group/{}/history?before={}", id, ts)
+    } else {
+        format!("/group/{}/history", id)
+    };
+    let resp = authorized_request(&cfg, client.get(backend_url(&cfg, &path)))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !resp.status().is_success() { return Err(safe_http_error(resp.status())); }
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn group_settings_get(app: tauri::AppHandle, id: String) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let url = backend_url(&cfg, &format!("/group/{}/settings", id));
+    let resp = authorized_request(&cfg, client.get(&url))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !resp.status().is_success() { return Err(safe_http_error(resp.status())); }
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn group_settings_patch(app: tauri::AppHandle, id: String, settings: serde_json::Value) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let url = backend_url(&cfg, &format!("/group/{}/settings", id));
+    let resp = authorized_request(&cfg, client.patch(&url))
+        .json(&settings)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !resp.status().is_success() { return Err(safe_http_error(resp.status())); }
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn group_delete(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let url = backend_url(&cfg, &format!("/group/{}", id));
+    let resp = authorized_request(&cfg, client.delete(&url))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !resp.status().is_success() { return Err(safe_http_error(resp.status())); }
+    Ok(())
+}
+
+#[tauri::command]
+async fn group_patch_roster(app: tauri::AppHandle, id: String, roster: Vec<String>) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let url = backend_url(&cfg, &format!("/group/{}/roster", id));
+    let resp = authorized_request(&cfg, client.patch(&url))
+        .json(&serde_json::json!({ "roster": roster }))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !resp.status().is_success() { return Err(safe_http_error(resp.status())); }
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+// ── Meta Mode ────────────────────────────────────────────────────────────────
+
+#[tauri::command]
+async fn get_meta_mode(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let resp = authorized_request(&cfg, client.get(backend_url(&cfg, "/system/meta-mode")))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    let resp = require_success(resp).await?;
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn patch_meta_mode(
+    app: tauri::AppHandle,
+    mode: String,
+    ttl_seconds: Option<u64>,
+) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let mut body = serde_json::Map::new();
+    body.insert("mode".into(), mode.into());
+    if let Some(ttl) = ttl_seconds {
+        body.insert("ttl_seconds".into(), ttl.into());
+    }
+    let resp = authorized_request(&cfg, client.patch(backend_url(&cfg, "/system/meta-mode")))
+        .json(&serde_json::Value::Object(body))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    let resp = require_success(resp).await?;
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn patch_presence_nag(
+    app: tauri::AppHandle,
+    enabled: bool,
+) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let resp = authorized_request(&cfg, client.put(backend_url(&cfg, "/scheduler/config")))
+        .json(&serde_json::json!({ "presence_nag": enabled }))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    let resp = require_success(resp).await?;
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
 
 // ── Dream Seed ────────────────────────────────────────────────────────────────
@@ -1078,6 +1534,7 @@ pub fn run() {
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             ws_bridge::register(app);
             let cfg = load_client_config(app.handle());
@@ -1119,15 +1576,21 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             actions::action_minimize_window,
+            actions::action_request_attention,
+            actions::action_send_notification,
             actions::action_open_url,
             actions::action_show_notify,
             actions::action_media_play_pause,
+            actions::action_play_netease,
+            actions::presence_nag,
+            actions::presence_nag_close_all,
             client_config::load_public_client_config,
             ws_bridge::native_ws_connect,
             ws_bridge::native_ws_send,
             ws_bridge::native_ws_disconnect,
             greet,
             list_dream_fonts,
+            list_themes,
             send_chat,
             load_history,
             load_garden_state,
@@ -1144,9 +1607,14 @@ pub fn run() {
             read_avatars_json,
             write_avatars_json,
             dream_get_state,
+            hardware_get_devices,
+            hardware_connect,
+            dream_get_stats,
             dream_enter,
             dream_chat,
             dream_exit,
+            dream_wake,
+            dream_resume,
             dream_get_settings,
             dream_update_settings,
             get_prompt_assets,
@@ -1161,6 +1629,10 @@ pub fn run() {
             activity_reading_page,
             activity_reading_turn_page,
             activity_reading_close,
+            activity_reading_chat,
+            activity_reading_library,
+            activity_reading_add_book,
+            activity_reading_start_from_library,
             activity_gomoku_start,
             activity_gomoku_state,
             activity_gomoku_move,
@@ -1172,10 +1644,24 @@ pub fn run() {
             activity_chess_move,
             activity_chess_legal_moves,
             activity_chess_close,
+            activity_chess_chat,
+            activity_chess_ai_move,
             activity_dream_seed_start,
             activity_dream_seed_state,
             activity_dream_seed_chat,
             activity_dream_seed_close,
+            group_list,
+            group_create,
+            group_get,
+            group_send,
+            group_history,
+            group_settings_get,
+            group_settings_patch,
+            group_delete,
+            group_patch_roster,
+            get_meta_mode,
+            patch_meta_mode,
+            patch_presence_nag,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -1208,6 +1694,8 @@ mod auth_tests {
             ("POST", "/dream/enter"),
             ("POST", "/dream/chat"),
             ("POST", "/dream/exit"),
+            ("POST", "/dream/wake"),
+            ("POST", "/dream/resume"),
             ("GET", "/dream/state"),
             ("GET", "/dream/settings"),
             ("PATCH", "/dream/settings"),

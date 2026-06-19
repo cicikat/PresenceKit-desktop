@@ -1,12 +1,17 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "pet",
-  "description": "Minimal capability for the visual-only pet window",
+  "description": "Capability for the interactive pet window",
   "windows": ["pet"],
   "permissions": [
     "core:event:allow-listen",
     "core:event:allow-unlisten",
     "core:event:allow-emit",
+    "core:window:allow-available-monitors",
+    "core:window:allow-cursor-position",
+    "core:window:allow-outer-position",
+    "core:window:allow-outer-size",
+    "core:window:allow-set-position",
     "core:window:allow-start-dragging"
   ]
 }
