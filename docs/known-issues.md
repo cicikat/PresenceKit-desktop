@@ -71,18 +71,6 @@ Phase 2c+ 之后，ChatPanel 启动历史改走 `/chat-log/*` 接口，owner_qq 
 
 ---
 
-## P2：桌宠按钮没有真实桌宠窗口
-
-**位置**：`src/windows/chat/ChatWindow.tsx`
-
-`onPetToggle()` 只切换本地 `petVisible` 和 engine mode。当前没有 `src/windows/pet/`，也没有 Tauri 第二窗口。
-
-**影响**：用户点击 Ribbon 桌宠按钮会看到 active 状态变化，但没有桌宠出现。
-
-**建议**：在实现前 UI 上可弱化入口，或在迁移桌宠窗口时同步设计 shared engine。
-
----
-
 ## P2：`sensor-service/` 只有空目录骨架
 
 **位置**：`sensor-service/`
@@ -248,6 +236,13 @@ ChatPanel 已实现 Dream active 期间按 `msg_id` park Reality `channel_messag
 ---
 
 ## 已修复
+
+### 桌宠按钮已接入真实桌宠窗口与鼠标交互（2026-06-14，CC-11b）
+
+**原问题**：Ribbon 只切 `petVisible` 和 engine mode，没有真实桌宠窗口。
+
+**修复**：已接入独立透明置顶 `PetWindow`、Chat/Pet 快照桥、粒子视觉，并补充害羞躲避、
+随机蹭、Ctrl 钉住、拖拽协调、屏幕边界保护和全局鼠标交互偏好。
 
 ### title_sanitizer 已改为隐私保守默认（2026-06-12，N4）
 

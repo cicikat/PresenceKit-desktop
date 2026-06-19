@@ -30,7 +30,7 @@
 | `sidebar.jsx` 中的 SubFlow 视觉 | `src/windows/chat/components/SubFlow.tsx` | 已接真实 mood/activity，叙事文本 + ring buffer 时间轴 |
 | `sidebar.jsx` 中的花园视觉 | `src/windows/chat/components/SubGarden.tsx` | 已接后端只读状态，不再是纯 mock |
 | `sidebar.jsx` 中的日记视觉 | `src/windows/chat/components/SubDiary.tsx` | 已接后端只读日记，不再是占位 |
-| `pet.jsx` | 尚无 | 未迁 |
+| `pet.jsx` | `src/windows/pet/PetWindow.tsx` / `components/ParticleCanvas.tsx` | 已落地独立透明粒子桌宠；具象角色视觉未迁 |
 | `companion.html` | `src/shared/theme/globals.css` 等 | 主题变量部分迁入 |
 
 ---
@@ -58,25 +58,22 @@
 
 ## 桌宠迁移状态
 
-当前仓库没有 `src/windows/pet/` 实现。`ChatWindow` 里只有：
+当前仓库已有独立透明置顶 pet Tauri window。Ribbon 桌宠按钮会显隐窗口、切换
+`petVisible` 并调用 `engine.setMode("companion" | "chat-only")`。Chat 通过
+`src/shared/pet/bridge.ts` 将 mood / presence / activity / thinking / 最新回复摘要广播给桌宠。
 
-```tsx
-{/* TODO: Phase-2 — 桌宠窗口 <PetWindow> */}
-```
+桌宠当前使用抽象粒子视觉，并已实现鼠标交互：
 
-Ribbon 的桌宠按钮会：
-
-- 切换 `petVisible`。
-- 调 `engine.setMode("companion" | "chat-only")`。
-
-但不会创建透明置顶窗口，也不会渲染 `Emerald-desktopUI/pet.jsx` 里的形象与行为。
+- `惊讶` mood 下光标靠近会缓动躲避，目标位置限制在显示器 work area。
+- 随机间隔朝光标轻移并触发蹭的粒子脉冲。
+- Ctrl 钉住和拖拽期间暂停自动移动。
+- Chat 偏好“其他”页可关闭鼠标交互并配置随机靠近间隔。
 
 后续迁移要解决：
 
-- Tauri 第二窗口配置。
-- 透明、无边框、置顶、点击穿透策略。
-- 聊天窗口与宠物窗口共享同一份 `StateEngine`。
-- 鼠标追随、呼吸、眨眼、蹭鼠标等原型行为。
+- 具象角色视觉、眨眼与更丰富的姿态行为。
+- 是否需要点击穿透和独立桌宠上下文菜单。
+- 多窗口 StateEngine 从快照广播升级为更完整的共享状态同步。
 - 后端 `state_update` 如何驱动宠物表现。
 
 ---

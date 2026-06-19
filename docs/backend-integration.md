@@ -769,6 +769,8 @@ P-01 已接入的最小执行动作：
 | `show_notify` | `{"text": "...", "title": "..."}` | `tauri-plugin-dialog` 信息对话框 fallback，并记录 log |
 | `media_play_pause` | `{}` | Windows 发送媒体播放/暂停键；非 Windows 记录 stub log |
 | `dream_invite` | `{}` | emit `dream_invite` UI 事件，由 ChatWindow 打开 Dream 窗口 |
+| `toy_invite` | `{}` | emit `toy_invite` UI 事件；ChatWindow 在「玩耍模式」开启时打开 ToyWindow，关闭时忽略 |
+| `presence_nag` | `{"text": "<LLM 台词>", "avatar": "<角色标识>"}` | 默认关闭；启用后调用同名 Tauri command，更新并显示单实例置顶角色弹窗 |
 
 `sensor_aware` trigger 产出的 action 类型：
 
@@ -796,7 +798,9 @@ P-01 已接入的最小执行动作：
 | `action` | emit 给订阅者，异步 dispatch 到 Tauri action command，按执行结果 ack |
 | `ping` | 回 `pong` |
 
-注意：`dream_invite` 是 UI action，不调用 Tauri command；ChatWindow 收到事件后打开 Dream 窗口并正常回 ack。未知 action 不执行，并回 `ok:false`；这不改变后端协议，也不影响旧桌宠或 file fallback。
+注意：`dream_invite` / `toy_invite` 都是 UI action，不调用 Tauri command；ChatWindow 收到事件后打开对应窗口并正常回 ack（`toy_invite` 仅在玩耍模式开关开启时开窗，否则忽略仍回 ack）。未知 action 不执行，并回 `ok:false`；这不改变后端协议，也不影响旧桌宠或 file fallback。
+
+玩耍模式硬件状态走 Tauri command 代理：`hardware_get_devices` → `GET /hardware/devices`、`hardware_connect` → `POST /hardware/connect`（与 dream 命令同样用 `authorized_request` 带 bearer token）。
 
 ---
 
@@ -850,6 +854,8 @@ v1 目标新增或替换：
 | `action_open_url(url)` | 前端 → Rust | 执行 `open_url`，使用 `tauri-plugin-opener` 打开 URL |
 | `action_show_notify(title, text)` | 前端 → Rust | 执行 `show_notify`，当前用 dialog fallback 展示 |
 | `action_media_play_pause()` | 前端 → Rust | 执行 `media_play_pause`，Windows 发送媒体键，非 Windows stub log |
+| `presence_nag(text, avatar)` | 前端 → Rust | 更新并显示单实例 `presence-nag` 置顶窗口；action type、`ws.ts` case 与 command 名保持一致 |
+| `presence_nag_close_all()` | 前端 → Rust | 强制隐藏存在感弹窗；由 Esc、全部关闭入口和关闭设置调用 |
 | `save_avatar(role, image_b64)` | 前端 → Rust | 保存 PNG 到 `app_data_dir()/avatars/`；头像和 Dream 日间 / 夜间背景共用 |
 | `load_avatar(path)` | 前端 → Rust | 读取头像或 Dream 背景并返回 data URL |
 | `read_avatars_json()` | 前端 → Rust | 读取头像和 Dream 日间 / 夜间背景配置；旧 `dream_background` 字段由前端兼容为夜间背景 |

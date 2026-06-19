@@ -52,6 +52,8 @@ D:\ai\Emerald-client\
 | 查 bug、技术债、迁移缺口 | `docs/known-issues.md` |
 
 后端系统本身的细节以 `D:\ai\qq-st-bot\AGENTS.md` 和它的 `ARCHITECTURE.md` / `docs/` 为准。
+在 Codex / Claude Code Windows 沙箱中运行 build、pytest、跨仓 git 或浏览器验证前，
+必须阅读 `D:\ai\qq-st-bot\docs\dev-environment.md`。
 
 ---
 
@@ -119,6 +121,10 @@ sensor-service/
 7. 不要用浏览器原生 `fetch` 直接打后端 HTTP；CORS 和代理规则都不稳定。HTTP 走 Tauri command。
 8. 浏览器原生 WebSocket API 不读系统代理环境变量，当前可以直接连 `ws://127.0.0.1:8080/ws/desktop`。
 9. 不要修改 `D:\ai\qq-st-bot\`、`D:\ai\Emerald-desktop\`、`D:\ai\Emerald-desktopUI\`，除非用户明确改范围。
+10. 沙箱中 `npm run build` 若因 `node_modules/.vite-temp` 写入报 `EPERM`，这是环境权限问题；
+    对原命令申请权限后重跑，不能只跑 `tsc` 就宣称 build 通过。
+11. 跨仓 git 遇到 `dubious ownership` 时使用单命令参数
+    `git -c safe.directory=D:/ai/Emerald-client ...`，不要擅自修改全局 git 配置。
 
 ---
 
@@ -153,6 +159,12 @@ npm run tauri dev
 
 # 生产构建
 npm run tauri build
+
+# Agent 验证：前端和 Rust 分开检查
+npx.cmd tsc --noEmit
+npm.cmd run build
+cd src-tauri
+cargo check
 ```
 
 Vite 固定端口是 `1420`，见 `vite.config.ts`。

@@ -8,16 +8,20 @@ import type {
   DesktopActionType,
   NarrativeSegment,
 } from './types';
+import { isPresenceNagEnabled } from '../presenceNag';
 
 type EventMap = {
   state: ConnectionState;
-  channel_message: { content: string; msg_id: string; source?: string };
-  message_segments: { content: string; segments: NarrativeSegment[]; msg_id: string; source?: string };
+  channel_message: { content: string; msg_id: string; source?: string; char_id?: string; round_id?: string };
+  message_segments: { content: string; segments: NarrativeSegment[]; msg_id: string; source?: string; char_id?: string };
   action: DesktopActionPayload;
   dream_invite: Record<string, never>;
-  message_stream_start: { msg_id: string };
+  toy_invite: Record<string, never>;
+  message_stream_start: { msg_id: string; char_id?: string; round_id?: string };
   message_stream_delta: { msg_id: string; delta: string };
   message_stream_end: { msg_id: string };
+  group_round_start: { round_id: string; group_id: string };
+  group_round_end: { round_id: string; group_id: string };
 };
 
 type NativeMessageEvent = { connectionId: number; data: string };
@@ -174,7 +178,7 @@ class WSClient {
         this._setState('connected');
         break;
       case 'channel_message':
-        this.emit('channel_message', { content: msg.content, msg_id: msg.msg_id, source: msg.source });
+        this.emit('channel_message', { content: msg.content, msg_id: msg.msg_id, source: msg.source, char_id: msg.char_id, round_id: msg.round_id });
         this._send({ type: 'ack', msg_id: msg.msg_id, ok: true });
         break;
       case 'message_segments':
@@ -183,6 +187,7 @@ class WSClient {
           segments: msg.segments,
           msg_id: msg.msg_id,
           source: msg.source,
+          char_id: msg.char_id,
         });
         break;
       case 'action':
@@ -193,13 +198,19 @@ class WSClient {
         this._send({ type: 'pong' });
         break;
       case 'message_stream_start':
-        this.emit('message_stream_start', { msg_id: msg.msg_id });
+        this.emit('message_stream_start', { msg_id: msg.msg_id, char_id: msg.char_id, round_id: msg.round_id });
         break;
       case 'message_stream_delta':
         this.emit('message_stream_delta', { msg_id: msg.msg_id, delta: msg.delta });
         break;
       case 'message_stream_end':
         this.emit('message_stream_end', { msg_id: msg.msg_id });
+        break;
+      case 'group_round_start':
+        this.emit('group_round_start', { round_id: msg.round_id, group_id: msg.group_id });
+        break;
+      case 'group_round_end':
+        this.emit('group_round_end', { round_id: msg.round_id, group_id: msg.group_id });
         break;
     }
   }
@@ -272,9 +283,26 @@ class WSClient {
       case 'media_play_pause':
         await invoke('action_media_play_pause');
         return;
+      case 'play_netease': {
+        const songId = stringParam(action, ['song_id']);
+        if (!songId) throw new Error('play_netease 缺少 params.song_id');
+        await invoke('action_play_netease', { songId });
+        return;
+      }
       case 'dream_invite':
         this.emit('dream_invite', {});
         return;
+      case 'toy_invite':
+        this.emit('toy_invite', {});
+        return;
+      case 'presence_nag': {
+        if (!isPresenceNagEnabled()) return;
+        const text = stringParam(action, ['text', 'message', 'body']);
+        if (!text) throw new Error('presence_nag 缺少 text');
+        const avatar = stringParam(action, ['avatar', 'character', 'char_id'], '叶瑄');
+        await invoke('presence_nag', { text, avatar });
+        return;
+      }
       default:
         throw new Error(`unsupported action type: ${type}`);
     }

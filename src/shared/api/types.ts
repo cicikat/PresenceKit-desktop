@@ -9,13 +9,15 @@ export interface NarrativeSegment {
 
 export type ServerMessage =
   | { type: 'hello_ack'; server_version: string }
-  | { type: 'channel_message'; content: string; msg_id: string; source?: string }
-  | { type: 'message_segments'; content: string; segments: NarrativeSegment[]; msg_id: string; source?: string }
+  | { type: 'channel_message'; content: string; msg_id: string; source?: string; char_id?: string; round_id?: string }
+  | { type: 'message_segments'; content: string; segments: NarrativeSegment[]; msg_id: string; source?: string; char_id?: string }
   | { type: 'action'; action: DesktopActionPayload; msg_id: string }
   | { type: 'ping' }
-  | { type: 'message_stream_start'; msg_id: string; source?: string }
+  | { type: 'message_stream_start'; msg_id: string; source?: string; char_id?: string; round_id?: string }
   | { type: 'message_stream_delta'; msg_id: string; delta: string }
-  | { type: 'message_stream_end'; msg_id: string };
+  | { type: 'message_stream_end'; msg_id: string }
+  | { type: 'group_round_start'; round_id: string; group_id: string }
+  | { type: 'group_round_end'; round_id: string; group_id: string };
 
 export type ClientMessage =
   | { type: 'hello'; client: string; version: string }
@@ -29,7 +31,23 @@ export type DesktopActionType =
   | 'open_url'
   | 'show_notify'
   | 'media_play_pause'
-  | 'dream_invite';
+  | 'play_netease'
+  | 'dream_invite'
+  | 'toy_invite'
+  | 'presence_nag';
+
+export interface HardwareDevice {
+  index: number;
+  name: string;
+  display_name: string;
+  connected: boolean;
+  can_vibrate: boolean;
+}
+
+export interface HardwareStatus {
+  connected: boolean;
+  devices: HardwareDevice[];
+}
 
 export type DesktopActionPayload = {
   type?: string;
@@ -187,6 +205,46 @@ export type SensorRealtimeResponse = SensorRealtimeData | SensorNoData;
 export function isSensorNoData(r: SensorRealtimeResponse): r is SensorNoData {
   return (r as SensorNoData)._no_data === true;
 }
+
+// ── Group Chat (spec-10) ──────────────────────────────────────────────────────
+
+export type GroupDomain = 'reality' | 'dream';
+
+export interface GroupSettings {
+  min_responders: number;
+  max_responders: number;
+  max_ai_chain_depth: number;
+  addressed_exclusive: boolean;
+}
+
+export interface GroupRosterMember {
+  char_id: string;
+  label: string;
+  avatar_url: string | null;
+}
+
+export interface GroupSummary {
+  group_id: string;
+  domain: GroupDomain;
+  roster: GroupRosterMember[];
+  title: string;
+}
+
+export interface GroupMessage {
+  msg_id: string;
+  speaker_id: 'owner' | string;
+  content: string;
+  timestamp: number;
+  segments?: NarrativeSegment[];
+  triggered_by?: 'user' | string;
+}
+
+export interface GroupDetail extends GroupSummary {
+  settings: GroupSettings;
+  recent: GroupMessage[];
+}
+
+export interface GroupSendResponse { round_id: string; status: string; }
 
 export interface PromptAssetCharacter {
   id: string;

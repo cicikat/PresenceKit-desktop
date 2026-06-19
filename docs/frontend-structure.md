@@ -12,7 +12,8 @@
 2. 调用 `avatarStore.init()` 读取本地头像配置。
 3. 渲染 `<ChatWindow />`。
 
-当前只有聊天窗口 view。桌宠 view 尚未作为独立 Tauri window 或 React component 接入。
+入口按 query 参数选择 view：默认渲染聊天窗口，`?window=pet` 渲染独立 `PetWindow`，
+`?window=presence-nag` 渲染独立、默认隐藏的 `PresenceNagWindow`。
 
 ---
 
@@ -37,7 +38,7 @@
 | state | 说明 |
 |---|---|
 | `theme` | 当前主题 id；通过主题注册中心注入 token 并持久化到 `chat.theme` |
-| `petVisible` | 当前只影响 Ribbon active 和 engine mode，没有真实桌宠窗口 |
+| `petVisible` | 控制独立 Tauri pet 窗口显隐，并同步 engine mode |
 | `sidebarOpen` / `sidebarTab` | 控制左侧副栏 |
 | `sidebarWidth` | 可拖拽调整，范围 250-540 |
 | `chatHeaderVisible` | 控制 ChatPanel 顶部状态栏 |
@@ -110,6 +111,29 @@ src/windows/dream/
 
 ---
 
+## ToyWindow（玩耍模式）
+
+文件：`src/windows/toy/`
+
+```
+src/windows/toy/
+├── ToyWindow.tsx            Ribbon + 侧栏 + 聊天页布局；fixed overlay，z-index 110
+├── index.ts
+└── components/
+    ├── ToyRibbon.tsx        返回对话 / 玩耍标识 / 日夜主题切换
+    ├── ToySidebar.tsx       两块只读状态卡：系统状态（Intiface/蓝牙连接 + 连接按钮）+ toy 状态（设备列表），6s 轮询 GET /hardware/devices
+    └── ToyChatPanel.tsx     自包含 append-only 聊天，经 sendChat() 走 /desktop/chat
+```
+
+职责：
+
+- 与 ActivityWindow 同级，由 `main.tsx` 的 `activeWindow` 状态切换挂载，不在 ChatWindow 组件树内；不读写 Chat messages / state / session。
+- 入口受「玩耍模式」开关（`src/shared/playMode.ts`，localStorage `playMode.enabled`，默认关闭）门控：开启后 ChatWindow 订阅的 WS `toy_invite` 才自动开窗，Ribbon 才显示手动入口按钮。
+- 硬件状态经 `src/shared/api/hardware.ts`（`getHardwareDevices` / `connectHardware`）调 Tauri `hardware_get_devices` / `hardware_connect` 代理后端 `/hardware/*`。`connected` 即 Intiface 蓝牙连接状态，`devices` 即 toy 列表。
+- 设备控制（振动等）仍由后端 owner 门控工具在对话里触发，ToyWindow 只做状态显示与聊天。
+
+---
+
 ## ChatPanel
 
 文件：`src/windows/chat/components/ChatPanel.tsx`
@@ -151,6 +175,29 @@ src/windows/dream/
 
 - `send()` 顶部注释仍写着“TODO WebSocket”，但实际已经接了 HTTP 后端。
 - v1 目标协议要求用户消息走 WS `user_message`，当前未实现。
+
+## PetWindow
+
+文件：`src/windows/pet/`
+
+- `PetWindow.tsx`：独立透明置顶窗口入口，订阅 Chat 广播的 `PetSnapshot`，保留左键拖拽。
+- `components/ParticleCanvas.tsx`：持续粒子呼吸，并响应 `shy` / `nuzzle` 短促视觉脉冲。
+- `usePetMouse.ts`：轮询 Tauri `cursorPosition()`，读取窗口位置、尺寸和显示器 work area，
+  实现边界内的缓动躲避/靠近；Ctrl 钉住与拖拽期间停止自动移动。
+- `src/shared/pet/mouseSettings.ts`：持久化全局鼠标交互开关与随机靠近间隔。
+
+当前只读状态映射：`惊讶` mood 触发害羞躲避。该映射不修改 StateEngine，也不新增另一份
+mood 真值。Chat 偏好“其他”页可关闭全部鼠标自动交互并调整随机靠近间隔。
+
+## PresenceNagWindow
+
+文件：`src/windows/presence-nag/`
+
+- 单实例透明置顶窗口，通过 Tauri event `presence-nag` 接收 `{ text, avatar }` 并更新内容。
+- Chat 偏好“其他”页的「允许存在感弹窗」使用本地 UI 偏好，默认关闭；`ws.ts` 每次 action 到达时读取该值。
+- 启用时 `case 'presence_nag'` 调同名 Tauri command `presence_nag`；重复 action 不创建新窗口。
+- `Esc` 和所有关闭入口统一调用 `presence_nag_close_all`。关闭设置时也立即全关。
+- 视觉明确使用角色头像和梦核配色，不仿冒原生系统对话框。
 
 ---
 

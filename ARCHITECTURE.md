@@ -54,10 +54,28 @@ Emerald-client 是 `qq-st-bot` 的新桌面客户端。它不拥有角色记忆�
 - 使用 `src/shared/chatAppearance.ts` 保存 Chat 聊天字号、主题字号和字体包；Sidebar 宽度仅通过界面分隔条拖拽调整。
 - 偏好面板的「世界」页通过 `getPromptAssets()` / `patchPromptAssets()` 管理 Reality Prompt Assets：角色卡单选、世界书多选和破限多选。可用选项来自后端，客户端不展示文件路径。
 - 把 engine 传给 `ChatPanel`。
-- Activity 打开时保持 ChatWindow / ChatPanel 挂载，ActivityWindow 只作为覆盖层显示。
+- Activity 打开时保持 ChatWindow / ChatPanel 挂载，ActivityWindow 只作为覆盖层显示。ToyWindow（玩耍模式）与 ActivityWindow 同级，由 `main.tsx` 的 `activeWindow` 切换挂载，ChatWindow 传入 `onToyOpen`。
 - 管理正式 Dream overlay 的本地开关；Ribbon 月亮按钮和 WS `dream_invite` UI 事件共用该入口，DreamWindow 自己接入 Dream API 和窗口状态机。
+- 玩耍模式：偏好「其他」页开关（`shared/playMode.ts`，localStorage `playMode.enabled`，默认关闭）；开启后 WS `toy_invite` 自动开窗、Ribbon 显示手动入口。ToyWindow 侧栏经 `hardware_get_devices` 轮询设备/连接状态，聊天经 `sendChat` 走 `/desktop/chat`。
 - 将当前 Reality 激活角色卡头像传给 DreamWindow；Dream 内控制栏、动向侧栏和消息区优先显示该头像，无角色头像时回退到本地 HER 头像。
-- 当前没有实际 `PetWindow` 渲染。
+- Ribbon 桌宠开关通过 `src/shared/pet/bridge.ts` 显隐独立透明置顶 `PetWindow`，并将
+  StateEngine 的 mood / presence / activity 快照广播给桌宠。
+
+桌宠窗口是 `src/windows/pet/PetWindow.tsx`：
+
+- `ParticleCanvas` 按 mood / presence / thinking 渲染持续粒子呼吸和交互脉冲。
+- `usePetMouse` 使用 Tauri 全局光标、窗口位置和显示器 work area API 驱动鼠标交互。
+- 当前 `惊讶` mood 作为害羞状态：光标接近时窗口缓动躲避；随机间隔会朝光标轻移并触发
+  蹭的粒子反应。
+- 按住 Ctrl 或拖拽期间暂停自动移动；所有目标位置夹在当前显示器可视工作区内。
+- 鼠标交互开关和随机蹭间隔是本地 UI 偏好，不写入 StateEngine 或后端。
+
+存在感弹窗是 `src/windows/presence-nag/PresenceNagWindow.tsx`：
+
+- 独立透明置顶 `presence-nag` Tauri 窗口，默认隐藏且单实例；重复 action 只更新内容，不叠加刷屏。
+- Chat 偏好「其他」中的「允许存在感弹窗」默认关闭；关闭时 WS action 静默跳过，并立即隐藏已显示窗口。
+- `Esc`、标题栏关闭、「别理我了」、「确定」和「全部关闭」均调用 `presence_nag_close_all`，保证可彻底关闭。
+- 内容只消费后端 `presence_nag` action 的 LLM 台词；头像使用本地 HER 头像，角色标识用于显示角色名。
 
 Dream 窗口是 `src/windows/dream/DreamWindow.tsx`：
 
@@ -118,7 +136,7 @@ Tauri Rust 在 `src-tauri/src/lib.rs`：
 - `load_sensor_realtime`：GET `/sensor/realtime`，使用 Bearer token；无数据响应归一为 `_no_data`。
 - `get_prompt_assets` / `patch_prompt_assets`：GET / PATCH `/settings/prompt-assets`，使用 Bearer token 和 `reqwest.no_proxy()`；仅服务 Chat 的 Reality Prompt Assets 设置。
 - `load_hidden_state_debug`：GET `/debug/user-hidden-state`，并只读参考 `/dream/settings.display.physiological_arousal` 作为潜意识面板开发者字段显隐；不写 hidden state。
-- `src-tauri/src/actions.rs`：执行 `minimize_window` / `open_url` / `show_notify` / `media_play_pause` 四类 desktop action。
+- `src-tauri/src/actions.rs`：执行基础 desktop action，并负责单实例 `presence_nag` 窗口显示与 `presence_nag_close_all` 强制全关。
 - `save_avatar` / `load_avatar` / `read_avatars_json` / `write_avatars_json`：本地头像和 Dream 背景持久化。
 - `list_dream_fonts`：打包后优先扫描 `resource_dir/fonts`，debug/dev 模式回退源码 `public/fonts/`；目录不可用时返回明确错误。
 - `list_themes`：扫描 `resource_dir/themes/*/theme.json`，debug/dev 模式回退源码 `public/themes/`；前端注册中心负责契约校验和内置主题合并。
@@ -243,6 +261,8 @@ Dream 背景按 `day` / `night` 分开记录。旧版单字段 `dream_background
 |---|---|
 | `src/main.tsx` | React 入口 |
 | `src/windows/chat/` | 主聊天窗口 |
+| `src/windows/pet/` | 独立桌宠窗口、粒子视觉和鼠标交互 |
+| `src/shared/pet/` | Chat/Pet 窗口快照桥和桌宠本地设置 |
 | `src/windows/chat/components/` | Ribbon、Sidebar、ChatPanel、浮动 pane、偏好/帮助等 UI |
 | `src/features/dream/` | Dream UI v2 纯前端 preview：tokens、overlay、入口按钮、afterglow |
 | `src/shared/state/store.ts` | 客户端状态 engine |
@@ -282,7 +302,7 @@ Dream 背景按 `day` / `night` 分开记录。旧版单字段 `dream_background
 
 未迁或未完成：
 
-- `pet.jsx` 的桌宠渲染与行为。
+- `pet.jsx` 的具象角色渲染与更完整行为；当前已落地抽象粒子桌宠、窗口桥和鼠标交互。
 - v1 WebSocket 协议。
 - Sidebar flow/status tab 的真实数据接入。
 - 花园交互能力和 harvest/vase 详情展示。

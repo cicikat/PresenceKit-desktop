@@ -219,6 +219,14 @@ export async function groupHistory(id: string, before?: number): Promise<GroupDe
   return invoke<GroupDetail['recent']>('group_history', { id, before: before ?? null });
 }
 
+export async function deleteGroup(id: string): Promise<void> {
+  await invoke('group_delete', { id });
+}
+
+export async function patchGroupRoster(id: string, roster: string[]): Promise<GroupDetail> {
+  return invoke<GroupDetail>('group_patch_roster', { id, roster });
+}
+
 export async function getGroupSettings(id: string): Promise<GroupSettings> {
   return invoke<GroupSettings>('group_settings_get', { id });
 }
