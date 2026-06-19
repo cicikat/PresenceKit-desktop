@@ -1,5 +1,9 @@
 import { useEffect, useRef } from 'react';
-import type { PetSnapshot } from '../../../shared/pet/types';
+import {
+  DEFAULT_PET_SNAPSHOT,
+  type PetMouseReaction,
+  type PetSnapshot,
+} from '../../../shared/pet/types';
 
 type Rgb = [number, number, number];
 
@@ -28,6 +32,18 @@ interface Accent {
   phase: number;
 }
 
+interface VisualState {
+  palette: Palette;
+  alpha: number;
+  speed: number;
+  orbit: number;
+  wobble: number;
+  breathRate: number;
+  breathDepth: number;
+  coreScale: number;
+  pulse: number;
+}
+
 const PALETTES: Record<string, Palette> = {
   '平静': { primary: [184, 158, 226], secondary: [211, 194, 241], glow: [255, 251, 255] },
   '开心': { primary: [226, 153, 193], secondary: [243, 194, 218], glow: [255, 240, 248] },
@@ -41,6 +57,67 @@ const PALETTES: Record<string, Palette> = {
 };
 
 const rgba = ([r, g, b]: Rgb, alpha: number) => `rgba(${r}, ${g}, ${b}, ${alpha})`;
+const lerp = (current: number, target: number, amount: number) => current + (target - current) * amount;
+const lerpRgb = (current: Rgb, target: Rgb, amount: number): Rgb => [
+  lerp(current[0], target[0], amount),
+  lerp(current[1], target[1], amount),
+  lerp(current[2], target[2], amount),
+];
+
+const MOOD_MOTION: Record<string, Pick<VisualState, 'speed' | 'orbit' | 'wobble' | 'breathRate' | 'breathDepth'>> = {
+  '平静': { speed: 1, orbit: 1, wobble: 1, breathRate: 1, breathDepth: 1 },
+  '开心': { speed: 1.28, orbit: 1.08, wobble: 1.22, breathRate: 1.28, breathDepth: 1.18 },
+  '低落': { speed: 0.58, orbit: 0.88, wobble: 0.58, breathRate: 0.72, breathDepth: 0.86 },
+  '病娇': { speed: 0.82, orbit: 0.76, wobble: 0.72, breathRate: 1.12, breathDepth: 1.12 },
+  '分心': { speed: 0.9, orbit: 1.16, wobble: 1.32, breathRate: 0.92, breathDepth: 0.88 },
+  '生气': { speed: 1.52, orbit: 1.04, wobble: 1.5, breathRate: 1.55, breathDepth: 1.28 },
+  '惊讶': { speed: 1.36, orbit: 1.2, wobble: 1.12, breathRate: 1.34, breathDepth: 1.34 },
+};
+
+function visualTarget(state: PetSnapshot): VisualState {
+  const motion = MOOD_MOTION[state.mood] ?? MOOD_MOTION['平静'];
+  const presence = state.presence === 'away'
+    ? { alpha: 0.46, speed: 0.34, orbit: 0.62, wobble: 0.5, breathRate: 0.68, coreScale: 0.82 }
+    : state.presence === 'idle'
+      ? { alpha: 0.76, speed: 0.62, orbit: 0.86, wobble: 0.72, breathRate: 0.82, coreScale: 0.92 }
+      : { alpha: 1, speed: 1, orbit: 1, wobble: 1, breathRate: 1, coreScale: 1 };
+  const thinking = state.thinking
+    ? { speed: 0.72, orbit: 0.72, wobble: 0.68, breathRate: 1.08, coreScale: 0.94, pulse: 1 }
+    : { speed: 1, orbit: 1, wobble: 1, breathRate: 1, coreScale: 1, pulse: 0 };
+
+  return {
+    palette: state.thinking
+      ? PALETTES.thinking
+      : state.presence === 'away'
+        ? PALETTES.sleepy
+        : PALETTES[state.mood] ?? PALETTES['平静'],
+    alpha: presence.alpha,
+    speed: motion.speed * presence.speed * thinking.speed,
+    orbit: motion.orbit * presence.orbit * thinking.orbit,
+    wobble: motion.wobble * presence.wobble * thinking.wobble,
+    breathRate: motion.breathRate * presence.breathRate * thinking.breathRate,
+    breathDepth: motion.breathDepth,
+    coreScale: presence.coreScale * thinking.coreScale,
+    pulse: thinking.pulse,
+  };
+}
+
+function approachVisual(current: VisualState, target: VisualState, delta: number) {
+  const amount = 1 - Math.exp(-delta * 1.8);
+  current.palette = {
+    primary: lerpRgb(current.palette.primary, target.palette.primary, amount),
+    secondary: lerpRgb(current.palette.secondary, target.palette.secondary, amount),
+    glow: lerpRgb(current.palette.glow, target.palette.glow, amount),
+  };
+  current.alpha = lerp(current.alpha, target.alpha, amount);
+  current.speed = lerp(current.speed, target.speed, amount);
+  current.orbit = lerp(current.orbit, target.orbit, amount);
+  current.wobble = lerp(current.wobble, target.wobble, amount);
+  current.breathRate = lerp(current.breathRate, target.breathRate, amount);
+  current.breathDepth = lerp(current.breathDepth, target.breathDepth, amount);
+  current.coreScale = lerp(current.coreScale, target.coreScale, amount);
+  current.pulse = lerp(current.pulse, target.pulse, amount);
+}
 
 function makeBlobs(width: number, height: number): Blob[] {
   const centerX = width / 2;
@@ -108,6 +185,7 @@ function drawCore(
   breathWave: number,
   thinkingWave: number,
   alphaScale: number,
+  coreScale: number,
 ) {
   const pulse = breathWave * 7 + thinkingWave * 2.5;
   for (const [radius, alpha] of [
@@ -119,13 +197,13 @@ function drawCore(
   ] as const) {
     context.fillStyle = rgba(palette.glow, alpha * alphaScale);
     context.beginPath();
-    context.arc(centerX, centerY, radius, 0, Math.PI * 2);
+    context.arc(centerX, centerY, radius * coreScale, 0, Math.PI * 2);
     context.fill();
   }
 
   context.fillStyle = rgba([255, 255, 255], (0.9 + breathWave * 0.07) * alphaScale);
   context.beginPath();
-  context.arc(centerX, centerY, 5.5 + breathWave * 1.4, 0, Math.PI * 2);
+  context.arc(centerX, centerY, (5.5 + breathWave * 1.4) * coreScale, 0, Math.PI * 2);
   context.fill();
 }
 
@@ -137,10 +215,12 @@ function drawAccent(
   palette: Palette,
   time: number,
   alphaScale: number,
+  delta: number,
+  visual: VisualState,
 ) {
-  accent.angle += accent.speed / 60;
-  const wobble = Math.sin(time * 0.8 + accent.phase) * 5;
-  const radius = accent.orbitRadius + wobble;
+  accent.angle += accent.speed * delta * visual.speed;
+  const wobble = Math.sin(time * 0.8 + accent.phase) * 5 * visual.wobble;
+  const radius = accent.orbitRadius * visual.orbit + wobble;
   const x = centerX + Math.cos(accent.angle) * radius;
   const y = centerY + Math.sin(accent.angle) * radius * 0.86;
   const alpha = (0.18 + (Math.sin(time * 1.3 + accent.phase) + 1) * 0.08) * alphaScale;
@@ -155,14 +235,42 @@ function drawAccent(
   context.fill();
 }
 
-export function ParticleCanvas({ snapshot }: { snapshot: PetSnapshot }) {
+function drawInteractionPulse(
+  context: CanvasRenderingContext2D,
+  centerX: number,
+  centerY: number,
+  reaction: PetMouseReaction | null,
+  reactionStartedAt: number,
+  timestamp: number,
+) {
+  if (!reaction || !reactionStartedAt) return;
+  const progress = Math.min(1, (timestamp - reactionStartedAt) / 800);
+  if (progress >= 1) return;
+  const nuzzle = reaction.kind === 'nuzzle';
+  const radius = nuzzle ? 28 + progress * 70 : 92 - progress * 42;
+  const alpha = Math.sin(progress * Math.PI) * (nuzzle ? 0.42 : 0.32);
+  context.strokeStyle = nuzzle ? `rgba(255, 219, 238, ${alpha})` : `rgba(220, 205, 255, ${alpha})`;
+  context.lineWidth = nuzzle ? 2.4 : 1.8;
+  context.beginPath();
+  context.arc(centerX, centerY, radius, 0, Math.PI * 2);
+  context.stroke();
+}
+
+export function ParticleCanvas({ snapshot, reaction }: { snapshot: PetSnapshot; reaction?: PetMouseReaction | null }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const snapshotRef = useRef(snapshot);
+  const reactionRef = useRef<PetMouseReaction | null>(reaction ?? null);
+  const reactionStartedAtRef = useRef(0);
   const mouseRef = useRef({ x: -1000, y: -1000 });
 
   useEffect(() => {
     snapshotRef.current = snapshot;
   }, [snapshot]);
+
+  useEffect(() => {
+    reactionRef.current = reaction ?? null;
+    reactionStartedAtRef.current = reaction ? performance.now() : 0;
+  }, [reaction]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -175,6 +283,8 @@ export function ParticleCanvas({ snapshot }: { snapshot: PetSnapshot }) {
     let height = 0;
     let blobs: Blob[] = [];
     let accents: Accent[] = [];
+    let lastTimestamp = 0;
+    const visual = visualTarget(DEFAULT_PET_SNAPSHOT);
 
     const resize = () => {
       const rect = canvas.getBoundingClientRect();
@@ -193,17 +303,16 @@ export function ParticleCanvas({ snapshot }: { snapshot: PetSnapshot }) {
 
     const draw = (timestamp: number) => {
       const state = snapshotRef.current;
-      const palette = state.thinking
-        ? PALETTES.thinking
-        : state.presence === 'away'
-          ? PALETTES.sleepy
-          : PALETTES[state.mood] ?? PALETTES['平静'];
-      const alphaScale = state.presence === 'away' ? 0.54 : state.presence === 'idle' ? 0.78 : 1;
+      const delta = lastTimestamp ? Math.min(0.05, (timestamp - lastTimestamp) / 1000) : 1 / 60;
+      lastTimestamp = timestamp;
+      approachVisual(visual, visualTarget(state), delta);
+      const palette = visual.palette;
+      const alphaScale = visual.alpha;
       const centerX = width / 2;
       const centerY = height / 2;
       const time = timestamp / 1000;
-      const breathWave = (Math.sin(time * 1.75) + 1) / 2;
-      const thinkingWave = state.thinking ? (Math.sin(time * 4.8) + 1) / 2 : 0;
+      const breathWave = (Math.sin(time * 1.75 * visual.breathRate) + 1) / 2;
+      const thinkingWave = ((Math.sin(time * 4.8) + 1) / 2) * visual.pulse;
 
       context.globalCompositeOperation = 'destination-in';
       context.fillStyle = 'rgba(0, 0, 0, 0.86)';
@@ -211,9 +320,9 @@ export function ParticleCanvas({ snapshot }: { snapshot: PetSnapshot }) {
       context.globalCompositeOperation = 'source-over';
 
       for (const blob of blobs) {
-        blob.angle += blob.speed / 60;
-        const wobble = Math.sin(time * 0.7 + blob.phase) * 7;
-        const orbit = blob.orbitRadius + wobble;
+        blob.angle += blob.speed * delta * visual.speed;
+        const wobble = Math.sin(time * 0.7 + blob.phase) * 7 * visual.wobble;
+        const orbit = blob.orbitRadius * visual.orbit + wobble;
         let x = centerX + Math.cos(blob.angle) * orbit;
         let y = centerY + Math.sin(blob.angle) * orbit * 0.84;
         const dx = x - mouseRef.current.x;
@@ -226,16 +335,25 @@ export function ParticleCanvas({ snapshot }: { snapshot: PetSnapshot }) {
         }
         blob.x = x;
         blob.y = y;
-        const localBreath = Math.sin(time * blob.breathSpeed + blob.phase) * 2.6;
-        const syncedBreath = breathWave * 5.2 + thinkingWave * 1.8;
+        const localBreath = Math.sin(time * blob.breathSpeed * visual.breathRate + blob.phase)
+          * 2.6 * visual.breathDepth;
+        const syncedBreath = breathWave * 5.2 * visual.breathDepth + thinkingWave * 1.8;
         drawBlob(context, blob, palette, blob.size + localBreath + syncedBreath, alphaScale);
       }
 
       for (const accent of accents) {
-        drawAccent(context, accent, centerX, centerY, palette, time, alphaScale);
+        drawAccent(context, accent, centerX, centerY, palette, time, alphaScale, delta, visual);
       }
 
-      drawCore(context, centerX, centerY, palette, breathWave, thinkingWave, alphaScale);
+      drawCore(context, centerX, centerY, palette, breathWave, thinkingWave, alphaScale, visual.coreScale);
+      drawInteractionPulse(
+        context,
+        centerX,
+        centerY,
+        reactionRef.current,
+        reactionStartedAtRef.current,
+        timestamp,
+      );
       frame = window.requestAnimationFrame(draw);
     };
 

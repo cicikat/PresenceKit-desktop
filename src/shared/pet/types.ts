@@ -9,6 +9,11 @@ export interface PetSnapshot {
   updatedAt: number;
 }
 
+export interface PetMouseReaction {
+  kind: 'shy' | 'nuzzle';
+  id: number;
+}
+
 export const DEFAULT_PET_SNAPSHOT: PetSnapshot = {
   mood: '平静',
   presence: 'active',
