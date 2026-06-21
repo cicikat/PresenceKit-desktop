@@ -63,6 +63,7 @@ Rust/Tauri HTTP client 统一显式禁用代理并设置超时：普通请求 15
 | 客户端文件 | 调用 |
 |---|---|
 | `src/shared/api/backend.ts` | `sendChat()`、`loadHistory()`、`loadGardenState()`、`loadDiaryList()`、`loadDiaryEntry()`、`loadSensorRealtime()`、`getPromptAssets()`、`patchPromptAssets()` |
+| `src/shared/api/chat-settings.ts` | `getChatSettings()`、`setChatMode()`、`setChatStyle()`、`setChatMultiMessage()`，由偏好面板「其他」tab 的 `ChatSettingsSection` 调用 |
 | `src/shared/api/ws.ts` | `wsClient.connect()`、通过 Tauri commands / events 完成 legacy WS 收发 |
 | `src-tauri/src/ws_bridge.rs` | 原生 WS 连接、Bearer header、URL 清洗与前端事件桥接 |
 | `src-tauri/src/lib.rs` | `send_chat`、`load_history`、`load_garden_state`、`load_diary_list`、`load_diary_entry`、`get_prompt_assets`、`patch_prompt_assets`、头像 / Dream 背景文件 commands、Dream 字体目录扫描、主题 Mod manifest 扫描 |
@@ -864,6 +865,10 @@ v1 目标新增或替换：
 | `list_themes()` | 前端 → Rust | packaged 优先扫描 `resource_dir/themes/*/theme.json`，debug/dev 回退源码 `public/themes/`；原样返回 manifest，由前端校验 token 契约 |
 | `dream_get_settings()` | 前端 → Rust → 后端 | GET `/dream/settings`；读取 Dream 上下文与 `display.physiological_arousal` |
 | `dream_update_settings(..., jailbreak_preset, display)` | 前端 → Rust → 后端 | PATCH `/dream/settings`；透传 Dream 独立 `jailbreak_preset`，`display` 可透传 `{ "physiological_arousal": boolean }` |
+| `get_chat_settings()` | 前端 → Rust → 后端 | 顺序 GET `/chat-mode` + `/chat-style` + `/chat-multi-message`，合并为 `{ mode, style, multi_message }` 返回 |
+| `set_chat_mode(mode)` | 前端 → Rust → 后端 | PUT `/chat-mode`，`mode` 取值 `"chat"` \| `"roleplay"` |
+| `set_chat_style(style)` | 前端 → Rust → 后端 | PUT `/chat-style`，`style` 取值 `"chat"` \| `"roleplay"` |
+| `set_chat_multi_message(enabled)` | 前端 → Rust → 后端 | PUT `/chat-multi-message`，`enabled` 布尔 |
 | `greet(name)` | 前端 → Rust | Tauri 模板遗留，当前未使用 |
 
 HTTP command 必须使用：

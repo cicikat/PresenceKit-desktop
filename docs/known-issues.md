@@ -4,6 +4,16 @@
 
 ---
 
+## 语音（TTS）功能完全未接入
+
+**影响**：后端已有完整 TTS 合成（`config.yaml: tts.enabled`、情绪音色映射、`/tts-config` 接口），但客户端从未实现音频播放端，`/tts-config` 的开关也无处放置——控制一个不存在的功能没有意义。
+
+**证据**：全仓 grep `tts|voice|audio` 仅命中 avatar 等无关项，无任何音频播放代码。
+
+**建议**：单开"语音接入"工单，最小形态：① Rust command 请求后端合成音频 → ② 前端播放 → ③ 偏好面板加 TTS 开关（音色映射属部署期，留 `config.yaml`）。目前对话设置（Fix 1）已先行独立上线，不依赖本项。
+
+---
+
 ## P1：客户端和目标 v1 WS 协议不一致
 
 **位置**：`src/shared/api/ws.ts`、`src/shared/api/types.ts`、`D:\ai\qq-st-bot\channels\desktop_ws.py`
