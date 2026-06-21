@@ -4,6 +4,8 @@
  * ============================================================ */
 
 import { useState, useEffect, useRef, useCallback, type CSSProperties } from 'react';
+import { getChatSettings, setChatMode, setChatStyle, setChatMultiMessage } from '../../shared/api/chat-settings';
+import type { ChatSettings } from '../../shared/api/types';
 import { invoke } from '@tauri-apps/api/core';
 import { Icon, MicroLabel } from './components/UIKit';
 import { StateEngine } from '../../shared/state/store';
@@ -138,6 +140,7 @@ function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHea
       }}>
         <div onClick={e => e.stopPropagation()} style={{
           margin: 'auto', width: 'min(540px, 92vw)',
+          maxHeight: '90vh', display: 'flex', flexDirection: 'column',
           background: 'var(--paper)', border: '1px solid var(--paper-edge)',
           borderRadius: 'var(--radius-lg)', overflow: 'hidden',
           boxShadow: '0 30px 80px var(--shadow-rgb-mix)',
@@ -167,7 +170,7 @@ function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHea
               }}>{label}</button>
             ))}
           </div>
-          <div style={{ padding: '18px 22px', display: 'grid', gap: 18 }}>
+          <div style={{ padding: '18px 22px', display: 'grid', gap: 18, flex: 1, minHeight: 0, overflowY: 'auto' }}>
             {tab === 'appearance' ? (
               <>
                 <PrefRow label="日间主题" hint="手动切换至日间或自动模式日间时段使用的主题">
@@ -346,6 +349,8 @@ function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHea
               <PromptAssetsSettings onCharacterAvatarChange={onCharacterAvatarChange} />
             ) : (
               <>
+                <ChatSettingsSection />
+                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
                 <div>
                   <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink)', marginBottom: 2 }}>桌宠鼠标交互</div>
                   <div className="mono" style={{ fontSize: 9.5, color: 'var(--ink-3)', letterSpacing: 1.1 }}>
@@ -769,6 +774,109 @@ function MinuteSelect({ value, onChange }: { value: number; onChange: (value: nu
         <option key={minutes} value={minutes}>{minutes < 1 ? `${minutes * 60}秒` : `${minutes}分`}</option>
       ))}
     </select>
+  );
+}
+
+/* ── 对话设置 ── */
+function ChatSettingsSection() {
+  const [settings, setSettings] = useState<ChatSettings | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState<{ ok: boolean; msg: string } | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    getChatSettings()
+      .then(s => { setSettings(s); setLoading(false); })
+      .catch(e => { setStatus({ ok: false, msg: `读取失败：${String(e)}` }); setLoading(false); });
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, []);
+
+  const flash = (ok: boolean, msg: string) => {
+    setStatus({ ok, msg });
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setStatus(null), 3000);
+  };
+
+  const saveMode = async (mode: ChatSettings['mode']) => {
+    if (!settings || saving) return;
+    setSaving(true);
+    const prev = settings.mode;
+    setSettings(s => s ? { ...s, mode } : s);
+    try { await setChatMode(mode); flash(true, '对话模式已保存'); }
+    catch (e) { setSettings(s => s ? { ...s, mode: prev } : s); flash(false, `保存失败：${String(e)}`); }
+    finally { setSaving(false); }
+  };
+
+  const saveStyle = async (style: ChatSettings['style']) => {
+    if (!settings || saving) return;
+    setSaving(true);
+    const prev = settings.style;
+    setSettings(s => s ? { ...s, style } : s);
+    try { await setChatStyle(style); flash(true, '对话风格已保存'); }
+    catch (e) { setSettings(s => s ? { ...s, style: prev } : s); flash(false, `保存失败：${String(e)}`); }
+    finally { setSaving(false); }
+  };
+
+  const saveMultiMessage = async (enabled: boolean) => {
+    if (!settings || saving) return;
+    setSaving(true);
+    const prev = settings.multi_message;
+    setSettings(s => s ? { ...s, multi_message: enabled } : s);
+    try { await setChatMultiMessage(enabled); flash(true, '分条发送已保存'); }
+    catch (e) { setSettings(s => s ? { ...s, multi_message: prev } : s); flash(false, `保存失败：${String(e)}`); }
+    finally { setSaving(false); }
+  };
+
+  if (loading) {
+    return <div className="serif" style={{ color: 'var(--ink-3)', fontSize: 13 }}>读取对话设置…</div>;
+  }
+
+  return (
+    <div>
+      <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink)', marginBottom: 2 }}>对话</div>
+      <div className="mono" style={{ fontSize: 9.5, color: 'var(--ink-3)', letterSpacing: 1.1, marginBottom: 14 }}>
+        Reality 对话运行时开关
+      </div>
+      <div style={{ display: 'grid', gap: 14 }}>
+        <PrefRow label="对话模式" hint="chat：普通聊天 / roleplay：沉浸角色扮演">
+          <select
+            value={settings?.mode ?? 'chat'}
+            disabled={saving || !settings}
+            onChange={e => void saveMode(e.target.value as ChatSettings['mode'])}
+            style={{ ...prefSelectStyle, width: 140 }}
+          >
+            <option value="chat">聊天模式</option>
+            <option value="roleplay">角色扮演</option>
+          </select>
+        </PrefRow>
+        <PrefRow label="对话风格" hint="chat：沉浸式对话 / roleplay：沉浸式角色扮演">
+          <select
+            value={settings?.style ?? 'roleplay'}
+            disabled={saving || !settings}
+            onChange={e => void saveStyle(e.target.value as ChatSettings['style'])}
+            style={{ ...prefSelectStyle, width: 140 }}
+          >
+            <option value="chat">沉浸对话</option>
+            <option value="roleplay">沉浸扮演</option>
+          </select>
+        </PrefRow>
+        <PrefRow label="多消息分条" hint="开启后 AI 回复拆分成多条气泡发送">
+          <PrefSwitch
+            active={settings?.multi_message ?? false}
+            onClick={() => { if (settings) void saveMultiMessage(!settings.multi_message); }}
+          />
+        </PrefRow>
+        {status && (
+          <div className="mono" style={{
+            fontSize: 9.5, letterSpacing: 0.8,
+            color: status.ok ? 'var(--ink-3)' : 'var(--danger)',
+          }}>
+            {status.msg}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

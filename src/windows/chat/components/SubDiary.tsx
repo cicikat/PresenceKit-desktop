@@ -199,16 +199,18 @@ export function SubDiary() {
     return data.entries;
   }, [data]);
 
-  function openEntry(item: DiaryListItem) {
+  async function openEntry(item: DiaryListItem) {
     const charId = activeCharId || '';
-    const label = `diary-detail-${charId}-${item.date}`;
+    // Tauri window labels only allow [a-zA-Z0-9-/:_]; slug non-ASCII charId chars
+    const safeCharId = charId.replace(/[^a-zA-Z0-9_-]/g, c => `u${c.codePointAt(0)!.toString(16)}`);
+    const label = `diary-detail-${safeCharId}-${item.date}`;
     const params = new URLSearchParams({ window: 'diary-detail', date: item.date, char: charId });
-    const existing = WebviewWindow.getByLabel(label);
+    const existing = await WebviewWindow.getByLabel(label);
     if (existing) {
-      existing.then(w => w?.setFocus()).catch(() => {});
+      await existing.setFocus();
       return;
     }
-    new WebviewWindow(label, {
+    const w = new WebviewWindow(label, {
       url: `index.html?${params.toString()}`,
       title: `${formatDate(item.date)} · ${item.title}`,
       width: 520,
@@ -216,7 +218,9 @@ export function SubDiary() {
       decorations: false,
       resizable: true,
       focus: true,
+      visible: false,
     });
+    w.once('tauri://error', e => console.error('[diary] window creation failed', e));
   }
 
   if (loading) {

@@ -1606,13 +1606,15 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       position: 'relative', height: '100%',
       display: 'flex', flexDirection: 'column',
       minWidth: 0,
-      background: 'var(--paper)', overflow: 'hidden',
+      background: avatars.chatBackground?.dataUrl ? 'transparent' : 'var(--paper)',
+      overflow: 'hidden',
     }}>
       {/* HEADER */}
       {headerVisible && (
         <div style={{
           padding: '20px 28px 14px', borderBottom: '1px solid var(--paper-edge)',
-          background: 'var(--paper)', display: 'flex', alignItems: 'flex-start', gap: 16,
+          background: avatars.chatBackground?.dataUrl ? 'oklch(from var(--paper) l c h / 0.75)' : 'var(--paper)',
+          display: 'flex', alignItems: 'flex-start', gap: 16,
         }}>
           <BreathingAvatar engine={engine} hue={currentHue} size={50} dataUrl={herDataUrl} />
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -1655,7 +1657,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       <div
         ref={scrollRef}
         onScroll={onScroll}
-        style={{ flex: 1, overflowY: 'auto', padding: `8px ${youVisible ? 56 : 28}px 12px 28px`, background: 'var(--paper)' }}
+        style={{ flex: 1, overflowY: 'auto', padding: `8px ${youVisible ? 56 : 28}px 12px 28px`, background: avatars.chatBackground?.dataUrl ? 'transparent' : 'var(--paper)' }}
       >
         {/* 初始加载中占位 */}
         {historyStatus.kind === 'loading' && messages.length === 0 && (
@@ -1713,7 +1715,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       </div>
 
       {/* INPUT */}
-      <div style={{ position: 'relative', padding: 18, borderTop: '1px solid var(--paper-edge)', background: 'var(--paper-2)' }}>
+      <div style={{ position: 'relative', padding: 18, borderTop: '1px solid var(--paper-edge)', background: avatars.chatBackground?.dataUrl ? 'oklch(from var(--paper-2) l c h / 0.85)' : 'var(--paper-2)' }}>
         {showAttachMenu && (
           <div style={{
             position: 'absolute', bottom: '100%', left: 18, marginBottom: 8,

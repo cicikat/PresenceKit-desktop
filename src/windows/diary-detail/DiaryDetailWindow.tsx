@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { DiaryDetailPane } from '../chat/components/SubDiary';
+import { initTheme } from '../../shared/theme/registry';
 
 const params = new URLSearchParams(window.location.search);
 const DATE = params.get('date') ?? '';
@@ -13,6 +14,16 @@ export function DiaryDetailWindow() {
     if (DATE) {
       win.setTitle(DATE).catch(() => {});
     }
+  }, [win]);
+
+  useEffect(() => {
+    initTheme()
+      .catch(() => {})
+      .finally(() => {
+        win.show().catch(() => {});
+      });
+    const t = setTimeout(() => win.show().catch(() => {}), 300);
+    return () => clearTimeout(t);
   }, [win]);
 
   return (

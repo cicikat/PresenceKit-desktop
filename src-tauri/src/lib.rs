@@ -1117,7 +1117,7 @@ async fn activity_reading_start(app: tauri::AppHandle, file_path: String) -> Res
         .part("file", part)
         .text("start_page", "1");
 
-    let client = http_client()?;
+    let client = llm_http_client()?;
     let resp = authorized_request(&cfg, client.post(backend_url(&cfg, "/activity/reading/start")))
         .multipart(form)
         .send()
@@ -1295,11 +1295,70 @@ struct ReadingStartFromLibraryPayload {
 
 #[tauri::command]
 async fn activity_reading_start_from_library(app: tauri::AppHandle, payload: ReadingStartFromLibraryPayload) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
     let body = serde_json::json!({
         "book_id": payload.book_id,
         "start_page": payload.start_page.unwrap_or(1),
     });
-    activity_post(&app, "/activity/reading/start_from_library", body).await
+    let client = llm_http_client()?;
+    let resp = client
+        .post(backend_url(&cfg, "/activity/reading/start_from_library"))
+        .bearer_auth(&cfg.admin_token)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    let status = resp.status();
+    if !status.is_success() {
+        let body_text = resp.text().await.unwrap_or_default();
+        return Err(format!("HTTP {}: {}", status.as_u16(), body_text));
+    }
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[derive(serde::Deserialize)]
+struct ReadingDeleteBookPayload {
+    book_id: String,
+    with_insights: Option<bool>,
+}
+
+#[tauri::command]
+async fn activity_reading_delete_book(app: tauri::AppHandle, payload: ReadingDeleteBookPayload) -> Result<serde_json::Value, String> {
+    let body = serde_json::json!({
+        "book_id": payload.book_id,
+        "with_insights": payload.with_insights.unwrap_or(false),
+    });
+    activity_post(&app, "/activity/reading/library/delete", body).await
+}
+
+#[derive(serde::Deserialize)]
+struct ReadingRenameBookPayload {
+    book_id: String,
+    title: String,
+}
+
+#[tauri::command]
+async fn activity_reading_rename_book(app: tauri::AppHandle, payload: ReadingRenameBookPayload) -> Result<serde_json::Value, String> {
+    let body = serde_json::json!({
+        "book_id": payload.book_id,
+        "title": payload.title,
+    });
+    activity_post(&app, "/activity/reading/library/rename", body).await
+}
+
+#[derive(serde::Deserialize)]
+struct ReadingCategorizeBookPayload {
+    book_id: String,
+    category: String,
+}
+
+#[tauri::command]
+async fn activity_reading_categorize_book(app: tauri::AppHandle, payload: ReadingCategorizeBookPayload) -> Result<serde_json::Value, String> {
+    let body = serde_json::json!({
+        "book_id": payload.book_id,
+        "category": payload.category,
+    });
+    activity_post(&app, "/activity/reading/library/categorize", body).await
 }
 
 // ── Group Chat ────────────────────────────────────────────────────────────────
@@ -1490,6 +1549,68 @@ async fn patch_presence_nag(
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
 
+// ── Chat Settings ────────────────────────────────────────────────────────────
+
+#[tauri::command]
+async fn get_chat_settings(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+
+    let mode_resp = authorized_request(&cfg, client.get(backend_url(&cfg, "/chat-mode")))
+        .send().await.map_err(|e| e.to_string())?;
+    let mode_resp = require_success(mode_resp).await?;
+    let mode_val: serde_json::Value = mode_resp.json().await.map_err(|e| e.to_string())?;
+
+    let style_resp = authorized_request(&cfg, client.get(backend_url(&cfg, "/chat-style")))
+        .send().await.map_err(|e| e.to_string())?;
+    let style_resp = require_success(style_resp).await?;
+    let style_val: serde_json::Value = style_resp.json().await.map_err(|e| e.to_string())?;
+
+    let multi_resp = authorized_request(&cfg, client.get(backend_url(&cfg, "/chat-multi-message")))
+        .send().await.map_err(|e| e.to_string())?;
+    let multi_resp = require_success(multi_resp).await?;
+    let multi_val: serde_json::Value = multi_resp.json().await.map_err(|e| e.to_string())?;
+
+    Ok(serde_json::json!({
+        "mode": mode_val.get("mode").and_then(|v| v.as_str()).unwrap_or("chat"),
+        "style": style_val.get("style").and_then(|v| v.as_str()).unwrap_or("roleplay"),
+        "multi_message": multi_val.get("multi_message").and_then(|v| v.as_bool()).unwrap_or(false),
+    }))
+}
+
+#[tauri::command]
+async fn set_chat_mode(app: tauri::AppHandle, mode: String) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let resp = authorized_request(&cfg, client.put(backend_url(&cfg, "/chat-mode")))
+        .json(&serde_json::json!({ "mode": mode }))
+        .send().await.map_err(|e| e.to_string())?;
+    let resp = require_success(resp).await?;
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn set_chat_style(app: tauri::AppHandle, style: String) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let resp = authorized_request(&cfg, client.put(backend_url(&cfg, "/chat-style")))
+        .json(&serde_json::json!({ "style": style }))
+        .send().await.map_err(|e| e.to_string())?;
+    let resp = require_success(resp).await?;
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn set_chat_multi_message(app: tauri::AppHandle, enabled: bool) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let resp = authorized_request(&cfg, client.put(backend_url(&cfg, "/chat-multi-message")))
+        .json(&serde_json::json!({ "enabled": enabled }))
+        .send().await.map_err(|e| e.to_string())?;
+    let resp = require_success(resp).await?;
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
 // ── Dream Seed ────────────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -1633,6 +1754,9 @@ pub fn run() {
             activity_reading_library,
             activity_reading_add_book,
             activity_reading_start_from_library,
+            activity_reading_delete_book,
+            activity_reading_rename_book,
+            activity_reading_categorize_book,
             activity_gomoku_start,
             activity_gomoku_state,
             activity_gomoku_move,
@@ -1662,6 +1786,10 @@ pub fn run() {
             get_meta_mode,
             patch_meta_mode,
             patch_presence_nag,
+            get_chat_settings,
+            set_chat_mode,
+            set_chat_style,
+            set_chat_multi_message,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
