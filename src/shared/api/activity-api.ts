@@ -71,6 +71,10 @@ export interface ReadingChatResult {
 export interface ReadingLibraryBook {
   book_id: string;
   filename: string;
+  title: string;
+  category: string;
+  added_at?: string;
+  total_pages?: number | null;
   size_bytes: number;
 }
 
@@ -97,6 +101,12 @@ export const readingApi = {
     invokeActivity('activity_reading_add_book', { filePath }),
   startFromLibrary: (book_id: string, start_page = 1): Promise<ReadingStartResult> =>
     invokeActivity('activity_reading_start_from_library', { payload: { book_id, start_page } }),
+  deleteBook: (book_id: string, with_insights = false): Promise<{ deleted: boolean; book_id: string }> =>
+    invokeActivity('activity_reading_delete_book', { payload: { book_id, with_insights } }),
+  renameBook: (book_id: string, title: string): Promise<ReadingLibraryBook> =>
+    invokeActivity('activity_reading_rename_book', { payload: { book_id, title } }),
+  categorizeBook: (book_id: string, category: string): Promise<ReadingLibraryBook> =>
+    invokeActivity('activity_reading_categorize_book', { payload: { book_id, category } }),
 };
 
 // ── Gomoku ────────────────────────────────────────────────────────────────────

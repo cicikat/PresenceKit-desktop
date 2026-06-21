@@ -285,6 +285,14 @@ export interface PromptAssetsPatchResponse {
   active: ActivePromptAssets;
 }
 
+// ── Chat Settings (runtime preferences) ──────────────────────────────────────
+
+export interface ChatSettings {
+  mode: 'chat' | 'roleplay';
+  style: 'chat' | 'roleplay';
+  multi_message: boolean;
+}
+
 // ── Hidden State Panel (Phase 4.5, read-only UI) ──────────────────────────────
 
 export interface HiddenStateSensitivity {
