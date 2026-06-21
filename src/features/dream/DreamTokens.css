@@ -760,6 +760,11 @@
   box-shadow: 0 0 14px rgb(127 191 232 / 0.14);
 }
 
+.dream-hud__pill--neutral {
+  border-color: var(--dt-border-soft);
+  background: var(--dt-surface-2);
+}
+
 .dream-hud__metric-head {
   margin-bottom: 4px;
 }

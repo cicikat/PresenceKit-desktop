@@ -532,17 +532,7 @@ function DreamSidePane({
       <aside
         className="dream-theme__sidebar dream-theme__sidebar--subconscious"
         aria-label="梦境潜意识"
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          '--forest': 'transparent',
-          '--forest-1': 'var(--dt-surface-deep)',
-          '--forest-line': 'var(--dt-border-soft)',
-          '--on-forest': 'var(--dt-ink)',
-          '--on-forest-2': 'var(--dt-ink-3)',
-          '--chat-theme-font-scale': 'var(--dream-theme-font-scale)',
-        } as CSSProperties}
+        style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
       >
         <div className="dream-side-placeholder__head">
           <div>
