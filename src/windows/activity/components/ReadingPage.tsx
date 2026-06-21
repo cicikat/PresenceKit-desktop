@@ -4,7 +4,7 @@ import {
   readingApi,
   type ReadingState, type ReadingPageResult, type ReadingLibraryBook,
 } from '../../../shared/api/activity-api';
-import { ActivityCompanionPanel } from './ActivityCompanionPanel';
+import { CompanionSidebar } from './CompanionSidebar';
 import { getUIPref, onUIPrefChange } from '../../../shared/uiPreferences';
 
 function StatusTag({ text, ok }: { text: string; ok?: boolean }) {
@@ -54,14 +54,47 @@ function formatBytes(n: number): string {
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
-function BookListItem({ book, onRead, disabled }: { book: ReadingLibraryBook; onRead: () => void; disabled: boolean }) {
+function BookListItem({ book, onRead, onDelete, onRename, onCategorize, disabled }: {
+  book: ReadingLibraryBook;
+  onRead: () => void;
+  onDelete: () => void;
+  onRename: (title: string) => void;
+  onCategorize: (category: string) => void;
+  disabled: boolean;
+}) {
   const [hover, setHover] = useState(false);
-  const name = book.filename.replace(/\.pdf$/i, '');
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const handleMenuClick = (e: { stopPropagation(): void }) => {
+    e.stopPropagation();
+    setMenuOpen(v => !v);
+  };
+
+  const handleRename = (e: { stopPropagation(): void }) => {
+    e.stopPropagation();
+    setMenuOpen(false);
+    const t = window.prompt('新名称：', book.title);
+    if (t !== null && t.trim()) onRename(t.trim());
+  };
+
+  const handleCategorize = (e: { stopPropagation(): void }) => {
+    e.stopPropagation();
+    setMenuOpen(false);
+    const c = window.prompt('分类名称（留空恢复「未分类」）：', book.category === '未分类' ? '' : book.category);
+    if (c !== null) onCategorize(c.trim());
+  };
+
+  const handleDelete = (e: { stopPropagation(): void }) => {
+    e.stopPropagation();
+    setMenuOpen(false);
+    if (window.confirm(`确认删除《${book.title}》？此操作不可撤销。`)) onDelete();
+  };
+
   return (
     <div
       onClick={disabled ? undefined : onRead}
       onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
+      onMouseLeave={() => { setHover(false); setMenuOpen(false); }}
       style={{
         padding: '10px 14px',
         borderRadius: 'var(--radius-sm)',
@@ -71,6 +104,7 @@ function BookListItem({ book, onRead, disabled }: { book: ReadingLibraryBook; on
         opacity: disabled ? 0.5 : 1,
         transition: 'background 0.12s, border-color 0.12s',
         display: 'flex', alignItems: 'center', gap: 10,
+        position: 'relative',
       }}
     >
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -78,18 +112,59 @@ function BookListItem({ book, onRead, disabled }: { book: ReadingLibraryBook; on
           fontSize: 14, fontWeight: 600, color: 'var(--ink)',
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>
-          {name}
+          {book.title || book.filename.replace(/\.pdf$/i, '')}
         </div>
         <div className="mono" style={{ fontSize: 10, color: 'var(--ink-3)', marginTop: 2, letterSpacing: 0.5 }}>
-          {formatBytes(book.size_bytes)}
+          {book.total_pages ? `${book.total_pages} 页 · ` : ''}{formatBytes(book.size_bytes)}
         </div>
       </div>
-      <div style={{
-        fontSize: 11, color: 'var(--ink-3)', flexShrink: 0,
-        fontFamily: 'var(--font-mono)',
-      }}>
-        阅读 →
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+        <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'var(--font-mono)' }}>
+          阅读 →
+        </div>
+        <button
+          onClick={handleMenuClick}
+          style={{
+            fontFamily: 'inherit', fontSize: 14, padding: '2px 6px',
+            border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-xs)',
+            background: menuOpen ? 'var(--paper-edge)' : 'transparent',
+            color: 'var(--ink-3)', cursor: 'pointer', lineHeight: 1,
+          }}
+        >
+          ⋯
+        </button>
       </div>
+      {menuOpen && (
+        <div
+          style={{
+            position: 'absolute', right: 8, top: '100%', zIndex: 10,
+            background: 'var(--paper)', border: '1px solid var(--paper-edge)',
+            borderRadius: 'var(--radius-sm)', boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+            minWidth: 110, overflow: 'hidden',
+          }}
+          onClick={e => e.stopPropagation()}
+        >
+          {[
+            { label: '改名', action: handleRename },
+            { label: '分类', action: handleCategorize },
+            { label: '删除', action: handleDelete, danger: true },
+          ].map(item => (
+            <div
+              key={item.label}
+              onClick={item.action}
+              style={{
+                padding: '8px 14px', fontSize: 13, cursor: 'pointer',
+                color: item.danger ? 'oklch(0.50 0.18 20)' : 'var(--ink)',
+                transition: 'background 0.1s',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'var(--paper-2)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+            >
+              {item.label}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -152,6 +227,36 @@ export function ReadingPage() {
     }
   };
 
+  const handleDeleteBook = async (book_id: string) => {
+    setError(null);
+    try {
+      await readingApi.deleteBook(book_id);
+      await refreshLibrary();
+    } catch (e: any) {
+      setError(String(e?.message ?? e));
+    }
+  };
+
+  const handleRenameBook = async (book_id: string, title: string) => {
+    setError(null);
+    try {
+      await readingApi.renameBook(book_id, title);
+      await refreshLibrary();
+    } catch (e: any) {
+      setError(String(e?.message ?? e));
+    }
+  };
+
+  const handleCategorizeBook = async (book_id: string, category: string) => {
+    setError(null);
+    try {
+      await readingApi.categorizeBook(book_id, category);
+      await refreshLibrary();
+    } catch (e: any) {
+      setError(String(e?.message ?? e));
+    }
+  };
+
   const handleAddBook = async () => {
     const selected = await open({
       multiple: false,
@@ -202,12 +307,13 @@ export function ReadingPage() {
 
   return (
     <div style={{
-      flex: 1, display: 'flex', flexDirection: 'column',
-      padding: '28px 32px', gap: 20, overflowY: 'auto',
+      flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column',
+      padding: '28px 32px', gap: 20,
+      overflow: isActive ? 'hidden' : 'auto',
       background: 'var(--paper)', color: 'var(--ink)',
     }}>
       {/* header */}
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexShrink: 0 }}>
         <div className="serif" style={{ fontSize: 22, fontWeight: 600, letterSpacing: -0.3 }}>
           一起看书
         </div>
@@ -222,6 +328,7 @@ export function ReadingPage() {
           padding: '8px 12px', background: 'oklch(0.95 0.05 20)',
           border: '1px solid oklch(0.80 0.10 20)', borderRadius: 'var(--radius-sm)',
           fontSize: 11, color: 'oklch(0.40 0.14 20)', letterSpacing: 0.5,
+          flexShrink: 0,
         }}>
           {error}
         </div>
@@ -253,85 +360,120 @@ export function ReadingPage() {
               }}>
                 书库还是空的，先添加一本 PDF 吧。
               </div>
-            ) : (
-              books.map(book => (
-                <BookListItem
-                  key={book.book_id}
-                  book={book}
-                  onRead={() => handleReadBook(book)}
-                  disabled={loading}
-                />
-              ))
-            )}
+            ) : (() => {
+              const grouped: Record<string, ReadingLibraryBook[]> = {};
+              for (const b of books) {
+                const cat = b.category || '未分类';
+                (grouped[cat] ??= []).push(b);
+              }
+              const cats = Object.keys(grouped).sort((a, b) =>
+                a === '未分类' ? 1 : b === '未分类' ? -1 : a.localeCompare(b, 'zh')
+              );
+              return cats.map(cat => (
+                <div key={cat}>
+                  {cats.length > 1 && (
+                    <div className="mono" style={{
+                      fontSize: 10, letterSpacing: 1, color: 'var(--ink-3)',
+                      fontWeight: 600, padding: '4px 2px 2px',
+                      textTransform: 'uppercase',
+                    }}>
+                      {cat}
+                    </div>
+                  )}
+                  {grouped[cat].map(book => (
+                    <BookListItem
+                      key={book.book_id}
+                      book={book}
+                      onRead={() => handleReadBook(book)}
+                      onDelete={() => handleDeleteBook(book.book_id)}
+                      onRename={title => handleRenameBook(book.book_id, title)}
+                      onCategorize={category => handleCategorizeBook(book.book_id, category)}
+                      disabled={loading}
+                    />
+                  ))}
+                </div>
+              ));
+            })()}
           </div>
         </div>
       ) : (
-        /* ── 阅读中 ── */
-        <>
-          {/* session info */}
+        /* ── 阅读中：左书页 / 右聊天 ── */
+        <div style={{
+          flex: 1, minHeight: 0,
+          display: 'flex', gap: 20,
+          position: 'relative',
+        }}>
+          {/* 左栏：书页区 */}
           <div style={{
-            display: 'flex', gap: 16, alignItems: 'center',
-            padding: '10px 14px',
-            background: 'var(--paper-2)', border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-md)',
+            flex: 1, minWidth: 0,
+            display: 'flex', flexDirection: 'column', gap: 20,
           }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="serif" style={{ fontSize: 15, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {state?.title ?? '—'}
-              </div>
-              <div className="mono" style={{ fontSize: 10.5, color: 'var(--ink-3)', letterSpacing: 0.8, marginTop: 2 }}>
-                第 {state?.current_page ?? '?'} 页 / 共 {state?.total_pages ?? '?'} 页
-              </div>
-            </div>
-            <Btn onClick={handleClose} disabled={loading}>关闭阅读</Btn>
-          </div>
-
-          {/* page content */}
-          <div style={{
-            flex: 1, minHeight: 0,
-            background: 'var(--paper)', border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-md)',
-            overflowY: 'auto',
-          }}>
+            {/* session info */}
             <div style={{
-              maxWidth: maxWidth, margin: '0 auto',
-              padding: '20px 24px',
-              lineHeight: 1.85, fontSize: fontSize,
-              fontFamily: 'var(--font-serif)',
-              whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-              color: 'var(--ink)',
+              display: 'flex', gap: 16, alignItems: 'center',
+              padding: '10px 14px', flexShrink: 0,
+              background: 'var(--paper-2)', border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-md)',
             }}>
-              {page ? page.text : (
-                <span style={{ color: 'var(--ink-3)', fontStyle: 'italic' }}>加载页面内容…</span>
-              )}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="serif" style={{ fontSize: 15, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {state?.title ?? '—'}
+                </div>
+                <div className="mono" style={{ fontSize: 10.5, color: 'var(--ink-3)', letterSpacing: 0.8, marginTop: 2 }}>
+                  第 {state?.current_page ?? '?'} 页 / 共 {state?.total_pages ?? '?'} 页
+                </div>
+              </div>
+              <Btn onClick={handleClose} disabled={loading}>关闭阅读</Btn>
+            </div>
+
+            {/* page content — scrolls internally */}
+            <div style={{
+              flex: 1, minHeight: 0,
+              background: 'var(--paper)', border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-md)',
+              overflowY: 'auto',
+            }}>
+              <div style={{
+                maxWidth: maxWidth, margin: '0 auto',
+                padding: '20px 24px',
+                lineHeight: 1.85, fontSize: fontSize,
+                fontFamily: 'var(--font-serif)',
+                whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                color: 'var(--ink)',
+              }}>
+                {page ? page.text : (
+                  <span style={{ color: 'var(--ink-3)', fontStyle: 'italic' }}>加载页面内容…</span>
+                )}
+              </div>
+            </div>
+
+            {showDebug && (
+              <div className="mono" style={{
+                padding: '8px 12px', background: 'var(--paper-2)',
+                border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-sm)',
+                fontSize: 10.5, color: 'var(--ink-3)', letterSpacing: 0.5, flexShrink: 0,
+              }}>
+                session_id: {state?.session_id ?? '—'} · page: {state?.current_page ?? '—'} / {state?.total_pages ?? '—'}
+              </div>
+            )}
+
+            {/* navigation — pinned at bottom of left column */}
+            <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
+              <Btn onClick={() => handleTurnPage('prev')} disabled={loading || (state?.current_page ?? 1) <= 1}>
+                ← 上一页
+              </Btn>
+              <Btn onClick={() => handleTurnPage('next')} disabled={loading || (state?.current_page ?? 0) >= (state?.total_pages ?? 0)}>
+                下一页 →
+              </Btn>
             </div>
           </div>
 
-          {showDebug && (
-            <div className="mono" style={{
-              padding: '8px 12px', background: 'var(--paper-2)',
-              border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-sm)',
-              fontSize: 10.5, color: 'var(--ink-3)', letterSpacing: 0.5,
-            }}>
-              session_id: {state?.session_id ?? '—'} · page: {state?.current_page ?? '—'} / {state?.total_pages ?? '—'}
-            </div>
-          )}
-
-          {/* navigation */}
-          <div style={{ display: 'flex', gap: 10, paddingBottom: 4 }}>
-            <Btn onClick={() => handleTurnPage('prev')} disabled={loading || (state?.current_page ?? 1) <= 1}>
-              ← 上一页
-            </Btn>
-            <Btn onClick={() => handleTurnPage('next')} disabled={loading || (state?.current_page ?? 0) >= (state?.total_pages ?? 0)}>
-              下一页 →
-            </Btn>
-          </div>
-
-          <ActivityCompanionPanel
+          {/* 右栏：聊天侧栏 */}
+          <CompanionSidebar
             activityId="reading"
             sessionId={state?.session_id ?? null}
             sessionActive={isActive}
             sessionFinished={false}
           />
-        </>
+        </div>
       )}
     </div>
   );

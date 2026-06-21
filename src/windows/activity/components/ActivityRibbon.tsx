@@ -119,8 +119,8 @@ export function ActivityRibbon({ activeTab, onTab, onClose, onOpenSettings, them
       <ABtn icon="settings" label="活动偏好" active={false} onClick={onOpenSettings} />
       <Sep />
       <ABtn
-        icon={theme === 'dark' ? 'sparkle' : 'mood'}
-        label={theme === 'dark' ? '日间' : '夜间'}
+        icon={theme === 'night' ? 'sparkle' : 'mood'}
+        label={theme === 'night' ? '日间' : '夜间'}
         active={false}
         onClick={onThemeToggle}
       />

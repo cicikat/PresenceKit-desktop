@@ -17,8 +17,7 @@ import { GomokuPage } from './components/GomokuPage';
 import { ChessPage } from './components/ChessPage';
 import { DreamSeedPanel } from './components/DreamSeedPanel';
 import { ActivityPreferencesPanel } from './components/ActivitySettingsPage';
-import { getUIPref } from '../../shared/uiPreferences';
-import { listThemes, setTheme as applyRegisteredTheme, subscribe as subscribeTheme } from '../../shared/theme/registry';
+import { toggleDayNight, getDayNight, subscribe as subscribeTheme } from '../../shared/theme/registry';
 
 interface ActivityWindowProps {
   onClose: () => void;
@@ -27,19 +26,13 @@ interface ActivityWindowProps {
 export function ActivityWindow({ onClose }: ActivityWindowProps) {
   const [activeTab, setActiveTab] = useState<ActivityTab>('home');
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [theme, setTheme] = useState(() => getUIPref('chat.theme', 'paper'));
+  const [theme, setTheme] = useState(() => getDayNight().active);
 
   const handleTab = (tab: ActivityTab) => setActiveTab(tab);
 
-  useEffect(() => subscribeTheme(() => setTheme(getUIPref('chat.theme', 'paper'))), []);
+  useEffect(() => subscribeTheme(() => setTheme(getDayNight().active)), []);
 
-  const handleThemeToggle = async () => {
-    const themes = await listThemes();
-    const index = themes.findIndex(record => record.manifest.id === theme);
-    const next = themes[(index + 1) % themes.length]?.manifest.id ?? 'paper';
-    await applyRegisteredTheme(next);
-    setTheme(next);
-  };
+  const handleThemeToggle = () => toggleDayNight();
 
   return (
     <div

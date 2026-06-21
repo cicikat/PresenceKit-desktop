@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type CSSProperties } from 'react';
+import { useState, useEffect, useCallback, useRef, type CSSProperties } from 'react';
 import {
   gomokuApi,
   type GomokuState,
@@ -7,7 +7,7 @@ import {
   type GomokuOpponent,
   type GomokuAiStyle,
 } from '../../../shared/api/activity-api';
-import { ActivityCompanionPanel } from './ActivityCompanionPanel';
+import { CompanionSidebar } from './CompanionSidebar';
 import { getUIPref, onUIPrefChange } from '../../../shared/uiPreferences';
 
 const BOARD_THEMES: Record<string, Record<string, string>> = {
@@ -19,9 +19,8 @@ const BOARD_THEMES: Record<string, Record<string, string>> = {
 };
 
 const BOARD_SIZE = 15;
-const CELL = 34;
-const PAD = 17;
-const BOARD_PX = (BOARD_SIZE - 1) * CELL + PAD * 2;
+const CELL = 34;   // default cell size
+const MIN_CELL = 14;
 
 const AI_STYLE_LABELS: Record<GomokuAiStyle, string> = {
   balanced: '均衡',
@@ -103,16 +102,21 @@ function GomokuBoard({
   lastMove,
   onPlace,
   disabled,
+  cellSize = CELL,
 }: {
   board: GomokuCell[][];
   lastMove: GomokuLastMove | null;
   onPlace: (row: number, col: number) => void;
   disabled: boolean;
+  cellSize?: number;
 }) {
+  const pad = Math.round(cellSize / 2);
+  const boardPx = (BOARD_SIZE - 1) * cellSize + pad * 2;
+
   return (
     <div style={{
       position: 'relative',
-      width: BOARD_PX, height: BOARD_PX,
+      width: boardPx, height: boardPx,
       background: 'var(--goban-bg)',
       border: '2px solid var(--goban-line)',
       borderRadius: 'var(--radius-sm)',
@@ -121,32 +125,32 @@ function GomokuBoard({
     }}>
       <svg
         style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
-        width={BOARD_PX} height={BOARD_PX}
+        width={boardPx} height={boardPx}
       >
         {Array.from({ length: BOARD_SIZE }).map((_, i) => (
           <g key={i}>
             <line
-              x1={PAD} y1={PAD + i * CELL}
-              x2={PAD + (BOARD_SIZE - 1) * CELL} y2={PAD + i * CELL}
+              x1={pad} y1={pad + i * cellSize}
+              x2={pad + (BOARD_SIZE - 1) * cellSize} y2={pad + i * cellSize}
               stroke="var(--goban-line)" strokeWidth={0.8}
             />
             <line
-              x1={PAD + i * CELL} y1={PAD}
-              x2={PAD + i * CELL} y2={PAD + (BOARD_SIZE - 1) * CELL}
+              x1={pad + i * cellSize} y1={pad}
+              x2={pad + i * cellSize} y2={pad + (BOARD_SIZE - 1) * cellSize}
               stroke="var(--goban-line)" strokeWidth={0.8}
             />
           </g>
         ))}
         {[[3,3],[3,7],[3,11],[7,3],[7,7],[7,11],[11,3],[11,7],[11,11]].map(([r,c]) => (
           <circle key={`${r}-${c}`}
-            cx={PAD + c * CELL} cy={PAD + r * CELL}
-            r={3} fill="var(--goban-line)"
+            cx={pad + c * cellSize} cy={pad + r * cellSize}
+            r={Math.max(2, Math.round(cellSize / 11))} fill="var(--goban-line)"
           />
         ))}
         {lastMove && (
           <circle
-            cx={PAD + lastMove.x * CELL} cy={PAD + lastMove.y * CELL}
-            r={5} fill="none" stroke="red" strokeWidth={1.5}
+            cx={pad + lastMove.x * cellSize} cy={pad + lastMove.y * cellSize}
+            r={Math.max(3, Math.round(cellSize / 7))} fill="none" stroke="red" strokeWidth={1.5}
           />
         )}
       </svg>
@@ -163,16 +167,16 @@ function GomokuBoard({
               }}
               style={{
                 position: 'absolute',
-                left: PAD + col * CELL - CELL / 2,
-                top: PAD + row * CELL - CELL / 2,
-                width: CELL, height: CELL,
+                left: pad + col * cellSize - cellSize / 2,
+                top: pad + row * cellSize - cellSize / 2,
+                width: cellSize, height: cellSize,
                 cursor: disabled || !!stone ? 'default' : 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}
             >
               {stone && (
                 <div style={{
-                  width: CELL - 6, height: CELL - 6,
+                  width: cellSize - 6, height: cellSize - 6,
                   borderRadius: '50%',
                   background: stone === 'black'
                     ? 'radial-gradient(circle at 35% 35%, var(--stone-black-core), var(--stone-black-edge))'
@@ -194,11 +198,28 @@ export function GomokuPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Selected options (shown in pre-game panel; after start, read from gameState)
   const [selectedOpponent, setSelectedOpponent] = useState<GomokuOpponent>('yexuan_ai');
   const [selectedStyle, setSelectedStyle] = useState<GomokuAiStyle>('balanced');
   const [boardTheme, setBoardTheme] = useState(() => getUIPref('activity.board.theme', 'classic_wood'));
   const [showDebug, setShowDebug] = useState(() => getUIPref('activity.debug', false));
+
+  const boardContainerRef = useRef<HTMLDivElement>(null);
+  const [dynamicCell, setDynamicCell] = useState(CELL);
+
+  useEffect(() => {
+    const el = boardContainerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries => {
+      const w = entries[0]?.contentRect.width ?? 0;
+      if (w > 0) {
+        const pad = Math.round(CELL / 2);
+        const fit = Math.floor((w - pad * 2) / (BOARD_SIZE - 1));
+        setDynamicCell(Math.max(MIN_CELL, Math.min(CELL, fit)));
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => onUIPrefChange(key => {
     if (key === 'activity.board.theme') setBoardTheme(getUIPref('activity.board.theme', 'classic_wood'));
@@ -286,7 +307,6 @@ export function GomokuPage() {
   const isActive = gameState?.status === 'active';
   const isFinished = gameState?.status === 'completed' || !!gameState?.winner;
   const isAIMode = gameState?.opponent === 'yexuan_ai';
-  // In AI mode: user plays black, AI plays white — disable board when it's white's turn
   const boardDisabled = !isActive || loading || (isAIMode && gameState?.current_turn === 'white');
 
   const emptyBoard: GomokuCell[][] = Array.from({ length: BOARD_SIZE }, () =>
@@ -402,25 +422,18 @@ export function GomokuPage() {
         </div>
       )}
 
-      {/* board + right column */}
-      <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
-        <div style={BOARD_THEMES[boardTheme] as CSSProperties}>
-          <GomokuBoard
-            board={gameState?.board ?? emptyBoard}
-            lastMove={gameState?.last_move ?? null}
-            onPlace={handlePlace}
-            disabled={boardDisabled}
-          />
-        </div>
-
-        {/* right column: info panel + companion chat */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: 300, flexShrink: 0 }}>
+      {/* board row: left=board+info, right=companion */}
+      <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', position: 'relative' }}>
+        {/* left: game info + board (responsive) */}
+        <div
+          ref={boardContainerRef}
+          style={{ flex: 1, minWidth: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 12 }}
+        >
           {/* info panel */}
           {(isActive || isFinished) && (
             <div style={{
               padding: '14px 16px',
               background: 'var(--paper-2)', border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-md)',
-              width: '100%',
             }}>
               <div className="mono" style={{ fontSize: 10, letterSpacing: 1.2, color: 'var(--ink-3)', fontWeight: 600, marginBottom: 8 }}>
                 对局信息
@@ -443,13 +456,24 @@ export function GomokuPage() {
             </div>
           )}
 
-          <ActivityCompanionPanel
-            activityId="gomoku"
-            sessionId={gameState?.session_id ?? null}
-            sessionActive={isActive}
-            sessionFinished={isFinished}
-          />
+          <div style={BOARD_THEMES[boardTheme] as CSSProperties}>
+            <GomokuBoard
+              board={gameState?.board ?? emptyBoard}
+              lastMove={gameState?.last_move ?? null}
+              onPlace={handlePlace}
+              disabled={boardDisabled}
+              cellSize={dynamicCell}
+            />
+          </div>
         </div>
+
+        {/* right: companion sidebar */}
+        <CompanionSidebar
+          activityId="gomoku"
+          sessionId={gameState?.session_id ?? null}
+          sessionActive={isActive}
+          sessionFinished={isFinished}
+        />
       </div>
 
       {showDebug && gameState && (
@@ -458,7 +482,7 @@ export function GomokuPage() {
           border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-sm)',
           fontSize: 10.5, color: 'var(--ink-3)', letterSpacing: 0.5,
         }}>
-          session_id: {gameState.session_id ?? '—'} · turn: {gameState.current_turn} · status: {gameState.status}
+          session_id: {gameState.session_id ?? '—'} · turn: {gameState.current_turn} · status: {gameState.status} · cell: {dynamicCell}
         </div>
       )}
     </div>

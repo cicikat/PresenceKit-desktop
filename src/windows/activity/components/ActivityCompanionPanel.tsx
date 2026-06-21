@@ -5,7 +5,6 @@ import {
   type ChessGroundingFacts,
   type ReadingGroundingFacts,
 } from '../../../shared/api/activity-api';
-import { getUIPref, setUIPref } from '../../../shared/uiPreferences';
 
 type ActivityId = 'gomoku' | 'chess' | 'reading';
 
@@ -132,21 +131,15 @@ interface Props {
   sessionId: string | null;
   sessionActive: boolean;
   sessionFinished: boolean;
+  onCollapse?: () => void;
 }
 
-export function ActivityCompanionPanel({ activityId, sessionId, sessionActive, sessionFinished }: Props) {
+export function ActivityCompanionPanel({ activityId, sessionId, sessionActive, sessionFinished, onCollapse }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
-  const [collapsed, setCollapsed] = useState(() => getUIPref('activity.companion.collapsed', false));
   const listRef = useRef<HTMLDivElement>(null);
   const prevSessionId = useRef<string | null>(null);
-
-  const toggleCollapsed = () => {
-    const next = !collapsed;
-    setCollapsed(next);
-    setUIPref('activity.companion.collapsed', next);
-  };
 
   useEffect(() => {
     if (sessionId !== prevSessionId.current) {
@@ -188,39 +181,11 @@ export function ActivityCompanionPanel({ activityId, sessionId, sessionActive, s
     ? STATUS_FINISHED[activityId]
     : null;
 
-  if (collapsed) {
-    return (
-      <div style={{
-        writingMode: 'horizontal-tb',
-        width: '100%',
-        background: 'var(--paper-2)', border: '1px solid var(--paper-edge)',
-        borderRadius: 'var(--radius-md)', overflow: 'hidden',
-        display: 'flex', alignItems: 'center',
-        padding: '9px 14px',
-      }}>
-        <div className="mono" style={{
-          flex: 1, fontSize: 10, letterSpacing: 1.2, fontWeight: 600, color: 'var(--ink-3)',
-        }}>
-          和叶瑄说说
-        </div>
-        <button
-          onClick={toggleCollapsed}
-          title="展开"
-          style={{
-            border: 'none', background: 'transparent', cursor: 'pointer',
-            color: 'var(--ink-3)', fontSize: 14, lineHeight: 1,
-            padding: '0 2px', display: 'flex', alignItems: 'center',
-          }}
-        >«</button>
-      </div>
-    );
-  }
-
   return (
     <div style={{
       display: 'flex', flexDirection: 'column',
       writingMode: 'horizontal-tb',
-      width: '100%', minWidth: 280, minHeight: 360,
+      width: '100%', minWidth: 0, minHeight: 360,
       background: 'var(--paper-2)', border: '1px solid var(--paper-edge)',
       borderRadius: 'var(--radius-md)', overflow: 'hidden',
     }}>
@@ -233,7 +198,7 @@ export function ActivityCompanionPanel({ activityId, sessionId, sessionActive, s
       }}>
         <span style={{ flex: 1 }}>和叶瑄说说</span>
         <button
-          onClick={toggleCollapsed}
+          onClick={() => onCollapse?.()}
           title="收起"
           style={{
             border: 'none', background: 'transparent', cursor: 'pointer',

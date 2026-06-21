@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type CSSProperties } from 'react';
+import { useState, useEffect, useCallback, useRef, type CSSProperties } from 'react';
 import {
   chessApi,
   type ChessState,
@@ -8,7 +8,7 @@ import {
   type ChessOpponent,
   type ChessAiStyle,
 } from '../../../shared/api/activity-api';
-import { ActivityCompanionPanel } from './ActivityCompanionPanel';
+import { CompanionSidebar } from './CompanionSidebar';
 import { getUIPref, onUIPrefChange } from '../../../shared/uiPreferences';
 
 const BOARD_THEMES: Record<string, Record<string, string>> = {
@@ -24,7 +24,9 @@ const BOARD_THEMES: Record<string, Record<string, string>> = {
   },
 };
 
-const SQUARE = 54; // px per square
+const SQUARE = 54;   // default square size
+const MIN_SQUARE = 28;
+
 // piece notation → Unicode
 const PIECE_UNICODE: Record<string, string> = {
   K: '♔', Q: '♕', R: '♖', B: '♗', N: '♘', P: '♙',
@@ -121,6 +123,7 @@ function ChessBoard({
   onSquareClick,
   disabled,
   pieceStyle,
+  squareSize = SQUARE,
 }: {
   board: (string | null)[][];
   selected: [number, number] | null;
@@ -128,12 +131,13 @@ function ChessBoard({
   onSquareClick: (row: number, col: number) => void;
   disabled: boolean;
   pieceStyle: string;
+  squareSize?: number;
 }) {
   return (
     <div style={{
       display: 'grid',
-      gridTemplateColumns: `repeat(8, ${SQUARE}px)`,
-      gridTemplateRows: `repeat(8, ${SQUARE}px)`,
+      gridTemplateColumns: `repeat(8, ${squareSize}px)`,
+      gridTemplateRows: `repeat(8, ${squareSize}px)`,
       border: '2px solid var(--paper-edge)',
       borderRadius: 'var(--radius-sm)',
       overflow: 'hidden',
@@ -157,7 +161,7 @@ function ChessBoard({
               key={`${row}-${col}`}
               onClick={() => !disabled && onSquareClick(row, col)}
               style={{
-                width: SQUARE, height: SQUARE,
+                width: squareSize, height: squareSize,
                 background: bg,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 cursor: disabled ? 'default' : 'pointer',
@@ -169,14 +173,14 @@ function ChessBoard({
               {col === 0 && (
                 <span style={{
                   position: 'absolute', top: 2, left: 3,
-                  fontSize: 9, fontWeight: 700, fontFamily: 'var(--font-mono)',
+                  fontSize: Math.max(7, squareSize / 7), fontWeight: 700, fontFamily: 'var(--font-mono)',
                   color: isLight ? 'var(--board-coord-light)' : 'var(--board-coord-dark)', lineHeight: 1,
                 }}>{8 - row}</span>
               )}
               {row === 7 && (
                 <span style={{
                   position: 'absolute', bottom: 2, right: 3,
-                  fontSize: 9, fontWeight: 700, fontFamily: 'var(--font-mono)',
+                  fontSize: Math.max(7, squareSize / 7), fontWeight: 700, fontFamily: 'var(--font-mono)',
                   color: isLight ? 'var(--board-coord-light)' : 'var(--board-coord-dark)', lineHeight: 1,
                 }}>{String.fromCharCode(97 + col)}</span>
               )}
@@ -184,7 +188,7 @@ function ChessBoard({
               {/* piece */}
               {piece && (
                 <span style={{
-                  fontSize: SQUARE - 14,
+                  fontSize: squareSize - 14,
                   lineHeight: 1,
                   userSelect: 'none',
                   filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.35))',
@@ -237,6 +241,23 @@ export function ChessPage() {
   const [showDebug, setShowDebug] = useState(() => getUIPref('activity.debug', false));
   const [opponent, setOpponent] = useState<ChessOpponent>('human');
   const [aiStyle, setAiStyle] = useState<ChessAiStyle>('balanced');
+
+  const boardContainerRef = useRef<HTMLDivElement>(null);
+  const [dynamicSquare, setDynamicSquare] = useState(SQUARE);
+
+  useEffect(() => {
+    const el = boardContainerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries => {
+      const w = entries[0]?.contentRect.width ?? 0;
+      if (w > 0) {
+        const fit = Math.floor(w / 8);
+        setDynamicSquare(Math.max(MIN_SQUARE, Math.min(SQUARE, fit)));
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => onUIPrefChange(key => {
     if (key === 'activity.board.theme') setBoardTheme(getUIPref('activity.board.theme', 'classic_wood'));
@@ -313,10 +334,8 @@ export function ChessPage() {
     const sqName = toSquareName(row, col);
 
     if (!selected) {
-      // first click — select a piece belonging to the current side
       if (isCurrentTurnPiece(piece, gameState.turn)) {
         setSelected([row, col]);
-        // fetch legal moves for this piece
         try {
           const { legal_moves } = await chessApi.legalMoves(gameState.session_id!);
           const fromSq = toSquareName(row, col);
@@ -331,7 +350,6 @@ export function ChessPage() {
       return;
     }
 
-    // second click — either move or reselect
     const fromSq = toSquareName(selected[0], selected[1]);
     if (legalTargets.includes(sqName)) {
       const uci = fromSq + sqName;
@@ -342,7 +360,6 @@ export function ChessPage() {
         const result = await chessApi.move(sid, uci);
         setGameState(prev => normalizeChessState(result, prev));
         if (result.pending_ai_turn) {
-          // keep loading=true while AI is thinking
           await triggerAiMove(sid);
           return;
         }
@@ -352,7 +369,6 @@ export function ChessPage() {
         setLoading(false);
       }
     } else if (isCurrentTurnPiece(piece, gameState.turn)) {
-      // reselect another piece belonging to the current side
       setSelected([row, col]);
       try {
         const { legal_moves } = await chessApi.legalMoves(gameState.session_id!);
@@ -459,24 +475,25 @@ export function ChessPage() {
         )}
       </div>
 
-      {/* board + info */}
-      <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
-        <div style={BOARD_THEMES[boardTheme] as CSSProperties}>
-          <ChessBoard
-            board={displayBoard}
-            selected={selected}
-            legalTargets={legalTargets}
-            onSquareClick={handleSquareClick}
-            disabled={!isActive || loading || gameState?.turn === gameState?.ai_player}
-            pieceStyle={pieceStyle}
-          />
-        </div>
+      {/* board row: left=board+info, right=companion */}
+      <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', position: 'relative' }}>
+        {/* left: board (responsive) + instructions + move history */}
+        <div
+          ref={boardContainerRef}
+          style={{ flex: 1, minWidth: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 12 }}
+        >
+          <div style={BOARD_THEMES[boardTheme] as CSSProperties}>
+            <ChessBoard
+              board={displayBoard}
+              selected={selected}
+              legalTargets={legalTargets}
+              onSquareClick={handleSquareClick}
+              disabled={!isActive || loading || gameState?.turn === gameState?.ai_player}
+              pieceStyle={pieceStyle}
+              squareSize={dynamicSquare}
+            />
+          </div>
 
-        {/* side panel */}
-        <div style={{
-          display: 'flex', flexDirection: 'column', gap: 12,
-          width: 300, flexShrink: 0,
-        }}>
           {isActive && (
             <div style={{
               padding: '12px 14px',
@@ -504,7 +521,6 @@ export function ChessPage() {
             </div>
           )}
 
-          {/* move history */}
           {gameState?.move_history && gameState.move_history.length > 0 && (
             <div style={{
               padding: '12px 14px',
@@ -528,14 +544,15 @@ export function ChessPage() {
               </div>
             </div>
           )}
-
-          <ActivityCompanionPanel
-            activityId="chess"
-            sessionId={gameState?.session_id ?? null}
-            sessionActive={isActive}
-            sessionFinished={isFinished}
-          />
         </div>
+
+        {/* right: companion sidebar */}
+        <CompanionSidebar
+          activityId="chess"
+          sessionId={gameState?.session_id ?? null}
+          sessionActive={isActive}
+          sessionFinished={isFinished}
+        />
       </div>
 
       {showDebug && gameState && (
@@ -544,7 +561,7 @@ export function ChessPage() {
           border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-sm)',
           fontSize: 10.5, color: 'var(--ink-3)', letterSpacing: 0.5,
         }}>
-          session_id: {gameState.session_id ?? '—'} · FEN: {gameState.fen}
+          session_id: {gameState.session_id ?? '—'} · FEN: {gameState.fen} · sq: {dynamicSquare}
         </div>
       )}
     </div>
