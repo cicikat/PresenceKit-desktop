@@ -233,5 +233,5 @@ export function usePetMouse({ shy }: { shy: boolean }) {
     }
   }, [petWindow]);
 
-  return { settings, pinned, reaction, startDrag };
+  return { settings, pinned, reaction, startDrag, draggingRef, movingRef };
 }

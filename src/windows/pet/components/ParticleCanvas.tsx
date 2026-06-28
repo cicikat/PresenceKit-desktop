@@ -4,8 +4,25 @@ import {
   type PetMouseReaction,
   type PetSnapshot,
 } from '../../../shared/pet/types';
+import {
+  loadPetVisualStyle,
+  subscribePetVisualStyle,
+  type PetVisualStyle,
+} from '../../../shared/pet/petVisualStyle';
+import {
+  loadPetRippleSettings,
+  subscribePetRippleSettings,
+  type PetRippleSettings,
+} from '../../../shared/pet/petRippleSettings';
 
 type Rgb = [number, number, number];
+
+interface Ripple {
+  x: number;
+  y: number;
+  radius: number;
+  life: number;
+}
 
 interface Palette {
   primary: Rgb;
@@ -30,6 +47,15 @@ interface Accent {
   speed: number;
   size: number;
   phase: number;
+}
+
+interface Dot {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  homeX: number;
+  homeY: number;
 }
 
 interface VisualState {
@@ -144,6 +170,143 @@ function makeAccents(): Accent[] {
   }));
 }
 
+function makeScatterDots(width: number, height: number): Dot[] {
+  return Array.from({ length: 60 }, () => ({
+    x: Math.random() * width,
+    y: Math.random() * height,
+    vx: (Math.random() - 0.5) * 1.2,
+    vy: (Math.random() - 0.5) * 1.2,
+    homeX: width / 2,
+    homeY: height / 2,
+  }));
+}
+
+function makeNetworkDots(width: number, height: number): Dot[] {
+  const cx = width / 2;
+  const cy = height / 2;
+  const rings: { radius: number; count: number }[] = [
+    { radius: 30, count: 5 },
+    { radius: 60, count: 10 },
+    { radius: 90, count: 14 },
+    { radius: 118, count: 10 },
+  ];
+  const dots: Dot[] = [];
+  for (const ring of rings) {
+    for (let i = 0; i < ring.count; i++) {
+      const a = (Math.PI * 2 * i) / ring.count;
+      const hx = cx + Math.cos(a) * ring.radius;
+      const hy = cy + Math.sin(a) * ring.radius;
+      dots.push({
+        x: hx + (Math.random() - 0.5) * 4,
+        y: hy + (Math.random() - 0.5) * 4,
+        vx: 0, vy: 0, homeX: hx, homeY: hy,
+      });
+    }
+  }
+  for (let i = 0; i < 10; i++) {
+    const hx = cx + (Math.random() - 0.5) * 160;
+    const hy = cy + (Math.random() - 0.5) * 160;
+    dots.push({
+      x: hx, y: hy,
+      vx: (Math.random() - 0.5) * 0.5,
+      vy: (Math.random() - 0.5) * 0.5,
+      homeX: hx, homeY: hy,
+    });
+  }
+  return dots;
+}
+
+function tickDots(
+  dots: Dot[],
+  mouse: { x: number; y: number },
+  width: number,
+  height: number,
+  delta: number,
+  speedScale: number,
+  homeSpring: number,
+  damping: number,
+  centerPull: number,
+  bounceEdges: boolean,
+) {
+  const cx = width / 2;
+  const cy = height / 2;
+  const t = delta * 60;
+  for (const dot of dots) {
+    dot.vx += (cx - dot.x) * centerPull * t;
+    dot.vy += (cy - dot.y) * centerPull * t;
+    if (homeSpring > 0) {
+      dot.vx += (dot.homeX - dot.x) * homeSpring * t;
+      dot.vy += (dot.homeY - dot.y) * homeSpring * t;
+    }
+    const rdx = dot.x - mouse.x;
+    const rdy = dot.y - mouse.y;
+    const rd = Math.hypot(rdx, rdy);
+    if (rd > 0 && rd < 50) {
+      const f = (1 - rd / 50) * 1.5 * t;
+      dot.vx += (rdx / rd) * f;
+      dot.vy += (rdy / rd) * f;
+    }
+    dot.vx *= Math.pow(damping, t);
+    dot.vy *= Math.pow(damping, t);
+    dot.x += dot.vx * speedScale * t;
+    dot.y += dot.vy * speedScale * t;
+    if (bounceEdges) {
+      if (dot.x < 0) { dot.x = 0; dot.vx = Math.abs(dot.vx); }
+      else if (dot.x > width) { dot.x = width; dot.vx = -Math.abs(dot.vx); }
+      if (dot.y < 0) { dot.y = 0; dot.vy = Math.abs(dot.vy); }
+      else if (dot.y > height) { dot.y = height; dot.vy = -Math.abs(dot.vy); }
+    }
+  }
+}
+
+function renderScatter(ctx: CanvasRenderingContext2D, dots: Dot[], palette: Palette, alphaScale: number) {
+  for (let i = 0; i < dots.length; i++) {
+    for (let j = i + 1; j < dots.length; j++) {
+      const d = Math.hypot(dots[i].x - dots[j].x, dots[i].y - dots[j].y);
+      if (d < 35) {
+        ctx.strokeStyle = rgba(palette.primary, (1 - d / 35) * 0.196 * alphaScale);
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(dots[i].x, dots[i].y);
+        ctx.lineTo(dots[j].x, dots[j].y);
+        ctx.stroke();
+      }
+    }
+  }
+  for (const dot of dots) {
+    ctx.fillStyle = rgba(palette.primary, 0.55 * alphaScale);
+    ctx.beginPath();
+    ctx.arc(dot.x, dot.y, 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function renderNetwork(ctx: CanvasRenderingContext2D, dots: Dot[], palette: Palette, alphaScale: number) {
+  for (let i = 0; i < dots.length; i++) {
+    for (let j = i + 1; j < dots.length; j++) {
+      const d = Math.hypot(dots[i].x - dots[j].x, dots[i].y - dots[j].y);
+      if (d < 80) {
+        ctx.strokeStyle = rgba(palette.primary, (1 - d / 80) * 0.47 * alphaScale);
+        ctx.lineWidth = 0.9;
+        ctx.beginPath();
+        ctx.moveTo(dots[i].x, dots[i].y);
+        ctx.lineTo(dots[j].x, dots[j].y);
+        ctx.stroke();
+      }
+    }
+  }
+  for (const dot of dots) {
+    ctx.fillStyle = rgba(palette.primary, 0.12 * alphaScale);
+    ctx.beginPath();
+    ctx.arc(dot.x, dot.y, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = rgba(palette.primary, 0.7 * alphaScale);
+    ctx.beginPath();
+    ctx.arc(dot.x, dot.y, 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
 function drawBlob(
   context: CanvasRenderingContext2D,
   blob: Blob,
@@ -256,12 +419,16 @@ function drawInteractionPulse(
   context.stroke();
 }
 
-export function ParticleCanvas({ snapshot, reaction }: { snapshot: PetSnapshot; reaction?: PetMouseReaction | null }) {
+export function ParticleCanvas({ snapshot, reaction, volume = 0 }: { snapshot: PetSnapshot; reaction?: PetMouseReaction | null; volume?: number }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const snapshotRef = useRef(snapshot);
   const reactionRef = useRef<PetMouseReaction | null>(reaction ?? null);
   const reactionStartedAtRef = useRef(0);
   const mouseRef = useRef({ x: -1000, y: -1000 });
+  const styleRef = useRef<PetVisualStyle>(loadPetVisualStyle());
+  const rippleRef = useRef<Ripple[]>([]);
+  const rippleSettingsRef = useRef<PetRippleSettings>(loadPetRippleSettings());
+  const volumeRef = useRef(volume);
 
   useEffect(() => {
     snapshotRef.current = snapshot;
@@ -271,6 +438,13 @@ export function ParticleCanvas({ snapshot, reaction }: { snapshot: PetSnapshot; 
     reactionRef.current = reaction ?? null;
     reactionStartedAtRef.current = reaction ? performance.now() : 0;
   }, [reaction]);
+
+  useEffect(() => {
+    volumeRef.current = volume;
+  }, [volume]);
+
+  useEffect(() => subscribePetVisualStyle(style => { styleRef.current = style; }), []);
+  useEffect(() => subscribePetRippleSettings(s => { rippleSettingsRef.current = s; }), []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -283,6 +457,8 @@ export function ParticleCanvas({ snapshot, reaction }: { snapshot: PetSnapshot; 
     let height = 0;
     let blobs: Blob[] = [];
     let accents: Accent[] = [];
+    let scatterDots: Dot[] = [];
+    let networkDots: Dot[] = [];
     let lastTimestamp = 0;
     const visual = visualTarget(DEFAULT_PET_SNAPSHOT);
 
@@ -297,6 +473,8 @@ export function ParticleCanvas({ snapshot, reaction }: { snapshot: PetSnapshot; 
       context.clearRect(0, 0, width, height);
       blobs = makeBlobs(width, height);
       accents = makeAccents();
+      scatterDots = makeScatterDots(width, height);
+      networkDots = makeNetworkDots(width, height);
     };
     resize();
     window.addEventListener('resize', resize);
@@ -319,30 +497,57 @@ export function ParticleCanvas({ snapshot, reaction }: { snapshot: PetSnapshot; 
       context.fillRect(0, 0, width, height);
       context.globalCompositeOperation = 'source-over';
 
-      for (const blob of blobs) {
-        blob.angle += blob.speed * delta * visual.speed;
-        const wobble = Math.sin(time * 0.7 + blob.phase) * 7 * visual.wobble;
-        const orbit = blob.orbitRadius * visual.orbit + wobble;
-        let x = centerX + Math.cos(blob.angle) * orbit;
-        let y = centerY + Math.sin(blob.angle) * orbit * 0.84;
-        const dx = x - mouseRef.current.x;
-        const dy = y - mouseRef.current.y;
-        const distance = Math.hypot(dx, dy);
-        if (distance > 0 && distance < 68) {
-          const force = (1 - distance / 68) * 17;
-          x += (dx / distance) * force;
-          y += (dy / distance) * force;
+      const style = styleRef.current;
+      const volumeBoost = 1 + volumeRef.current * 3;
+      if (style === 'fluid') {
+        for (const blob of blobs) {
+          blob.angle += blob.speed * delta * visual.speed;
+          const wobble = Math.sin(time * 0.7 + blob.phase) * 7 * visual.wobble;
+          const orbit = blob.orbitRadius * visual.orbit * volumeBoost + wobble;
+          let x = centerX + Math.cos(blob.angle) * orbit;
+          let y = centerY + Math.sin(blob.angle) * orbit * 0.84;
+          const dx = x - mouseRef.current.x;
+          const dy = y - mouseRef.current.y;
+          const distance = Math.hypot(dx, dy);
+          if (distance > 0 && distance < 68) {
+            const force = (1 - distance / 68) * 17;
+            x += (dx / distance) * force;
+            y += (dy / distance) * force;
+          }
+          blob.x = x;
+          blob.y = y;
+          const localBreath = Math.sin(time * blob.breathSpeed * visual.breathRate + blob.phase)
+            * 2.6 * visual.breathDepth;
+          const syncedBreath = breathWave * 5.2 * visual.breathDepth + thinkingWave * 1.8;
+          drawBlob(context, blob, palette, blob.size + localBreath + syncedBreath, alphaScale);
         }
-        blob.x = x;
-        blob.y = y;
-        const localBreath = Math.sin(time * blob.breathSpeed * visual.breathRate + blob.phase)
-          * 2.6 * visual.breathDepth;
-        const syncedBreath = breathWave * 5.2 * visual.breathDepth + thinkingWave * 1.8;
-        drawBlob(context, blob, palette, blob.size + localBreath + syncedBreath, alphaScale);
-      }
-
-      for (const accent of accents) {
-        drawAccent(context, accent, centerX, centerY, palette, time, alphaScale, delta, visual);
+        for (const accent of accents) {
+          drawAccent(context, accent, centerX, centerY, palette, time, alphaScale, delta, visual);
+        }
+      } else if (style === 'scatter') {
+        if (volumeRef.current > 0) {
+          const vf = volumeRef.current * 3 * delta * 60;
+          for (const dot of scatterDots) {
+            const dx = dot.x - centerX; const dy = dot.y - centerY;
+            const d = Math.hypot(dx, dy) || 1;
+            dot.vx += (dx / d) * vf * 0.18;
+            dot.vy += (dy / d) * vf * 0.18;
+          }
+        }
+        tickDots(scatterDots, mouseRef.current, width, height, delta, visual.speed, 0, 0.91, 0.0001, true);
+        renderScatter(context, scatterDots, palette, alphaScale);
+      } else {
+        if (volumeRef.current > 0) {
+          const vf = volumeRef.current * 3 * delta * 60;
+          for (const dot of networkDots) {
+            const dx = dot.x - centerX; const dy = dot.y - centerY;
+            const d = Math.hypot(dx, dy) || 1;
+            dot.vx += (dx / d) * vf * 0.12;
+            dot.vy += (dy / d) * vf * 0.12;
+          }
+        }
+        tickDots(networkDots, mouseRef.current, width, height, delta, visual.speed, 0.006, 0.87, 0.0025, false);
+        renderNetwork(context, networkDots, palette, alphaScale);
       }
 
       drawCore(context, centerX, centerY, palette, breathWave, thinkingWave, alphaScale, visual.coreScale);
@@ -354,6 +559,24 @@ export function ParticleCanvas({ snapshot, reaction }: { snapshot: PetSnapshot; 
         reactionStartedAtRef.current,
         timestamp,
       );
+
+      if (rippleSettingsRef.current.enabled) {
+        const alive: Ripple[] = [];
+        for (const r of rippleRef.current) {
+          r.radius += 240 * delta; // 4px/frame at 60fps
+          r.life -= 1.5 * delta;   // 0.025/frame at 60fps → ~0.67s lifetime
+          if (r.life > 0) {
+            context.strokeStyle = `rgba(240, 200, 255, ${(r.life * 0.65).toFixed(3)})`;
+            context.lineWidth = 1.5;
+            context.beginPath();
+            context.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
+            context.stroke();
+            alive.push(r);
+          }
+        }
+        rippleRef.current = alive;
+      }
+
       frame = window.requestAnimationFrame(draw);
     };
 
@@ -367,6 +590,16 @@ export function ParticleCanvas({ snapshot, reaction }: { snapshot: PetSnapshot; 
   return (
     <canvas
       ref={canvasRef}
+      onPointerDown={event => {
+        if (!rippleSettingsRef.current.enabled) return;
+        const rect = event.currentTarget.getBoundingClientRect();
+        rippleRef.current.push({
+          x: event.clientX - rect.left,
+          y: event.clientY - rect.top,
+          radius: 10,
+          life: 1,
+        });
+      }}
       onPointerMove={event => {
         const rect = event.currentTarget.getBoundingClientRect();
         mouseRef.current = { x: event.clientX - rect.left, y: event.clientY - rect.top };

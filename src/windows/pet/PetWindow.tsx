@@ -1,9 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { listen } from '@tauri-apps/api/event';
+import { invoke } from '@tauri-apps/api/core';
 import { listenPetSnapshots } from '../../shared/pet/bridge';
 import { DEFAULT_PET_SNAPSHOT, type PetSnapshot } from '../../shared/pet/types';
 import type { Mood, Presence } from '../../shared/state/store';
+import { sendChat } from '../../shared/api/backend';
+import { useVoiceInput } from '../../shared/voice/useVoiceInput';
 import { ParticleCanvas } from './components/ParticleCanvas';
 import { usePetMouse } from './usePetMouse';
+import { usePetRoam } from './usePetRoam';
 
 const MOOD_ATMOSPHERES: Record<Mood, string[]> = {
   '平静': ['呼吸平稳', '微光缓缓', '安静相伴'],
@@ -28,7 +33,28 @@ function pickAtmosphere(options: string[], current?: string) {
 export function PetWindow() {
   const [snapshot, setSnapshot] = useState<PetSnapshot>(DEFAULT_PET_SNAPSHOT);
   const [bubbleVisible, setBubbleVisible] = useState(false);
-  const { pinned, reaction, startDrag } = usePetMouse({ shy: snapshot.mood === '惊讶' });
+  const { pinned, reaction, startDrag, draggingRef, movingRef } = usePetMouse({ shy: snapshot.mood === '惊讶' });
+  usePetRoam({ draggingRef, movingRef });
+
+  const voice = useVoiceInput();
+  const voiceRef = useRef(voice);
+  voiceRef.current = voice;
+
+  // Alt+1 global hotkey → toggle voice recording; on stop, auto-send transcribed text
+  useEffect(() => {
+    invoke('start_voice_hotkey_listener').catch(console.warn);
+    let unlisten: (() => void) | undefined;
+    listen<void>('voice-hotkey', async () => {
+      const v = voiceRef.current;
+      if (v.isRecording) {
+        const text = await v.stop();
+        if (text) sendChat(text).catch(console.warn);
+      } else {
+        await v.start();
+      }
+    }).then(fn => { unlisten = fn; }).catch(console.warn);
+    return () => { unlisten?.(); };
+  }, []);
   const atmosphereOptions = useMemo(
     () => snapshot.thinking
       ? ['思绪聚拢', '光点轻颤', '正在凝神']
@@ -92,7 +118,7 @@ export function PetWindow() {
           fontFamily: '"Microsoft YaHei", "Noto Sans SC", sans-serif',
         }}
       >
-        <ParticleCanvas snapshot={snapshot} reaction={reaction} />
+        <ParticleCanvas snapshot={snapshot} reaction={reaction} volume={voice.isRecording ? voice.volume : 0} />
 
         <section style={{
           position: 'absolute',
@@ -108,6 +134,11 @@ export function PetWindow() {
         }}>
           <span>{snapshot.thinking ? 'THINKING' : snapshot.mood}</span>
           <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            {voice.isRecording && (
+              <span className="mono" style={{ color: 'rgba(255, 120, 120, 0.9)', animation: 'petActivityIn 300ms ease-out' }}>
+                {voice.transcribing ? 'STT…' : '● REC'}
+              </span>
+            )}
             {pinned && <span className="mono" style={{ opacity: 0.72 }}>PINNED</span>}
             <span key={activity} style={{ display: 'inline-block', animation: 'petActivityIn 900ms ease-out' }}>
               {activity}
