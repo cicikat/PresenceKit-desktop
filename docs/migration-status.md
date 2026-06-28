@@ -8,7 +8,7 @@
 
 | 项目 | 路径 | 角色 | 本仓库是否可改 |
 |---|---|---|---|
-| qq-st-bot | `D:\ai\qq-st-bot\` | 后端、核心数据、记忆、调度、工具、WS/HTTP 服务 | 默认不可改 |
+| Emerald-presence | `D:\ai\Emerald-presence\` | 后端、核心数据、记忆、调度、工具、WS/HTTP 服务 | 默认不可改 |
 | Emerald-desktop | `D:\ai\Emerald-desktop\` | 旧 PyQt 桌宠和 Python 感知/行为层 | 默认不可改 |
 | Emerald-desktopUI | `D:\ai\Emerald-desktopUI\` | React/JSX UI 原型 | 只读参考 |
 | Emerald-client | `D:\ai\Emerald-client\` | 新 Tauri 客户端 | 当前工作区 |
@@ -82,7 +82,7 @@
 
 当前已完成：
 
-- 后端 `qq-st-bot` 提供 `GET /garden/state`。
+- 后端 `Emerald-presence` 提供 `GET /garden/state`。
 - Tauri command `load_garden_state` 已接入，HTTP client 使用 `no_proxy()`。
 - 前端 `loadGardenState()` 已封装。
 - Sidebar `garden` tab 已挂载 `SubGarden`。
@@ -157,10 +157,10 @@ src-tauri/src/sensor/
 
 - 旧桌面方案：`D:\ai\Emerald-desktop\docs\desktop-client-plan.md`
 - 旧桌面协议：`D:\ai\Emerald-desktop\docs\desktop-client-protocol.md`
-- 后端总览：`D:\ai\qq-st-bot\ARCHITECTURE.md`
-- 后端细节：`D:\ai\qq-st-bot\docs\`
+- 后端总览：`D:\ai\Emerald-presence\ARCHITECTURE.md`
+- 后端细节：`D:\ai\Emerald-presence\docs\`
 
-注意：旧入口文档曾指向 `D:\ai\qq-st-bot\docs\desktop-client-protocol.md`，但当前该文件不在后端 docs 目录。
+注意：旧入口文档曾指向 `D:\ai\Emerald-presence\docs\desktop-client-protocol.md`，但当前该文件不在后端 docs 目录。
 
 ---
 

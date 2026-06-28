@@ -6,7 +6,7 @@
 
 ## 项目定位
 
-Emerald-client 是 `qq-st-bot` AI 陪伴系统的新桌面客户端，技术栈是 Tauri + React + TypeScript。
+Emerald-client 是 `Emerald-presence` AI 陪伴系统的新桌面客户端，技术栈是 Tauri + React + TypeScript。
 
 它目标上包含两个 view：
 
@@ -26,7 +26,7 @@ Emerald-client 是 `qq-st-bot` AI 陪伴系统的新桌面客户端，技术栈�
 
 不在本项目范围内的事：
 
-- 不修改 `D:\ai\qq-st-bot\`，它是后端和核心数据项目。
+- 不修改 `D:\ai\Emerald-presence\`，它是后端和核心数据项目。
 - 不修改 `D:\ai\Emerald-desktop\`，它是旧桌宠客户端。
 - 不修改 `D:\ai\Emerald-desktopUI\`，它是 UI 迁移参考原型，只读。
 
@@ -51,9 +51,9 @@ D:\ai\Emerald-client\
 | 继续旧客户端迁移 | `docs/migration-status.md` |
 | 查 bug、技术债、迁移缺口 | `docs/known-issues.md` |
 
-后端系统本身的细节以 `D:\ai\qq-st-bot\AGENTS.md` 和它的 `ARCHITECTURE.md` / `docs/` 为准。
+后端系统本身的细节以 `D:\ai\Emerald-presence\AGENTS.md` 和它的 `ARCHITECTURE.md` / `docs/` 为准。
 在 Codex / Claude Code Windows 沙箱中运行 build、pytest、跨仓 git 或浏览器验证前，
-必须阅读 `D:\ai\qq-st-bot\docs\dev-environment.md`。
+必须阅读 `D:\ai\Emerald-presence\docs\dev-environment.md`。
 
 ---
 
@@ -120,7 +120,7 @@ sensor-service/
 6. 所有出站 HTTP 请求必须显式禁用代理。Rust 侧用 `reqwest::Client::builder().no_proxy()`。
 7. 不要用浏览器原生 `fetch` 直接打后端 HTTP；CORS 和代理规则都不稳定。HTTP 走 Tauri command。
 8. 浏览器原生 WebSocket API 不读系统代理环境变量，当前可以直接连 `ws://127.0.0.1:8080/ws/desktop`。
-9. 不要修改 `D:\ai\qq-st-bot\`、`D:\ai\Emerald-desktop\`、`D:\ai\Emerald-desktopUI\`，除非用户明确改范围。
+9. 不要修改 `D:\ai\Emerald-presence\`、`D:\ai\Emerald-desktop\`、`D:\ai\Emerald-desktopUI\`，除非用户明确改范围。
 10. 沙箱中 `npm run build` 若因 `node_modules/.vite-temp` 写入报 `EPERM`，这是环境权限问题；
     对原命令申请权限后重跑，不能只跑 `tsc` 就宣称 build 通过。
 11. 跨仓 git 遇到 `dubious ownership` 时使用单命令参数
@@ -132,7 +132,7 @@ sensor-service/
 
 当前实际后端：
 
-- 后端项目：`D:\ai\qq-st-bot\`
+- 后端项目：`D:\ai\Emerald-presence\`
 - 默认管理服务：`http://127.0.0.1:8080`
 - WebSocket：`ws://127.0.0.1:8080/ws/desktop`
 - HTTP 对话：`POST http://127.0.0.1:8080/desktop/chat`
@@ -144,7 +144,7 @@ sensor-service/
 
 - 后端当前实际 WS 协议仍是 legacy：`hello` / `hello_ack` / `channel_message` / `action` / `ack` / `ping` / `pong`。
 - v1 目标协议文档目前在旧项目：`D:\ai\Emerald-desktop\docs\desktop-client-protocol.md`。
-- `qq-st-bot/docs/` 目前没有 `desktop-client-protocol.md` 和 `desktop-client-plan.md`，不要按旧路径假定存在。
+- `Emerald-presence/docs/` 目前没有 `desktop-client-protocol.md` 和 `desktop-client-plan.md`，不要按旧路径假定存在。
 
 ---
 

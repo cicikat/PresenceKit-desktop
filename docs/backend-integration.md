@@ -1,12 +1,12 @@
 # docs/backend-integration.md — 后端接口与协议现状
 
-本文档记录 Emerald-client 当前和 `qq-st-bot` 的连接方式。重点区分“当前实际协议”和“v1 目标协议”。
+本文档记录 Emerald-client 当前和 `Emerald-presence` 的连接方式。重点区分“当前实际协议”和“v1 目标协议”。
 
 ---
 
 ## 后端来源
 
-后端项目：`D:\ai\qq-st-bot\`
+后端项目：`D:\ai\Emerald-presence\`
 
 关键后端文件：
 
@@ -235,9 +235,9 @@ Authorization: Bearer <admin_token>
 
 后端文件：
 
-- `D:\ai\qq-st-bot\admin\routers\garden.py`
-- `D:\ai\qq-st-bot\core\garden\manager.py`
-- `D:\ai\qq-st-bot\docs\garden.md`
+- `D:\ai\Emerald-presence\admin\routers\garden.py`
+- `D:\ai\Emerald-presence\core\garden\manager.py`
+- `D:\ai\Emerald-presence\docs\garden.md`
 
 返回结构：
 
@@ -284,7 +284,7 @@ Sidebar diary tab
   → Rust reqwest GET http://127.0.0.1:8080/diary/list
 ```
 
-后端要求 Bearer token。数据源目录：`D:\ai\qq-st-bot\data\yexuan_inner\diary\`，文件名严格匹配 `^\d{4}-\d{2}-\d{2}\.md$`。
+后端要求 Bearer token。数据源目录：`D:\ai\Emerald-presence\data\yexuan_inner\diary\`，文件名严格匹配 `^\d{4}-\d{2}-\d{2}\.md$`。
 
 返回结构：
 
@@ -327,7 +327,7 @@ SubDiary 点击 entry
 
 `body` 是 strip 掉首行 `# ` heading 后的剩余正文，保留 `##` 子标题和段落结构，原样 markdown 文本。
 
-后端文件：`D:\ai\qq-st-bot\admin\routers\diary.py`
+后端文件：`D:\ai\Emerald-presence\admin\routers\diary.py`
 
 ---
 
@@ -343,7 +343,7 @@ ChatPanel mount
   ← { dates: ["2026-05-16", "2026-05-15", ...], count: N }
 ```
 
-后端要求 Bearer token。数据源目录：`qq-st-bot/data/event_log/{owner_qq}/`，文件名严格匹配 `^\d{4}-\d{2}-\d{2}\.md$`，`full_log.md` 忽略。
+后端要求 Bearer token。数据源目录：`Emerald-presence/data/event_log/{owner_qq}/`，文件名严格匹配 `^\d{4}-\d{2}-\d{2}\.md$`，`full_log.md` 忽略。
 
 **重要**：接口路径不含 QQ 号。`owner_qq` 由后端从 `config.yaml` 的 `scheduler.owner_id` 字段读取，客户端零 QQ 知识。
 
@@ -402,7 +402,7 @@ ChatPanel 启动或滚顶触发
 WebSocket 消息；`time` 仅用于旧响应兼容和显示。assistant-only trigger turn 的
 `user` 为空字符串，客户端仍渲染 assistant 消息。
 
-后端文件：`D:\ai\qq-st-bot\admin\routers\chat_log.py`
+后端文件：`D:\ai\Emerald-presence\admin\routers\chat_log.py`
 
 ---
 
@@ -418,7 +418,7 @@ loadMoodState()
 
 后端要求 Bearer token。数据源：`core/memory/mood_state.py load()`，返回持久化的情绪状态（两轮漂移才切换，非即时检测值）。
 
-后端文件：`D:\ai\qq-st-bot\admin\routers\mood.py`、`D:\ai\qq-st-bot\core\memory\mood_state.py`
+后端文件：`D:\ai\Emerald-presence\admin\routers\mood.py`、`D:\ai\Emerald-presence\core\memory\mood_state.py`
 
 返回结构：
 
@@ -448,7 +448,7 @@ loadActivityState()
 
 后端要求 Bearer token。调用 `core.activity_manager.get_current()`，必要时自动切换到新活动（15-45 分钟随机间隔）。
 
-后端文件：`D:\ai\qq-st-bot\admin\routers\activity.py`、`D:\ai\qq-st-bot\core\activity_manager.py`
+后端文件：`D:\ai\Emerald-presence\admin\routers\activity.py`、`D:\ai\Emerald-presence\core\activity_manager.py`
 
 返回结构：
 
@@ -535,7 +535,7 @@ Authorization: Bearer <admin_token>
 - 聊天软件、Other、未知应用、Explorer / Office / PDF / 压缩工具：直接置空字符串
 - 黑名单关键词（密码、银行、医疗等）整条置空
 
-后端文件：`D:\ai\qq-st-bot\admin\routers\sensor.py`、`D:\ai\qq-st-bot\core\memory\realtime_state.py`
+后端文件：`D:\ai\Emerald-presence\admin\routers\sensor.py`、`D:\ai\Emerald-presence\core\memory\realtime_state.py`
 
 ---
 
@@ -611,7 +611,7 @@ Emerald-client SubStatus
 
 `stale_seconds` 是后端算的"距上次 POST 多少秒",SubStatus 用这个判断 sensor 模块是否还在采集(比如 >120 视为掉线,UI 显示降级)。
 
-后端文件：`D:\ai\qq-st-bot\admin\routers\sensor.py`、`D:\ai\qq-st-bot\core\memory\realtime_state.py`
+后端文件：`D:\ai\Emerald-presence\admin\routers\sensor.py`、`D:\ai\Emerald-presence\core\memory\realtime_state.py`
 
 > `sensor_aware` 触发器默认关闭，后端 `config.yaml` 设置
 > `scheduler.sensor_aware.enabled: true` 才生效，重启服务后 scheduler 启动日志会打出 `ENABLED` 确认。
@@ -620,7 +620,7 @@ Emerald-client SubStatus
 
 ## /sensor/realtime（GET）
 
-读取最新一份 sensor 快照。后端 `D:\ai\qq-st-bot\admin\routers\sensor.py:213`。
+读取最新一份 sensor 快照。后端 `D:\ai\Emerald-presence\admin\routers\sensor.py:213`。
 
 ### 响应 schema
 
@@ -667,7 +667,7 @@ Emerald-client SubStatus
 ws://127.0.0.1:8080/ws/desktop
 ```
 
-后端实现：`D:\ai\qq-st-bot\channels\desktop_ws.py`
+后端实现：`D:\ai\Emerald-presence\channels\desktop_ws.py`
 
 当前客户端实现：`src/shared/api/ws.ts`
 
@@ -914,7 +914,7 @@ Client Auth Sync（R9 / SEC-AUTH-1）已同步的受保护调用点：
 
 ## 后端 fallback
 
-`qq-st-bot/channels/desktop.py` 在 WS 不可用时会写文件队列：
+`Emerald-presence/channels/desktop.py` 在 WS 不可用时会写文件队列：
 
 ```text
 data/channel_queue.json
@@ -932,14 +932,14 @@ data/channel_queue.json
 - `src/shared/api/ws.ts`
 - `src/shared/api/backend.ts`
 - `src-tauri/src/lib.rs`
-- `qq-st-bot/channels/desktop_ws.py`
-- `qq-st-bot/admin/routers/chat.py`
-- `qq-st-bot/admin/routers/memory.py`
-- `qq-st-bot/admin/routers/garden.py`
-- `qq-st-bot/admin/routers/diary.py`
-- `qq-st-bot/admin/routers/chat_log.py`
-- `qq-st-bot/admin/routers/sensor.py`
-- `qq-st-bot/core/memory/realtime_state.py`
+- `Emerald-presence/channels/desktop_ws.py`
+- `Emerald-presence/admin/routers/chat.py`
+- `Emerald-presence/admin/routers/memory.py`
+- `Emerald-presence/admin/routers/garden.py`
+- `Emerald-presence/admin/routers/diary.py`
+- `Emerald-presence/admin/routers/chat_log.py`
+- `Emerald-presence/admin/routers/sensor.py`
+- `Emerald-presence/core/memory/realtime_state.py`
 
 ---
 

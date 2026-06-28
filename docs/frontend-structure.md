@@ -181,20 +181,22 @@ src/windows/toy/
 文件：`src/windows/pet/`
 
 - `PetWindow.tsx`：独立透明置顶窗口入口，订阅 Chat 广播的 `PetSnapshot`，保留左键拖拽。
-- `components/ParticleCanvas.tsx`：持续粒子呼吸，并响应 `shy` / `nuzzle` 短促视觉脉冲。
+- `components/ParticleCanvas.tsx`：三种粒子视觉风格（流体光球 fluid / 散点粒子 scatter / 神经网络 network），
+  均响应情绪配色 lerp 与 shy/nuzzle 视觉脉冲；通过 `styleRef` 订阅 `petVisualStyle` 设置实时切换。
 - `usePetMouse.ts`：轮询 Tauri `cursorPosition()`，读取窗口位置、尺寸和显示器 work area，
   实现边界内的缓动躲避/靠近；Ctrl 钉住与拖拽期间停止自动移动。
 - `src/shared/pet/mouseSettings.ts`：持久化全局鼠标交互开关与随机靠近间隔。
+- `src/shared/pet/petVisualStyle.ts`：持久化粒子风格（`'fluid' | 'scatter' | 'network'`，默认 `network`），localStorage + CustomEvent 双通道。
 
 当前只读状态映射：`惊讶` mood 触发害羞躲避。该映射不修改 StateEngine，也不新增另一份
-mood 真值。Chat 偏好“其他”页可关闭全部鼠标自动交互并调整随机靠近间隔。
+mood 真值。Chat 偏好 “3 · 桌宠” 页可切换粒子风格、关闭全部鼠标自动交互并调整随机靠近间隔。
 
 ## PresenceNagWindow
 
 文件：`src/windows/presence-nag/`
 
 - 单实例透明置顶窗口，通过 Tauri event `presence-nag` 接收 `{ text, avatar }` 并更新内容。
-- Chat 偏好“其他”页的「允许存在感弹窗」使用本地 UI 偏好，默认关闭；`ws.ts` 每次 action 到达时读取该值。
+- Chat 偏好 “3 · 桌宠” 页的「允许存在感弹窗」使用本地 UI 偏好，默认关闭；`ws.ts` 每次 action 到达时读取该值。
 - 启用时 `case 'presence_nag'` 调同名 Tauri command `presence_nag`；重复 action 不创建新窗口。
 - `Esc` 和所有关闭入口统一调用 `presence_nag_close_all`。关闭设置时也立即全关。
 - 视觉明确使用角色头像和梦核配色，不仿冒原生系统对话框。
