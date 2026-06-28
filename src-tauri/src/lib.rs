@@ -1,10 +1,10 @@
 // NOTE(endpoint-literals): 本文件中的后端路径（/desktop/chat、/desktop/wake、/desktop/activate、
 // /memory/…、/garden/state、/diary/…、/chat-log/…、/mood/state、/activity/current、
-// /sensor/realtime、/upload/ingest、/dream/state|enter|chat|exit|settings、
+// /sensor/realtime、/upload/ingest、/transcribe、/dream/state|enter|chat|exit|settings、
 // /settings/prompt-assets、/debug/user-hidden-state、/hardware/devices|connect、
 // /activity/reading/…(5)、/activity/gomoku/…(5)、/activity/chess/…(5)、
 // /group/list|create|{id}|{id}/send|{id}/history|{id}/settings|{id}/roster(7)、
-// /system/meta-mode，共 43 个不同路径）均为字面量硬编码。
+// /system/meta-mode、/lorebook(4)、/jailbreak-entries(4)，共 52 个不同路径）均为字面量硬编码。
 // publisher.rs 另有 /sensor/realtime。后端路由变更时需手动同步这两个文件。
 mod actions;
 mod client_config;
@@ -13,11 +13,15 @@ pub mod sensor;
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{atomic::AtomicBool, Mutex};
 use base64::Engine;
 use crate::client_config::{backend_url, load_client_config};
 use crate::sensor::runner::{spawn_sensor_runner, SensorRunnerConfig, SensorRunnerHandle};
-use tauri::Manager;
+use tauri::{Emitter, Manager};
+
+struct VoiceHotkeyState {
+    running: AtomicBool,
+}
 
 fn http_client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
@@ -569,6 +573,63 @@ async fn upload_document(
     resp.json::<serde_json::Value>()
         .await
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn transcribe_audio(app: tauri::AppHandle, audio_b64: String) -> Result<serde_json::Value, String> {
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(&audio_b64)
+        .map_err(|_| "HTTP 422: base64 解码失败".to_string())?;
+
+    let cfg = load_client_config(&app);
+    let part = reqwest::multipart::Part::bytes(bytes)
+        .file_name("recording.webm")
+        .mime_str("audio/webm")
+        .map_err(|e| e.to_string())?;
+    let form = reqwest::multipart::Form::new()
+        .part("file", part)
+        .text("channel", "desktop");
+
+    let client = llm_http_client()?;
+    let resp = authorized_request(&cfg, client.post(backend_url(&cfg, "/transcribe")))
+        .multipart(form)
+        .send()
+        .await
+        .map_err(|_| "HTTP 0: 转写请求失败".to_string())?;
+
+    let status = resp.status();
+    if !status.is_success() {
+        return Err(safe_http_error(status));
+    }
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn start_voice_hotkey_listener(app: tauri::AppHandle) -> Result<(), String> {
+    use std::sync::atomic::Ordering;
+    let state = app.state::<VoiceHotkeyState>();
+    if state.running.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err() {
+        return Ok(());
+    }
+    std::thread::Builder::new()
+        .name("voice-hotkey-poll".into())
+        .spawn(move || {
+            use device_query::{DeviceQuery, DeviceState, Keycode};
+            let device = DeviceState::new();
+            let mut was_active = false;
+            loop {
+                let keys = device.get_keys();
+                let active = (keys.contains(&Keycode::LAlt) || keys.contains(&Keycode::RAlt))
+                    && keys.contains(&Keycode::Key1);
+                if active && !was_active {
+                    let _ = app.emit("voice-hotkey", ());
+                }
+                was_active = active;
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+        })
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -1649,9 +1710,98 @@ async fn activity_dream_seed_close(app: tauri::AppHandle, payload: ActivitySessi
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
 
+// ── Lorebook entry CRUD ───────────────────────────────────────────────────────
+
+#[tauri::command]
+async fn get_lorebook_entries(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let resp = authorized_request(&cfg, client.get(backend_url(&cfg, "/lorebook")))
+        .send().await.map_err(|e| e.to_string())?;
+    let resp = require_success(resp).await?;
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn add_lorebook_entry(app: tauri::AppHandle, entry: serde_json::Value) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let resp = authorized_request(&cfg, client.post(backend_url(&cfg, "/lorebook")))
+        .json(&entry).send().await.map_err(|e| e.to_string())?;
+    let resp = require_success(resp).await?;
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn update_lorebook_entry(app: tauri::AppHandle, eid: String, entry: serde_json::Value) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let url = backend_url(&cfg, &format!("/lorebook/{}", eid));
+    let resp = authorized_request(&cfg, client.put(&url))
+        .json(&entry).send().await.map_err(|e| e.to_string())?;
+    let resp = require_success(resp).await?;
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn delete_lorebook_entry(app: tauri::AppHandle, eid: String) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let url = backend_url(&cfg, &format!("/lorebook/{}", eid));
+    let resp = authorized_request(&cfg, client.delete(&url))
+        .send().await.map_err(|e| e.to_string())?;
+    let resp = require_success(resp).await?;
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+// ── Jailbreak entry CRUD ──────────────────────────────────────────────────────
+
+#[tauri::command]
+async fn get_jailbreak_entries(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let resp = authorized_request(&cfg, client.get(backend_url(&cfg, "/jailbreak-entries")))
+        .send().await.map_err(|e| e.to_string())?;
+    let resp = require_success(resp).await?;
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn add_jailbreak_entry(app: tauri::AppHandle, entry: serde_json::Value) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let resp = authorized_request(&cfg, client.post(backend_url(&cfg, "/jailbreak-entries")))
+        .json(&entry).send().await.map_err(|e| e.to_string())?;
+    let resp = require_success(resp).await?;
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn update_jailbreak_entry(app: tauri::AppHandle, eid: String, entry: serde_json::Value) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let url = backend_url(&cfg, &format!("/jailbreak-entries/{}", eid));
+    let resp = authorized_request(&cfg, client.put(&url))
+        .json(&entry).send().await.map_err(|e| e.to_string())?;
+    let resp = require_success(resp).await?;
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn delete_jailbreak_entry(app: tauri::AppHandle, eid: String) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let url = backend_url(&cfg, &format!("/jailbreak-entries/{}", eid));
+    let resp = authorized_request(&cfg, client.delete(&url))
+        .send().await.map_err(|e| e.to_string())?;
+    let resp = require_success(resp).await?;
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(VoiceHotkeyState { running: AtomicBool::new(false) })
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
@@ -1723,6 +1873,8 @@ pub fn run() {
             load_activity_state,
             load_sensor_realtime,
             upload_document,
+            transcribe_audio,
+            start_voice_hotkey_listener,
             save_avatar,
             load_avatar,
             read_avatars_json,
@@ -1790,6 +1942,14 @@ pub fn run() {
             set_chat_mode,
             set_chat_style,
             set_chat_multi_message,
+            get_lorebook_entries,
+            add_lorebook_entry,
+            update_lorebook_entry,
+            delete_lorebook_entry,
+            get_jailbreak_entries,
+            add_jailbreak_entry,
+            update_jailbreak_entry,
+            delete_jailbreak_entry,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
