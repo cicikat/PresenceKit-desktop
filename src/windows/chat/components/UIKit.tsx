@@ -130,6 +130,7 @@ export function Icon({ name, size = 18, stroke = 'currentColor', strokeWidth = 1
     case 'wind':    return <svg {...common}><path d="M4 10h12a3 3 0 1 0-3-3M4 14h16a3 3 0 1 1-3 3"/></svg>;
     case 'spec':    return <svg {...common}><path d="M4 4h11l5 5v11H4z"/><path d="M15 4v5h5M8 13h8M8 17h5"/></svg>;
     case 'grid2':   return <svg {...common}><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>;
+    case 'mic':     return <svg {...common}><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 19v3M9 22h6"/></svg>;
     default:        return <svg {...common}><circle cx="12" cy="12" r="4"/></svg>;
   }
 }

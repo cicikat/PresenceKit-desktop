@@ -4,13 +4,19 @@
  * ============================================================ */
 
 import { useState, useEffect, useRef, useCallback, type CSSProperties } from 'react';
-import { getChatSettings, setChatMode, setChatStyle, setChatMultiMessage } from '../../shared/api/chat-settings';
+import { getChatSettings, setChatStyle, setChatMultiMessage } from '../../shared/api/chat-settings';
 import type { ChatSettings } from '../../shared/api/types';
 import { invoke } from '@tauri-apps/api/core';
-import { Icon, MicroLabel } from './components/UIKit';
+import { Icon } from './components/UIKit';
 import { StateEngine } from '../../shared/state/store';
 import { avatarStore } from '../../shared/avatars/store';
 import { getPromptAssets, patchPromptAssets, getCharacterAvatar, uploadCharacterAvatar, deleteCharacterAvatar } from '../../shared/api/backend';
+import {
+  getLoreEntries, addLoreEntry, updateLoreEntry, deleteLoreEntry,
+  getJailbreakEntries, addJailbreakEntry, updateJailbreakEntry, deleteJailbreakEntry,
+  type LoreEntry, type JailbreakEntry,
+} from '../../shared/api/entries';
+import { EntryManager, type EntryManagerSchema, type EntryManagerCallbacks, type ManagedEntry } from './components/EntryManager';
 import { wsClient } from '../../shared/api/ws';
 import type { PromptAssetsPatch, PromptAssetsResponse } from '../../shared/api/types';
 import { getUIPref, setUIPref } from '../../shared/uiPreferences';
@@ -27,6 +33,23 @@ import {
   subscribePetMouseSettings,
   type PetMouseSettings,
 } from '../../shared/pet/mouseSettings';
+import {
+  loadPetVisualStyle,
+  savePetVisualStyle,
+  subscribePetVisualStyle,
+  type PetVisualStyle,
+} from '../../shared/pet/petVisualStyle';
+import {
+  loadPetRoamSettings,
+  savePetRoamSettings,
+  subscribePetRoamSettings,
+} from '../../shared/pet/petRoamSettings';
+import {
+  loadPetRippleSettings,
+  savePetRippleSettings,
+  subscribePetRippleSettings,
+} from '../../shared/pet/petRippleSettings';
+import { YandereOverlay } from './components/YandereOverlay';
 import {
   chatFontFamily,
   chatFontUrl,
@@ -54,15 +77,16 @@ import {
   setThemeMode,
   subscribe as subscribeTheme,
 } from '../../shared/theme/registry';
+import { ChatColorPage } from './components/ChatColorPage';
 
 const SIDEBAR_MIN     = 250;
 const SIDEBAR_MAX     = 540;
 const SIDEBAR_DEFAULT = 340;
 
 /* ── 偏好面板 ── */
-function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHeaderVisible, onChatHeaderToggle, appearance, onAppearanceChange, onCharacterAvatarChange, petMouseSettings, onPetMouseSettingsChange, presenceNagEnabled, onPresenceNagToggle, playModeEnabled, onPlayModeToggle }: any) {
+function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHeaderVisible, onChatHeaderToggle, appearance, onAppearanceChange, onCharacterAvatarChange, onCharacterSwitched, petMouseSettings, onPetMouseSettingsChange, petVisualStyle, onPetVisualStyleChange, presenceNagEnabled, onPresenceNagToggle, playModeEnabled, onPlayModeToggle, petRoamEnabled, onPetRoamToggle, petRippleEnabled, onPetRippleToggle, onYandereOpen }: any) {
   const [avatars, setAvatars] = useState(avatarStore.get());
-  const [tab, setTab] = useState<'appearance' | 'world' | 'other'>('appearance');
+  const [tab, setTab] = useState<'appearance' | 'color' | 'world' | 'pet' | 'chat' | 'other'>('appearance');
   const [cropSrc, setCropSrc] = useState<string | null>(null);
   const [cropRole, setCropRole] = useState<'her' | 'you' | null>(null);
   const [bgCropSrc, setBgCropSrc] = useState<string | null>(null);
@@ -155,19 +179,26 @@ function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHea
             <div style={{ flex: 1 }} />
             <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--ink-3)', cursor: 'pointer', fontSize: 18, padding: 0, lineHeight: 1 }}>×</button>
           </div>
-          <div style={{ padding: '10px 20px 0', display: 'flex', gap: 4, borderBottom: '1px solid var(--paper-edge)' }}>
+          <div style={{ padding: '10px 20px 0', display: 'flex', gap: 2, borderBottom: '1px solid var(--paper-edge)' }}>
             {([
-              ['appearance', '1 · 外观'],
-              ['world', '2 · 世界'],
-              ['other', '3 · 其他'],
-            ] as const).map(([key, label]) => (
+              ['appearance', '1', '外观'],
+              ['color', '2', '色彩自定义'],
+              ['world', '3', '世界'],
+              ['pet', '4', '桌宠'],
+              ['chat', '5', '对话'],
+              ['other', '6', '其他'],
+            ] as const).map(([key, num, label]) => (
               <button key={key} onClick={() => setTab(key)} style={{
-                padding: '7px 14px', border: 'none', borderRadius: '6px 6px 0 0',
+                padding: '5px 10px', border: 'none', borderRadius: '6px 6px 0 0',
                 background: tab === key ? 'var(--paper)' : 'transparent',
                 color: tab === key ? 'var(--ink)' : 'var(--ink-3)',
-                fontFamily: 'inherit', fontSize: 12, fontWeight: tab === key ? 600 : 500,
-                cursor: 'pointer', borderBottom: tab === key ? '2px solid var(--accent)' : '2px solid transparent',
-              }}>{label}</button>
+                fontFamily: 'inherit', cursor: 'pointer',
+                borderBottom: tab === key ? '2px solid var(--accent)' : '2px solid transparent',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1,
+              }}>
+                <span style={{ fontSize: 10, fontWeight: 600, lineHeight: 1, letterSpacing: 0.5 }}>{num}</span>
+                <span style={{ fontSize: 11, fontWeight: tab === key ? 600 : 500, lineHeight: 1.2 }}>{label}</span>
+              </button>
             ))}
           </div>
           <div style={{ padding: '18px 22px', display: 'grid', gap: 18, flex: 1, minHeight: 0, overflowY: 'auto' }}>
@@ -335,21 +366,30 @@ function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHea
                     </div>
                   </div>
                 </div>
-                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
+              </>
+            ) : tab === 'color' ? (
+              <ChatColorPage />
+            ) : tab === 'world' ? (
+              <PromptAssetsSettings onCharacterAvatarChange={onCharacterAvatarChange} onCharacterSwitched={onCharacterSwitched} />
+            ) : tab === 'pet' ? (
+              <>
                 <div>
-                  <MicroLabel>未来主题接入接口</MicroLabel>
-                  <div className="serif" style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6, marginTop: 6, fontStyle: 'italic' }}>
-                    所有颜色都用 CSS 变量管理。要加新主题，复制{' '}
-                    <code style={{ fontFamily: 'var(--font-mono)', background: 'var(--paper-3)', padding: '1px 5px', borderRadius: 'var(--radius-xs)' }}>:root[data-theme="paper"]</code>{' '}
-                    这块改值即可。
+                  <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink)', marginBottom: 2 }}>桌宠粒子风格</div>
+                  <div className="mono" style={{ fontSize: 9.5, color: 'var(--ink-3)', letterSpacing: 1.1 }}>
+                    切换桌宠窗口的动画效果
                   </div>
                 </div>
-              </>
-            ) : tab === 'world' ? (
-              <PromptAssetsSettings onCharacterAvatarChange={onCharacterAvatarChange} />
-            ) : (
-              <>
-                <ChatSettingsSection />
+                <PrefRow label="粒子风格" hint="流体光球 · 散点粒子 · 神经网络">
+                  <select
+                    value={petVisualStyle}
+                    onChange={e => onPetVisualStyleChange(e.target.value)}
+                    style={{ ...prefSelectStyle, width: 140 }}
+                  >
+                    <option value="fluid">流体光球</option>
+                    <option value="scatter">散点粒子</option>
+                    <option value="network">神经网络</option>
+                  </select>
+                </PrefRow>
                 <div style={{ height: 1, background: 'var(--paper-edge)' }} />
                 <div>
                   <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink)', marginBottom: 2 }}>桌宠鼠标交互</div>
@@ -376,11 +416,15 @@ function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHea
                     />
                   </div>
                 </PrefRow>
-                <PrefRow label="允许存在感弹窗" hint="开启后，叶瑄被冷落久了会用带头像的弹窗找你；默认关闭">
-                  <PrefSwitch active={presenceNagEnabled} onClick={onPresenceNagToggle} />
-                </PrefRow>
                 <PrefRow label="玩耍模式" hint="开启后，叶瑄在对话里表达想一起玩 toy 时会自动进入玩耍模式；Ribbon 也会出现手动入口。默认关闭">
                   <PrefSwitch active={playModeEnabled} onClick={onPlayModeToggle} />
+                </PrefRow>
+                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
+                <PrefRow label="全屏漫游" hint="桌宠在屏幕上自动游走反弹；拖动或被交互时暂停。默认关闭">
+                  <PrefSwitch active={petRoamEnabled} onClick={onPetRoamToggle} />
+                </PrefRow>
+                <PrefRow label="点击涟漪" hint="在桌宠粒子上点击会炸出扩散涟漪。默认开启">
+                  <PrefSwitch active={petRippleEnabled} onClick={onPetRippleToggle} />
                 </PrefRow>
                 <div className="serif" style={{
                   padding: '14px 16px', border: '1px dashed var(--paper-edge)', borderRadius: 'var(--radius-md)',
@@ -389,6 +433,22 @@ function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHea
                   当前由「惊讶」情绪触发害羞躲避。按住 Ctrl 可临时钉住桌宠并稳定拖动。
                 </div>
               </>
+            ) : tab === 'chat' ? (
+              <>
+                <ChatSettingsSection />
+                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
+                <PrefRow label="允许存在感弹窗" hint="开启后，叶瑄被冷落久了会用带头像的弹窗找你；默认关闭">
+                  <PrefSwitch active={presenceNagEnabled} onClick={onPresenceNagToggle} />
+                </PrefRow>
+                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
+                <PrefRow label="沉浸式挽留模式（废弃版仅保留视觉效果）" hint="5 秒倒计时后触发暗红遮罩与关一弹十小窗；ESC 退出">
+                  <button onClick={onYandereOpen} style={prefActionButtonStyle}>启动</button>
+                </PrefRow>
+              </>
+            ) : (
+              <div className="serif" style={{ color: 'var(--ink-3)', fontSize: 13.5, textAlign: 'center', padding: '48px 0', fontStyle: 'italic' }}>
+                未完待续
+              </div>
             )}
           </div>
         </div>
@@ -397,7 +457,95 @@ function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHea
   );
 }
 
-function PromptAssetsSettings({ onCharacterAvatarChange }: { onCharacterAvatarChange?: (dataUrl: string | null) => void }) {
+// ── Lorebook EntryManager schema ──────────────────────────────────────────────
+
+const LORE_SCHEMA: EntryManagerSchema = {
+  titleField: 'keyword',
+  extraFields: [
+    {
+      key: 'keyword', label: '关键词（逗号分隔）', type: 'text',
+      default: '', placeholder: '关键词1, 关键词2',
+    },
+    {
+      key: 'insertion_order', label: '注入顺序（数字越小越靠前）', type: 'number',
+      default: 100,
+    },
+    {
+      key: 'regex', label: '正则模式（关键词作为正则表达式）', type: 'select',
+      default: 'false',
+      options: [{ value: 'false', label: '普通关键词' }, { value: 'true', label: '正则表达式' }],
+    },
+  ],
+};
+
+const LORE_CALLBACKS: EntryManagerCallbacks = {
+  load: async () => {
+    const rows = await getLoreEntries();
+    return rows.map(r => ({
+      ...r,
+      keyword: Array.isArray(r.keyword) ? r.keyword.join(', ') : r.keyword,
+    }) as unknown as ManagedEntry);
+  },
+  add: async entry => {
+    const e = entry as unknown as Omit<LoreEntry, 'id'> & { keyword: string };
+    await addLoreEntry({
+      keyword: typeof e.keyword === 'string' ? e.keyword.split(',').map(s => s.trim()).filter(Boolean) : e.keyword,
+      content: e.content,
+      enabled: e.enabled,
+      regex: String(e.regex) === 'true',
+      insertion_order: Number(e.insertion_order) || 100,
+    });
+  },
+  update: async (id, entry) => {
+    const e = entry as unknown as Omit<LoreEntry, 'id'> & { keyword: string };
+    await updateLoreEntry(id, {
+      keyword: typeof e.keyword === 'string' ? e.keyword.split(',').map(s => s.trim()).filter(Boolean) : e.keyword,
+      content: e.content,
+      enabled: e.enabled,
+      regex: String(e.regex) === 'true',
+      insertion_order: Number(e.insertion_order) || 100,
+    });
+  },
+  remove: deleteLoreEntry,
+};
+
+// ── Jailbreak EntryManager schema ─────────────────────────────────────────────
+
+const JB_SCHEMA: EntryManagerSchema = {
+  titleField: 'title',
+  extraFields: [
+    { key: 'title', label: '标题', type: 'text', default: '', placeholder: '条目标题' },
+    {
+      key: 'layer', label: '层级', type: 'select', default: 0,
+      options: [
+        { value: 0, label: '层 0（身份设定）' },
+        { value: 2, label: '层 2（背景补充）' },
+        { value: 11, label: '层 11（表达规则，权重最高）' },
+      ],
+    },
+  ],
+};
+
+const JB_CALLBACKS: EntryManagerCallbacks = {
+  load: async () => {
+    const rows = await getJailbreakEntries();
+    return rows as unknown as ManagedEntry[];
+  },
+  add: async entry => {
+    const e = entry as unknown as Omit<JailbreakEntry, 'id'>;
+    await addJailbreakEntry({ title: e.title ?? '', content: e.content, enabled: e.enabled, layer: Number(e.layer) || 0 });
+  },
+  update: async (id, entry) => {
+    const e = entry as unknown as Omit<JailbreakEntry, 'id'>;
+    await updateJailbreakEntry(id, { title: e.title ?? '', content: e.content, enabled: e.enabled, layer: Number(e.layer) || 0 });
+  },
+  remove: deleteJailbreakEntry,
+};
+
+// ── PromptAssetsSettings ──────────────────────────────────────────────────────
+
+function PromptAssetsSettings({ onCharacterAvatarChange, onCharacterSwitched }: { onCharacterAvatarChange?: (dataUrl: string | null) => void; onCharacterSwitched?: () => void }) {
+  const [worldSubTab, setWorldSubTab] = useState<'assets' | 'lorebook' | 'jailbreak'>('assets');
   const [assets, setAssets] = useState<PromptAssetsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -468,6 +616,7 @@ function PromptAssetsSettings({ onCharacterAvatarChange }: { onCharacterAvatarCh
       const response = await patchPromptAssets(patch);
       setAssets(current => current ? { ...current, active: response.active } : current);
       if (patch.active_character && assets) {
+        onCharacterSwitched?.();
         void loadActiveCharAvatar(patch.active_character, assets.characters);
       }
     } catch (saveError) {
@@ -557,7 +706,33 @@ function PromptAssetsSettings({ onCharacterAvatarChange }: { onCharacterAvatarCh
   const hasRuntimeAvatar = activeChar?.has_runtime_avatar ?? false;
 
   return (
-    <div style={{ display: 'grid', gap: 18 }}>
+    <div style={{ display: 'grid', gap: 14 }}>
+      {/* Sub-tabs */}
+      <div style={{ display: 'flex', gap: 3, borderBottom: '1px solid var(--paper-edge)', paddingBottom: 0 }}>
+        {([
+          ['assets', '素材选择'],
+          ['lorebook', '世界书条目'],
+          ['jailbreak', '破限条目'],
+        ] as const).map(([key, label]) => (
+          <button key={key} onClick={() => setWorldSubTab(key)} style={{
+            padding: '5px 12px', border: 'none', borderRadius: '5px 5px 0 0',
+            background: worldSubTab === key ? 'var(--paper)' : 'transparent',
+            color: worldSubTab === key ? 'var(--ink)' : 'var(--ink-3)',
+            fontFamily: 'inherit', fontSize: 11.5, fontWeight: worldSubTab === key ? 600 : 400,
+            cursor: 'pointer',
+            borderBottom: worldSubTab === key ? '2px solid var(--accent)' : '2px solid transparent',
+          }}>{label}</button>
+        ))}
+      </div>
+
+      {worldSubTab === 'lorebook' && (
+        <EntryManager schema={LORE_SCHEMA} callbacks={LORE_CALLBACKS} />
+      )}
+      {worldSubTab === 'jailbreak' && (
+        <EntryManager schema={JB_SCHEMA} callbacks={JB_CALLBACKS} />
+      )}
+
+      {worldSubTab === 'assets' && (<>
       {avatarCropSrc && (
         <AvatarCropper
           imageSrc={avatarCropSrc}
@@ -633,27 +808,12 @@ function PromptAssetsSettings({ onCharacterAvatarChange }: { onCharacterAvatarCh
           </div>
         )}
       </div>
-      <PromptAssetChecks
-        title="Reality 世界书"
-        hint="多选 · 仅显示可用世界书 stem"
-        options={assets.lorebooks}
-        selected={assets.active.enabled_lorebooks}
-        disabled={saving}
-        onToggle={id => void save({ enabled_lorebooks: toggle(assets.active.enabled_lorebooks, id) })}
-      />
-      <PromptAssetChecks
-        title="Reality 破限"
-        hint="多选 · 仅显示可用破限 stem"
-        options={assets.jailbreaks}
-        selected={assets.active.enabled_jailbreaks}
-        disabled={saving}
-        onToggle={id => void save({ enabled_jailbreaks: toggle(assets.active.enabled_jailbreaks, id) })}
-      />
       {(saving || error) && (
         <div className="mono" style={{ color: error ? 'var(--danger)' : 'var(--ink-3)', fontSize: 9.5, letterSpacing: 0.8 }}>
           {saving ? '正在保存…' : error}
         </div>
       )}
+      </>)}
     </div>
   );
 }
@@ -798,16 +958,6 @@ function ChatSettingsSection() {
     timerRef.current = setTimeout(() => setStatus(null), 3000);
   };
 
-  const saveMode = async (mode: ChatSettings['mode']) => {
-    if (!settings || saving) return;
-    setSaving(true);
-    const prev = settings.mode;
-    setSettings(s => s ? { ...s, mode } : s);
-    try { await setChatMode(mode); flash(true, '对话模式已保存'); }
-    catch (e) { setSettings(s => s ? { ...s, mode: prev } : s); flash(false, `保存失败：${String(e)}`); }
-    finally { setSaving(false); }
-  };
-
   const saveStyle = async (style: ChatSettings['style']) => {
     if (!settings || saving) return;
     setSaving(true);
@@ -834,31 +984,16 @@ function ChatSettingsSection() {
 
   return (
     <div>
-      <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink)', marginBottom: 2 }}>对话</div>
-      <div className="mono" style={{ fontSize: 9.5, color: 'var(--ink-3)', letterSpacing: 1.1, marginBottom: 14 }}>
-        Reality 对话运行时开关
-      </div>
       <div style={{ display: 'grid', gap: 14 }}>
-        <PrefRow label="对话模式" hint="chat：普通聊天 / roleplay：沉浸角色扮演">
-          <select
-            value={settings?.mode ?? 'chat'}
-            disabled={saving || !settings}
-            onChange={e => void saveMode(e.target.value as ChatSettings['mode'])}
-            style={{ ...prefSelectStyle, width: 140 }}
-          >
-            <option value="chat">聊天模式</option>
-            <option value="roleplay">角色扮演</option>
-          </select>
-        </PrefRow>
-        <PrefRow label="对话风格" hint="chat：沉浸式对话 / roleplay：沉浸式角色扮演">
+        <PrefRow label="对话风格" hint="chat：以对白与回应为核心 / roleplay：第一人称沉浸，动作心理用括号表达">
           <select
             value={settings?.style ?? 'roleplay'}
             disabled={saving || !settings}
             onChange={e => void saveStyle(e.target.value as ChatSettings['style'])}
             style={{ ...prefSelectStyle, width: 140 }}
           >
-            <option value="chat">沉浸对话</option>
-            <option value="roleplay">沉浸扮演</option>
+            <option value="chat">对白为主</option>
+            <option value="roleplay">第一人称沉浸</option>
           </select>
         </PrefRow>
         <PrefRow label="多消息分条" hint="开启后 AI 回复拆分成多条气泡发送">
@@ -916,14 +1051,19 @@ export function ChatWindow({ onActivityOpen, onToyOpen }: { onActivityOpen?: () 
   const [chatHeaderVisible, setChatHeaderVisible] = useState(() => getUIPref('chat.headerVisible', true));
   const [appearance, setAppearance]               = useState<ChatAppearance>(() => loadChatAppearance());
   const [petMouseSettings, setPetMouseSettings]   = useState<PetMouseSettings>(() => loadPetMouseSettings());
+  const [petVisualStyle, setPetVisualStyle]       = useState<PetVisualStyle>(() => loadPetVisualStyle());
   const [presenceNagEnabled, setPresenceNagEnabledState] = useState(() => isPresenceNagEnabled());
   const [playModeEnabled, setPlayModeEnabledState] = useState(() => isPlayModeEnabled());
+  const [petRoamEnabled, setPetRoamEnabled] = useState(() => loadPetRoamSettings().enabled);
+  const [petRippleEnabled, setPetRippleEnabled] = useState(() => loadPetRippleSettings().enabled);
+  const [yandereOpen, setYandereOpen] = useState(false);
   const [loadedFontFamily, setLoadedFontFamily]   = useState<string | null>(null);
   const [specOpen, setSpecOpen]                   = useState(false);
   const [prefsOpen, setPrefsOpen]                 = useState(false);
   const [dreamWindowOpen, setDreamWindowOpen]     = useState(false);
   const [dreamAfterglow, setDreamAfterglow]       = useState(false);
   const [characterAvatarDataUrl, setCharacterAvatarDataUrl] = useState<string | null>(null);
+  const [charSwitchKey, setCharSwitchKey] = useState(0);
   // null = 1v1 chat | 'list' = group list | string = group_id
   const [groupView, setGroupView]                 = useState<null | 'list' | string>(null);
 
@@ -937,6 +1077,9 @@ export function ChatWindow({ onActivityOpen, onToyOpen }: { onActivityOpen?: () 
   }), []);
   useEffect(() => avatarStore.subscribe(c => setChatBackground(c.chatBackground)), []);
   useEffect(() => subscribePetMouseSettings(setPetMouseSettings), []);
+  useEffect(() => subscribePetVisualStyle(setPetVisualStyle), []);
+  useEffect(() => subscribePetRoamSettings(s => setPetRoamEnabled(s.enabled)), []);
+  useEffect(() => subscribePetRippleSettings(s => setPetRippleEnabled(s.enabled)), []);
 
   useEffect(() => {
     const publishEngineSnapshot = () => {
@@ -969,6 +1112,15 @@ export function ChatWindow({ onActivityOpen, onToyOpen }: { onActivityOpen?: () 
 
   const updatePetMouseSettings = useCallback((patch: Partial<PetMouseSettings>) => {
     setPetMouseSettings(savePetMouseSettings(patch));
+  }, []);
+
+  const updatePetVisualStyle = useCallback((style: PetVisualStyle) => {
+    setPetVisualStyle(savePetVisualStyle(style));
+  }, []);
+
+  const handleYandereOpen = useCallback(() => {
+    setPrefsOpen(false);
+    setYandereOpen(true);
   }, []);
 
   const loadCharacterAvatar = useCallback(async (charId: string | null) => {
@@ -1119,7 +1271,7 @@ export function ChatWindow({ onActivityOpen, onToyOpen }: { onActivityOpen?: () 
           )}
           <div style={{ flex: 1, minWidth: 0 }}>
             {groupView === null ? (
-              <ChatPanel engine={engine} chatRectRef={chatRectRef} headerVisible={chatHeaderVisible} chatFontSize={appearance.chatFontSize} dreamActive={dreamWindowOpen} characterAvatarDataUrl={characterAvatarDataUrl} />
+              <ChatPanel key={charSwitchKey} engine={engine} chatRectRef={chatRectRef} headerVisible={chatHeaderVisible} chatFontSize={appearance.chatFontSize} dreamActive={dreamWindowOpen} characterAvatarDataUrl={characterAvatarDataUrl} />
             ) : groupView === 'list' ? (
               <GroupListPanel
                 onSelectGroup={id => setGroupView(id)}
@@ -1166,6 +1318,8 @@ export function ChatWindow({ onActivityOpen, onToyOpen }: { onActivityOpen?: () 
         onAppearanceChange={updateAppearance}
         petMouseSettings={petMouseSettings}
         onPetMouseSettingsChange={updatePetMouseSettings}
+        petVisualStyle={petVisualStyle}
+        onPetVisualStyleChange={updatePetVisualStyle}
         presenceNagEnabled={presenceNagEnabled}
         onPresenceNagToggle={() => {
           const next = !presenceNagEnabled;
@@ -1182,7 +1336,14 @@ export function ChatWindow({ onActivityOpen, onToyOpen }: { onActivityOpen?: () 
           setPlayModeEnabled(next);
           setPlayModeEnabledState(next);
         }}
-        onCharacterAvatarChange={setCharacterAvatarDataUrl} />
+        petRoamEnabled={petRoamEnabled}
+        onPetRoamToggle={() => savePetRoamSettings({ enabled: !petRoamEnabled })}
+        petRippleEnabled={petRippleEnabled}
+        onPetRippleToggle={() => savePetRippleSettings({ enabled: !petRippleEnabled })}
+        onYandereOpen={handleYandereOpen}
+        onCharacterAvatarChange={setCharacterAvatarDataUrl}
+        onCharacterSwitched={() => setCharSwitchKey(k => k + 1)} />
+      {yandereOpen && <YandereOverlay onClose={() => setYandereOpen(false)} />}
     </div>
   );
 }

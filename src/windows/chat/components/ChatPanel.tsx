@@ -12,6 +12,7 @@ import { avatarStore } from '../../../shared/avatars/store';
 import { open } from '@tauri-apps/plugin-dialog';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { sendChat, uploadDocument, desktopWake } from '../../../shared/api/backend';
+import { useVoiceInput } from '../../../shared/voice/useVoiceInput';
 import { loadChatLogDates, loadChatLogDay } from '../../../shared/api/backend';
 import { getClientConfig } from '../../../shared/api/config';
 import { wsClient } from '../../../shared/api/ws';
@@ -462,6 +463,16 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
 
+  const voice = useVoiceInput();
+  const handleMicClick = async () => {
+    if (voice.isRecording) {
+      const text = await voice.stop();
+      if (text) setInput(prev => prev ? `${prev} ${text}` : text);
+    } else {
+      await voice.start();
+    }
+  };
+
   // 按日懒加载状态
   const availableDatesRef = useRef<string[]>([]);
   const loadedDatesRef = useRef<string[]>([]);
@@ -494,6 +505,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
     style.textContent = `
       @keyframes streaming-cursor-blink { 0%,100%{opacity:.6} 50%{opacity:.15} }
       @keyframes streaming-pulse { 0%,100%{opacity:.5} 50%{opacity:.25} }
+      @keyframes mic-pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.75;transform:scale(0.94)} }
     `;
     document.head.appendChild(style);
   }, []);
@@ -828,6 +840,19 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       loadMore();
     }
   }, [loadMore]);
+
+  // 消息不足以填满视口时自动补加载（防止内容太少无法触发滚动事件）
+  useEffect(() => {
+    if (noMoreHistoryRef.current || isLoadingMoreRef.current) return;
+    const id = requestAnimationFrame(() => {
+      const scroll = scrollRef.current;
+      if (scroll && !noMoreHistoryRef.current && !isLoadingMoreRef.current &&
+          scroll.scrollHeight <= scroll.clientHeight) {
+        void loadMore();
+      }
+    });
+    return () => cancelAnimationFrame(id);
+  }, [messages.length, loadMore]);
 
   // ── 注册聊天区位置 ────────────────────────────────────────────────────────
 
@@ -1750,6 +1775,17 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
           </div>
         )}
         <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+          <button onClick={() => void handleMicClick()} title={voice.isRecording ? '点击停止录音' : '语音输入 (Alt+1)'} style={{
+            width: 40, height: 40, borderRadius: 'var(--radius-md)',
+            background: voice.isRecording ? 'oklch(0.55 0.18 25)' : 'var(--paper)',
+            color: voice.isRecording ? '#fff' : 'var(--ink)',
+            border: '1px solid var(--paper-edge)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', transition: 'all 0.15s',
+            animation: voice.isRecording ? 'mic-pulse 1.2s ease-in-out infinite' : 'none',
+          }}>
+            <Icon name="mic" size={18} />
+          </button>
           <button onClick={() => setShowAttachMenu(s => !s)} style={{
             width: 40, height: 40, borderRadius: 'var(--radius-md)',
             background: showAttachMenu ? 'var(--ink)' : 'var(--paper)',
