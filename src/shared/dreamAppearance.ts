@@ -14,6 +14,8 @@ export interface DreamAppearance {
   accentColor: string;
   savedColors: string[];
   backgroundBlur: number;
+  colorOverridesDay: Record<string, string>;
+  colorOverridesNight: Record<string, string>;
 }
 
 const DEFAULT_APPEARANCE: DreamAppearance = {
@@ -23,6 +25,8 @@ const DEFAULT_APPEARANCE: DreamAppearance = {
   accentColor: '#8f78d6',
   savedColors: [],
   backgroundBlur: 18,
+  colorOverridesDay: {},
+  colorOverridesNight: {},
 };
 
 function clamp(value: unknown, fallback: number, min: number, max: number): number {
@@ -35,6 +39,11 @@ function isHexColor(value: unknown): value is string {
   return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value);
 }
 
+function isColorOverrideMap(v: unknown): v is Record<string, string> {
+  if (typeof v !== 'object' || v === null) return false;
+  return Object.values(v).every(val => typeof val === 'string');
+}
+
 export function loadDreamAppearance(): DreamAppearance {
   const saved = getUIPref<Partial<DreamAppearance>>('dream.appearance', {});
   return {
@@ -44,6 +53,8 @@ export function loadDreamAppearance(): DreamAppearance {
     accentColor: isHexColor(saved.accentColor) ? saved.accentColor : DEFAULT_APPEARANCE.accentColor,
     savedColors: Array.isArray(saved.savedColors) ? saved.savedColors.filter(isHexColor) : [],
     backgroundBlur: clamp(saved.backgroundBlur, DEFAULT_APPEARANCE.backgroundBlur, 0, 36),
+    colorOverridesDay: isColorOverrideMap(saved.colorOverridesDay) ? saved.colorOverridesDay : {},
+    colorOverridesNight: isColorOverrideMap(saved.colorOverridesNight) ? saved.colorOverridesNight : {},
   };
 }
 

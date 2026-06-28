@@ -271,6 +271,7 @@ export interface PromptAssetsResponse {
   lorebooks: PromptAssetOption[];
   jailbreaks: PromptAssetOption[];
   dream_presets: PromptAssetOption[];
+  world_cards: PromptAssetOption[];
   active: ActivePromptAssets;
 }
 

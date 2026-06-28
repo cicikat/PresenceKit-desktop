@@ -3,6 +3,7 @@ import { getUIPref, setUIPref } from '../uiPreferences';
 import { BUILTIN_THEMES } from './builtinThemes';
 import { applyTheme, applyThemeCss, validateTheme } from './loader';
 import { inspectThemeCss } from './cssGuard';
+import { loadUserPresets, presetToManifest } from './userPresets';
 import type { ThemeManifest, ThemeRecord } from './types';
 
 const NIGHT_START = 19; // 19:00 → night
@@ -58,6 +59,11 @@ export async function listThemes(refresh = false): Promise<ThemeRecord[]> {
     console.warn('[theme] 磁盘主题目录读取失败，继续使用内置主题:', error);
   }
 
+  for (const preset of loadUserPresets()) {
+    const record = validRecord(presetToManifest(preset), 'disk');
+    if (record) merged.set(preset.id, record);
+  }
+
   const valid: ThemeRecord[] = [];
   for (const record of merged.values()) {
     if (record.manifest.css) {
@@ -105,6 +111,10 @@ export async function setTheme(id: string): Promise<void> {
 export function subscribe(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
+}
+
+export function invalidateThemeCache(): void {
+  records = null;
 }
 
 // ── Day/Night slot API ──────────────────────────────────────────────────────

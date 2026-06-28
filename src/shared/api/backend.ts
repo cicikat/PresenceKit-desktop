@@ -122,6 +122,7 @@ function normalizePromptAssets(value: unknown): PromptAssetsResponse {
     lorebooks: normalizePromptAssetOptions(raw.lorebooks),
     jailbreaks: normalizePromptAssetOptions(raw.jailbreaks),
     dream_presets: normalizePromptAssetOptions(raw.dream_presets),
+    world_cards: normalizePromptAssetOptions(raw.world_cards),
     active: normalizeActivePromptAssets(raw.active),
   };
 }
@@ -233,6 +234,10 @@ export async function getGroupSettings(id: string): Promise<GroupSettings> {
 
 export async function patchGroupSettings(id: string, settings: Partial<GroupSettings>): Promise<GroupSettings> {
   return invoke<GroupSettings>('group_settings_patch', { id, settings });
+}
+
+export async function transcribeAudio(audioB64: string): Promise<{ text: string }> {
+  return invoke<{ text: string }>('transcribe_audio', { audioB64 });
 }
 
 export async function uploadDocument(
