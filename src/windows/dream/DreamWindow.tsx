@@ -281,6 +281,7 @@ export function DreamWindow({ characterAvatarDataUrl = null, onClose }: DreamWin
           '--font-serif': loadedFontFamily,
           '--font-mono': loadedFontFamily,
         } : {}),
+        ...(tone === 'day' ? appearance.colorOverridesDay : appearance.colorOverridesNight),
       } as CSSProperties}
     >
       <div className="dream-theme__canvas" />

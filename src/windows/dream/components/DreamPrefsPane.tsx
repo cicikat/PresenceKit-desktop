@@ -9,7 +9,6 @@ import {
   type DreamStats,
   type MemoryAccess,
   type BoundaryLevel,
-  type WorldLayer,
   type LucidMode,
   type DreamJailbreakPreset,
 } from '../../../shared/api/dream-types';
@@ -38,14 +37,6 @@ const BOUNDARY_LEVEL_LABELS: Record<BoundaryLevel, string> = {
   threshold_break: '阈值突破',
 };
 
-const WORLD_LAYER_LABELS: Record<WorldLayer, string> = {
-  reality_derived: '现实衍生',
-  abo: 'ABO',
-  vampire: '吸血鬼',
-  cat: '猫',
-  flower_bud: '花苞',
-  custom: '自定义',
-};
 
 const LUCID_MODE_LABELS: Record<LucidMode, string> = {
   lucid_shared: '清明共享',
@@ -166,13 +157,15 @@ function JailbreakMultiPicker({
 }
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
-type DreamPrefsTab = 'status' | 'context' | 'system' | 'world';
+type DreamPrefsTab = 'status' | 'context' | 'system' | 'world' | 'color' | 'other';
 
 const DREAM_PREF_TABS: Array<[DreamPrefsTab, string]> = [
   ['status', '1 · 当前状态'],
   ['context', '2 · 梦境上下文'],
   ['system', '3 · 系统设置'],
   ['world', '4 · 世界'],
+  ['color', '5 · 色彩'],
+  ['other', '6 · 其他'],
 ];
 
 function normalizeDreamSettings(raw: DreamSettings): DreamSettings {
@@ -267,6 +260,47 @@ function SelectPref<T extends string>({
           {labels[opt]}
         </button>
       ))}
+    </div>
+  );
+}
+
+function DynamicSelectPref({
+  value,
+  options,
+  onChange,
+  disabled = false,
+}: {
+  value: string;
+  options: PromptAssetOption[];
+  onChange: (v: string) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+      {options.map(opt => (
+        <button
+          key={opt.id}
+          type="button"
+          disabled={disabled}
+          onClick={() => onChange(opt.id)}
+          style={{
+            padding: '4px 10px', borderRadius: 8, fontSize: 'calc(11px * var(--dream-theme-font-scale, 1))', cursor: disabled ? 'not-allowed' : 'pointer',
+            fontFamily: 'var(--font-mono)', letterSpacing: 0.8,
+            background: value === opt.id ? 'var(--dt-flower-dandelion)' : 'var(--dt-surface-2)',
+            color: value === opt.id ? 'var(--dt-ink)' : 'var(--dt-ink-3)',
+            border: value === opt.id ? '1px solid transparent' : '1px solid var(--dt-border-soft)',
+            transition: 'background 0.15s, color 0.15s',
+            opacity: disabled ? 0.55 : 1,
+          }}
+        >
+          {opt.label}
+        </button>
+      ))}
+      {options.length === 0 && (
+        <span style={{ fontSize: 'calc(10px * var(--dream-theme-font-scale, 1))', color: 'var(--dt-ink-4)' }}>
+          读取中…
+        </span>
+      )}
     </div>
   );
 }
@@ -436,6 +470,195 @@ function BackgroundImportCard({
   );
 }
 
+// ── Dream color editor ───────────────────────────────────────────────────────
+
+const DREAM_DAY_DEFAULTS: Record<string, string> = {
+  '--dt-bg-1': '#f8f3e9', '--dt-bg-2': '#f0e7f3', '--dt-bg-3': '#ebf5f2',
+  '--dt-ink': '#48404e', '--dt-ink-2': '#716679', '--dt-ink-3': '#9a8fa0', '--dt-ink-4': '#c8becb',
+  '--dt-flower-dandelion': '#d6b6ef', '--dt-flower-rose': '#efa5a2',
+  '--dt-flower-bluebell': '#accbe9', '--dt-flower-daisy': '#ead884', '--dt-flower-sun': '#efd477',
+  '--dt-accent-rose': '#e96c6c', '--dt-accent-violet': '#b97fe8', '--dt-accent-azure': '#7fbfe8',
+};
+
+const DREAM_NIGHT_DEFAULTS: Record<string, string> = {
+  '--dt-bg-1': '#0b1020', '--dt-bg-2': '#11182b', '--dt-bg-3': '#151d32',
+  '--dt-ink': '#d9dce8', '--dt-ink-2': '#a7aec3', '--dt-ink-3': '#8a90a8', '--dt-ink-4': '#6a7090',
+  '--dt-flower-dandelion': '#8f78d6', '--dt-flower-rose': '#efa5a2',
+  '--dt-flower-bluebell': '#7cb8ff', '--dt-flower-daisy': '#ead884', '--dt-flower-sun': '#efd477',
+  '--dt-accent-rose': '#e96c6c', '--dt-accent-violet': '#b97fe8', '--dt-accent-azure': '#7fbfe8',
+};
+
+const DREAM_COLOR_GROUPS: Array<{ label: string; tokens: string[] }> = [
+  { label: '背景', tokens: ['--dt-bg-1', '--dt-bg-2', '--dt-bg-3'] },
+  { label: '文字', tokens: ['--dt-ink', '--dt-ink-2', '--dt-ink-3', '--dt-ink-4'] },
+  { label: '花卉装饰', tokens: ['--dt-flower-dandelion', '--dt-flower-rose', '--dt-flower-bluebell', '--dt-flower-daisy', '--dt-flower-sun'] },
+  { label: '强调色', tokens: ['--dt-accent-rose', '--dt-accent-violet', '--dt-accent-azure'] },
+];
+
+function DreamColorTab({
+  appearance,
+  onAppearanceChange,
+}: {
+  appearance: DreamAppearance;
+  onAppearanceChange: (patch: Partial<DreamAppearance>) => void;
+}) {
+  const [tone, setTone] = useState<'day' | 'night'>('day');
+
+  const overrides = tone === 'day' ? appearance.colorOverridesDay : appearance.colorOverridesNight;
+  const defaults = tone === 'day' ? DREAM_DAY_DEFAULTS : DREAM_NIGHT_DEFAULTS;
+
+  const handleChange = (token: string, hex: string) => {
+    const updated = { ...overrides, [token]: hex };
+    onAppearanceChange(
+      tone === 'day'
+        ? { colorOverridesDay: updated }
+        : { colorOverridesNight: updated },
+    );
+  };
+
+  const handleReset = (token: string) => {
+    const updated = { ...overrides };
+    delete updated[token];
+    onAppearanceChange(
+      tone === 'day'
+        ? { colorOverridesDay: updated }
+        : { colorOverridesNight: updated },
+    );
+  };
+
+  const handleResetAll = () => {
+    onAppearanceChange(
+      tone === 'day'
+        ? { colorOverridesDay: {} }
+        : { colorOverridesNight: {} },
+    );
+  };
+
+  const hasAnyOverride = Object.keys(overrides).length > 0;
+
+  const fontScale = 'calc(1px * var(--dream-theme-font-scale, 1))';
+
+  return (
+    <div className="dream-prefs__groups">
+      <div className="dream-prefs__group">
+        <div className="dream-prefs__group-head">
+          <div className="dream-prefs__group-title">色彩自定义</div>
+          <div className="dream-prefs__group-hint">分别编辑日间 / 夜间的 Dream 配色 · 改动即时预览</div>
+        </div>
+
+        {/* Tone switcher */}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 12, alignItems: 'center' }}>
+          {(['day', 'night'] as const).map(t => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTone(t)}
+              style={{
+                padding: '4px 12px', borderRadius: 8,
+                fontSize: `calc(11px * var(--dream-theme-font-scale, 1))`,
+                fontFamily: 'var(--font-mono)', letterSpacing: 0.8,
+                background: tone === t ? 'var(--dt-flower-dandelion)' : 'var(--dt-surface-2)',
+                color: tone === t ? 'var(--dt-ink)' : 'var(--dt-ink-3)',
+                border: tone === t ? '1px solid transparent' : '1px solid var(--dt-border-soft)',
+                cursor: 'pointer', transition: 'background 0.15s',
+              }}
+            >
+              {t === 'day' ? '☀ 日间' : '☾ 夜间'}
+            </button>
+          ))}
+          {hasAnyOverride && (
+            <button
+              type="button"
+              onClick={handleResetAll}
+              style={{
+                marginLeft: 'auto', padding: '4px 10px', borderRadius: 8,
+                fontSize: `calc(10px * var(--dream-theme-font-scale, 1))`,
+                fontFamily: 'var(--font-mono)', letterSpacing: 0.6,
+                background: 'transparent', color: 'var(--dt-ink-4)',
+                border: '1px solid var(--dt-border-soft)', cursor: 'pointer',
+              }}
+            >
+              重置全部
+            </button>
+          )}
+        </div>
+
+        {/* Color groups */}
+        {DREAM_COLOR_GROUPS.map(group => (
+          <div key={group.label} style={{ marginBottom: 14 }}>
+            <div style={{
+              fontSize: `calc(10px * var(--dream-theme-font-scale, 1))`,
+              fontWeight: 600, color: 'var(--dt-ink-4)',
+              letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 6,
+            }}>
+              {group.label}
+            </div>
+            {group.tokens.map(token => {
+              const hasOverride = token in overrides;
+              const currentHex = overrides[token] ?? defaults[token] ?? '#888888';
+              return (
+                <div key={token} style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '3px 0',
+                }}>
+                  <input
+                    type="color"
+                    value={currentHex}
+                    onChange={e => handleChange(token, e.target.value)}
+                    style={{
+                      width: 26, height: 26, padding: 2, border: '1px solid var(--dt-border-soft)',
+                      borderRadius: 4, cursor: 'pointer', background: 'transparent',
+                      flexShrink: 0,
+                    }}
+                    title={token}
+                  />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      fontSize: `calc(10px * var(--dream-theme-font-scale, 1))`,
+                      color: hasOverride ? 'var(--dt-ink-2)' : 'var(--dt-ink-4)',
+                      fontFamily: 'var(--font-mono)', letterSpacing: 0.5,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {token.replace(/^--/, '')}
+                    </div>
+                  </div>
+                  <div style={{
+                    fontSize: `calc(9px * var(--dream-theme-font-scale, 1))`,
+                    color: 'var(--dt-ink-4)', fontFamily: 'var(--font-mono)',
+                  }}>
+                    {currentHex.toUpperCase()}
+                  </div>
+                  {hasOverride && (
+                    <button
+                      type="button"
+                      onClick={() => handleReset(token)}
+                      title="恢复默认"
+                      style={{
+                        background: 'transparent', border: 'none', color: 'var(--dt-ink-4)',
+                        cursor: 'pointer', fontSize: `calc(11px * var(--dream-theme-font-scale, 1))`,
+                        padding: '0 2px', lineHeight: 1,
+                      }}
+                    >
+                      ↺
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ))}
+
+        <div style={{
+          fontSize: `calc(10px * var(--dream-theme-font-scale, 1))`,
+          color: 'var(--dt-ink-4)', lineHeight: 1.5, marginTop: 4,
+        }}>
+          调整颜色后立即生效 · 点击 ↺ 恢复单个 token 默认值
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function DreamPrefsPane({
   open,
   dreamState,
@@ -457,6 +680,7 @@ export function DreamPrefsPane({
   const [fontLoadError, setFontLoadError] = useState<string | null>(null);
   const [backgrounds, setBackgrounds] = useState(() => avatarStore.get().dreamBackgrounds);
   const [availablePresets, setAvailablePresets] = useState<PromptAssetOption[]>([]);
+  const [availableWorldCards, setAvailableWorldCards] = useState<PromptAssetOption[]>([]);
   const [backgroundCropSrc, setBackgroundCropSrc] = useState<string | null>(null);
   const [backgroundCropTone, setBackgroundCropTone] = useState<DreamBackgroundTone | null>(null);
   const [backgroundSaving, setBackgroundSaving] = useState(false);
@@ -504,9 +728,19 @@ export function DreamPrefsPane({
   useEffect(() => {
     if (!open || tab !== 'world') return;
     getPromptAssets()
-      .then(data => setAvailablePresets(data.dream_presets ?? []))
+      .then(data => {
+        setAvailablePresets(data.dream_presets ?? []);
+        setAvailableWorldCards(data.world_cards ?? []);
+      })
       .catch(() => {});
   }, [open, tab]);
+
+  useEffect(() => {
+    if (!open) return;
+    getPromptAssets()
+      .then(data => setAvailableWorldCards(data.world_cards ?? []))
+      .catch(() => {});
+  }, [open]);
 
   const patch = useCallback(async (update: Partial<DreamSettings>) => {
     if (!settings) return;
@@ -657,7 +891,7 @@ export function DreamPrefsPane({
                 <div className="dream-prefs__status-grid">
                   <StatusItem
                     label="当前世界"
-                    value={settings ? WORLD_LAYER_LABELS[settings.world_layer] : 'ABO'}
+                    value={settings ? (availableWorldCards.find(w => w.id === settings.world_layer)?.label ?? settings.world_layer) : '—'}
                     detail="WORLD LAYER"
                   />
                   <StatusItem
@@ -930,11 +1164,11 @@ export function DreamPrefsPane({
                   <div className="dream-prefs__group-hint">选择下一次入梦时使用的独立世界层</div>
                 </div>
                 <SettingRow label="世界卡" deferred={isDreamActive}>
-                  <SelectPref<WorldLayer>
+                  <DynamicSelectPref
                     value={settings.world_layer}
-                    options={['reality_derived', 'abo', 'vampire', 'cat', 'flower_bud', 'custom']}
-                    labels={WORLD_LAYER_LABELS}
+                    options={availableWorldCards}
                     onChange={v => patch({ world_layer: v })}
+                    disabled={isDreamActive}
                   />
                 </SettingRow>
               </div>
@@ -963,6 +1197,15 @@ export function DreamPrefsPane({
             <div className="dream-prefs__placeholder">正在读取梦境世界设置…</div>
           )}
 
+          {tab === 'color' && (
+            <DreamColorTab appearance={appearance} onAppearanceChange={onAppearanceChange} />
+          )}
+
+          {tab === 'other' && (
+            <div className="dream-prefs__placeholder" style={{ fontStyle: 'italic' }}>
+              未完待续
+            </div>
+          )}
 
         </div>
       </section>

@@ -126,7 +126,7 @@ export interface DreamResumeResponse {
 
 export type MemoryAccess = 'card_only' | 'relationship_summary' | 'full_snapshot';
 export type BoundaryLevel = 'vague' | 'body_perceptible' | 'numbers_visible' | 'threshold_break';
-export type WorldLayer = 'reality_derived' | 'abo' | 'vampire' | 'cat' | 'flower_bud' | 'custom';
+export type WorldLayer = string;
 export type LucidMode = 'lucid_shared' | 'non_lucid';
 /** Backend accepts safe ASCII preset stems; the UI exposes its verified allowlist. */
 export type DreamJailbreakPreset = string;
