@@ -101,11 +101,13 @@ export async function setTheme(id: string): Promise<void> {
     validRecord(BUILTIN_THEMES[0], 'builtin')!;
   const record = requested ?? fallback;
   if (!requested) console.warn(`[theme] 找不到主题 "${id}"，已回退 paper`);
+  document.documentElement.classList.add('theme-transitioning');
   applyTheme(record.manifest);
   applyThemeCss(record.manifest.id, record.cssText ?? null);
   currentThemeId = record.manifest.id;
   setUIPref('chat.theme', currentThemeId);
   listeners.forEach(listener => listener());
+  setTimeout(() => document.documentElement.classList.remove('theme-transitioning'), 600);
 }
 
 export function subscribe(listener: () => void): () => void {

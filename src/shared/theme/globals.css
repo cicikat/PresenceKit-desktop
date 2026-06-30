@@ -64,6 +64,13 @@
   --radius-pill: 999px;
   --border-thin:    1px;
   --border-regular: 2px;
+
+  --motion-fast:      0.16s;
+  --motion-base:      0.28s;
+  --motion-slow:      0.5s;
+  --ease-standard:    cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-emphasized:  cubic-bezier(0.2, 0.7, 0.2, 1);
+  --motion-scale:     1;
 }
 
 * { box-sizing: border-box; }
@@ -85,6 +92,37 @@ body::before {
     radial-gradient(ellipse at 92% 88%, var(--paper-grain-2), transparent 55%);
   mix-blend-mode: multiply;
   transition: opacity 0.4s ease;
+}
+
+/* ── Motion tokens ──────────────────────────────────────────────────────────── */
+
+@keyframes msg-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+.msg-enter {
+  animation: msg-in calc(var(--motion-base) * var(--motion-scale)) var(--ease-emphasized) both;
+}
+
+/* Theme transition: applied by registry.setTheme() for ~600ms */
+html.theme-transitioning,
+html.theme-transitioning *,
+html.theme-transitioning *::before,
+html.theme-transitioning *::after {
+  transition:
+    background-color calc(var(--motion-slow) * var(--motion-scale)) var(--ease-standard),
+    color            calc(var(--motion-slow) * var(--motion-scale)) var(--ease-standard),
+    border-color     calc(var(--motion-slow) * var(--motion-scale)) var(--ease-standard) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .msg-enter { animation: none; }
+  html.theme-transitioning,
+  html.theme-transitioning *,
+  html.theme-transitioning *::before,
+  html.theme-transitioning *::after {
+    transition: none !important;
+  }
 }
 
 ::-webkit-scrollbar { width: 8px; height: 8px; }

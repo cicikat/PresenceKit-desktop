@@ -39,8 +39,14 @@ export const SHAPE_TOKENS = [
   '--border-thin', '--border-regular',
 ] as const;
 
+export const MOTION_TOKENS = [
+  '--motion-fast', '--motion-base', '--motion-slow',
+  '--ease-standard', '--ease-emphasized',
+  '--motion-scale',
+] as const;
+
 export const REQUIRED_TOKENS = [...CORE_TOKENS, ...GAME_TOKENS, ...SHAPE_TOKENS] as const;
-export const OPTIONAL_TOKENS = [...FONT_TOKENS, ...DREAM_TOKENS] as const;
+export const OPTIONAL_TOKENS = [...FONT_TOKENS, ...DREAM_TOKENS, ...MOTION_TOKENS] as const;
 export const ALL_TOKENS = [...REQUIRED_TOKENS, ...OPTIONAL_TOKENS] as const;
 
 export type TokenName = (typeof ALL_TOKENS)[number];

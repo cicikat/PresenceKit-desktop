@@ -1,3 +1,5 @@
+import { save } from '@tauri-apps/plugin-dialog';
+import { invoke } from '@tauri-apps/api/core';
 import { getUIPref, setUIPref } from '../uiPreferences';
 import { PAPER_THEME, DARK_THEME } from './builtinThemes';
 import type { ThemeManifest } from './types';
@@ -51,15 +53,16 @@ export function presetToManifest(preset: UserThemePreset): ThemeManifest {
   };
 }
 
-export function exportPreset(preset: UserThemePreset): void {
+export async function exportPreset(preset: UserThemePreset): Promise<boolean> {
   const json = JSON.stringify(preset, null, 2);
-  const blob = new Blob([json], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${preset.name.replace(/[^\w一-龥-]/g, '_')}.theme.json`;
-  a.click();
-  URL.revokeObjectURL(url);
+  const safe = preset.name.replace(/[^\w一-龥-]/g, '_') || 'theme';
+  const path = await save({
+    defaultPath: `${safe}.theme.json`,
+    filters: [{ name: 'Theme', extensions: ['json'] }],
+  });
+  if (!path) return false;
+  await invoke('write_text_file', { path, contents: json });
+  return true;
 }
 
 export function importPresetFromJson(json: string): UserThemePreset | null {
