@@ -5,6 +5,7 @@ import { ChatWindow } from "./windows/chat/ChatWindow";
 import { PetWindow } from "./windows/pet/PetWindow";
 import { ActivityWindow } from "./windows/activity";
 import { ToyWindow } from "./windows/toy";
+import { RoomWindow } from "./windows/room";
 import { PresenceNagWindow } from "./windows/presence-nag/PresenceNagWindow";
 import { DiaryDetailWindow } from "./windows/diary-detail/DiaryDetailWindow";
 import { avatarStore } from "./shared/avatars/store";
@@ -16,18 +17,22 @@ const isPresenceNagWindow = windowView === "presence-nag";
 const isDiaryDetailWindow = windowView === "diary-detail";
 
 function AppRoot() {
-  const [activeWindow, setActiveWindow] = useState<"chat" | "activity" | "toy">("chat");
+  const [activeWindow, setActiveWindow] = useState<"chat" | "activity" | "toy" | "room">("chat");
   return (
     <>
       <ChatWindow
         onActivityOpen={() => setActiveWindow("activity")}
         onToyOpen={() => setActiveWindow("toy")}
+        onRoomOpen={() => setActiveWindow("room")}
       />
       {activeWindow === "activity" && (
         <ActivityWindow onClose={() => setActiveWindow("chat")} />
       )}
       {activeWindow === "toy" && (
         <ToyWindow onClose={() => setActiveWindow("chat")} />
+      )}
+      {activeWindow === "room" && (
+        <RoomWindow onClose={() => setActiveWindow("chat")} />
       )}
     </>
   );

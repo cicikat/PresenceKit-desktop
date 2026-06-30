@@ -303,6 +303,9 @@ class WSClient {
         await invoke('presence_nag', { text, avatar });
         return;
       }
+      case 'avatar_directive':
+        // consumed via wsClient.on('action') in avatarDirective.ts
+        return;
       default:
         throw new Error(`unsupported action type: ${type}`);
     }

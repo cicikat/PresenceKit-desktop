@@ -34,7 +34,8 @@ export type DesktopActionType =
   | 'play_netease'
   | 'dream_invite'
   | 'toy_invite'
-  | 'presence_nag';
+  | 'presence_nag'
+  | 'avatar_directive';
 
 export interface HardwareDevice {
   index: number;

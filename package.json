@@ -15,11 +15,13 @@
     "@tauri-apps/plugin-http": "^2.5.9",
     "@tauri-apps/plugin-notification": "^2",
     "@tauri-apps/plugin-opener": "^2",
+    "@types/three": "^0.185.0",
     "date-fns": "^4.1.0",
     "react": "^19.1.0",
     "react-colorful": "^5.7.0",
     "react-dom": "^19.1.0",
-    "react-easy-crop": "^5.5.7"
+    "react-easy-crop": "^5.5.7",
+    "three": "^0.185.0"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
