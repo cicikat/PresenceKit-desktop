@@ -14,6 +14,10 @@ dist-ssr
 config/client.local.json
 .claude/
 
+# 3D model assets (large binary files, not tracked in git)
+public/room/character/
+public/room/scene/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
