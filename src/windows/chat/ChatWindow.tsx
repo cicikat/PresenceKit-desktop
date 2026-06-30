@@ -21,6 +21,7 @@ import { wsClient } from '../../shared/api/ws';
 import type { PromptAssetsPatch, PromptAssetsResponse } from '../../shared/api/types';
 import { getUIPref, setUIPref } from '../../shared/uiPreferences';
 import { isPresenceNagEnabled, patchPresenceNagEnabled } from '../../shared/presenceNag';
+import { getProactiveGapHours, patchProactiveGapHours } from '../../shared/proactiveGap';
 import { isPlayModeEnabled, setPlayModeEnabled } from '../../shared/playMode';
 import {
   publishPetSnapshot,
@@ -58,7 +59,9 @@ import {
   saveChatAppearance,
   type ChatAppearance,
   type ChatFontOption,
+  type BackgroundKind,
 } from '../../shared/chatAppearance';
+import { ParticleBackground } from './components/ParticleBackground';
 import { AvatarCropper } from './components/AvatarCropper';
 import { DreamBackgroundCropper } from '../dream/components/DreamBackgroundCropper';
 import { Ribbon } from './components/Ribbon';
@@ -78,15 +81,17 @@ import {
   subscribe as subscribeTheme,
 } from '../../shared/theme/registry';
 import { ChatColorPage } from './components/ChatColorPage';
+import { applyMoodOverlay, clearMoodOverlay } from '../../shared/theme/moodReactive';
+import { CallSettingsPage } from './components/CallSettingsPage';
 
 const SIDEBAR_MIN     = 250;
 const SIDEBAR_MAX     = 540;
 const SIDEBAR_DEFAULT = 340;
 
 /* ── 偏好面板 ── */
-function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHeaderVisible, onChatHeaderToggle, appearance, onAppearanceChange, onCharacterAvatarChange, onCharacterSwitched, petMouseSettings, onPetMouseSettingsChange, petVisualStyle, onPetVisualStyleChange, presenceNagEnabled, onPresenceNagToggle, playModeEnabled, onPlayModeToggle, petRoamEnabled, onPetRoamToggle, petRippleEnabled, onPetRippleToggle, onYandereOpen }: any) {
+function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHeaderVisible, onChatHeaderToggle, appearance, onAppearanceChange, onCharacterAvatarChange, onCharacterSwitched, petMouseSettings, onPetMouseSettingsChange, petVisualStyle, onPetVisualStyleChange, presenceNagEnabled, onPresenceNagToggle, proactiveGapHours, onProactiveGapChange, playModeEnabled, onPlayModeToggle, petRoamEnabled, onPetRoamToggle, petRippleEnabled, onPetRippleToggle, onYandereOpen }: any) {
   const [avatars, setAvatars] = useState(avatarStore.get());
-  const [tab, setTab] = useState<'appearance' | 'color' | 'world' | 'pet' | 'chat' | 'other'>('appearance');
+  const [tab, setTab] = useState<'appearance' | 'color' | 'world' | 'pet' | 'chat' | 'call' | 'other'>('appearance');
   const [cropSrc, setCropSrc] = useState<string | null>(null);
   const [cropRole, setCropRole] = useState<'her' | 'you' | null>(null);
   const [bgCropSrc, setBgCropSrc] = useState<string | null>(null);
@@ -186,7 +191,8 @@ function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHea
               ['world', '3', '世界'],
               ['pet', '4', '桌宠'],
               ['chat', '5', '对话'],
-              ['other', '6', '其他'],
+              ['call', '6', '视频通话'],
+              ['other', '7', '其他'],
             ] as const).map(([key, num, label]) => (
               <button key={key} onClick={() => setTab(key)} style={{
                 padding: '5px 10px', border: 'none', borderRadius: '6px 6px 0 0',
@@ -256,6 +262,32 @@ function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHea
                     )}
                   </div>
                 </PrefRow>
+                <PrefRow label="背景来源" hint="无 · 图片 · 粒子（跟随情绪）· 视频">
+                  <select
+                    value={appearance.backgroundKind}
+                    onChange={e => onAppearanceChange({ backgroundKind: e.target.value as BackgroundKind })}
+                    style={{ ...prefSelectStyle, width: 140 }}
+                  >
+                    <option value="none">无</option>
+                    <option value="image">图片</option>
+                    <option value="particles">粒子动态背景</option>
+                    <option value="video">视频</option>
+                  </select>
+                </PrefRow>
+                {appearance.backgroundKind === 'video' && (
+                  <PrefRow label="视频路径" hint="public/ 下的路径，如 /backgrounds/bg.mp4">
+                    <input
+                      type="text"
+                      placeholder="/backgrounds/bg.mp4"
+                      value={appearance.backgroundVideoPath ?? ''}
+                      onChange={e => onAppearanceChange({ backgroundVideoPath: e.target.value || null })}
+                      style={{
+                        ...prefSelectStyle, width: 200,
+                        fontFamily: 'var(--font-mono)', fontSize: 11,
+                      }}
+                    />
+                  </PrefRow>
+                )}
                 <PrefRow label="聊天背景" hint="聊天区域的背景图（16:9，自动模糊）">
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     {avatars.chatBackground.dataUrl ? (
@@ -294,6 +326,40 @@ function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHea
                     onChange={(value: number) => onAppearanceChange({ backgroundBlur: value })}
                   />
                 </PrefRow>
+                <PrefRow label="界面动效" hint="0 关闭所有动画，1 默认，1.5 加强">
+                  <PrefRange
+                    min={0}
+                    max={1.5}
+                    step={0.1}
+                    value={appearance.motionScale}
+                    onChange={(value: number) => onAppearanceChange({ motionScale: value })}
+                  />
+                </PrefRow>
+                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
+                {/* 情绪联动分区 */}
+                <div>
+                  <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink)', marginBottom: 2 }}>情绪联动主题</div>
+                  <div className="mono" style={{ fontSize: 9.5, color: 'var(--ink-3)', letterSpacing: 1.1 }}>
+                    界面会随她的情绪轻微变化
+                  </div>
+                </div>
+                <PrefRow label="情绪联动" hint="开启后，accent 与侧栏氛围随 mood 平滑偏移；正文与主背景不受影响">
+                  <PrefSwitch
+                    active={appearance.moodReactive.enabled}
+                    onClick={() => onAppearanceChange({ moodReactive: { ...appearance.moodReactive, enabled: !appearance.moodReactive.enabled } })}
+                  />
+                </PrefRow>
+                {appearance.moodReactive.enabled && (
+                  <PrefRow label="联动强度" hint="0 ≈ 无变化，1 明显但不辣眼">
+                    <PrefRange
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      value={appearance.moodReactive.intensity}
+                      onChange={(value: number) => onAppearanceChange({ moodReactive: { ...appearance.moodReactive, intensity: value } })}
+                    />
+                  </PrefRow>
+                )}
                 <div style={{ height: 1, background: 'var(--paper-edge)' }} />
                 {/* 头像分区 */}
                 <div>
@@ -388,6 +454,7 @@ function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHea
                     <option value="fluid">流体光球</option>
                     <option value="scatter">散点粒子</option>
                     <option value="network">神经网络</option>
+                    <option value="live2d">Live2D（实验）</option>
                   </select>
                 </PrefRow>
                 <div style={{ height: 1, background: 'var(--paper-edge)' }} />
@@ -433,12 +500,29 @@ function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHea
                   当前由「惊讶」情绪触发害羞躲避。按住 Ctrl 可临时钉住桌宠并稳定拖动。
                 </div>
               </>
+            ) : tab === 'call' ? (
+              <CallSettingsPage />
             ) : tab === 'chat' ? (
               <>
                 <ChatSettingsSection />
                 <div style={{ height: 1, background: 'var(--paper-edge)' }} />
                 <PrefRow label="允许存在感弹窗" hint="开启后，叶瑄被冷落久了会用带头像的弹窗找你；默认关闭">
                   <PrefSwitch active={presenceNagEnabled} onClick={onPresenceNagToggle} />
+                </PrefRow>
+                <PrefRow label="主动消息最小间隔" hint={`叶瑄每隔至少 ${proactiveGapHours} h 才会主动发消息 · 范围 0.5–12`}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <button
+                      onClick={() => onProactiveGapChange(Math.max(0.5, proactiveGapHours - 0.5))}
+                      style={prefActionButtonStyle}
+                    >−</button>
+                    <span className="mono" style={{ width: 38, textAlign: 'center', color: 'var(--ink-2)', fontSize: 11 }}>
+                      {proactiveGapHours}h
+                    </span>
+                    <button
+                      onClick={() => onProactiveGapChange(Math.min(12, proactiveGapHours + 0.5))}
+                      style={prefActionButtonStyle}
+                    >+</button>
+                  </div>
                 </PrefRow>
                 <div style={{ height: 1, background: 'var(--paper-edge)' }} />
                 <PrefRow label="沉浸式挽留模式（废弃版仅保留视觉效果）" hint="5 秒倒计时后触发暗红遮罩与关一弹十小窗；ESC 退出">
@@ -887,13 +971,14 @@ function PrefRow({ label, hint, children }: any) {
   );
 }
 
-function PrefRange({ min, max, value, onChange }: any) {
+function PrefRange({ min, max, step, value, onChange }: any) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: 250 }}>
       <input
         type="range"
         min={min}
         max={max}
+        step={step}
         value={value}
         onChange={event => onChange(Number(event.target.value))}
         style={{ flex: 1, minWidth: 0 }}
@@ -1035,8 +1120,33 @@ function Divider({ onDrag }: any) {
   );
 }
 
+/* ── 视频背景组件 ── */
+function VideoBg({ src, blur }: { src: string; blur: number }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const onVis = () => { document.hidden ? el.pause() : el.play().catch(() => {}); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, []);
+  return (
+    <video
+      ref={ref}
+      className="chat-ui__background"
+      src={src}
+      autoPlay
+      loop
+      muted
+      playsInline
+      aria-hidden="true"
+      style={{ filter: `blur(${blur}px)`, objectFit: 'cover' } as CSSProperties}
+    />
+  );
+}
+
 /* ── ChatWindow (App) ── */
-export function ChatWindow({ onActivityOpen, onToyOpen }: { onActivityOpen?: () => void; onToyOpen?: () => void } = {}) {
+export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivityOpen?: () => void; onToyOpen?: () => void; onRoomOpen?: () => void } = {}) {
   const engineRef = useRef<StateEngine | null>(null);
   if (!engineRef.current) engineRef.current = new StateEngine();
   const engine = engineRef.current;
@@ -1053,6 +1163,7 @@ export function ChatWindow({ onActivityOpen, onToyOpen }: { onActivityOpen?: () 
   const [petMouseSettings, setPetMouseSettings]   = useState<PetMouseSettings>(() => loadPetMouseSettings());
   const [petVisualStyle, setPetVisualStyle]       = useState<PetVisualStyle>(() => loadPetVisualStyle());
   const [presenceNagEnabled, setPresenceNagEnabledState] = useState(() => isPresenceNagEnabled());
+  const [proactiveGapHours, setProactiveGapHours] = useState(0.75);
   const [playModeEnabled, setPlayModeEnabledState] = useState(() => isPlayModeEnabled());
   const [petRoamEnabled, setPetRoamEnabled] = useState(() => loadPetRoamSettings().enabled);
   const [petRippleEnabled, setPetRippleEnabled] = useState(() => loadPetRippleSettings().enabled);
@@ -1082,6 +1193,11 @@ export function ChatWindow({ onActivityOpen, onToyOpen }: { onActivityOpen?: () 
   useEffect(() => subscribePetRippleSettings(s => setPetRippleEnabled(s.enabled)), []);
 
   useEffect(() => {
+    if (!prefsOpen) return;
+    getProactiveGapHours().then(setProactiveGapHours).catch(console.warn);
+  }, [prefsOpen]);
+
+  useEffect(() => {
     const publishEngineSnapshot = () => {
       const state = engine.get();
       publishPetSnapshot({
@@ -1101,6 +1217,21 @@ export function ChatWindow({ onActivityOpen, onToyOpen }: { onActivityOpen?: () 
       unsubscribeResponder?.();
     };
   }, [engine]);
+
+  // Mood-reactive theme overlay
+  useEffect(() => {
+    if (!appearance.moodReactive.enabled) {
+      clearMoodOverlay();
+      return;
+    }
+    const apply = () => applyMoodOverlay(engine.get().mood, appearance.moodReactive.intensity);
+    apply();
+    const unsub = engine.subscribe(apply);
+    return () => { unsub(); };
+  }, [engine, appearance.moodReactive.enabled, appearance.moodReactive.intensity]);
+
+  // Clear overlay on unmount
+  useEffect(() => () => clearMoodOverlay(), []);
 
   const updateAppearance = useCallback((patch: Partial<ChatAppearance>) => {
     setAppearance(current => {
@@ -1227,6 +1358,7 @@ export function ChatWindow({ onActivityOpen, onToyOpen }: { onActivityOpen?: () 
           height: '100%',
           display: 'flex',
           '--chat-theme-font-scale': appearance.themeFontSize / 14,
+          '--motion-scale': appearance.motionScale,
           ...(loadedFontFamily ? {
             '--font-serif': loadedFontFamily,
             '--font-sans': loadedFontFamily,
@@ -1252,10 +1384,17 @@ export function ChatWindow({ onActivityOpen, onToyOpen }: { onActivityOpen?: () 
           onGroupOpen={() => setGroupView('list')}
         />
         <div ref={bodyRef} className="chat-ui__body" style={{ flex: 1, display: 'flex', minHeight: 0, minWidth: 0, position: 'relative', '--chat-background-blur': `${appearance.backgroundBlur}px` } as CSSProperties}>
-          {chatBackground.dataUrl && (
+          {/* image: explicit or backward-compat (had a dataUrl before backgroundKind existed) */}
+          {(appearance.backgroundKind === 'image' || (appearance.backgroundKind === 'none' && chatBackground.dataUrl)) && chatBackground.dataUrl && (
             <div className="chat-ui__background"
                  style={{ backgroundImage: `url("${chatBackground.dataUrl}")` } as CSSProperties}
                  aria-hidden="true" />
+          )}
+          {appearance.backgroundKind === 'particles' && (
+            <ParticleBackground engine={engine} blur={appearance.backgroundBlur} />
+          )}
+          {appearance.backgroundKind === 'video' && appearance.backgroundVideoPath && (
+            <VideoBg src={appearance.backgroundVideoPath} blur={appearance.backgroundBlur} />
           )}
           {sidebarOpen && (
             <>
@@ -1271,7 +1410,7 @@ export function ChatWindow({ onActivityOpen, onToyOpen }: { onActivityOpen?: () 
           )}
           <div style={{ flex: 1, minWidth: 0 }}>
             {groupView === null ? (
-              <ChatPanel key={charSwitchKey} engine={engine} chatRectRef={chatRectRef} headerVisible={chatHeaderVisible} chatFontSize={appearance.chatFontSize} dreamActive={dreamWindowOpen} characterAvatarDataUrl={characterAvatarDataUrl} />
+              <ChatPanel key={charSwitchKey} engine={engine} chatRectRef={chatRectRef} headerVisible={chatHeaderVisible} chatFontSize={appearance.chatFontSize} dreamActive={dreamWindowOpen} characterAvatarDataUrl={characterAvatarDataUrl} onOpenRoom={onRoomOpen} />
             ) : groupView === 'list' ? (
               <GroupListPanel
                 onSelectGroup={id => setGroupView(id)}
@@ -1321,6 +1460,11 @@ export function ChatWindow({ onActivityOpen, onToyOpen }: { onActivityOpen?: () 
         petVisualStyle={petVisualStyle}
         onPetVisualStyleChange={updatePetVisualStyle}
         presenceNagEnabled={presenceNagEnabled}
+        proactiveGapHours={proactiveGapHours}
+        onProactiveGapChange={(v: number) => {
+          setProactiveGapHours(v);
+          patchProactiveGapHours(v).catch(error => console.warn('[proactive_gap] 保存失败:', error));
+        }}
         onPresenceNagToggle={() => {
           const next = !presenceNagEnabled;
           void patchPresenceNagEnabled(next)

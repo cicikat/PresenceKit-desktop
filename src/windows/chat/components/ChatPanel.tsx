@@ -448,7 +448,7 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
 
 // ── 主组件 ──────────────────────────────────────────────────────────────────
 
-export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontSize = 14, dreamActive = false, characterAvatarDataUrl = null }: any) {
+export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontSize = 14, dreamActive = false, characterAvatarDataUrl = null, onOpenRoom }: any) {
   const [state, setState] = useState(engine.get());
   useEffect(() => engine.subscribe(setState), [engine]);
 
@@ -1708,16 +1708,17 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         )}
 
         {messages.map((m: ChatMsg) => (
-          <Bubble
-            key={m.id}
-            msg={m}
-            currentHue={currentHue}
-            herDataUrl={herDataUrl}
-            youDataUrl={youDataUrl}
-            youVisible={youVisible}
-            assistantFontSize={fontSizes.assistant}
-            userFontSize={fontSizes.user}
-          />
+          <div key={m.id} className={m.role === 'user' || m.role === 'assistant' ? 'msg-enter' : undefined}>
+            <Bubble
+              msg={m}
+              currentHue={currentHue}
+              herDataUrl={herDataUrl}
+              youDataUrl={youDataUrl}
+              youVisible={youVisible}
+              assistantFontSize={fontSizes.assistant}
+              userFontSize={fontSizes.user}
+            />
+          </div>
         ))}
 
         {(typing || loading || wakeLoading) && (
@@ -1750,13 +1751,13 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
           }}>
             {([
               ['attach', '附加文件',   '.txt .md .docx',       'doc'],
-              ['book',   '插入日记片段', '从他的日记中',          'close'],
               ['attach', '插入图片',    '.png .jpg .gif .webp', 'img'],
-              ['leaf',   '从花园中取',  '已养成的物品',          'close'],
+              ['video',  '视频通话',   '进入她的空间',           'room'],
             ] as [string, string, string, string][]).map(([icon, label, sub, action]) => (
               <button key={label} onClick={
-                action === 'doc' ? onClickAttach :
-                action === 'img' ? onClickImage :
+                action === 'doc'  ? onClickAttach :
+                action === 'img'  ? onClickImage :
+                action === 'room' ? () => { setShowAttachMenu(false); onOpenRoom?.(); } :
                 () => setShowAttachMenu(false)
               } style={{
                 display: 'flex', alignItems: 'center', gap: 10, width: '100%',

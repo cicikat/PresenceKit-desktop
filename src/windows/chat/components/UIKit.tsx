@@ -131,6 +131,10 @@ export function Icon({ name, size = 18, stroke = 'currentColor', strokeWidth = 1
     case 'spec':    return <svg {...common}><path d="M4 4h11l5 5v11H4z"/><path d="M15 4v5h5M8 13h8M8 17h5"/></svg>;
     case 'grid2':   return <svg {...common}><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>;
     case 'mic':     return <svg {...common}><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 19v3M9 22h6"/></svg>;
+    case 'video':   return <svg {...common}><rect x="2" y="7" width="13" height="10" rx="2"/><path d="M15 9.5l5-3v11l-5-3"/></svg>;
+    case 'phone-off': return <svg {...common}><path d="M10.7 5.8a14 14 0 0 1 8.5 8.5M9 6l3 3-2 2.5c1.2 1.9 2.5 3.2 4.4 4.4L17 13.5l3 3-2 2c-5.5-.5-10-5-10.5-10.5l2-2z"/><line x1="2" y1="2" x2="22" y2="22"/></svg>;
+    case 'move':    return <svg {...common}><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg>;
+    case 'bookmark': return <svg {...common}><path d="M5 4h14v17l-7-4-7 4V4z"/></svg>;
     default:        return <svg {...common}><circle cx="12" cy="12" r="4"/></svg>;
   }
 }

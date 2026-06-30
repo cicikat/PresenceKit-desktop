@@ -213,8 +213,13 @@ export function ChatColorPage() {
     setRenameMode(false);
   };
 
-  const handleExport = () => {
-    if (selectedPreset) exportPreset(selectedPreset);
+  const handleExport = async () => {
+    if (!selectedPreset) return;
+    try {
+      await exportPreset(selectedPreset);
+    } catch (e) {
+      console.warn('[theme] 导出失败:', e);
+    }
   };
 
   const handleImport = () => { importRef.current?.click(); };
