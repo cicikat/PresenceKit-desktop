@@ -6,7 +6,7 @@ import { DEFAULT_PET_SNAPSHOT, type PetSnapshot } from '../../shared/pet/types';
 import type { Mood, Presence } from '../../shared/state/store';
 import { sendChat } from '../../shared/api/backend';
 import { useVoiceInput } from '../../shared/voice/useVoiceInput';
-import { ParticleCanvas } from './components/ParticleCanvas';
+import { PetStage } from './components/PetStage';
 import { usePetMouse } from './usePetMouse';
 import { usePetRoam } from './usePetRoam';
 
@@ -118,7 +118,7 @@ export function PetWindow() {
           fontFamily: '"Microsoft YaHei", "Noto Sans SC", sans-serif',
         }}
       >
-        <ParticleCanvas snapshot={snapshot} reaction={reaction} volume={voice.isRecording ? voice.volume : 0} />
+        <PetStage snapshot={snapshot} reaction={reaction} volume={voice.isRecording ? voice.volume : 0} />
 
         <section style={{
           position: 'absolute',
