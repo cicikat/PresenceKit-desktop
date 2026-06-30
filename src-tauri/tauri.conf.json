@@ -55,7 +55,8 @@
     "targets": "all",
     "resources": {
       "../public/fonts/": "fonts/",
-      "../public/themes/": "themes/"
+      "../public/themes/": "themes/",
+      "../public/room/": "room/"
     },
     "icon": [
       "icons/32x32.png",

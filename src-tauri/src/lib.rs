@@ -288,6 +288,135 @@ fn list_themes(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     list_themes_in_dir(&theme_dir)
 }
 
+fn room_assets_dir(app: &tauri::AppHandle, kind: &str) -> Result<PathBuf, String> {
+    let mut checked = Vec::new();
+
+    match app.path().resource_dir() {
+        Ok(resource_dir) => {
+            let dir = resource_dir.join("room").join(kind);
+            if dir.is_dir() {
+                return Ok(dir);
+            }
+            checked.push(dir);
+        }
+        Err(error) => eprintln!("[room_assets] 无法定位运行期资源目录: {error}"),
+    }
+
+    if cfg!(debug_assertions) {
+        let dev_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .ok_or_else(|| "无法定位项目根目录".to_string())?
+            .join("public")
+            .join("room")
+            .join(kind);
+        if dev_dir.is_dir() {
+            return Ok(dev_dir);
+        }
+        checked.push(dev_dir);
+    }
+
+    let checked_paths = checked
+        .iter()
+        .map(|p| p.display().to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    Err(format!("无法定位 room/{kind} 资源目录，已检查: {checked_paths}"))
+}
+
+#[tauri::command]
+fn list_room_assets(app: tauri::AppHandle, kind: String) -> Result<serde_json::Value, String> {
+    if kind != "character" && kind != "scene" {
+        return Err(format!("无效的 kind 参数 '{kind}'，仅接受 character|scene"));
+    }
+    let dir = room_assets_dir(&app, &kind)?;
+    let mut assets = Vec::new();
+    for entry in fs::read_dir(&dir)
+        .map_err(|e| format!("无法读取目录 {}: {e}", dir.display()))?
+    {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let Some(ext) = path.extension().and_then(|v| v.to_str()) else {
+            continue;
+        };
+        if !matches!(ext.to_ascii_lowercase().as_str(), "glb" | "gltf") {
+            continue;
+        }
+        let Some(file_name) = path.file_name().and_then(|v| v.to_str()) else {
+            continue;
+        };
+        let label = path.file_stem().and_then(|v| v.to_str()).unwrap_or(file_name);
+        assets.push(serde_json::json!({ "fileName": file_name, "label": label }));
+    }
+    assets.sort_by(|a, b| {
+        a["fileName"].as_str().unwrap_or_default()
+            .cmp(b["fileName"].as_str().unwrap_or_default())
+    });
+    Ok(serde_json::Value::Array(assets))
+}
+
+#[tauri::command]
+fn list_room_props(app: tauri::AppHandle, category: Option<String>) -> Result<serde_json::Value, String> {
+    let props_dir = match room_assets_dir(&app, "props") {
+        Ok(dir) => dir,
+        Err(_) => return Ok(serde_json::json!([])),
+    };
+
+    match category {
+        None => {
+            // List subdirectories as categories
+            let mut categories = Vec::new();
+            for entry in fs::read_dir(&props_dir).map_err(|e| e.to_string())? {
+                let entry = entry.map_err(|e| e.to_string())?;
+                let path = entry.path();
+                if !path.is_dir() { continue; }
+                let Some(name) = path.file_name().and_then(|v| v.to_str()) else { continue; };
+                categories.push(serde_json::json!({ "category": name }));
+            }
+            categories.sort_by(|a, b| {
+                a["category"].as_str().unwrap_or("").cmp(b["category"].as_str().unwrap_or(""))
+            });
+            Ok(serde_json::Value::Array(categories))
+        }
+        Some(cat) => {
+            // Validate no path traversal
+            if cat.contains('/') || cat.contains('\\') || cat.starts_with('.') {
+                return Err(format!("无效的 category 名称: {cat}"));
+            }
+            let target = if cat.is_empty() {
+                props_dir.clone()
+            } else {
+                props_dir.join(&cat)
+            };
+            if !target.is_dir() {
+                return Ok(serde_json::json!([]));
+            }
+            let mut assets = Vec::new();
+            for entry in fs::read_dir(&target).map_err(|e| e.to_string())? {
+                let entry = entry.map_err(|e| e.to_string())?;
+                let path = entry.path();
+                if !path.is_file() { continue; }
+                let Some(ext) = path.extension().and_then(|v| v.to_str()) else { continue; };
+                if !matches!(ext.to_ascii_lowercase().as_str(), "glb" | "gltf") { continue; }
+                let Some(file_name) = path.file_name().and_then(|v| v.to_str()) else { continue; };
+                let label = path.file_stem().and_then(|v| v.to_str()).unwrap_or(file_name);
+                let file = if cat.is_empty() {
+                    file_name.to_string()
+                } else {
+                    format!("{}/{}", cat, file_name)
+                };
+                assets.push(serde_json::json!({ "file": file, "label": label, "category": cat }));
+            }
+            assets.sort_by(|a, b| {
+                a["file"].as_str().unwrap_or("").cmp(b["file"].as_str().unwrap_or(""))
+            });
+            Ok(serde_json::Value::Array(assets))
+        }
+    }
+}
+
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
@@ -681,6 +810,11 @@ async fn write_avatars_json(app: tauri::AppHandle, json: String) -> Result<(), S
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let json_path = dir.join("avatars.json");
     fs::write(&json_path, json).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn write_text_file(path: String, contents: String) -> Result<(), String> {
+    std::fs::write(&path, contents).map_err(|e| format!("写入失败 {path}: {e}"))
 }
 
 #[tauri::command]
@@ -1610,6 +1744,34 @@ async fn patch_presence_nag(
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+async fn patch_proactive_gap(app: tauri::AppHandle, hours: f64) -> Result<(), String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let resp = authorized_request(&cfg, client.put(backend_url(&cfg, "/scheduler/config")))
+        .json(&serde_json::json!({ "global_proactive_min_gap_hours": hours }))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    require_success(resp).await.map(|_| ())
+}
+
+#[tauri::command]
+async fn get_proactive_gap_hours(app: tauri::AppHandle) -> Result<f64, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let resp = authorized_request(&cfg, client.get(backend_url(&cfg, "/scheduler/config")))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    let resp = require_success(resp).await?;
+    let body: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    let secs = body.get("global_proactive_min_gap_seconds")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(2700.0);
+    Ok(secs / 3600.0)
+}
+
 // ── Chat Settings ────────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -1862,6 +2024,8 @@ pub fn run() {
             greet,
             list_dream_fonts,
             list_themes,
+            list_room_assets,
+            list_room_props,
             send_chat,
             load_history,
             load_garden_state,
@@ -1879,6 +2043,7 @@ pub fn run() {
             load_avatar,
             read_avatars_json,
             write_avatars_json,
+            write_text_file,
             dream_get_state,
             hardware_get_devices,
             hardware_connect,
@@ -1938,6 +2103,8 @@ pub fn run() {
             get_meta_mode,
             patch_meta_mode,
             patch_presence_nag,
+            patch_proactive_gap,
+            get_proactive_gap_hours,
             get_chat_settings,
             set_chat_mode,
             set_chat_style,
