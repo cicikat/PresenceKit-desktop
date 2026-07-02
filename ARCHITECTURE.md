@@ -69,6 +69,25 @@ Emerald-client 是 `Emerald-presence` 的新桌面客户端。它不拥有角色
   蹭的粒子反应。
 - 按住 Ctrl 或拖拽期间暂停自动移动；所有目标位置夹在当前显示器可视工作区内。
 - 鼠标交互开关和随机蹭间隔是本地 UI 偏好，不写入 StateEngine 或后端。
+- 「粒子风格」偏好新增 `live2d`：`Live2DStage` 复用 `src/shared/live2d/useLive2DStage.ts` 驱动层，
+  `transparent` 强制开启（无视 Live2DSettings.bgKind），缩放走独立 `pet.live2d.zoom` UI 偏好；
+  害羞 / 蹭反应触发一次性衰减姿态脉冲（`useLive2DStage` 返回的 `pulse()`）。
+
+视频通话窗口是 `src/windows/room/RoomWindow.tsx`：
+
+- 顶栏 / VN 气泡（`VnBubble` + `useVnPresenter`）/ 输入栏 / 麦克风 / 挂断在两种渲染模式间共用；
+  `setupAvatarDirectiveListener` 在 RoomWindow 层挂载，`avatarDirective.ts` 的 TTL 指令
+  （表情 / 注视 / 手势 / 说话）两种渲染模式语义一致。
+- `roomSettings.renderMode`（`model3d` | `live2d`，Chat 偏好「6 视频通话」页切换）决定挂载
+  `ThreeCallStage`（现有 Three.js GLB 角色 + `useRoomScene`，含摆放模式 / 自由视角 / 保存视角）
+  还是 `Live2DCallStage`（`src/shared/live2d/useLive2DStage.ts`，pixi.js + pixi-live2d-display）。
+  两者互斥挂载，不能同时启用 hook，切换即时黑一帧无过渡。
+- `src/shared/live2d/` 是 3D 侧 `useCharacterRig` 的平行驱动层：模型加载（Cubism Core 动态注入 +
+  `Live2DModel.from`）、mood → 表情/参数映射（`live2dExpressions.ts`，表情命名匹配优先，
+  核心参数直写兜底）、眨眼 / 口型 / 注视 / 手势通过 monkey-patch `motionManager.update` 逐帧叠加。
+  Live2D 模型资产（Cubism 4/5，`.model3.json`）放 `public/live2d/models/<名>/`，一模型一目录；
+  Cubism Core 运行时（`live2dcubismcore.min.js`）放 `public/live2d/core/`，Live2D 专有许可不入
+  git，需手动下载，见 `docs/live2d-model-import-guide.md`。
 
 存在感弹窗是 `src/windows/presence-nag/PresenceNagWindow.tsx`：
 

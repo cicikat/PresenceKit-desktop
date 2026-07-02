@@ -18,6 +18,11 @@ config/client.local.json
 public/room/character/
 public/room/scene/
 
+# Live2D Cubism Core runtime (proprietary Live2D license, cannot be redistributed)
+public/live2d/core/
+# Live2D character model assets (large binary files, not tracked in git)
+public/live2d/models/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

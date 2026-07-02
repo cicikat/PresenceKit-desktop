@@ -89,7 +89,7 @@ const SIDEBAR_MAX     = 540;
 const SIDEBAR_DEFAULT = 340;
 
 /* ── 偏好面板 ── */
-function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHeaderVisible, onChatHeaderToggle, appearance, onAppearanceChange, onCharacterAvatarChange, onCharacterSwitched, petMouseSettings, onPetMouseSettingsChange, petVisualStyle, onPetVisualStyleChange, presenceNagEnabled, onPresenceNagToggle, proactiveGapHours, onProactiveGapChange, playModeEnabled, onPlayModeToggle, petRoamEnabled, onPetRoamToggle, petRippleEnabled, onPetRippleToggle, onYandereOpen }: any) {
+function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHeaderVisible, onChatHeaderToggle, appearance, onAppearanceChange, onCharacterAvatarChange, onCharacterSwitched, petMouseSettings, onPetMouseSettingsChange, petVisualStyle, onPetVisualStyleChange, model3dZoom, onModel3dZoomChange, live2dZoom, onLive2dZoomChange, presenceNagEnabled, onPresenceNagToggle, proactiveGapHours, onProactiveGapChange, playModeEnabled, onPlayModeToggle, petRoamEnabled, onPetRoamToggle, petRippleEnabled, onPetRippleToggle, onYandereOpen }: any) {
   const [avatars, setAvatars] = useState(avatarStore.get());
   const [tab, setTab] = useState<'appearance' | 'color' | 'world' | 'pet' | 'chat' | 'call' | 'other'>('appearance');
   const [cropSrc, setCropSrc] = useState<string | null>(null);
@@ -445,7 +445,7 @@ function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHea
                     切换桌宠窗口的动画效果
                   </div>
                 </div>
-                <PrefRow label="粒子风格" hint="流体光球 · 散点粒子 · 神经网络">
+                <PrefRow label="粒子风格" hint="流体光球 · 散点粒子 · 神经网络 · 3D 模型">
                   <select
                     value={petVisualStyle}
                     onChange={e => onPetVisualStyleChange(e.target.value)}
@@ -454,9 +454,51 @@ function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHea
                     <option value="fluid">流体光球</option>
                     <option value="scatter">散点粒子</option>
                     <option value="network">神经网络</option>
-                    <option value="live2d">Live2D（实验）</option>
+                    <option value="live2d">Live2D</option>
+                    <option value="model3d">3D 模型</option>
                   </select>
                 </PrefRow>
+                {petVisualStyle === 'model3d' && (
+                  <PrefRow label="3D 缩放" hint="正交相机缩放，值越大越近">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <input
+                        type="range"
+                        min={0.3}
+                        max={4}
+                        step={0.05}
+                        value={model3dZoom ?? 1}
+                        onChange={e => onModel3dZoomChange(parseFloat(e.target.value))}
+                        style={{ width: 100 }}
+                      />
+                      <span className="mono" style={{ color: 'var(--ink-3)', fontSize: 10, minWidth: 28 }}>
+                        {(model3dZoom ?? 1).toFixed(2)}×
+                      </span>
+                    </div>
+                  </PrefRow>
+                )}
+                {petVisualStyle === 'live2d' && (
+                  <>
+                    <PrefRow label="Live2D 缩放" hint="值越大越近">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <input
+                          type="range"
+                          min={0.3}
+                          max={4}
+                          step={0.05}
+                          value={live2dZoom ?? 1}
+                          onChange={e => onLive2dZoomChange(parseFloat(e.target.value))}
+                          style={{ width: 100 }}
+                        />
+                        <span className="mono" style={{ color: 'var(--ink-3)', fontSize: 10, minWidth: 28 }}>
+                          {(live2dZoom ?? 1).toFixed(2)}×
+                        </span>
+                      </div>
+                    </PrefRow>
+                    <div className="mono" style={{ fontSize: 9.5, color: 'var(--ink-3)', letterSpacing: 1.1 }}>
+                      模型与表情映射与视频通话共用，去 6 视频通话 页配置
+                    </div>
+                  </>
+                )}
                 <div style={{ height: 1, background: 'var(--paper-edge)' }} />
                 <div>
                   <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink)', marginBottom: 2 }}>桌宠鼠标交互</div>
@@ -1162,6 +1204,8 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivi
   const [appearance, setAppearance]               = useState<ChatAppearance>(() => loadChatAppearance());
   const [petMouseSettings, setPetMouseSettings]   = useState<PetMouseSettings>(() => loadPetMouseSettings());
   const [petVisualStyle, setPetVisualStyle]       = useState<PetVisualStyle>(() => loadPetVisualStyle());
+  const [model3dZoom, setModel3dZoom]             = useState<number>(() => getUIPref('pet.model3d.zoom', 1));
+  const [live2dZoom, setLive2dZoom]               = useState<number>(() => getUIPref('pet.live2d.zoom', 1));
   const [presenceNagEnabled, setPresenceNagEnabledState] = useState(() => isPresenceNagEnabled());
   const [proactiveGapHours, setProactiveGapHours] = useState(0.75);
   const [playModeEnabled, setPlayModeEnabledState] = useState(() => isPlayModeEnabled());
@@ -1247,6 +1291,18 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivi
 
   const updatePetVisualStyle = useCallback((style: PetVisualStyle) => {
     setPetVisualStyle(savePetVisualStyle(style));
+  }, []);
+
+  const updateModel3dZoom = useCallback((zoom: number) => {
+    const clamped = Math.max(0.3, Math.min(4, zoom));
+    setModel3dZoom(clamped);
+    setUIPref('pet.model3d.zoom', clamped);
+  }, []);
+
+  const updateLive2dZoom = useCallback((zoom: number) => {
+    const clamped = Math.max(0.3, Math.min(4, zoom));
+    setLive2dZoom(clamped);
+    setUIPref('pet.live2d.zoom', clamped);
   }, []);
 
   const handleYandereOpen = useCallback(() => {
@@ -1459,6 +1515,10 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivi
         onPetMouseSettingsChange={updatePetMouseSettings}
         petVisualStyle={petVisualStyle}
         onPetVisualStyleChange={updatePetVisualStyle}
+        model3dZoom={model3dZoom}
+        onModel3dZoomChange={updateModel3dZoom}
+        live2dZoom={live2dZoom}
+        onLive2dZoomChange={updateLive2dZoom}
         presenceNagEnabled={presenceNagEnabled}
         proactiveGapHours={proactiveGapHours}
         onProactiveGapChange={(v: number) => {

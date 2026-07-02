@@ -417,6 +417,98 @@ fn list_room_props(app: tauri::AppHandle, category: Option<String>) -> Result<se
     }
 }
 
+fn live2d_models_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let mut checked = Vec::new();
+
+    match app.path().resource_dir() {
+        Ok(resource_dir) => {
+            let dir = resource_dir.join("live2d").join("models");
+            if dir.is_dir() {
+                return Ok(dir);
+            }
+            checked.push(dir);
+        }
+        Err(error) => eprintln!("[live2d_assets] 无法定位运行期资源目录: {error}"),
+    }
+
+    if cfg!(debug_assertions) {
+        let dev_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .ok_or_else(|| "无法定位项目根目录".to_string())?
+            .join("public")
+            .join("live2d")
+            .join("models");
+        if dev_dir.is_dir() {
+            return Ok(dev_dir);
+        }
+        checked.push(dev_dir);
+    }
+
+    let checked_paths = checked
+        .iter()
+        .map(|p| p.display().to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    Err(format!("无法定位 live2d/models 资源目录，已检查: {checked_paths}"))
+}
+
+#[tauri::command]
+fn list_live2d_models(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let dir = match live2d_models_dir(&app) {
+        Ok(dir) => dir,
+        Err(message) => {
+            // Missing `live2d/models/` is an expected fresh-install state, not a hard error —
+            // degrade to an empty list so the settings UI can show a placement hint instead of
+            // an error banner. The checked-paths detail still goes to the log for debugging.
+            eprintln!("[live2d_assets] {message}");
+            return Ok(serde_json::json!([]));
+        }
+    };
+
+    let mut models = Vec::new();
+    for entry in fs::read_dir(&dir).map_err(|e| format!("无法读取目录 {}: {e}", dir.display()))? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let Some(dir_name) = path.file_name().and_then(|v| v.to_str()) else {
+            continue;
+        };
+
+        let mut candidates: Vec<String> = Vec::new();
+        if let Ok(sub_entries) = fs::read_dir(&path) {
+            for sub in sub_entries.flatten() {
+                let sub_path = sub.path();
+                if !sub_path.is_file() {
+                    continue;
+                }
+                let Some(name) = sub_path.file_name().and_then(|v| v.to_str()) else {
+                    continue;
+                };
+                if name.ends_with(".model3.json") {
+                    candidates.push(name.to_string());
+                }
+            }
+        }
+        candidates.sort();
+        let Some(model_json) = candidates.into_iter().next() else {
+            continue;
+        };
+
+        models.push(serde_json::json!({
+            "dirName": dir_name,
+            "modelJson": model_json,
+            "label": dir_name,
+        }));
+    }
+    models.sort_by(|a, b| {
+        a["dirName"].as_str().unwrap_or_default()
+            .cmp(b["dirName"].as_str().unwrap_or_default())
+    });
+    Ok(serde_json::Value::Array(models))
+}
+
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
@@ -2026,6 +2118,7 @@ pub fn run() {
             list_themes,
             list_room_assets,
             list_room_props,
+            list_live2d_models,
             send_chat,
             load_history,
             load_garden_state,

@@ -17,6 +17,8 @@
     "@tauri-apps/plugin-opener": "^2",
     "@types/three": "^0.185.0",
     "date-fns": "^4.1.0",
+    "pixi-live2d-display": "0.4.0",
+    "pixi.js": "6.5.10",
     "react": "^19.1.0",
     "react-colorful": "^5.7.0",
     "react-dom": "^19.1.0",

@@ -3,6 +3,7 @@ import { loadPetVisualStyle, subscribePetVisualStyle, type PetVisualStyle } from
 import type { PetRendererProps } from '../../../shared/pet/petRenderer';
 import { ParticleCanvas } from './ParticleCanvas';
 import { Live2DStage } from './Live2DStage';
+import { Model3DStage } from './Model3DStage';
 
 const PARTICLE_STYLES = new Set<PetVisualStyle>(['fluid', 'scatter', 'network']);
 
@@ -16,6 +17,9 @@ export function PetStage({ snapshot, reaction, volume }: PetRendererProps) {
   }
   if (style === 'live2d') {
     return <Live2DStage snapshot={snapshot} reaction={reaction} volume={volume} />;
+  }
+  if (style === 'model3d') {
+    return <Model3DStage snapshot={snapshot} reaction={reaction} volume={volume} />;
   }
   return <ParticleCanvas snapshot={snapshot} reaction={reaction} volume={volume ?? 0} />;
 }

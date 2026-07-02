@@ -14,6 +14,8 @@ import {
   deletePreset,
 } from '../../../shared/room/roomPresets';
 import type { RoomPreset } from '../../../shared/room/roomPresets';
+import type { RenderMode } from '../../../shared/room/roomSettings';
+import { Live2DSettingsSection } from './Live2DSettingsSection';
 
 // ─── shared styles ────────────────────────────────────────────────────────────
 
@@ -33,6 +35,9 @@ const btnStyle: CSSProperties = {
 };
 
 const dangerBtnStyle: CSSProperties = { ...btnStyle, color: 'var(--danger)', borderColor: 'var(--danger)' };
+
+// mirrors springBones.ts DEFAULT_SPRING_PARAMS.gravity — kept local to avoid a cross-window import
+const DEFAULT_PHYS_GRAVITY = 0.3;
 
 // ─── primitives ───────────────────────────────────────────────────────────────
 
@@ -199,8 +204,27 @@ export function CallSettingsPage() {
 
   const checkStyle: CSSProperties = { width: 14, height: 14, cursor: 'pointer' };
 
+  const renderMode: RenderMode = settings.renderMode ?? 'model3d';
+
   return (
     <div style={{ display: 'grid', gap: 18 }}>
+      <Row label="渲染模式" hint="3D 模型 · Live2D，即时切换">
+        <select
+          value={renderMode}
+          onChange={e => patch({ renderMode: e.target.value as RenderMode })}
+          style={{ ...selectStyle, width: 120 }}
+        >
+          <option value="model3d">3D 模型</option>
+          <option value="live2d">Live2D</option>
+        </select>
+      </Row>
+
+      {renderMode === 'live2d' && <Live2DSettingsSection />}
+
+      {renderMode === 'model3d' && <>
+
+      <Divider />
+
       <div>
         <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink)', marginBottom: 2 }}>模型与场景</div>
         <div className="mono" style={{ fontSize: 9.5, color: 'var(--ink-3)', letterSpacing: 1.1 }}>
@@ -420,6 +444,28 @@ export function CallSettingsPage() {
       <Divider />
 
       <div>
+        <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink)', marginBottom: 2 }}>物理骨骼</div>
+        <div className="mono" style={{ fontSize: 9.5, color: 'var(--ink-3)', letterSpacing: 1.1 }}>
+          头发/尾巴等弹簧物理链的整体强度（模型需绑骨并打 phys_chain 属性，否则无效果）
+        </div>
+      </div>
+
+      <Row label="物理强度" hint="整体重力/摆动强度；0 完全关闭该物理">
+        <SliderNum
+          min={0} max={1} step={0.05}
+          value={settings.physicsBones?.default?.gravity ?? DEFAULT_PHYS_GRAVITY}
+          onChange={v => patch({
+            physicsBones: {
+              ...settings.physicsBones,
+              default: { ...settings.physicsBones?.default, gravity: v },
+            },
+          })}
+        />
+      </Row>
+
+      <Divider />
+
+      <div>
         <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink)', marginBottom: 2 }}>预设</div>
         <div className="mono" style={{ fontSize: 9.5, color: 'var(--ink-3)', letterSpacing: 1.1 }}>
           保存当前所有参数为命名预设，随时一键应用
@@ -541,6 +587,8 @@ export function CallSettingsPage() {
       }}>
         在视频通话窗口底部点击「🔧 调整视角」可自由旋转/缩放/平移查看模型，摆好后点「保存当前视角」固定机位。点击「🛠 摆放」可拖动角色/灯光/道具定位。
       </div>
+
+      </>}
     </div>
   );
 }

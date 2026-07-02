@@ -1,5 +1,4 @@
-export type PetVisualStyle = 'fluid' | 'scatter' | 'network' | 'live2d';
-// 'model3d' reserved for future RoomWindow / virtual-space feature
+export type PetVisualStyle = 'fluid' | 'scatter' | 'network' | 'live2d' | 'model3d';
 
 export const DEFAULT_PET_VISUAL_STYLE: PetVisualStyle = 'network';
 
@@ -7,7 +6,7 @@ const STORAGE_KEY = 'emerald.pet.visual-style';
 const CHANGE_EVENT = 'emerald:pet-visual-style';
 
 function validate(value: unknown): PetVisualStyle {
-  if (value === 'fluid' || value === 'scatter' || value === 'network' || value === 'live2d') return value;
+  if (value === 'fluid' || value === 'scatter' || value === 'network' || value === 'live2d' || value === 'model3d') return value;
   return DEFAULT_PET_VISUAL_STYLE;
 }
 
