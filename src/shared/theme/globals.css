@@ -167,3 +167,5 @@ input, textarea { font-family: inherit; }
   position: relative;
   z-index: 1;
 }
+
+@keyframes vn-cursor-blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }

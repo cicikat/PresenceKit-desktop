@@ -1,6 +1,7 @@
 import { getUIPref, setUIPref } from '../uiPreferences';
 
 export type Framing = 'face' | 'upperBody' | 'full';
+export type RenderMode = 'model3d' | 'live2d';
 
 export interface LightCfg {
   on: boolean;
@@ -15,6 +16,20 @@ export interface RoomLights {
   key: LightCfg;
   charFill: LightCfg;
   moodTint: boolean;
+}
+
+export type BoneRole = 'head' | 'chest' | 'spine' | 'shoulderL' | 'shoulderR' | 'leftEye' | 'rightEye';
+export type BoneMap = Partial<Record<BoneRole, string>>;
+
+export interface SpringParamsCfg {
+  stiffness?: number;
+  damping?: number;
+  gravity?: number;
+}
+
+export interface PhysicsBonesCfg {
+  default?: SpringParamsCfg;
+  overrides?: Record<string, SpringParamsCfg>;
 }
 
 export interface RoomProp {
@@ -36,6 +51,10 @@ export interface RoomSettings {
   anchorMode: 'floor' | 'free';
   lights: RoomLights;
   props: RoomProp[];
+  boneMap?: BoneMap;
+  physicsBones?: PhysicsBonesCfg;
+  idleClip?: string;
+  renderMode?: RenderMode;
 }
 
 export const DEFAULT_LIGHTS: RoomLights = {
@@ -58,6 +77,7 @@ export const DEFAULT_ROOM_SETTINGS: RoomSettings = {
   anchorMode: 'free',
   lights: DEFAULT_LIGHTS,
   props: [],
+  renderMode: 'model3d',
 };
 
 const STORAGE_KEY = 'room.settings';
@@ -107,6 +127,33 @@ function validateProp(raw: unknown): RoomProp | null {
   return { file: r.file, pos, rot, scale };
 }
 
+function validateSpringParamsCfg(raw: unknown): SpringParamsCfg | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const r = raw as Record<string, unknown>;
+  const out: SpringParamsCfg = {};
+  if (typeof r.stiffness === 'number') out.stiffness = r.stiffness;
+  if (typeof r.damping === 'number') out.damping = r.damping;
+  if (typeof r.gravity === 'number') out.gravity = r.gravity;
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function validatePhysicsBones(raw: unknown): PhysicsBonesCfg | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const r = raw as Record<string, unknown>;
+  const out: PhysicsBonesCfg = {};
+  const def = validateSpringParamsCfg(r.default);
+  if (def) out.default = def;
+  if (r.overrides && typeof r.overrides === 'object') {
+    const overrides: Record<string, SpringParamsCfg> = {};
+    for (const [name, v] of Object.entries(r.overrides as Record<string, unknown>)) {
+      const cfg = validateSpringParamsCfg(v);
+      if (cfg) overrides[name] = cfg;
+    }
+    if (Object.keys(overrides).length > 0) out.overrides = overrides;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 function validate(raw: unknown): RoomSettings {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   return {
@@ -140,6 +187,19 @@ function validate(raw: unknown): RoomSettings {
     props: Array.isArray(r.props)
       ? (r.props as unknown[]).map(validateProp).filter((p): p is RoomProp => p !== null)
       : [],
+    boneMap: (() => {
+      if (!r.boneMap || typeof r.boneMap !== 'object') return undefined;
+      const bm = r.boneMap as Record<string, unknown>;
+      const roles: BoneRole[] = ['head', 'chest', 'spine', 'shoulderL', 'shoulderR', 'leftEye', 'rightEye'];
+      const out: BoneMap = {};
+      for (const role of roles) {
+        if (typeof bm[role] === 'string' && bm[role]) out[role] = bm[role] as string;
+      }
+      return Object.keys(out).length > 0 ? out : undefined;
+    })(),
+    physicsBones: validatePhysicsBones(r.physicsBones),
+    idleClip: typeof r.idleClip === 'string' && r.idleClip ? r.idleClip : undefined,
+    renderMode: r.renderMode === 'live2d' ? 'live2d' : 'model3d',
   };
 }
 

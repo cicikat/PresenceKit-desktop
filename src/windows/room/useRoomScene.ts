@@ -11,6 +11,17 @@ import { getActiveDirective } from './avatarDirective';
 import { backendMoodToFrontend } from '../../shared/state/mood-mapping';
 import { saveRoomSettings } from '../../shared/room/roomSettings';
 import type { RoomSettings } from '../../shared/room/roomSettings';
+import { BoneResolver, microNoise } from './boneResolver';
+import {
+  collectSpringChains,
+  updateSpringChains,
+  getSpringChainRootNames,
+  applySpringSettings,
+  resetSpringChains,
+  DEFAULT_SPRING_PARAMS,
+} from './springBones';
+import type { SpringChain } from './springBones';
+import { collectExcludedBoneNames, filterClipTracks, selectIdleClip } from './clipPlayer';
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
@@ -248,6 +259,28 @@ function findHeadBone(root: THREE.Object3D): THREE.Bone | null {
   return found;
 }
 
+// Picks the idle clip (if any), deletes tracks owned by procedural/physics systems, and starts
+// it looping. Returns null when the model has no usable animation.
+function setupIdleClip(
+  model: THREE.Object3D,
+  animations: THREE.AnimationClip[],
+  headBone: THREE.Bone | null,
+  leftEyeBone: THREE.Bone | null,
+  rightEyeBone: THREE.Bone | null,
+  springChains: SpringChain[],
+  idleClipName: string | undefined,
+): { mixer: THREE.AnimationMixer; animatedBoneNames: Set<string> } | null {
+  if (animations.length === 0) return null;
+  if (import.meta.env.DEV) console.log('[room] clips:', animations.map(a => a.name));
+  const clip = selectIdleClip(animations, idleClipName);
+  if (!clip) return null;
+  const excluded = collectExcludedBoneNames(headBone, leftEyeBone, rightEyeBone, springChains);
+  const animatedBoneNames = filterClipTracks(clip, excluded);
+  const mixer = new THREE.AnimationMixer(model);
+  mixer.clipAction(clip).setLoop(THREE.LoopRepeat, Infinity).play();
+  return { mixer, animatedBoneNames };
+}
+
 // ─── hook ─────────────────────────────────────────────────────────────────────
 
 export interface RoomSceneAPI {
@@ -261,16 +294,14 @@ export interface RoomSceneAPI {
 export function useRoomScene(
   mountRef: React.RefObject<HTMLDivElement | null>,
   mood: Mood,
-  latestAssistantText: string | null,
-  textUpdatedAt: number,
+  talking: boolean,
   settings: RoomSettings,
 ): RoomSceneAPI {
   const refsRef            = useRef<SceneRefs | null>(null);
   const moodRef            = useRef(mood);
   const morphRef           = useRef<MorphController | null>(null);
   const blinkStateRef      = useRef<BlinkState>({ phase: 'idle', nextAt: performance.now() + 2000, startedAt: 0 });
-  const talkEndsAtRef      = useRef<number>(0);
-  const prevTextUpdatedAt  = useRef<number>(0);
+  const talkingRef         = useRef(talking);
   const settingsRef        = useRef<RoomSettings>(settings);
   const charGroupRef       = useRef<THREE.Group | null>(null);
   const roomGroupRef       = useRef<THREE.Group | null>(null);
@@ -281,6 +312,14 @@ export function useRoomScene(
   const [freeLook, setFreeLook] = useState(false);
   const headBoneRef        = useRef<THREE.Bone | null>(null);
   const headBoneRestRef    = useRef(new THREE.Euler());
+  const boneResolverRef    = useRef<BoneResolver | null>(null);
+  const springChainsRef    = useRef<SpringChain[]>([]);
+  const mixerRef           = useRef<THREE.AnimationMixer | null>(null);
+  const animatedBoneNamesRef = useRef<Set<string>>(new Set());
+  const chestBasePosYRef   = useRef(0);
+  const chestBaseScaleRef  = useRef(1);
+  const shLBasePosYRef     = useRef(0);
+  const shRBasePosYRef     = useRef(0);
 
   // Placement mode
   const placementModeRef      = useRef(false);
@@ -309,14 +348,10 @@ export function useRoomScene(
     s.targetLightIntensity = Math.max(0.3, Math.min(1.2, intensity));
   }, [mood]);
 
-  // new assistant message → start mouth-open speech
+  // keep talkingRef current so the render-loop tick always reads the latest VN presenter state
   useEffect(() => {
-    if (!latestAssistantText || textUpdatedAt === 0) return;
-    if (textUpdatedAt === prevTextUpdatedAt.current) return;
-    prevTextUpdatedAt.current = textUpdatedAt;
-    const talkMs = Math.max(800, Math.min(6000, latestAssistantText.length * 60));
-    talkEndsAtRef.current = performance.now() + talkMs;
-  }, [latestAssistantText, textUpdatedAt]);
+    talkingRef.current = talking;
+  }, [talking]);
 
   // re-apply framing/params when settings change (skip in placement mode)
   useEffect(() => {
@@ -328,9 +363,20 @@ export function useRoomScene(
     if (model) {
       resetModelTransform(model);
       normalizeAndPosition(model, settings);
+      resetSpringChains(model, springChainsRef.current);
     }
     applyView(refs, settings);
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings]);
+
+  // sync physics slider/override changes to already-collected spring chains live (not gated on
+  // placement mode: dragging the character's scale gizmo shouldn't block the gravity slider).
+  useEffect(() => {
+    applySpringSettings(
+      springChainsRef.current,
+      settings.physicsBones?.overrides ?? {},
+      { ...DEFAULT_SPRING_PARAMS, ...settings.physicsBones?.default },
+    );
   }, [settings]);
 
   // sync lights settings to scene objects (skip in placement mode)
@@ -370,12 +416,21 @@ export function useRoomScene(
     const charGroup = charGroupRef.current;
     if (!refs || !charGroup || disposedRef.current) return;
 
+    const oldModel = charGroup.children[0] ?? null;
+    if (mixerRef.current) {
+      mixerRef.current.stopAllAction();
+      if (oldModel) mixerRef.current.uncacheRoot(oldModel);
+      mixerRef.current = null;
+    }
+    animatedBoneNamesRef.current = new Set();
+
     for (const child of [...charGroup.children]) {
       charGroup.remove(child);
       disposeModel(child);
     }
     morphRef.current = null;
     headBoneRef.current = null;
+    springChainsRef.current = [];
 
     let cancelled = false;
     const loader = new GLTFLoader();
@@ -390,10 +445,30 @@ export function useRoomScene(
         charGroup.add(model);
         morphRef.current = new MorphController(model);
         charBaseScaleRef.current = s.scaleMul > 0 ? model.scale.x / s.scaleMul : model.scale.x;
-        const hb = findHeadBone(model);
+        boneResolverRef.current = new BoneResolver(model, s.boneMap);
+        const res = boneResolverRef.current.resolved;
+        const hb = res.head ?? findHeadBone(model);
         headBoneRef.current = hb;
         if (hb) headBoneRestRef.current.copy(hb.rotation);
-        if (import.meta.env.DEV) console.log('[room] char reloaded, morph keys:', morphRef.current.names());
+        const breathBone = res.chest ?? res.spine;
+        if (breathBone) { chestBasePosYRef.current = breathBone.position.y; chestBaseScaleRef.current = breathBone.scale.x; }
+        if (res.shoulderL) shLBasePosYRef.current = res.shoulderL.position.y;
+        if (res.shoulderR) shRBasePosYRef.current = res.shoulderR.position.y;
+        springChainsRef.current = collectSpringChains(
+          model,
+          s.physicsBones?.overrides,
+          { ...DEFAULT_SPRING_PARAMS, ...s.physicsBones?.default },
+        );
+        const clipSetup = setupIdleClip(
+          model, gltf.animations, hb, res.leftEye ?? null, res.rightEye ?? null,
+          springChainsRef.current, s.idleClip,
+        );
+        mixerRef.current = clipSetup?.mixer ?? null;
+        animatedBoneNamesRef.current = clipSetup?.animatedBoneNames ?? new Set();
+        if (import.meta.env.DEV) {
+          console.log('[room] char reloaded, morph keys:', morphRef.current.names(), '| bones:', boneResolverRef.current.names());
+          console.log('[room] phys chains:', getSpringChainRootNames(springChainsRef.current));
+        }
         if (!freeLookRef.current && !placementModeRef.current) applyView(refs, s);
       },
       undefined,
@@ -600,7 +675,7 @@ export function useRoomScene(
         }
       }, 150);
     });
-    scene.add(transformCtl as unknown as THREE.Object3D);
+    scene.add(transformCtl.getHelper());
 
     // ── raycaster for placement selection (click) ──
     const raycaster = new THREE.Raycaster();
@@ -753,10 +828,30 @@ export function useRoomScene(
         morphRef.current = new MorphController(model);
         const sm = initSettings.scaleMul;
         charBaseScaleRef.current = sm > 0 ? model.scale.x / sm : model.scale.x;
-        const hb = findHeadBone(model);
+        boneResolverRef.current = new BoneResolver(model, initSettings.boneMap);
+        const res = boneResolverRef.current.resolved;
+        const hb = res.head ?? findHeadBone(model);
         headBoneRef.current = hb;
         if (hb) headBoneRestRef.current.copy(hb.rotation);
-        if (import.meta.env.DEV) console.log('[room] morph keys:', morphRef.current.names());
+        const breathBone = res.chest ?? res.spine;
+        if (breathBone) { chestBasePosYRef.current = breathBone.position.y; chestBaseScaleRef.current = breathBone.scale.x; }
+        if (res.shoulderL) shLBasePosYRef.current = res.shoulderL.position.y;
+        if (res.shoulderR) shRBasePosYRef.current = res.shoulderR.position.y;
+        springChainsRef.current = collectSpringChains(
+          model,
+          initSettings.physicsBones?.overrides,
+          { ...DEFAULT_SPRING_PARAMS, ...initSettings.physicsBones?.default },
+        );
+        const clipSetup = setupIdleClip(
+          model, gltf.animations, hb, res.leftEye ?? null, res.rightEye ?? null,
+          springChainsRef.current, initSettings.idleClip,
+        );
+        mixerRef.current = clipSetup?.mixer ?? null;
+        animatedBoneNamesRef.current = clipSetup?.animatedBoneNames ?? new Set();
+        if (import.meta.env.DEV) {
+          console.log('[room] morph keys:', morphRef.current.names(), '| bones:', boneResolverRef.current.names());
+          console.log('[room] phys chains:', getSpringChainRootNames(springChainsRef.current));
+        }
         applyView(refs, initSettings);
         charLoaded = true;
         maybeRemovePlaceholder();
@@ -779,21 +874,26 @@ export function useRoomScene(
       refs.rafId = requestAnimationFrame(tick);
       if (document.hidden) return;
 
-      const t   = refs.clock.getElapsedTime();
+      const dt  = refs.clock.getDelta();
+      const t   = refs.clock.elapsedTime;
       const now = performance.now();
       const currentMood = moodRef.current;
       const morph = morphRef.current;
 
       const directive = getActiveDirective(now);
 
+      mixerRef.current?.update(dt);
+
       if (morph) {
-        // Hair sway: dual left/right keys; fallback to legacy hairSway
-        if (morph.has('hairSwayLeft') || morph.has('hairSwayRight')) {
-          const sway = Math.sin(t * 0.6);
-          morph.set('hairSwayLeft',  Math.max(0,  sway));
-          morph.set('hairSwayRight', Math.max(0, -sway));
-        } else if (morph.has('hairSway')) {
-          morph.set('hairSway', 0.5 + 0.5 * Math.sin(t * 0.6));
+        // Hair sway morph keys: only a fallback when no physics spring chain drives the hair
+        if (springChainsRef.current.length === 0) {
+          if (morph.has('hairSwayLeft') || morph.has('hairSwayRight')) {
+            const sway = Math.sin(t * 0.6);
+            morph.set('hairSwayLeft',  Math.max(0,  sway));
+            morph.set('hairSwayRight', Math.max(0, -sway));
+          } else if (morph.has('hairSway')) {
+            morph.set('hairSway', 0.5 + 0.5 * Math.sin(t * 0.6));
+          }
         }
 
         // Expression layer: directive overrides mood when active
@@ -813,10 +913,8 @@ export function useRoomScene(
         const pulse = getBlinkPulse(blinkStateRef.current, now, currentMood);
         morph.set('blink', Math.max(moodBlinkBaseline, pulse));
 
-        // Speaking: directive.speaking overrides talkEndsAtRef when not null
-        const talking = directive?.speaking !== null && directive?.speaking !== undefined
-          ? directive.speaking
-          : now < talkEndsAtRef.current;
+        // Speaking: directive.speaking overrides the VN presenter's talking prop when not null
+        const talking = directive?.speaking ?? talkingRef.current;
         const mouthTarget = talking
           ? (0.35 + 0.45 * (0.5 + 0.5 * Math.sin(t * 11))) * (0.8 + Math.random() * 0.2)
           : 0;
@@ -885,17 +983,68 @@ export function useRoomScene(
             charGroup.position.z = -rampIn * 0.1;
           }
         } else {
-          // Lerp head bone and charGroup back to rest
+          // Lerp head bone back to rest + micro-drift noise (folded into the target so the
+          // noise amplitude stays whatever it's set to, instead of accumulating every frame),
+          // and charGroup back to rest.
           if (headBone) {
-            headBone.rotation.x += (rest.x - headBone.rotation.x) * 0.1;
-            headBone.rotation.y += (rest.y - headBone.rotation.y) * 0.1;
-            headBone.rotation.z += (rest.z - headBone.rotation.z) * 0.1;
+            const driftX = rest.x + microNoise(t, 11) * 0.015;
+            const driftY = rest.y + microNoise(t, 23) * 0.020;
+            const driftZ = rest.z + microNoise(t, 37) * 0.010;
+            headBone.rotation.x += (driftX - headBone.rotation.x) * 0.1;
+            headBone.rotation.y += (driftY - headBone.rotation.y) * 0.1;
+            headBone.rotation.z += (driftZ - headBone.rotation.z) * 0.1;
           }
           if (charGroup) {
             charGroup.position.z += (0 - charGroup.position.z) * 0.1;
           }
         }
       }
+
+      // Procedural micro-animation: breath (chest) + head/shoulder noise.
+      // Bones driven by the idle clip get `+=` (mixer already wrote this frame's base value,
+      // so the offset doesn't accumulate); bones with no clip track use the existing
+      // rest-value + offset absolute write, since mixer never touches them.
+      {
+        const res = boneResolverRef.current?.resolved;
+        const animatedBoneNames = animatedBoneNamesRef.current;
+        if (res) {
+          const moodEntry = MOOD_TABLE[currentMood];
+          const period = ((moodEntry?.breathePeriod as number | undefined) ?? 4200) / 1000;
+          const depth  = (moodEntry?.breatheDepth  as number | undefined) ?? 0.022;
+          const breath = Math.sin((t / period) * Math.PI * 2);
+          const breathBone = res.chest ?? res.spine;
+          if (breathBone) {
+            const posOffset = breath * depth * 0.06;
+            const scaleOffset = breath * depth * 0.5;
+            if (animatedBoneNames.has(breathBone.name)) {
+              breathBone.position.y += posOffset;
+              breathBone.scale.x += scaleOffset;
+              breathBone.scale.y += scaleOffset;
+              breathBone.scale.z += scaleOffset;
+            } else {
+              breathBone.position.y = chestBasePosYRef.current + posOffset;
+              breathBone.scale.setScalar(chestBaseScaleRef.current + scaleOffset);
+            }
+          }
+          if (res.shoulderL) {
+            const offset = microNoise(t, 5) * 0.004;
+            if (animatedBoneNames.has(res.shoulderL.name)) res.shoulderL.position.y += offset;
+            else res.shoulderL.position.y = shLBasePosYRef.current + offset;
+          }
+          if (res.shoulderR) {
+            const offset = microNoise(t, 9) * 0.004;
+            if (animatedBoneNames.has(res.shoulderR.name)) res.shoulderR.position.y += offset;
+            else res.shoulderR.position.y = shRBasePosYRef.current + offset;
+          }
+        }
+      }
+
+      // Physics spring chains (hair/tail/ribbons) — must run after head/gaze/micro-anim so it
+      // inherits the final bone orientations for this frame. Head/breath/shoulder edits above
+      // only touch local transforms, so force a matrixWorld pass first or the chain would read
+      // last frame's parent.matrixWorld and lag/microjitter by one frame.
+      charGroupRef.current?.updateMatrixWorld(true);
+      updateSpringChains(springChainsRef.current, dt);
 
       // camera breathing — paused in free look and placement mode
       if (!freeLookRef.current && !placementModeRef.current) {
@@ -932,6 +1081,7 @@ export function useRoomScene(
       intensityLabelRef.current?.remove();
       intensityLabelRef.current = null;
 
+      scene.remove(transformCtl.getHelper());
       transformCtl.detach();
       transformCtl.dispose();
       proxyGeo.dispose();
@@ -940,6 +1090,12 @@ export function useRoomScene(
 
       refs.controls.dispose();
       morphRef.current = null;
+      springChainsRef.current = [];
+      if (mixerRef.current) {
+        mixerRef.current.stopAllAction();
+        mixerRef.current = null;
+      }
+      animatedBoneNamesRef.current = new Set();
 
       if (objChangeThrottle) clearTimeout(objChangeThrottle);
 
@@ -1042,6 +1198,11 @@ export function useRoomScene(
       intensityLabelRef.current = null;
       selectedLightRef.current = null;
       selectedPropIdxRef.current = null;
+      // A scale-mode gizmo drag while in placement mode changes model world scale directly,
+      // bypassing the settings effect (which is skipped in placement mode) — re-measure so
+      // spring chains don't clamp hair to a now-stale rest length.
+      const exitedModel = charGroupRef.current?.children[0];
+      if (exitedModel) resetSpringChains(exitedModel, springChainsRef.current);
     } else {
       // Exit free look first
       if (freeLookRef.current) {
@@ -1159,6 +1320,8 @@ export function useRoomScene(
               selectedPropIdxRef.current = null;
               intensityLabelRef.current?.remove();
               intensityLabelRef.current = null;
+              const escModel = charGroupRef.current?.children[0];
+              if (escModel) resetSpringChains(escModel, springChainsRef.current);
             }
             break;
         }
