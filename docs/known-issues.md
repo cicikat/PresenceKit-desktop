@@ -247,6 +247,26 @@ ChatPanel 已实现 Dream active 期间按 `msg_id` park Reality `channel_messag
 
 ## 已修复
 
+### Sidebar tab 缺 ErrorBoundary，单 panel 渲染异常会拖垮整个聊天窗口（2026-07-02，cc-tasks/08 #3）
+
+**原问题**：全仓库没有任何 `ErrorBoundary`。`Sidebar.tsx` 里 `flow/garden/diary/status` tab 切换用普通三元表达式渲染，任意一个 panel（尤其 `SubStatus.tsx`，接了 sensor 轮询 + mood 订阅 + 多个 `setInterval`）渲染期抛异常时，React 会卸载整棵树，表现为“点进某个 tab 就黑屏”而不是只黑那一块。静态审查未发现 `SubStatus.tsx` 有明显的 undefined 调用（`MOOD_HUE`/`MOOD_LABEL_EN`/`engine.get()` 等都有 `?? fallback`），本次沙箱环境无法起 Tauri 窗口做浏览器目检，未能复现拿到真实堆栈，因此这次只做了止血。
+
+**修复**：`Sidebar.tsx` 用 `src/shared/ui/ErrorBoundary.tsx`（新增）包住 tab 内容区，`key={tab}` 保证切 tab 时清空错误状态；崩溃只影响当前 panel（显示“状态出错 + 重试”），不再拖垮整个窗口，且 stack 会经 `componentDidCatch` 进控制台。
+
+**遗留**：真实根因仍未定位，需要有人在真实 Tauri 窗口里点开「状态」tab、读控制台第一条报错，重点怀疑 `useTelemetrySignals` 里 `spikeTickRef` 的递归 `setInterval` 或 sensor 轮询在特定时序下的边界情况。
+
+### ChatPanel 先开前端后开后端时历史空白，且不会自动重试（2026-07-02，cc-tasks/08 #4）
+
+**原问题**：`ChatPanel.tsx` 启动加载的 `useEffect` 依赖数组是 `[]`，`init()` 只跑一次。前端先起来、后端还没上时 `loadChatLogDates()` 抛错 → `historyStatus` 落入 `error` → 之后没有任何重试，等后端起来了也不会自动重新拉，页面一直空白（且 `_desktopWakeFired` 不会补触发，问候也丢了）。
+
+**修复**：`init()` 改造成 `useCallback`（配 `mountedRef`/`initInFlightRef` 防重入防并发），可重复调用。新增两条重试路径：① `wsClient.on('state', ...)` 订阅，WS 变 `connected` 且 `historyStatus.kind === 'error'` 时重拉；② 兜底 5s 轮询，`historyStatus.kind === 'error'` 期间持续重试直到成功或卸载。消息区新增 `error` 态下的“正在等待后端连接…+ 重试按钮”占位，不再是纯空白。`_desktopWakeFired`（同 session 只发一次问候）不受影响。
+
+### 上线主动触发（desktopWake）在重登/刷新前后端时会重复误发（2026-07-02，cc-tasks/08 #2）
+
+**原问题**：`desktopWake()` 的“每 session 只发一次”靠模块级布尔 `_desktopWakeFired` 去抖，但 F5 刷新或重开窗口会重置模块变量，导致短时间内重复触发上线问候。
+
+**修复**：新增 `src/shared/desktopWakeGate.ts`，用 `localStorage` 持久化“上次成功发出 wake 的时间戳”（跨刷新/重启存活，`WAKE_MIN_GAP_MS = 10 * 60 * 1000`）。`ChatPanel.tsx` 里发 wake 前先查 `shouldSkipDesktopWake()`，10 分钟内跳过（历史加载不受影响，照常拉），否则正常发送并在 HTTP 成功后 `markDesktopWakeFired()`。与 `_desktopWakeFired` 的 session 内去抖是两层，互不冲突。
+
 ### 桌宠按钮已接入真实桌宠窗口与鼠标交互（2026-06-14，CC-11b）
 
 **原问题**：Ribbon 只切 `petVisible` 和 engine mode，没有真实桌宠窗口。

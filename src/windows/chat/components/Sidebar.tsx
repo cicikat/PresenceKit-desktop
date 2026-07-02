@@ -8,6 +8,7 @@ import { SubDiary } from './SubDiary';
 import { SubStatus } from './SubStatus';
 import { SubFlow } from './SubFlow';
 import { chatThemeFontSize } from '../../../shared/chatAppearance';
+import { ErrorBoundary } from '../../../shared/ui/ErrorBoundary';
 import {
   FLOW_BACKEND_STATE_CADENCE,
   STATUS_BACKEND_STATE_CADENCE,
@@ -69,15 +70,17 @@ export function SidebarPanel({ engine, sidebarRectRef, tab, onClose }: any) {
         }}>×</button>
       </div>
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-        {tab === 'flow' ? (
-          <SubFlow engine={engine} />
-        ) : tab === 'garden' ? (
-          <SubGarden />
-        ) : tab === 'diary' ? (
-          <SubDiary />
-        ) : (
-          <SubStatus engine={engine} backendStatePolling={backendStatePolling} />
-        )}
+        <ErrorBoundary key={tab} fallbackLabel={meta.title}>
+          {tab === 'flow' ? (
+            <SubFlow engine={engine} />
+          ) : tab === 'garden' ? (
+            <SubGarden />
+          ) : tab === 'diary' ? (
+            <SubDiary />
+          ) : (
+            <SubStatus engine={engine} backendStatePolling={backendStatePolling} />
+          )}
+        </ErrorBoundary>
       </div>
     </div>
   );

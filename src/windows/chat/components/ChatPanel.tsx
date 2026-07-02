@@ -12,6 +12,7 @@ import { avatarStore } from '../../../shared/avatars/store';
 import { open } from '@tauri-apps/plugin-dialog';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { sendChat, uploadDocument, desktopWake } from '../../../shared/api/backend';
+import { shouldSkipDesktopWake, markDesktopWakeFired } from '../../../shared/desktopWakeGate';
 import { useVoiceInput } from '../../../shared/voice/useVoiceInput';
 import { loadChatLogDates, loadChatLogDay } from '../../../shared/api/backend';
 import { getClientConfig } from '../../../shared/api/config';
@@ -482,6 +483,16 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
   const [noMoreHistory, setNoMoreHistory] = useState(false);
   const [historyStatus, setHistoryStatus] = useState<HistoryStatus>({ kind: 'loading' });
   const [loadMoreError, setLoadMoreError] = useState<'network' | 'unauthorized' | 'malformed' | null>(null);
+  // init() 可重入：先前端后后端起来时，靠 WS connected / 轮询重拉历史，而不是永远卡在 error。
+  const historyStatusRef = useRef<HistoryStatus>({ kind: 'loading' });
+  useEffect(() => { historyStatusRef.current = historyStatus; }, [historyStatus]);
+  const mountedRef = useRef(false);
+  const initInFlightRef = useRef(false);
+  // scheduleAssistantSegments is declared later in this component; init() is declared
+  // earlier so it can be reused by both the mount effect and the WS reconnect effect.
+  // Route through a ref (kept in sync on every render, below) instead of a direct closure
+  // reference to avoid a TDZ error in init's useCallback dependency array.
+  const scheduleAssistantSegmentsRef = useRef<((fullText: string, wsMsgId?: string, preGeneratedIds?: string[]) => void) | null>(null);
 
   const rootRef  = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -560,109 +571,117 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
 
   // ── 启动加载 ─────────────────────────────────────────────────────────────
 
-  useEffect(() => {
-    let mounted = true;
+  // 可重入：首次挂载调用一次；historyStatus 落入 error 后，WS connected / 轮询兜底会再次调用。
+  const init = useCallback(async () => {
+    if (initInFlightRef.current) return;
+    initInFlightRef.current = true;
+    const mounted = () => mountedRef.current;
+    try {
+      const datesResp = await loadChatLogDates();
+      if (!mounted()) return;
+      availableDatesRef.current = datesResp.dates; // 倒序，最新在前
 
-    async function init() {
-      try {
-        const datesResp = await loadChatLogDates();
-        if (!mounted) return;
-        availableDatesRef.current = datesResp.dates; // 倒序，最新在前
+      const today = todayStr();
+      const dates = availableDatesRef.current;
 
-        const today = todayStr();
-        const dates = availableDatesRef.current;
+      if (dates.length === 0) {
+        setMessages([]);
+        setHistoryStatus({ kind: 'empty' });
+        noMoreHistoryRef.current = true;
+        setNoMoreHistory(true);
+        return;
+      }
 
-        if (dates.length === 0) {
-          setMessages([]);
-          setHistoryStatus({ kind: 'empty' });
+      let msgs: ChatMsg[] = [];
+      let firstDate: string | null = null;
+
+      if (dates.includes(today)) {
+        // 拉今日
+        const day = await loadChatLogDay(today);
+        if (!mounted()) return;
+        msgs = entriesToMsgs(today, day.entries, day.raw_fallback);
+        loadedDatesRef.current = [today];
+        firstDate = today;
+
+        // 不够 10 条，兜底拉前一天
+        if (msgs.filter(m => m.role === 'user' || m.role === 'assistant').length < 10) {
+          const todayIdx = dates.indexOf(today);
+          const prevDate = dates[todayIdx + 1];
+          if (prevDate) {
+            const prevDay = await loadChatLogDay(prevDate);
+            if (!mounted()) return;
+            const prevMsgs = entriesToMsgs(prevDate, prevDay.entries, prevDay.raw_fallback);
+            msgs = [...prevMsgs, dividerMsg(today), ...msgs];
+            loadedDatesRef.current = [prevDate, today];
+            firstDate = prevDate;
+          }
+        }
+      } else {
+        // 今天没聊，直接拉最近一天
+        const recentDate = dates[0];
+        const day = await loadChatLogDay(recentDate);
+        if (!mounted()) return;
+        msgs = entriesToMsgs(recentDate, day.entries, day.raw_fallback);
+        loadedDatesRef.current = [recentDate];
+        firstDate = recentDate;
+      }
+
+      // 检查是否还有更早的
+      if (firstDate) {
+        const firstIdx = availableDatesRef.current.indexOf(firstDate);
+        if (firstIdx >= availableDatesRef.current.length - 1) {
           noMoreHistoryRef.current = true;
           setNoMoreHistory(true);
-          return;
+          msgs = [{ id: newId(), role: 'no_more', text: '', time: 0 }, ...msgs];
         }
+      }
 
-        let msgs: ChatMsg[] = [];
-        let firstDate: string | null = null;
+      const historyAssistantCount = msgs.filter(m => m.role === 'assistant').length;
+      console.log('[chat] appendSource: history-replay | phase: init | assistantBubbles:', historyAssistantCount, '| totalMsgs:', msgs.length);
+      setMessages(msgs);
 
-        if (dates.includes(today)) {
-          // 拉今日
-          const day = await loadChatLogDay(today);
-          if (!mounted) return;
-          msgs = entriesToMsgs(today, day.entries, day.raw_fallback);
-          loadedDatesRef.current = [today];
-          firstDate = today;
-
-          // 不够 10 条，兜底拉前一天
-          if (msgs.filter(m => m.role === 'user' || m.role === 'assistant').length < 10) {
-            const todayIdx = dates.indexOf(today);
-            const prevDate = dates[todayIdx + 1];
-            if (prevDate) {
-              const prevDay = await loadChatLogDay(prevDate);
-              if (!mounted) return;
-              const prevMsgs = entriesToMsgs(prevDate, prevDay.entries, prevDay.raw_fallback);
-              msgs = [...prevMsgs, dividerMsg(today), ...msgs];
-              loadedDatesRef.current = [prevDate, today];
-              firstDate = prevDate;
-            }
+      // Register canonical turn IDs and hashes for WS cross-path dedup.
+      const _histInitNow = Date.now();
+      const historyIdsByTurn = new Map<string, string[]>();
+      for (const _m of msgs) {
+        if (_m.role === 'assistant') {
+          if (_m.turnId) {
+            const ids = historyIdsByTurn.get(_m.turnId) ?? [];
+            ids.push(_m.id);
+            historyIdsByTurn.set(_m.turnId, ids);
           }
+          const _h = normalizeForDedup(_m.text);
+          if (_h) {
+            recentHistoryHashesRef.current.set(_h, _histInitNow);
+            console.log('[chat] appendSource: history-replay-register | phase: init | hash:', _h, '| textPreview:', _m.text.slice(0, 40));
+          }
+        }
+      }
+      historyIdsByTurn.forEach((ids, turnId) => {
+        setBoundedMapEntry(wsMsgIdToLocalIdsRef.current, turnId, ids, MAX_WS_MSG_ID_MAPPINGS);
+      });
+
+      setHistoryStatus({ kind: 'ok' });
+
+      // Phase 2B: 拉取重开问候，每次 window/page session 仅触发一次
+      if (!_desktopWakeFired) {
+        _desktopWakeFired = true;
+
+        // 10min 去抖：跨刷新/重开窗口存活，排除「重登 / F5」误触发的重开问候。
+        // 历史加载不受影响（上面已经拉完），只跳过 wake 这一步。
+        if (shouldSkipDesktopWake()) {
+          console.log('[wake] skip | reason: within WAKE_MIN_GAP_MS of last fired wake');
         } else {
-          // 今天没聊，直接拉最近一天
-          const recentDate = dates[0];
-          const day = await loadChatLogDay(recentDate);
-          if (!mounted) return;
-          msgs = entriesToMsgs(recentDate, day.entries, day.raw_fallback);
-          loadedDatesRef.current = [recentDate];
-          firstDate = recentDate;
-        }
-
-        // 检查是否还有更早的
-        if (firstDate) {
-          const firstIdx = availableDatesRef.current.indexOf(firstDate);
-          if (firstIdx >= availableDatesRef.current.length - 1) {
-            noMoreHistoryRef.current = true;
-            setNoMoreHistory(true);
-            msgs = [{ id: newId(), role: 'no_more', text: '', time: 0 }, ...msgs];
-          }
-        }
-
-        const historyAssistantCount = msgs.filter(m => m.role === 'assistant').length;
-        console.log('[chat] appendSource: history-replay | phase: init | assistantBubbles:', historyAssistantCount, '| totalMsgs:', msgs.length);
-        setMessages(msgs);
-
-        // Register canonical turn IDs and hashes for WS cross-path dedup.
-        const _histInitNow = Date.now();
-        const historyIdsByTurn = new Map<string, string[]>();
-        for (const _m of msgs) {
-          if (_m.role === 'assistant') {
-            if (_m.turnId) {
-              const ids = historyIdsByTurn.get(_m.turnId) ?? [];
-              ids.push(_m.id);
-              historyIdsByTurn.set(_m.turnId, ids);
-            }
-            const _h = normalizeForDedup(_m.text);
-            if (_h) {
-              recentHistoryHashesRef.current.set(_h, _histInitNow);
-              console.log('[chat] appendSource: history-replay-register | phase: init | hash:', _h, '| textPreview:', _m.text.slice(0, 40));
-            }
-          }
-        }
-        historyIdsByTurn.forEach((ids, turnId) => {
-          setBoundedMapEntry(wsMsgIdToLocalIdsRef.current, turnId, ids, MAX_WS_MSG_ID_MAPPINGS);
-        });
-
-        setHistoryStatus({ kind: 'ok' });
-
-        // Phase 2B: 拉取重开问候，每次 window/page session 仅触发一次
-        if (!_desktopWakeFired) {
-          _desktopWakeFired = true;
           const lastAssistantMsg = msgs.filter(m => m.role === 'assistant').slice(-1)[0];
           const historyCursorSec = lastAssistantMsg
             ? lastAssistantMsg.time / 1000
             : undefined;
           console.log('[wake] start | historyCursorSec:', historyCursorSec ?? 'none');
-          if (mounted) setWakeLoading(true);
+          if (mounted()) setWakeLoading(true);
           try {
             const wakeResp = await desktopWake(historyCursorSec);
-            if (mounted && wakeResp.reply) {
+            markDesktopWakeFired();
+            if (mounted() && wakeResp.reply) {
               const parts = wakeResp.reply.split(/\n+/).map(s => s.trim()).filter(Boolean);
               const msgId = responseMsgId(wakeResp);
               console.log('[wake] httpDone | loadingSource: wake | waitingForWs: true | wsState:', wsClient.getState(), '| source:', wakeResp.source, '| msg_id:', msgId ?? '(none)', '| segments:', parts.length);
@@ -702,27 +721,32 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
                 if (msgId) setBoundedMapEntry(wsMsgIdToLocalIdsRef.current, msgId, fallbackIds, MAX_WS_MSG_ID_MAPPINGS);
                 console.log('[chat] appendSource: fallback | loadingSource: wake | msg_id:', msgId ?? '(none)', '| contentHash:', contentHash, '| normalizedHash:', normalizedHash, '| partsCount:', parts.length, '| renderedMsgIds:', fallbackIds, '| wsState:', wsClient.getState());
                 setWakeLoading(false);
-                scheduleAssistantSegments(wakeResp.reply, undefined, fallbackIds);
+                scheduleAssistantSegmentsRef.current?.(wakeResp.reply, undefined, fallbackIds);
               }, 5000);
               pendingWakeReplyRef.current = { timerId, parts, msgId };
-            } else if (mounted) {
+            } else if (mounted()) {
               console.log('[wake] HTTP response received, no reply, source:', wakeResp.source);
               setWakeLoading(false);
             }
           } catch (wakeErr) {
             console.warn('[chat] desktop_wake 失败:', wakeErr);
-            if (mounted) setWakeLoading(false);
+            if (mounted()) setWakeLoading(false);
           }
         }
-      } catch (err) {
-        console.warn('[chat-log] 初始化失败:', err);
-        if (mounted) setHistoryStatus({ kind: 'error', ...classifyHistoryError(err) });
       }
+    } catch (err) {
+      console.warn('[chat-log] 初始化失败:', err);
+      if (mounted()) setHistoryStatus({ kind: 'error', ...classifyHistoryError(err) });
+    } finally {
+      initInFlightRef.current = false;
     }
+  }, []);
 
+  useEffect(() => {
+    mountedRef.current = true;
     init();
     return () => {
-      mounted = false;
+      mountedRef.current = false;
       if (pendingWakeReplyRef.current) {
         clearTimeout(pendingWakeReplyRef.current.timerId);
         pendingWakeReplyRef.current = null;
@@ -732,7 +756,15 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         pendingSendReplyRef.current = null;
       }
     };
-  }, []);
+  }, [init]);
+
+  // 兜底轮询：historyStatus 落在 error 时，每 5s 重试一次 init()，直到成功或组件卸载。
+  // 覆盖「先开前端后开后端」场景下 WS state 事件因某种原因未触发的情况。
+  useEffect(() => {
+    if (historyStatus.kind !== 'error') return;
+    const id = setInterval(() => { void init(); }, 5000);
+    return () => clearInterval(id);
+  }, [historyStatus.kind, init]);
 
   // ── 滚顶懒加载 ───────────────────────────────────────────────────────────
 
@@ -954,6 +986,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       pendingSegmentTimersRef.current.push(timer);
     }
   }, [engine]);
+  scheduleAssistantSegmentsRef.current = scheduleAssistantSegments;
 
   // Replace an in-flight streaming bubble with the canonical content, split into
   // one bubble per paragraph (\n+). This converges the streaming path onto the
@@ -1064,6 +1097,14 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
     let mounted = true;
     getClientConfig().then(cfg => {
       if (mounted) wsClient.connect(cfg.websocketBase);
+    });
+
+    // 先开前端后开后端：历史加载在 WS 就绪前失败后，一旦后端真的活了（WS connected）
+    // 就重拉一次历史，而不是永远停在 error 空白页。
+    const unsubWsState = wsClient.on('state', (connState) => {
+      if (connState === 'connected' && historyStatusRef.current.kind === 'error') {
+        void init();
+      }
     });
 
     const processRealityChannelMessage = ({ content, msg_id, source }: RealityChannelMessage) => {
@@ -1320,6 +1361,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
 
     return () => {
       mounted = false;
+      unsubWsState();
       unsubMsg();
       unsubSegs();
       unsubStreamStart();
@@ -1329,7 +1371,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         processRealityChannelMessageRef.current = null;
       }
     };
-  }, [engine, parkPendingSegments, parkRealityMessage, scheduleAssistantSegments]);
+  }, [engine, init, parkPendingSegments, parkRealityMessage, scheduleAssistantSegments]);
 
   useEffect(() => {
     if (dreamActive) return;
@@ -1688,6 +1730,24 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         {historyStatus.kind === 'loading' && messages.length === 0 && (
           <div style={{ textAlign: 'center', padding: '60px 0 20px' }}>
             <span className="mono" style={{ fontSize: chatThemeFontSize(10), color: 'var(--ink-4)', letterSpacing: 0.8 }}>正在加载历史记录…</span>
+          </div>
+        )}
+
+        {/* 初始加载失败占位：先开前端后开后端时不留纯空白，后端起来后（WS connected / 5s 轮询）自动重拉 */}
+        {historyStatus.kind === 'error' && messages.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '60px 0 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+            <span className="mono" style={{ fontSize: chatThemeFontSize(10), color: 'var(--ink-4)', letterSpacing: 0.8 }}>
+              正在等待后端连接…（{historyStatus.category === 'network' ? '网络错误' : historyStatus.category === 'unauthorized' ? '未授权' : '格式异常'}）
+            </span>
+            <button
+              onClick={() => void init()}
+              style={{
+                fontSize: chatThemeFontSize(10), padding: '4px 12px', borderRadius: 'var(--radius-xs)', cursor: 'pointer',
+                background: 'transparent', border: '1px solid var(--paper-edge)',
+                color: 'var(--ink-3)', fontFamily: 'inherit',
+              }}>
+              重试
+            </button>
           </div>
         )}
 
