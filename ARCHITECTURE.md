@@ -1,6 +1,6 @@
 # ARCHITECTURE.md — Emerald-client 架构总览
 
-Emerald-client 是 `qq-st-bot` 的新桌面客户端。它不拥有角色记忆、调度、工具、情绪判断等核心数据；这些都属于 `D:\ai\qq-st-bot\`。客户端负责把后端的陪伴系统可视化：聊天窗口、桌宠形象、用户交互、桌面动作执行和未来的感知 UI。
+Emerald-client 是 `Emerald-presence` 的新桌面客户端。它不拥有角色记忆、调度、工具、情绪判断等核心数据；这些都属于 `D:\ai\Emerald-presence\`。客户端负责把后端的陪伴系统可视化：聊天窗口、桌宠形象、用户交互、桌面动作执行和未来的感知 UI。
 
 ---
 
@@ -8,7 +8,7 @@ Emerald-client 是 `qq-st-bot` 的新桌面客户端。它不拥有角色记忆�
 
 ```text
 ┌──────────────────────────┐
-│ qq-st-bot                │
+│ Emerald-presence                │
 │ 记忆 / prompt / LLM       │
 │ 调度 / 工具 / 情绪状态     │
 │ HTTP + WebSocket          │
@@ -170,7 +170,7 @@ ChatPanel.send()
   → src/shared/api/backend.ts sendChat()
   → Tauri invoke("send_chat")
   → src-tauri/src/lib.rs reqwest POST /desktop/chat
-  → qq-st-bot pipeline
+  → Emerald-presence pipeline
   ← HTTP JSON { reply, emotion, affection, level, turn_id, msg_id }
   → ChatPanel 优先按 msg_id 与 WS channel_message / message_segments 对账
 ```
@@ -181,7 +181,7 @@ ChatPanel.send()
 ### 后端主动消息
 
 ```text
-qq-st-bot DesktopChannel
+Emerald-presence DesktopChannel
   → channels/desktop_ws.py push_message()
   → WS { type: "channel_message", content, msg_id }
   → src/shared/api/ws.ts
@@ -191,7 +191,7 @@ qq-st-bot DesktopChannel
 ### 桌面动作
 
 ```text
-qq-st-bot push_action_and_wait()
+Emerald-presence push_action_and_wait()
   → WS { type: "action", action, msg_id }
   → src/shared/api/ws.ts
   → 根据 action_type/type 调 Tauri command
@@ -218,7 +218,7 @@ ChatPanel mount
   → ChatPanel prepend / append 消息列表
 ```
 
-数据源：`qq-st-bot/data/event_log/{owner_qq}/*.md`（owner_qq 由后端从 config 读，接口路径不暴露）。
+数据源：`Emerald-presence/data/event_log/{owner_qq}/*.md`（owner_qq 由后端从 config 读，接口路径不暴露）。
 
 ### 日记列表和详情
 
@@ -238,7 +238,7 @@ Sidebar diary tab → SubDiary mount
   → panesApi.openPane() 打开浮动详情窗
 ```
 
-数据源：`qq-st-bot/data/yexuan_inner/diary/*.md`（只读，严格匹配 `YYYY-MM-DD.md`）。
+数据源：`Emerald-presence/data/yexuan_inner/diary/*.md`（只读，严格匹配 `YYYY-MM-DD.md`）。
 
 ### 头像和 Dream 背景存储
 
@@ -317,7 +317,7 @@ Dream 背景按 `day` / `night` 分开记录。旧版单字段 `dream_background
 - HTTP 不从浏览器 `fetch` 直连后端，而是走 Tauri command，避免 CORS 和代理问题。
 - Rust HTTP client 必须 `no_proxy()`。
 - WS 使用 Tauri Rust 原生 bridge，以 Bearer header 连接本机 `127.0.0.1`，前端不持有 token。
-- 业务数据以 `qq-st-bot` 为准；客户端状态只是 UI 镜像。
+- 业务数据以 `Emerald-presence` 为准；客户端状态只是 UI 镜像。
 - legacy 协议和 v1 目标协议要在文档里明确区分，不能混写。
 
 ---

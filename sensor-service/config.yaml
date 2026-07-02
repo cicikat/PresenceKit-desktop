@@ -1,6 +1,6 @@
 ﻿backend:
   url: "http://127.0.0.1:8080"
-  token: "YOUR_ADMIN_TOKEN"   # 与 qq-st-bot config.yaml admin_token 一致
+  token: "YOUR_ADMIN_TOKEN"   # 与 Emerald-presence config.yaml admin_token 一致
 
 sensor:
   # 每次采集窗口时长（秒），同时也是 POST 频率

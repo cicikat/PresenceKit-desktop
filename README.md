@@ -1,8 +1,8 @@
 # Emerald-client
 
-Tauri + React + TypeScript desktop client for the `qq-st-bot` AI companion system.
+Tauri + React + TypeScript desktop client for the `Emerald-presence` AI companion system.
 
-This repo is the new client being migrated from the old desktop projects. Core memory, prompt, scheduler, tools, and character data live in `D:\ai\qq-st-bot\`; this repo owns the desktop UI, local Tauri IPC bridge, WebSocket client, and future pet window.
+This repo is the new client being migrated from the old desktop projects. Core memory, prompt, scheduler, tools, and character data live in `D:\ai\Emerald-presence\`; this repo owns the desktop UI, local Tauri IPC bridge, WebSocket client, and future pet window.
 
 ## Start
 

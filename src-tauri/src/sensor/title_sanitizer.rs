@@ -58,7 +58,7 @@ const MAX_TITLE_LEN: usize = 80;
 
 /// 根据进程名(全部小写)推断应用类别
 ///
-/// 本表是粗粒度初稿,跟 qq-st-bot core/scheduler/sensor_events.py 的
+/// 本表是粗粒度初稿,跟 Emerald-presence core/scheduler/sensor_events.py 的
 /// APP_CATEGORY 设计一致但 schema 不同(后端那张表区分 work/leisure,
 /// 这里区分 Browser/Editor/Chat,职责不同)。
 ///
@@ -156,7 +156,7 @@ fn extract_domain(title: &str) -> String {
 /// 从编辑器 title 提取文件名
 ///
 /// 编辑器 title 通常形如 "ChatPanel.tsx - Emerald-client - Visual Studio Code"
-/// 或 "main.rs — src — qq-st-bot"。策略:
+/// 或 "main.rs — src — Emerald-presence"。策略:
 /// 1. 按分隔符 (" - " / " — " / " | ") 切分,取第一段
 /// 2. 第一段如果是路径形态(含 / 或 \),取最后一段
 /// 3. trim 空白

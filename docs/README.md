@@ -11,8 +11,8 @@
 
 相关外部项目：
 
-- 后端：`D:\ai\qq-st-bot\`
+- 后端：`D:\ai\Emerald-presence\`
 - 旧桌宠：`D:\ai\Emerald-desktop\`
 - UI 原型：`D:\ai\Emerald-desktopUI\`
 
-注意：当前桌面 v1 协议文档实际位于 `D:\ai\Emerald-desktop\docs\desktop-client-protocol.md`，不在 `qq-st-bot/docs/`。
+注意：当前桌面 v1 协议文档实际位于 `D:\ai\Emerald-desktop\docs\desktop-client-protocol.md`，不在 `Emerald-presence/docs/`。

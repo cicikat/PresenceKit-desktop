@@ -16,7 +16,7 @@
 
 ## P1：客户端和目标 v1 WS 协议不一致
 
-**位置**：`src/shared/api/ws.ts`、`src/shared/api/types.ts`、`D:\ai\qq-st-bot\channels\desktop_ws.py`
+**位置**：`src/shared/api/ws.ts`、`src/shared/api/types.ts`、`D:\ai\Emerald-presence\channels\desktop_ws.py`
 
 当前实际协议是 legacy：
 
@@ -100,8 +100,8 @@ Phase 2c+ 之后，ChatPanel 启动历史改走 `/chat-log/*` 接口，owner_qq 
 旧入口说明曾写：
 
 ```text
-D:\ai\qq-st-bot\docs\desktop-client-protocol.md
-D:\ai\qq-st-bot\docs\desktop-client-plan.md
+D:\ai\Emerald-presence\docs\desktop-client-protocol.md
+D:\ai\Emerald-presence\docs\desktop-client-plan.md
 ```
 
 当前实际同名文件在：
@@ -153,7 +153,7 @@ Header 右侧渲染：
 
 ## P2：日记 emotion 字段后端未产出，客户端已预留 UI，等后端扩展
 
-**位置**：`qq-st-bot/admin/routers/diary.py`、`src/windows/chat/components/SubDiary.tsx`
+**位置**：`Emerald-presence/admin/routers/diary.py`、`src/windows/chat/components/SubDiary.tsx`
 
 后端 `/diary/list` 和 `/diary/{date}` 的 `emotion` 字段当前统一返回 `null`。客户端的 filter tabs 和 entry 标签已按 `emotion !== null` 判空处理，不渲染空标签。
 
@@ -165,7 +165,7 @@ Header 右侧渲染：
 
 ## P2：Garden daily lifecycle 仅数据层手测，scheduler 端到端未实测
 
-**位置**：`qq-st-bot/core/garden/manager.py daily_check()`、`qq-st-bot/core/scheduler/triggers/garden_daily.py`、`qq-st-bot/core/scheduler/loop.py` `garden_daily` cooldown
+**位置**：`Emerald-presence/core/garden/manager.py daily_check()`、`Emerald-presence/core/scheduler/triggers/garden_daily.py`、`Emerald-presence/core/scheduler/loop.py` `garden_daily` cooldown
 
 Phase 2d.5e 完成时数据层在 REPL 单测全通过：
 
