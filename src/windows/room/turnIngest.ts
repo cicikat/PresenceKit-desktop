@@ -1,4 +1,5 @@
 import { normalizeChatDisplayText } from '../chat/chatDisplay';
+import type { PerformSpec } from '../../shared/api/types';
 
 /**
  * Transport-normalization layer (see cc-tasks/06-room-vn-bubble-stream-reveal.md).
@@ -13,11 +14,16 @@ import { normalizeChatDisplayText } from '../chat/chatDisplay';
  * - message_segments → sets `segments` on the matching turn (current or a recent one).
  *     Never restarts playback; it only swaps the text source Segmenter reads from.
  */
+export interface TurnSegment {
+  text: string;
+  perform?: PerformSpec;
+}
+
 export interface AssistantTurn {
   msgId: string;
   buffer: string;
   canonical: string | null;
-  segments: string[] | null;
+  segments: TurnSegment[] | null;
   streamClosed: boolean;
   done: boolean;
   startedAt: number;
@@ -63,7 +69,7 @@ export function turnFromChannelMessage(msgId: string, content: string, now: numb
   return { msgId, buffer: content, canonical: content, segments: null, streamClosed: true, done: true, startedAt: now };
 }
 
-export function applySegmentsToTurn(turn: AssistantTurn, msgId: string, segments: string[]): AssistantTurn {
+export function applySegmentsToTurn(turn: AssistantTurn, msgId: string, segments: TurnSegment[]): AssistantTurn {
   if (turn.msgId !== msgId || segments.length === 0) return turn;
   return { ...turn, segments };
 }
@@ -75,6 +81,9 @@ export function checkWatchdog(turn: AssistantTurn, now: number): AssistantTurn {
 
 export interface EffectiveParts {
   parts: string[];
+  /** Same length as `parts`; undefined where the segment carries no performance spec, and
+   * always all-undefined for the splitReply fallback path (plain text has no perform data). */
+  performs: (PerformSpec | undefined)[];
   /** Index of the still-growing segment, or -1 when every segment is closed (turn done). */
   openIdx: number;
 }
@@ -85,10 +94,11 @@ export interface EffectiveParts {
  * receiving text — everything before it is already closed.
  */
 export function effectiveParts(turn: AssistantTurn): EffectiveParts {
-  const raw = turn.segments && turn.segments.length > 0
+  const raw: TurnSegment[] = turn.segments && turn.segments.length > 0
     ? turn.segments
-    : splitReply(turn.canonical ?? turn.buffer);
-  const parts = raw.map(normalizeChatDisplayText);
+    : splitReply(turn.canonical ?? turn.buffer).map(text => ({ text }));
+  const parts = raw.map(s => normalizeChatDisplayText(s.text));
+  const performs = raw.map(s => s.perform);
   const openIdx = turn.done || parts.length === 0 ? -1 : parts.length - 1;
-  return { parts, openIdx };
+  return { parts, performs, openIdx };
 }

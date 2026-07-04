@@ -9,7 +9,7 @@ import { MorphController } from './morphController';
 import { MOOD_MORPHS, EXPR_KEYS } from './morphExpressions';
 import { getActiveDirective } from './avatarDirective';
 import { backendMoodToFrontend } from '../../shared/state/mood-mapping';
-import { saveRoomSettings } from '../../shared/room/roomSettings';
+import { saveRoomSettings, getCharacterCfg } from '../../shared/room/roomSettings';
 import type { RoomSettings } from '../../shared/room/roomSettings';
 import { BoneResolver, microNoise } from './boneResolver';
 import {
@@ -318,6 +318,7 @@ export function useRoomScene(
   const animatedBoneNamesRef = useRef<Set<string>>(new Set());
   const chestBasePosYRef   = useRef(0);
   const chestBaseScaleRef  = useRef(1);
+  const chestBaseRotXRef   = useRef(0);
   const shLBasePosYRef     = useRef(0);
   const shRBasePosYRef     = useRef(0);
 
@@ -372,10 +373,11 @@ export function useRoomScene(
   // sync physics slider/override changes to already-collected spring chains live (not gated on
   // placement mode: dragging the character's scale gizmo shouldn't block the gravity slider).
   useEffect(() => {
+    const physicsBones = getCharacterCfg(settings, settings.characterFile).physicsBones;
     applySpringSettings(
       springChainsRef.current,
-      settings.physicsBones?.overrides ?? {},
-      { ...DEFAULT_SPRING_PARAMS, ...settings.physicsBones?.default },
+      physicsBones?.overrides ?? {},
+      { ...DEFAULT_SPRING_PARAMS, ...physicsBones?.default },
     );
   }, [settings]);
 
@@ -445,19 +447,20 @@ export function useRoomScene(
         charGroup.add(model);
         morphRef.current = new MorphController(model);
         charBaseScaleRef.current = s.scaleMul > 0 ? model.scale.x / s.scaleMul : model.scale.x;
-        boneResolverRef.current = new BoneResolver(model, s.boneMap);
+        const charCfg = getCharacterCfg(s, s.characterFile);
+        boneResolverRef.current = new BoneResolver(model, charCfg.boneMap);
         const res = boneResolverRef.current.resolved;
         const hb = res.head ?? findHeadBone(model);
         headBoneRef.current = hb;
         if (hb) headBoneRestRef.current.copy(hb.rotation);
         const breathBone = res.chest ?? res.spine;
-        if (breathBone) { chestBasePosYRef.current = breathBone.position.y; chestBaseScaleRef.current = breathBone.scale.x; }
+        if (breathBone) { chestBasePosYRef.current = breathBone.position.y; chestBaseScaleRef.current = breathBone.scale.x; chestBaseRotXRef.current = breathBone.rotation.x; }
         if (res.shoulderL) shLBasePosYRef.current = res.shoulderL.position.y;
         if (res.shoulderR) shRBasePosYRef.current = res.shoulderR.position.y;
         springChainsRef.current = collectSpringChains(
           model,
-          s.physicsBones?.overrides,
-          { ...DEFAULT_SPRING_PARAMS, ...s.physicsBones?.default },
+          charCfg.physicsBones?.overrides,
+          { ...DEFAULT_SPRING_PARAMS, ...charCfg.physicsBones?.default },
         );
         const clipSetup = setupIdleClip(
           model, gltf.animations, hb, res.leftEye ?? null, res.rightEye ?? null,
@@ -828,19 +831,20 @@ export function useRoomScene(
         morphRef.current = new MorphController(model);
         const sm = initSettings.scaleMul;
         charBaseScaleRef.current = sm > 0 ? model.scale.x / sm : model.scale.x;
-        boneResolverRef.current = new BoneResolver(model, initSettings.boneMap);
+        const charCfg = getCharacterCfg(initSettings, initSettings.characterFile);
+        boneResolverRef.current = new BoneResolver(model, charCfg.boneMap);
         const res = boneResolverRef.current.resolved;
         const hb = res.head ?? findHeadBone(model);
         headBoneRef.current = hb;
         if (hb) headBoneRestRef.current.copy(hb.rotation);
         const breathBone = res.chest ?? res.spine;
-        if (breathBone) { chestBasePosYRef.current = breathBone.position.y; chestBaseScaleRef.current = breathBone.scale.x; }
+        if (breathBone) { chestBasePosYRef.current = breathBone.position.y; chestBaseScaleRef.current = breathBone.scale.x; chestBaseRotXRef.current = breathBone.rotation.x; }
         if (res.shoulderL) shLBasePosYRef.current = res.shoulderL.position.y;
         if (res.shoulderR) shRBasePosYRef.current = res.shoulderR.position.y;
         springChainsRef.current = collectSpringChains(
           model,
-          initSettings.physicsBones?.overrides,
-          { ...DEFAULT_SPRING_PARAMS, ...initSettings.physicsBones?.default },
+          charCfg.physicsBones?.overrides,
+          { ...DEFAULT_SPRING_PARAMS, ...charCfg.physicsBones?.default },
         );
         const clipSetup = setupIdleClip(
           model, gltf.animations, hb, res.leftEye ?? null, res.rightEye ?? null,
@@ -949,68 +953,111 @@ export function useRoomScene(
         }
       }
 
-      // Gesture layer: head bone rotations + lean_in z-offset (graceful if no Head bone)
+      // energy: perform-layer amplitude/speed scalar. 0.5 (no directive, or field absent) = the
+      // pre-Brief-12 baseline, so every `energyMul` below is a no-op until energy actually differs.
+      const energy = directive?.energy ?? 0.5;
+      const energyMul = 0.5 + energy;
+
+      // Gesture layer: head bone rotations only (graceful if no Head bone). lean_in/lean_back/
+      // shrink/straighten no longer live here — they're posture values, handled below.
       {
         const headBone = headBoneRef.current;
         const rest = headBoneRestRef.current;
-        const charGroup = charGroupRef.current;
-        if (directive?.gesture) {
+        if (directive?.gesture && headBone) {
           const elapsedMs = now - directive.receivedAt;
           const rampIn = Math.min(1, elapsedMs / 200);
-          const osc = Math.sin(elapsedMs * 0.015) * rampIn;
-          if (headBone) {
-            switch (directive.gesture) {
-              case 'nod':
-                headBone.rotation.x = rest.x + osc * 0.15;
-                headBone.rotation.y = rest.y;
-                headBone.rotation.z = rest.z;
-                break;
-              case 'shake':
-                headBone.rotation.x = rest.x;
-                headBone.rotation.y = rest.y + osc * 0.15;
-                headBone.rotation.z = rest.z;
-                break;
-              case 'tilt':
-                headBone.rotation.x = rest.x;
-                headBone.rotation.y = rest.y;
-                headBone.rotation.z = rest.z + rampIn * 0.18;
-                break;
-              default:
-                headBone.rotation.set(rest.x, rest.y, rest.z);
-            }
+          const osc = Math.sin(elapsedMs * 0.015) * rampIn * energyMul;
+          switch (directive.gesture) {
+            case 'nod':
+              headBone.rotation.x = rest.x + osc * 0.15;
+              headBone.rotation.y = rest.y;
+              headBone.rotation.z = rest.z;
+              break;
+            case 'shake':
+              headBone.rotation.x = rest.x;
+              headBone.rotation.y = rest.y + osc * 0.15;
+              headBone.rotation.z = rest.z;
+              break;
+            case 'tilt':
+            case 'tilt_r':
+              headBone.rotation.x = rest.x;
+              headBone.rotation.y = rest.y;
+              headBone.rotation.z = rest.z + rampIn * 0.18;
+              break;
+            case 'tilt_l':
+              headBone.rotation.x = rest.x;
+              headBone.rotation.y = rest.y;
+              headBone.rotation.z = rest.z - rampIn * 0.18;
+              break;
+            case 'dip':
+              headBone.rotation.x = rest.x + rampIn * 0.22;
+              headBone.rotation.y = rest.y;
+              headBone.rotation.z = rest.z;
+              break;
+            default:
+              headBone.rotation.set(rest.x, rest.y, rest.z);
           }
-          if (directive.gesture === 'lean_in' && charGroup) {
-            charGroup.position.z = -rampIn * 0.1;
-          }
-        } else {
+        } else if (headBone) {
           // Lerp head bone back to rest + micro-drift noise (folded into the target so the
-          // noise amplitude stays whatever it's set to, instead of accumulating every frame),
-          // and charGroup back to rest.
-          if (headBone) {
-            const driftX = rest.x + microNoise(t, 11) * 0.015;
-            const driftY = rest.y + microNoise(t, 23) * 0.020;
-            const driftZ = rest.z + microNoise(t, 37) * 0.010;
-            headBone.rotation.x += (driftX - headBone.rotation.x) * 0.1;
-            headBone.rotation.y += (driftY - headBone.rotation.y) * 0.1;
-            headBone.rotation.z += (driftZ - headBone.rotation.z) * 0.1;
+          // noise amplitude stays whatever it's set to, instead of accumulating every frame).
+          const driftX = rest.x + microNoise(t, 11) * 0.015;
+          const driftY = rest.y + microNoise(t, 23) * 0.020;
+          const driftZ = rest.z + microNoise(t, 37) * 0.010;
+          headBone.rotation.x += (driftX - headBone.rotation.x) * 0.1;
+          headBone.rotation.y += (driftY - headBone.rotation.y) * 0.1;
+          headBone.rotation.z += (driftZ - headBone.rotation.z) * 0.1;
+        }
+      }
+
+      // Posture layer (Brief 12 §6.2): charGroup z-lean + chest rotation + shoulder sink,
+      // inserted after gesture and before the breath/micro-anim pass below (which folds
+      // `postureChestRotXOffset` / `postureShoulderYOffset` into its own additive-vs-absolute
+      // write so the two layers don't stomp each other on the same bones).
+      let postureChestRotXOffset = 0;
+      let postureShoulderYOffset = 0;
+      {
+        const charGroup = charGroupRef.current;
+        if (directive?.posture && charGroup) {
+          const elapsedMs = now - directive.receivedAt;
+          const ramp = Math.min(1, elapsedMs / 300);
+          switch (directive.posture) {
+            case 'lean_in':
+              charGroup.position.z += (-ramp * 0.1 - charGroup.position.z) * 0.15;
+              postureChestRotXOffset = ramp * 0.06 * energyMul;
+              break;
+            case 'lean_back':
+              charGroup.position.z += (ramp * 0.06 - charGroup.position.z) * 0.15;
+              postureChestRotXOffset = -ramp * 0.06 * energyMul;
+              break;
+            case 'shrink':
+              charGroup.position.z += (ramp * 0.02 - charGroup.position.z) * 0.15;
+              postureShoulderYOffset = -ramp * 0.02 * energyMul;
+              postureChestRotXOffset = ramp * 0.03 * energyMul;
+              break;
+            case 'straighten':
+              charGroup.position.z += (0 - charGroup.position.z) * 0.15;
+              postureShoulderYOffset = ramp * 0.006 * energyMul;
+              postureChestRotXOffset = -ramp * 0.025 * energyMul;
+              break;
           }
-          if (charGroup) {
-            charGroup.position.z += (0 - charGroup.position.z) * 0.1;
-          }
+        } else if (charGroup) {
+          charGroup.position.z += (0 - charGroup.position.z) * 0.1;
         }
       }
 
       // Procedural micro-animation: breath (chest) + head/shoulder noise.
       // Bones driven by the idle clip get `+=` (mixer already wrote this frame's base value,
       // so the offset doesn't accumulate); bones with no clip track use the existing
-      // rest-value + offset absolute write, since mixer never touches them.
+      // rest-value + offset absolute write, since mixer never touches them. Posture's
+      // chest-rotation / shoulder-Y offsets fold into the same additive-vs-absolute branch —
+      // the absolute-write case reuses the base refs captured at model load time.
       {
         const res = boneResolverRef.current?.resolved;
         const animatedBoneNames = animatedBoneNamesRef.current;
         if (res) {
           const moodEntry = MOOD_TABLE[currentMood];
           const period = ((moodEntry?.breathePeriod as number | undefined) ?? 4200) / 1000;
-          const depth  = (moodEntry?.breatheDepth  as number | undefined) ?? 0.022;
+          const depth  = ((moodEntry?.breatheDepth  as number | undefined) ?? 0.022) * (0.7 + 0.6 * energy);
           const breath = Math.sin((t / period) * Math.PI * 2);
           const breathBone = res.chest ?? res.spine;
           if (breathBone) {
@@ -1021,18 +1068,20 @@ export function useRoomScene(
               breathBone.scale.x += scaleOffset;
               breathBone.scale.y += scaleOffset;
               breathBone.scale.z += scaleOffset;
+              breathBone.rotation.x += postureChestRotXOffset;
             } else {
               breathBone.position.y = chestBasePosYRef.current + posOffset;
               breathBone.scale.setScalar(chestBaseScaleRef.current + scaleOffset);
+              breathBone.rotation.x = chestBaseRotXRef.current + postureChestRotXOffset;
             }
           }
           if (res.shoulderL) {
-            const offset = microNoise(t, 5) * 0.004;
+            const offset = microNoise(t, 5) * 0.004 + postureShoulderYOffset;
             if (animatedBoneNames.has(res.shoulderL.name)) res.shoulderL.position.y += offset;
             else res.shoulderL.position.y = shLBasePosYRef.current + offset;
           }
           if (res.shoulderR) {
-            const offset = microNoise(t, 9) * 0.004;
+            const offset = microNoise(t, 9) * 0.004 + postureShoulderYOffset;
             if (animatedBoneNames.has(res.shoulderR.name)) res.shoulderR.position.y += offset;
             else res.shoulderR.position.y = shRBasePosYRef.current + offset;
           }

@@ -2,9 +2,21 @@
 // Segments are a read-only view; the raw reply remains the source of truth.
 export type NarrativeSegmentType = 'say' | 'do' | 'env' | 'feel' | 'narration';
 
+// Sentence-level performance mapping (cc-tasks/12-perform-intent-mapping-client.md §1).
+// All fields optional; a null/absent channel means "don't override the mood baseline layer".
+export interface PerformSpec {
+  expression?: string | null;
+  intensity?: number;
+  head?: 'nod' | 'shake' | 'tilt_l' | 'tilt_r' | 'dip' | null;
+  posture?: 'lean_in' | 'lean_back' | 'shrink' | 'straighten' | null;
+  gaze?: 'user' | 'away' | 'down' | 'wander' | null;
+  energy?: number;
+}
+
 export interface NarrativeSegment {
   type: NarrativeSegmentType;
   text: string;
+  perform?: PerformSpec;
 }
 
 export type ServerMessage =

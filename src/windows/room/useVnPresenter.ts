@@ -12,6 +12,7 @@ import {
   effectiveParts,
 } from './turnIngest';
 import type { AssistantTurn } from './turnIngest';
+import { setLocalPerform, clearLocalPerform } from './avatarDirective';
 
 // ── constants (see cc-tasks/06-room-vn-bubble-stream-reveal.md) ────────────────
 
@@ -66,6 +67,7 @@ export function useVnPresenter(options: VnPresenterOptions = {}): VnPresenterAPI
 
   const activeMsgIdRef = useRef<string | null>(null);
   const statusRef = useRef<Status>('idle');
+  const firedPerformRef = useRef<{ msgId: string; segIdx: number } | null>(null);
   const segIdxRef = useRef(0);
   const revealedRef = useRef(0);
   const dwellDeadlineRef = useRef(0);
@@ -130,7 +132,9 @@ export function useVnPresenter(options: VnPresenterOptions = {}): VnPresenterAPI
     });
 
     const unSeg = wsClient.on('message_segments', ({ segments, msg_id }) => {
-      const parts = (segments ?? []).map(s => s.text).filter(s => s.trim());
+      const parts = (segments ?? [])
+        .filter(s => s.text.trim())
+        .map(s => ({ text: s.text, perform: s.perform }));
       if (parts.length === 0) return;
       const cur = turnRef.current;
       if (cur && cur.msgId === msg_id) {
@@ -183,6 +187,8 @@ export function useVnPresenter(options: VnPresenterOptions = {}): VnPresenterAPI
           turnRef.current = null;
           activeMsgIdRef.current = null;
           statusRef.current = 'idle';
+          firedPerformRef.current = null;
+          clearLocalPerform();
         }
       }
 
@@ -202,7 +208,7 @@ export function useVnPresenter(options: VnPresenterOptions = {}): VnPresenterAPI
         return;
       }
 
-      const { parts, openIdx } = effectiveParts(t);
+      const { parts, performs, openIdx } = effectiveParts(t);
       if (parts.length === 0) {
         // stream started but no delta has arrived yet
         if (snapshotRef.current.bubble !== null || snapshotRef.current.talking) {
@@ -220,6 +226,17 @@ export function useVnPresenter(options: VnPresenterOptions = {}): VnPresenterAPI
 
       segIdxRef.current = Math.min(segIdxRef.current, parts.length - 1);
       const segIdx = segIdxRef.current;
+
+      // Sentence-level performance trigger: fires once per (turn, segment) as soon as the
+      // segment becomes current — covers a fresh turn starting at segment 0, dwell/click
+      // advancing to the next segment, and segments arriving late (swap re-fires for whatever
+      // segment is current post-swap, since firedPerformRef was never set for it pre-swap).
+      const fired = firedPerformRef.current;
+      if ((!fired || fired.msgId !== t.msgId || fired.segIdx !== segIdx) && performs[segIdx]) {
+        setLocalPerform(performs[segIdx]!);
+        firedPerformRef.current = { msgId: t.msgId, segIdx };
+      }
+
       const currentPart = parts[segIdx];
       revealedRef.current = Math.min(revealedRef.current, currentPart.length);
       const isOpenSeg = segIdx === openIdx;
@@ -275,7 +292,10 @@ export function useVnPresenter(options: VnPresenterOptions = {}): VnPresenterAPI
     };
 
     rafId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafId);
+    return () => {
+      cancelAnimationFrame(rafId);
+      clearLocalPerform();
+    };
   }, [advanceOrFade]);
 
   // ── click handling (galgame semantics) ────────────────────────────────────────
