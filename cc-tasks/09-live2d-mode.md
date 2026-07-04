@@ -20,6 +20,8 @@
 
 `tauri.conf.json` 的 `csp` 为 `null`，本地 script 注入无 CSP 障碍，不需要改配置。
 
+> **注（Brief 10）**：渲染库已由 Brief 10 升级为 `pixi.js@7.4.3` + `pixi-live2d-display-lipsyncpatch@0.5.0-ls-8`（支持 Cubism 3–5），上表「渲染库」「Ticker」两行为历史版本记录，当前实际版本见 `package.json`；铁律（动态 import、Cubism Core 独立注入）不变。
+
 **茶茶侧 checklist（资产，代码开工前就能做）**：
 1. 从 Live2D 官网（Cubism SDK for Web）下载 `live2dcubismcore.min.js`，放到 `public/live2d/core/live2dcubismcore.min.js`。
 2. 模型按目录放置：`public/live2d/models/<模型名>/`，目录内含 `*.model3.json` 及其贴图/moc3/motions/expressions。每个模型一个目录。

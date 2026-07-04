@@ -10,6 +10,10 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@pixi/core": "7.4.3",
+    "@pixi/display": "7.4.3",
+    "@pixi/graphics": "7.4.3",
+    "@pixi/text": "7.4.3",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-dialog": "^2",
     "@tauri-apps/plugin-http": "^2.5.9",
@@ -17,8 +21,8 @@
     "@tauri-apps/plugin-opener": "^2",
     "@types/three": "^0.185.0",
     "date-fns": "^4.1.0",
-    "pixi-live2d-display": "0.4.0",
-    "pixi.js": "6.5.10",
+    "pixi-live2d-display-lipsyncpatch": "0.5.0-ls-8",
+    "pixi.js": "7.4.3",
     "react": "^19.1.0",
     "react-colorful": "^5.7.0",
     "react-dom": "^19.1.0",

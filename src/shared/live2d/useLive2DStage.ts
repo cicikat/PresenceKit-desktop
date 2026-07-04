@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import * as PIXI from 'pixi.js';
-// IMPORTANT: pixi-live2d-display/cubism4 must NOT be statically imported — its module body
+// IMPORTANT: pixi-live2d-display-lipsyncpatch/cubism4 must NOT be statically imported — its module body
 // throws "Could not find Cubism 4 runtime" when window.Live2DCubismCore is absent, which
 // kills the entire bundle at startup (main.tsx imports this file transitively via RoomWindow).
 // It is loaded lazily via loadCubism4() below, strictly AFTER ensureCubismCore().
 // eslint-disable-next-line import/no-unresolved -- subpath export, resolved via package.json "exports"
-import type { Live2DModel } from 'pixi-live2d-display/cubism4';
+import type { Live2DModel } from 'pixi-live2d-display-lipsyncpatch/cubism4';
 import { ensureCubismCore } from './cubismCore';
 import { listLive2DModels } from './live2dAssets';
 import {
@@ -20,11 +20,11 @@ import { backendMoodToFrontend } from '../state/mood-mapping';
 import { getActiveDirective } from '../../windows/room/avatarDirective';
 import { microNoise } from '../../windows/room/boneResolver';
 
-// pixi-live2d-display's Cubism4 core model type isn't exported from the package's public
+// pixi-live2d-display-lipsyncpatch's Cubism4 core model type isn't exported from the package's public
 // entry point — treated as `any` throughout this file. // TODO: type
 type CoreModel = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-type Cubism4Module = typeof import('pixi-live2d-display/cubism4');
+type Cubism4Module = typeof import('pixi-live2d-display-lipsyncpatch/cubism4');
 
 let cubism4: Cubism4Module | null = null;
 let cubism4Promise: Promise<Cubism4Module> | null = null;
@@ -33,7 +33,7 @@ let cubism4Promise: Promise<Cubism4Module> | null = null;
 async function loadCubism4(): Promise<Cubism4Module> {
   await ensureCubismCore();
   if (!cubism4Promise) {
-    cubism4Promise = import('pixi-live2d-display/cubism4').then(m => {
+    cubism4Promise = import('pixi-live2d-display-lipsyncpatch/cubism4').then(m => {
       m.Live2DModel.registerTicker(PIXI.Ticker as unknown as Parameters<typeof m.Live2DModel.registerTicker>[0]);
       cubism4 = m;
       return m;
@@ -106,6 +106,27 @@ function getParamValue(coreModel: CoreModel, id: string): number | null {
   }
 }
 
+/**
+ * A parameter's neutral value is its model-defined DEFAULT, not 0 — e.g. ParamEyeLOpen
+ * defaults to 1 (eyes open). Resetting expression params to 0 drives the eyes shut.
+ */
+function getParamDefault(coreModel: CoreModel, id: string): number {
+  const idx = getParamIndex(coreModel, id);
+  if (idx === -1) return 0;
+  try {
+    if (typeof coreModel.getParameterDefaultValue === 'function') {
+      const v = coreModel.getParameterDefaultValue(idx) as number;
+      if (Number.isFinite(v)) return v;
+    }
+  } catch { /* fall through */ }
+  try {
+    const dv = coreModel.getModel?.()?.parameters?.defaultValues;
+    const v = dv?.[idx];
+    if (typeof v === 'number' && Number.isFinite(v)) return v;
+  } catch { /* fall through */ }
+  return id === 'ParamEyeLOpen' || id === 'ParamEyeROpen' ? 1 : 0;
+}
+
 export interface UseLive2DStageOptions {
   getMood: () => Mood;
   getTalking: () => boolean;
@@ -142,7 +163,9 @@ export function useLive2DStage(
   const eyeBallXRef = useRef(0);
   const eyeBallYRef = useRef(0);
   const leanScaleRef = useRef(1);
+  const postureBodyAngleRef = useRef(0);
   const paramStateRef = useRef<Map<string, number>>(new Map());
+  const paramDefaultsRef = useRef<Map<string, number>>(new Map());
   const lastExpressionRef = useRef<string | null>(null);
   const lastMotionMoodRef = useRef<Mood | null>(null);
   const reactionPulseRef = useRef<{ kind: 'shy' | 'nuzzle'; startedAt: number } | null>(null);
@@ -181,21 +204,21 @@ export function useLive2DStage(
       }
 
       if (transparent) {
-        a.renderer.backgroundAlpha = 0;
+        a.renderer.background.alpha = 0;
         return;
       }
 
       if (settings.bgKind === 'color') {
-        a.renderer.backgroundAlpha = 1;
+        a.renderer.background.alpha = 1;
         const parsed = parseInt(settings.bgColor.replace('#', ''), 16);
-        if (Number.isFinite(parsed)) a.renderer.backgroundColor = parsed;
+        if (Number.isFinite(parsed)) a.renderer.background.color = parsed;
         return;
       }
 
       if (settings.bgKind === 'image' && settings.bgImage) {
-        a.renderer.backgroundAlpha = 1;
-        PIXI.Texture.fromURL(settings.bgImage)
-          .then(texture => {
+        a.renderer.background.alpha = 1;
+        PIXI.Assets.load(settings.bgImage)
+          .then((texture: PIXI.Texture) => {
             if (disposed || settingsRef.current.bgImage !== settings.bgImage) return;
             const sprite = new PIXI.Sprite(texture);
             const { clientWidth: w, clientHeight: h } = mount;
@@ -238,6 +261,7 @@ export function useLive2DStage(
       lastExpressionRef.current = null;
       lastMotionMoodRef.current = null;
       paramStateRef.current.clear();
+      paramDefaultsRef.current.clear();
 
       if (!dir) {
         setError('还没有选择 Live2D 模型：请在设置里选择，或把模型放到 public/live2d/models/<模型名>/');
@@ -319,14 +343,26 @@ export function useLive2DStage(
       const availableNames = expressionManager?.definitions.map(d => d.Name) ?? [];
       const matched = matchExpressionName(availableNames, mood);
 
+      // Reset target for a param is its model default (NOT 0 — eyes default open at 1);
+      // mood poses blend from the default toward the table value by `intensity`.
+      const paramDefault = (key: string): number => {
+        let d = paramDefaultsRef.current.get(key);
+        if (d === undefined) {
+          d = getParamDefault(coreModel, key);
+          paramDefaultsRef.current.set(key, d);
+        }
+        return d;
+      };
+
       if (matched) {
         if (lastExpressionRef.current !== matched) {
           modelRef.current?.expression(matched).catch(() => {});
           lastExpressionRef.current = matched;
         }
         for (const key of ALL_PARAM_KEYS) {
-          const cur = paramStateRef.current.get(key) ?? 0;
-          const next = lerp(cur, 0, 0.08);
+          const def = paramDefault(key);
+          const cur = paramStateRef.current.get(key) ?? def;
+          const next = lerp(cur, def, 0.08);
           paramStateRef.current.set(key, next);
           setParam(coreModel, key, next);
         }
@@ -334,8 +370,10 @@ export function useLive2DStage(
         lastExpressionRef.current = null;
         const targets = MOOD_PARAMS[mood] ?? {};
         for (const key of ALL_PARAM_KEYS) {
-          const target = (targets[key] ?? 0) * intensity;
-          const cur = paramStateRef.current.get(key) ?? 0;
+          const def = paramDefault(key);
+          const moodTarget = targets[key];
+          const target = moodTarget === undefined ? def : def + (moodTarget - def) * intensity;
+          const cur = paramStateRef.current.get(key) ?? def;
           const next = lerp(cur, target, 0.08);
           paramStateRef.current.set(key, next);
           setParam(coreModel, key, next);
@@ -427,6 +465,9 @@ export function useLive2DStage(
       setParam(coreModel, 'ParamEyeBallY', eyeBallYRef.current);
 
       // ── gesture (head angle pulses) + idle micro-noise fallback ──
+      // energy: perform-layer amplitude scalar (Brief 12 §6.3); 0.5 (no directive) = baseline.
+      const energy = directive?.energy ?? 0.5;
+      const energyMul = 0.5 + energy;
       let gestureAngleX = 0;
       let gestureAngleY = 0;
       let gestureAngleZ = 0;
@@ -434,7 +475,7 @@ export function useLive2DStage(
       if (directive?.gesture) {
         const elapsedMs = performance.now() - directive.receivedAt;
         const rampIn = Math.min(1, elapsedMs / 200);
-        const osc = Math.sin(elapsedMs * 0.015) * rampIn;
+        const osc = Math.sin(elapsedMs * 0.015) * rampIn * energyMul;
         switch (directive.gesture) {
           case 'nod':
             gestureAngleY = osc * 12;
@@ -443,7 +484,14 @@ export function useLive2DStage(
             gestureAngleX = osc * 12;
             break;
           case 'tilt':
+          case 'tilt_r':
             gestureAngleZ = rampIn * 10;
+            break;
+          case 'tilt_l':
+            gestureAngleZ = -rampIn * 10;
+            break;
+          case 'dip':
+            gestureAngleY = -rampIn * 10;
             break;
           case 'lean_in':
             leanScaleTarget = 1 + rampIn * 0.03;
@@ -457,6 +505,17 @@ export function useLive2DStage(
         const s = baseScaleRef.current * leanScaleRef.current;
         modelRef.current.scale.set(s, s);
       }
+
+      // ── posture (Brief 12 §7, P2/best-effort): lean_in/lean_back → ParamBodyAngleX (no-op if
+      // the model lacks that param); shrink/straighten have no Live2D-side mapping yet — silently
+      // ignored. // TODO: shrink/straighten body-angle mapping once a suitable param is settled on.
+      let postureBodyAngleXTarget = 0;
+      if (directive?.posture === 'lean_in' || directive?.posture === 'lean_back') {
+        const postureRamp = Math.min(1, (performance.now() - directive.receivedAt) / 300);
+        postureBodyAngleXTarget = (directive.posture === 'lean_in' ? 8 : -8) * postureRamp * energyMul;
+      }
+      postureBodyAngleRef.current = lerp(postureBodyAngleRef.current, postureBodyAngleXTarget, 0.1);
+      setParam(coreModel, 'ParamBodyAngleX', postureBodyAngleRef.current);
 
       setParam(coreModel, 'ParamAngleX', gazeAngleXRef.current + gestureAngleX);
       setParam(coreModel, 'ParamAngleY', gazeAngleYRef.current + gestureAngleY);
@@ -513,7 +572,7 @@ export function useLive2DStage(
     baseScaleRef.current = scale;
     model.scale.set(scale, scale);
     const transparent = opts.transparent || settings.bgKind === 'transparent';
-    app.renderer.backgroundAlpha = transparent ? 0 : app.renderer.backgroundAlpha;
+    app.renderer.background.alpha = transparent ? 0 : app.renderer.background.alpha;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opts.zoom, opts.transparent]);
 
