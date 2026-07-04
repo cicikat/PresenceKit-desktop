@@ -1,6 +1,7 @@
 ﻿backend:
   url: "http://127.0.0.1:8080"
-  token: "YOUR_ADMIN_TOKEN"   # 与 Emerald-presence config.yaml admin_token 一致
+  token: "YOUR_ADMIN_TOKEN"   # 填 sensor profile token（仅 sensor.write 权限），由后端 POST /auth/tokens 签发；
+                              # 不要复用桌面/admin token（legacy admin secret 仍兼容，但不建议在此使用）
 
 sensor:
   # 每次采集窗口时长（秒），同时也是 POST 频率

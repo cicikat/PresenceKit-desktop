@@ -155,7 +155,7 @@ class WSClient {
       if (message.includes('AUTHENTICATION_FAILED')) {
         this.authFailed = true;
         this._setState('auth-failed');
-        console.warn('[ws] 认证失败，请检查本地 token 配置');
+        console.warn('[ws] WebSocket 认证被拒：token 无效或缺少 ws.desktop scope');
         return;
       }
       this._setState('disconnected');

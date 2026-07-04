@@ -1,7 +1,7 @@
 {
   "backendBase": "http://127.0.0.1:8080",
   "websocketBase": "ws://127.0.0.1:8080/ws/desktop",
-  "adminToken": "replace-with-local-admin-token",
+  "adminToken": "replace-with-desktop-profile-token (emt_...; legacy admin secret still accepted)",
   "sensorConfig": {
     "enabled": true,
     "windowSeconds": 30,

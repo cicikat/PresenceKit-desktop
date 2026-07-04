@@ -35,6 +35,17 @@ def post_realtime(
             proxies=_NO_PROXY,
             timeout=timeout,
         )
+        # 401 = token 无效；403 = token 有效但缺 sensor.write scope（后端语义，见
+        # Emerald-presence/docs/security.md）。分开记日志，便于排查「token 发错 profile」。
+        if resp.status_code == 401:
+            logger.warning("[bot_client] 认证失败(401)：token 无效，请检查 sensor profile token 配置: %s", url)
+            return False
+        if resp.status_code == 403:
+            logger.warning(
+                "[bot_client] 权限不足(403)：token 缺少 sensor.write scope，检查该 token 的 profile 是否为 sensor: %s",
+                resp.text,
+            )
+            return False
         resp.raise_for_status()
         logger.debug("[bot_client] POST ok, ts=%s", payload.get("ts"))
         return True

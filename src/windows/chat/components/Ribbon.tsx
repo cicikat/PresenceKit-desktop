@@ -103,7 +103,7 @@ export function Ribbon({
               connState === 'connecting'
                 ? '连接中'
                 : connState === 'auth-failed'
-                  ? '认证失败，请检查本地 token 配置'
+                  ? 'WebSocket 认证被拒：token 无效或缺少 ws.desktop scope'
                   : '已断开，正在重连'
             }
             style={{

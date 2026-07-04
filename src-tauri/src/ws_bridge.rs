@@ -11,7 +11,9 @@ use tokio_tungstenite::tungstenite::{
     Message,
 };
 
-const AUTH_ERROR: &str = "AUTHENTICATION_FAILED: 认证失败，请检查本地 token 配置";
+// 后端 WS 升级拒绝(close 1008)时无法区分 401(token 无效)/403(scope 不足)，
+// 文案保持中性，不臆断具体原因。
+const AUTH_ERROR: &str = "AUTHENTICATION_FAILED: WebSocket 认证被拒：token 无效或缺少 ws.desktop scope";
 // Backend close-frame protocol contract. Until the backend defines a dedicated
 // close code, only this exact normal-close tuple means "do not reconnect".
 const REPLACED_BY_NEW_CONNECTION_CODE: u16 = 1000;
@@ -242,7 +244,8 @@ mod tests {
 
     #[test]
     fn authentication_error_is_safe() {
-        assert!(AUTH_ERROR.contains("认证失败"));
+        assert!(AUTH_ERROR.contains("认证被拒"));
+        assert!(AUTH_ERROR.contains("ws.desktop"));
         assert!(!AUTH_ERROR.contains("Bearer"));
         assert!(!AUTH_ERROR.contains("secret-value"));
     }

@@ -47,22 +47,39 @@ fn authorized_request(
     request.bearer_auth(&cfg.admin_token)
 }
 
-fn safe_http_error(status: reqwest::StatusCode) -> String {
-    if matches!(status.as_u16(), 401 | 403) {
-        format!(
-            "HTTP {}: 认证失败，请检查本地 token 配置",
-            status.as_u16()
-        )
-    } else {
-        format!("HTTP {}", status.as_u16())
+// 401 = token 无效；403 = token 有效但 scope 不足（后端语义，见 docs/security.md）。
+// 403 的 detail 里含所需 scope，可以展示给用户；401/403 文案均不得包含 token 值。
+fn safe_http_error_message(status: reqwest::StatusCode, detail: Option<&str>) -> String {
+    match status.as_u16() {
+        401 => "HTTP 401: 认证失败，请检查本地 token 配置".to_string(),
+        403 => format!(
+            "HTTP 403: token 权限不足（缺少 scope，检查该 token 的 profile 是否为 desktop）：{}",
+            detail.unwrap_or("未知")
+        ),
+        429 => "HTTP 429: 认证失败次数过多，来源 IP 已被临时限制，稍后重试".to_string(),
+        other => format!("HTTP {other}"),
     }
+}
+
+async fn safe_http_error(response: reqwest::Response) -> String {
+    let status = response.status();
+    let detail = if status.as_u16() == 403 {
+        response
+            .json::<serde_json::Value>()
+            .await
+            .ok()
+            .and_then(|v| v.get("detail").and_then(|d| d.as_str()).map(|s| s.to_string()))
+    } else {
+        None
+    };
+    safe_http_error_message(status, detail.as_deref())
 }
 
 async fn require_success(response: reqwest::Response) -> Result<reqwest::Response, String> {
     if response.status().is_success() {
         Ok(response)
     } else {
-        Err(safe_http_error(response.status()))
+        Err(safe_http_error(response).await)
     }
 }
 
@@ -526,7 +543,7 @@ async fn send_chat(app: tauri::AppHandle, message: String) -> Result<serde_json:
         .map_err(|e| e.to_string())?;
 
     if !resp.status().is_success() {
-        return Err(safe_http_error(resp.status()));
+        return Err(safe_http_error(resp).await);
     }
 
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
@@ -788,7 +805,7 @@ async fn upload_document(
     let status = resp.status();
     if !status.is_success() {
         // 分类错误码,前端按 status 数字处理文案
-        return Err(safe_http_error(status));
+        return Err(safe_http_error(resp).await);
     }
 
     resp.json::<serde_json::Value>()
@@ -820,7 +837,7 @@ async fn transcribe_audio(app: tauri::AppHandle, audio_b64: String) -> Result<se
 
     let status = resp.status();
     if !status.is_success() {
-        return Err(safe_http_error(status));
+        return Err(safe_http_error(resp).await);
     }
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
@@ -1044,7 +1061,7 @@ async fn dream_get_settings(app: tauri::AppHandle) -> Result<serde_json::Value, 
         .map_err(|_| "Dream settings 请求失败".to_string())?;
     let status = resp.status();
     if !status.is_success() {
-        return Err(safe_http_error(status));
+        return Err(safe_http_error(resp).await);
     }
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
@@ -1079,7 +1096,7 @@ async fn dream_update_settings(
         .map_err(|_| "Dream settings 更新失败".to_string())?;
     let status = resp.status();
     if !status.is_success() {
-        return Err(safe_http_error(status));
+        return Err(safe_http_error(resp).await);
     }
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
@@ -1095,7 +1112,7 @@ async fn get_prompt_assets(app: tauri::AppHandle) -> Result<serde_json::Value, S
         .await
         .map_err(|e| e.to_string())?;
     if !resp.status().is_success() {
-        return Err(safe_http_error(resp.status()));
+        return Err(safe_http_error(resp).await);
     }
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
@@ -1150,7 +1167,7 @@ async fn desktop_wake(app: tauri::AppHandle, last_seen: Option<f64>) -> Result<s
         .await
         .map_err(|_| "Desktop wake 请求失败".to_string())?;
     if !resp.status().is_success() {
-        return Err(safe_http_error(resp.status()));
+        return Err(safe_http_error(resp).await);
     }
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
@@ -1413,7 +1430,7 @@ async fn activity_reading_start(app: tauri::AppHandle, file_path: String) -> Res
 
     let status = resp.status();
     if !status.is_success() {
-        return Err(safe_http_error(status));
+        return Err(safe_http_error(resp).await);
     }
 
     resp.json::<serde_json::Value>()
@@ -1566,7 +1583,7 @@ async fn activity_reading_add_book(app: tauri::AppHandle, file_path: String) -> 
 
     let status = resp.status();
     if !status.is_success() {
-        return Err(safe_http_error(status));
+        return Err(safe_http_error(resp).await);
     }
 
     resp.json::<serde_json::Value>()
@@ -1658,7 +1675,7 @@ async fn group_list(app: tauri::AppHandle) -> Result<serde_json::Value, String> 
         .send()
         .await
         .map_err(|e| e.to_string())?;
-    if !resp.status().is_success() { return Err(safe_http_error(resp.status())); }
+    if !resp.status().is_success() { return Err(safe_http_error(resp).await); }
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
 
@@ -1682,7 +1699,7 @@ async fn group_create(
         .send()
         .await
         .map_err(|e| e.to_string())?;
-    if !resp.status().is_success() { return Err(safe_http_error(resp.status())); }
+    if !resp.status().is_success() { return Err(safe_http_error(resp).await); }
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
 
@@ -1695,7 +1712,7 @@ async fn group_get(app: tauri::AppHandle, id: String) -> Result<serde_json::Valu
         .send()
         .await
         .map_err(|e| e.to_string())?;
-    if !resp.status().is_success() { return Err(safe_http_error(resp.status())); }
+    if !resp.status().is_success() { return Err(safe_http_error(resp).await); }
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
 
@@ -1709,7 +1726,7 @@ async fn group_send(app: tauri::AppHandle, id: String, message: String) -> Resul
         .send()
         .await
         .map_err(|e| e.to_string())?;
-    if !resp.status().is_success() { return Err(safe_http_error(resp.status())); }
+    if !resp.status().is_success() { return Err(safe_http_error(resp).await); }
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
 
@@ -1726,7 +1743,7 @@ async fn group_history(app: tauri::AppHandle, id: String, before: Option<f64>) -
         .send()
         .await
         .map_err(|e| e.to_string())?;
-    if !resp.status().is_success() { return Err(safe_http_error(resp.status())); }
+    if !resp.status().is_success() { return Err(safe_http_error(resp).await); }
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
 
@@ -1739,7 +1756,7 @@ async fn group_settings_get(app: tauri::AppHandle, id: String) -> Result<serde_j
         .send()
         .await
         .map_err(|e| e.to_string())?;
-    if !resp.status().is_success() { return Err(safe_http_error(resp.status())); }
+    if !resp.status().is_success() { return Err(safe_http_error(resp).await); }
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
 
@@ -1753,7 +1770,7 @@ async fn group_settings_patch(app: tauri::AppHandle, id: String, settings: serde
         .send()
         .await
         .map_err(|e| e.to_string())?;
-    if !resp.status().is_success() { return Err(safe_http_error(resp.status())); }
+    if !resp.status().is_success() { return Err(safe_http_error(resp).await); }
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
 
@@ -1766,7 +1783,7 @@ async fn group_delete(app: tauri::AppHandle, id: String) -> Result<(), String> {
         .send()
         .await
         .map_err(|e| e.to_string())?;
-    if !resp.status().is_success() { return Err(safe_http_error(resp.status())); }
+    if !resp.status().is_success() { return Err(safe_http_error(resp).await); }
     Ok(())
 }
 
@@ -1780,7 +1797,7 @@ async fn group_patch_roster(app: tauri::AppHandle, id: String, roster: Vec<Strin
         .send()
         .await
         .map_err(|e| e.to_string())?;
-    if !resp.status().is_success() { return Err(safe_http_error(resp.status())); }
+    if !resp.status().is_success() { return Err(safe_http_error(resp).await); }
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
 
@@ -2071,7 +2088,7 @@ pub fn run() {
                 if let Ok(client) = http_client() {
                     match authorized_request(&activate_cfg, client.post(&activate_url)).json(&serde_json::json!({})).send().await {
                         Ok(response) if response.status().is_success() => eprintln!("[lib] desktop_activate ok"),
-                        Ok(response) => eprintln!("[lib] desktop_activate warning: {}", safe_http_error(response.status())),
+                        Ok(response) => eprintln!("[lib] desktop_activate warning: {}", safe_http_error(response).await),
                         Err(_) => eprintln!("[lib] desktop_activate warning: request failed"),
                     }
                 }
@@ -2266,19 +2283,33 @@ mod auth_tests {
     }
 
     #[test]
-    fn auth_http_errors_are_safe() {
-        for status in [reqwest::StatusCode::UNAUTHORIZED, reqwest::StatusCode::FORBIDDEN] {
-            let message = safe_http_error(status);
-            assert_eq!(
-                message,
-                format!(
-                    "HTTP {}: 认证失败，请检查本地 token 配置",
-                    status.as_u16()
-                )
-            );
-            assert!(!message.contains("Bearer"));
-            assert!(!message.contains("secret-value"));
-        }
+    fn invalid_token_reports_401_without_leaking_token() {
+        let message = safe_http_error_message(reqwest::StatusCode::UNAUTHORIZED, None);
+        assert_eq!(message, "HTTP 401: 认证失败，请检查本地 token 配置");
+        assert!(!message.contains("Bearer"));
+        assert!(!message.contains("secret-value"));
+    }
+
+    #[test]
+    fn scope_denied_reports_403_with_detail_but_no_token() {
+        let message = safe_http_error_message(
+            reqwest::StatusCode::FORBIDDEN,
+            Some("need: hardware"),
+        );
+        assert!(message.contains("scope"));
+        assert!(message.contains("desktop"));
+        assert!(message.contains("need: hardware"));
+        assert!(!message.contains("Bearer"));
+        assert!(!message.contains("secret-value"));
+    }
+
+    #[test]
+    fn rate_limited_reports_429_without_leaking_token() {
+        let message = safe_http_error_message(reqwest::StatusCode::TOO_MANY_REQUESTS, None);
+        assert!(message.contains("429"));
+        assert!(message.contains("认证失败次数过多"));
+        assert!(!message.contains("Bearer"));
+        assert!(!message.contains("secret-value"));
     }
 
     #[test]

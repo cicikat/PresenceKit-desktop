@@ -4,6 +4,8 @@ use tauri::Manager;
 
 const DEFAULT_BACKEND_BASE: &str = "http://127.0.0.1:8080";
 const DEFAULT_WEBSOCKET_BASE: &str = "ws://127.0.0.1:8080/ws/desktop";
+// 填 desktop profile token（`emt_…`，由后端 `POST /auth/tokens` 签发，profile=desktop）；
+// legacy admin secret（旧 god token）仍兼容，字段名/env var 名不变。见后端仓 docs/security.md。
 const DEFAULT_ADMIN_TOKEN_PLACEHOLDER: &str = "CHANGE_ME";
 const DEFAULT_BOT_USER_ID: &str = "";
 const DEFAULT_SENSOR_WINDOW_SECONDS: u32 = 30;
@@ -34,6 +36,7 @@ impl Default for SensorConfig {
 pub struct ClientConfig {
     pub backend_base: String,
     pub websocket_base: String,
+    // 字段名不变（配置兼容层）：填 desktop profile token（`emt_…`）或 legacy admin secret。
     pub admin_token: String,
     pub sensor_config: SensorConfig,
     pub bot_user_id: String,
@@ -44,6 +47,8 @@ impl Default for ClientConfig {
         Self {
             backend_base: DEFAULT_BACKEND_BASE.into(),
             websocket_base: DEFAULT_WEBSOCKET_BASE.into(),
+            // env var 名不变：EMERALD_ADMIN_TOKEN 现在填 desktop profile token（`emt_…`），
+            // legacy admin secret 仍兼容。
             admin_token: std::env::var("EMERALD_ADMIN_TOKEN")
                 .unwrap_or_else(|_| DEFAULT_ADMIN_TOKEN_PLACEHOLDER.to_string()),
             sensor_config: SensorConfig::default(),
