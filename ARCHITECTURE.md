@@ -36,6 +36,20 @@ Emerald-client 是 `Emerald-presence` 的新桌面客户端。它不拥有角色
 
 原则：后端是 single source of truth，客户端只显示和执行。客户端可以有本地 UI 状态，但不能把 mood、activity、presence 变成第二套业务真值。
 
+### 鉴权：三类 token
+
+后端（Emerald-presence）鉴权已升级为多 token + scope 分层（SEC-AUTH-2），default-deny，legacy
+admin secret 永远等价于 `admin` scope（零破坏迁移）。本仓触达的三类持有者：
+
+- **桌面 Tauri 客户端**（本仓 `src-tauri/`）：`desktop` profile token（`emt_…`），字段仍叫
+  `admin_token` / env `EMERALD_ADMIN_TOKEN`，不改名。
+- **手机 sensor-service**（本仓 `sensor-service/`）：`sensor` profile token，仅 `sensor.write`
+  权限，不得复用桌面/admin token。
+- **设备侧**（仓外，ESP32 固件等）：各自最小 scope token。
+
+Token 由后端 `POST /auth/tokens` 签发；scope 表、profile 表、管理操作见后端仓
+`docs/security.md`。
+
 ---
 
 ## 当前实现快照
@@ -148,7 +162,7 @@ WebSocket 在 `src/shared/api/ws.ts`：
 Tauri Rust 在 `src-tauri/src/lib.rs`：
 
 - `send_chat`：POST `/desktop/chat`，使用 `reqwest.no_proxy()`；响应保留 assistant `turn_id` / `msg_id`。
-- HTTP client 普通请求超时为 15 秒，chat / wake / Dream 等 LLM 请求超时为 120 秒；401/403 统一返回 `HTTP 401/403: 认证失败，请检查本地 token 配置`。
+- HTTP client 普通请求超时为 15 秒，chat / wake / Dream 等 LLM 请求超时为 120 秒；401（token 无效）与 403（scope 不足，detail 含所需 scope）分开报错，文案均不含 token 值，见 `safe_http_error`。
 - `ws_bridge.rs`：原生 WebSocket Bearer 鉴权、收发桥接和 URL query token 清洗。
 - `load_history`：GET `/memory/{user_id}/short-term`，使用 Bearer token。
 - `load_garden_state`：GET `/garden/state`，使用 Bearer token。

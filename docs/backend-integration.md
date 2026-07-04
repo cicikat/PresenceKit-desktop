@@ -54,7 +54,7 @@ config/client.local.json
 
 兼容说明：旧的 AppData `sensor_config.json` 仍可作为 sensor 兼容配置来源；新的 `config/client.local.json` 优先级更高，并同时覆盖 HTTP base、WS base、admin token 和 sensor 配置。
 
-Rust/Tauri HTTP client 统一显式禁用代理并设置超时：普通请求 15 秒，chat / wake / Dream 等 LLM 路径 120 秒。使用共享安全错误处理的受保护路径以稳定的 `HTTP <status>` 格式返回错误；401/403 返回 `HTTP 401/403: 认证失败，请检查本地 token 配置`，不包含 token 或响应正文。
+Rust/Tauri HTTP client 统一显式禁用代理并设置超时：普通请求 15 秒，chat / wake / Dream 等 LLM 路径 120 秒。使用共享安全错误处理（`safe_http_error`）的受保护路径按后端 SEC-AUTH-2 语义区分错误：401（token 无效）返回 `HTTP 401: 认证失败，请检查本地 token 配置`；403（token 有效但 scope 不足）返回 `HTTP 403: token 权限不足（缺少 scope，检查该 token 的 profile 是否为 desktop）：<detail>`，detail 为后端透传的所需 scope；429（认证失败限速）返回 `HTTP 429: 认证失败次数过多，来源 IP 已被临时限制，稍后重试`。以上文案均不包含 token 值。
 
 ---
 
@@ -745,6 +745,27 @@ ws://127.0.0.1:8080/ws/desktop
 ```
 
 同一 assistant 回复的 HTTP `turn_id` / `msg_id`、`channel_message.msg_id` 和 `message_segments.msg_id` 相同。`message_segments` 只更新已关联的消息气泡；先到达时由 ChatPanel 暂存。
+
+**句级表演意图映射**（cc-tasks/12-perform-intent-mapping-client.md，配对 `Emerald-presence` cc-tasks/20）：`segments[]` 的每个元素从 `{type, text}` 扩展为可选携带 `perform`：
+
+```jsonc
+{
+  "type": "say",
+  "text": "才、才没有等你很久呢",
+  "perform": {                  // 可选字段；整体缺失 = 无表演标注
+    "expression": "happy",      // 9 词汇之一（同 avatar_directive）| null=不覆盖基调层
+    "intensity": 0.7,           // 0~1，缺省 0.6
+    "head": "tilt_r",           // nod|shake|tilt_l|tilt_r|dip|null
+    "posture": "lean_in",       // lean_in|lean_back|shrink|straighten|null
+    "gaze": "away",             // user|away|down|wander|null
+    "energy": 0.4               // 0~1 幅度/速度总缩放，缺省 0.5
+  }
+}
+```
+
+`perform` 内字段均可缺省、未知字段忽略、非法值按无效处理。旧后端（无 `perform`）与旧客户端（不识别 `perform`）都零回归。
+
+客户端本地注入（`src/windows/room/avatarDirective.ts`）：VN presenter 在气泡 reveal 到对应句时调用 `setLocalPerform(spec)` 把该句的 perform 写入 `ActiveDirective`（`origin: 'local'`），段落结束/turn 淡出/组件卸载时调用 `clearLocalPerform()`。WS 推来的 `avatar_directive`（mood 基调层插播）与本地句级表演共用同一个 `ActiveDirective` 槽位，遵循 **last-writer-wins**：谁最后写入 `_active` 谁生效；`clearLocalPerform()` 只清除 `origin === 'local'` 的状态，不会误清 WS 指令。
 
 桌面动作：
 
