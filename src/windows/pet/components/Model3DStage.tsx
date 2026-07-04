@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import type { PetRendererProps } from '../../../shared/pet/petRenderer';
 import { useCharacterRig } from '../../../shared/room3d/useCharacterRig';
-import { loadRoomSettings, subscribeRoomSettings } from '../../../shared/room/roomSettings';
+import { loadRoomSettings, subscribeRoomSettings, getCharacterCfg } from '../../../shared/room/roomSettings';
 import { getUIPref, onUIPrefChange } from '../../../shared/uiPreferences';
 import { getActiveDirective } from '../../room/avatarDirective';
 import type { Mood } from '../../../shared/state/store';
@@ -23,7 +23,7 @@ export function Model3DStage({ snapshot }: PetRendererProps) {
   const prevTextUpdatedAt = useRef(0);
 
   const characterUrl = `/room/character/${encodeURIComponent(settings.characterFile)}`;
-  const { charGroup, animate, onNewSpeech } = useCharacterRig(characterUrl, settings.boneMap);
+  const { charGroup, animate, onNewSpeech } = useCharacterRig(characterUrl, getCharacterCfg(settings, settings.characterFile).boneMap);
 
   // Subscribe to room settings (for character file / boneMap changes)
   useEffect(() => subscribeRoomSettings(setSettings), []);

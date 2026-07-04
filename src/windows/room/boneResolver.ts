@@ -10,16 +10,18 @@ export function microNoise(t: number, seed: number): number {
   );
 }
 
-// Default bone name candidates per role (Rigify DEF- prefix + common naming)
+// Default bone name candidates per role (Rigify DEF- prefix + common naming, with
+// Auto-Rig Pro deform-bone names appended as further fallback — ARP export uses
+// lowercase `.x`/`.l`/`.r` suffixes instead of Rigify's `DEF-`/`.L`/`.R`).
 // Only used when boneMap does not specify the role explicitly.
 const DEFAULT_CANDIDATES: Record<BoneRole, string[]> = {
-  head:      ['DEF-spine.006', 'DEF-spine.005', 'DEF-head', 'head', 'Head'],
-  chest:     ['DEF-spine.003', 'DEF-spine.002', 'chest', 'Chest', 'spine.003'],
-  spine:     ['DEF-spine.001', 'DEF-spine', 'spine', 'Spine'],
-  shoulderL: ['DEF-shoulder.L', 'shoulder.L', 'DEF-clavicle.L', 'LeftShoulder'],
-  shoulderR: ['DEF-shoulder.R', 'shoulder.R', 'DEF-clavicle.R', 'RightShoulder'],
-  leftEye:   ['DEF-eye.L', 'eye.L', 'LeftEye'],
-  rightEye:  ['DEF-eye.R', 'eye.R', 'RightEye'],
+  head:      ['DEF-spine.006', 'DEF-spine.005', 'DEF-head', 'head', 'Head', 'head.x'],
+  chest:     ['DEF-spine.003', 'DEF-spine.002', 'chest', 'Chest', 'spine.003', 'spine_02.x', 'spine_03.x'],
+  spine:     ['DEF-spine.001', 'DEF-spine', 'spine', 'Spine', 'spine_01.x'],
+  shoulderL: ['DEF-shoulder.L', 'shoulder.L', 'DEF-clavicle.L', 'LeftShoulder', 'shoulder.l'],
+  shoulderR: ['DEF-shoulder.R', 'shoulder.R', 'DEF-clavicle.R', 'RightShoulder', 'shoulder.r'],
+  leftEye:   ['DEF-eye.L', 'eye.L', 'LeftEye', 'eye.l', 'c_eye.l'],
+  rightEye:  ['DEF-eye.R', 'eye.R', 'RightEye', 'eye.r', 'c_eye.r'],
 };
 
 export class BoneResolver {
@@ -38,6 +40,11 @@ export class BoneResolver {
         if (this.byName.has(cand)) { this.resolved[role] = this.byName.get(cand); break; }
       }
     });
+    if (import.meta.env.DEV) {
+      const roles = Object.keys(DEFAULT_CANDIDATES) as BoneRole[];
+      const summary = roles.map(role => `${role}→${this.resolved[role]?.name ?? '(none)'}`).join(', ');
+      console.log('[room] bone roles:', summary);
+    }
   }
 
   names(): string[] { return [...this.byName.keys()]; }

@@ -4,6 +4,7 @@ import {
   saveRoomSettings,
   DEFAULT_ROOM_SETTINGS,
   subscribeRoomSettings,
+  getCharacterCfg,
 } from '../../../shared/room/roomSettings';
 import type { RoomSettings, Framing, LightCfg, RoomLights, RoomProp } from '../../../shared/room/roomSettings';
 import { listRoomCharacters, listRoomScenes, listRoomPropCategories, listRoomPropFiles } from '../../../shared/room/roomAssets';
@@ -169,6 +170,20 @@ export function CallSettingsPage() {
     const pos = [...(settings.lights[key].pos ?? [0, 0, 0])] as [number, number, number];
     pos[idx] = v;
     patchLightCfg(key, { pos });
+  }
+
+  function patchPhysicsGravity(v: number) {
+    const file = settings.characterFile;
+    const charCfg = getCharacterCfg(settings, file);
+    patch({
+      perCharacter: {
+        ...settings.perCharacter,
+        [file]: {
+          ...charCfg,
+          physicsBones: { ...charCfg.physicsBones, default: { ...charCfg.physicsBones?.default, gravity: v } },
+        },
+      },
+    });
   }
 
   function handleReset() {
@@ -450,16 +465,11 @@ export function CallSettingsPage() {
         </div>
       </div>
 
-      <Row label="物理强度" hint="整体重力/摆动强度；0 完全关闭该物理">
+      <Row label="物理强度" hint="整体重力/摆动强度；0 完全关闭该物理（按角色模型文件分别记忆）">
         <SliderNum
           min={0} max={1} step={0.05}
-          value={settings.physicsBones?.default?.gravity ?? DEFAULT_PHYS_GRAVITY}
-          onChange={v => patch({
-            physicsBones: {
-              ...settings.physicsBones,
-              default: { ...settings.physicsBones?.default, gravity: v },
-            },
-          })}
+          value={getCharacterCfg(settings, settings.characterFile).physicsBones?.default?.gravity ?? DEFAULT_PHYS_GRAVITY}
+          onChange={patchPhysicsGravity}
         />
       </Row>
 

@@ -13,7 +13,7 @@
 1. 单位 **1 = 1 米**，角色直立、**面朝 +Z**、Y 轴向上。
 2. 文件丢进：角色 `public/room/character/`、场景 `public/room/scene/`、道具 `public/room/props/<类别>/`。
 3. 形态键**用规范英文名**（见 §3），做了就自动生效；只做了一部分也能跑。
-4. 想要"看你"的眼神：做 `eyeLookLeft/Right/Up/Down` 四个形态键；想要转头/呼吸/肩动，绑骨后在 `character.json` 的 `boneMap` 里把骨名映射给代码（见 §4，**不靠固定骨名**）。
+4. 想要"看你"的眼神：做 `eyeLookLeft/Right/Up/Down` 四个形态键；想要转头/呼吸/肩动，绑骨（Rigify / Auto-Rig Pro 均可）后在 `character.json` 的 `boneMap` 里把骨名映射给代码（见 §4，**不靠固定骨名**）。
 5. **头发/尾巴/飘带这类会晃动的部位，优先做骨骼 + 打「物理链」标记（见 §4.5），不要用形态键做飘动**——形态键只能循环播放，物理链才会跟着转头/动作自然甩动、有惯性。
 6. 加了**规范内**的形态键 → **不用改代码**；加**全新自定义**表情 → 写一行 `character.json` 绑定即可，**仍不用改代码**（见 §6）。
 
@@ -104,6 +104,8 @@ public/room/
 | `leftEye` / `rightEye` | 眼骨转眼（没有眼骨就用 §3.3 形态键 `eyeLook*`） | 可选 |
 
 ### 4.2 `character.json` 里的 boneMap（示例）
+
+Rigify 命名：
 ```json
 {
   "boneMap": {
@@ -117,7 +119,23 @@ public/room/
   }
 }
 ```
-> 不写 boneMap 时，代码会按一组默认候选名（Rigify `DEF-spine.006/.005`、`DEF-spine.003`、`DEF-shoulder.L/R`、`DEF-eye.L/R` 及 `Head`/`Chest` 等常见名）**尽力**匹配；匹配不到的角色相关效果静默跳过，不报错。**最稳妥还是照控制台打印的真实骨名显式写 boneMap。**
+
+Auto-Rig Pro（ARP）命名（实测导出骨名，小写 `.x`/`.l`/`.r` 后缀）：
+```json
+{
+  "boneMap": {
+    "head": "head.x",
+    "chest": "spine_02.x",
+    "spine": "spine_01.x",
+    "shoulderL": "shoulder.l",
+    "shoulderR": "shoulder.r",
+    "leftEye": "eye.l",
+    "rightEye": "eye.r"
+  }
+}
+```
+
+> 不写 boneMap 时，代码会按一组默认候选名尽力匹配——Rigify 候选（`DEF-spine.006/.005`、`DEF-spine.003`、`DEF-shoulder.L/R`、`DEF-eye.L/R` 及 `Head`/`Chest` 等常见名）在前，ARP 候选（`head.x`、`spine_02.x`/`spine_03.x`、`spine_01.x`、`shoulder.l/r`、`eye.l/r`、`c_eye.l/r`）追加在后，两套互不冲突；匹配不到的角色相关效果静默跳过，不报错。**最稳妥还是照控制台打印的真实骨名显式写 boneMap**——ARP 导出骨名以实际控制台打印为准，若与上表有出入按真实名补齐。
 
 ### 4.3 最小可用
 - 只想要"看你"：映射 `head`（+ 可选眼骨，或用 §3.3 眼形态键）即可。
@@ -139,8 +157,9 @@ public/room/
    - `phys_stiffness`（刚度，0~1，越低越软越飘，默认约 0.15）
    - `phys_damping`（阻尼，0~1，越低甩得越久，默认约 0.85）
    - `phys_gravity`（重力影响，默认约 0.3，让发梢有自然下垂趋势）
-4. 如果是 Rigify 生成的骨架：给 metarig 里的 hair 骨设 `rigify_type = basic.super_copy`，正常生成；**自定义属性要打在 metarig 原始骨上**，Generate 时会带到生成的 `DEF-` 骨上。
-5. 导出 GLB 时，Blender glTF 导出面板要勾选 **「Custom Properties」**（默认可能没开），否则这些标记不会进 glb。
+4. **（仅 Rigify）** 如果是 Rigify 生成的骨架：给 metarig 里的 hair 骨设 `rigify_type = basic.super_copy`，正常生成；**自定义属性要打在 metarig 原始骨上**，Generate 时会带到生成的 `DEF-` 骨上。
+5. 导出 GLB 时，Blender glTF 导出面板要勾选 **「Custom Properties」**（默认可能没开），否则这些标记不会进 glb。**（ARP 注意）** ARP 骨架没有 metarig 转生成这一步，`phys_chain`（及可选 `phys_*` 参数）直接打在 ARP 骨架本身的头发形变骨上即可；导出后务必验证自定义属性存活——看下方 DEV 控制台 `[room] phys chains` 是否非空，为空说明属性被导出流程剥掉了，需要在导出面板寻找保留自定义属性的选项，或导出后二次处理补回。
+6. **（ARP spline 头发注意事项）** `phys_chain` 必须打在**形变链根骨**上（如 `spline_01.x`），不能打在 `c_spline_*` 控制骨上——控制骨在 glb 里通常没有子链，且勾选"仅导出形变骨骼"后控制骨本身会从导出结果里消失，链就找不到了。
 
 **运行时（three.js）自动做什么：**
 - 加载时遍历骨骼树，找到所有带 `phys_chain` 属性的根骨（读取的是 glTF node 的 `extras` → three 里的 `bone.userData`），沿子骨自动收集整条链。
@@ -191,6 +210,29 @@ public/room/
 { "idleClip": "idle_calm" }
 ```
 > 缺省走自动选择（`idle` 优先，否则第一个 clip）。设置面板暂不加可视化开关。
+
+### 4.7 句级表演层（意图映射）—— 对模型资产的要求：**零新增**
+
+> 系统会把 AI 回复里的 `*动作描写*`（她凑近了一些、歪着头看你…）在后端翻译成受控的表演指令，
+> 台词气泡显示到哪一句，角色就演到哪一句。详见 `cc-tasks/12-perform-intent-mapping-client.md`。
+
+对建模/绑骨侧来说**不需要任何新资产**，表演层完全复用你已经做好的东西：
+
+| 表演能力 | 用到的资产 | 缺了会怎样 |
+|---|---|---|
+| 句级表情（开心/低落/惊讶…） | §3.1 表情形态键 | 缺哪个表情键，哪个表情静默跳过（有 fallback 链） |
+| 点头/摇头/歪头（左右）/低头 | `boneMap.head` | 无头骨则头部手势全部跳过，其余照常 |
+| 视线（看你/移开/低垂/游移） | 眼骨或 §3.3 `eyeLook*` 形态键 | 都没有则视线不动 |
+| 前倾/后仰/蜷缩/挺直（posture） | `boneMap.chest`(或 `spine`) + `shoulderL/R` | 缺哪根骨该姿态少一分量，不报错 |
+| 动作能量（幅度/呼吸快慢缩放） | 上述同一批骨 | 同上 |
+
+要点：
+
+- **做全 §3 形态键 + §4 boneMap 四类骨，表演层就是满配**；已按本指南导出的模型直接受益，不用重导。
+- 表演与 §4.6 idle clip 的分层规则不变：头骨归程序化独占，posture 在胸/肩上以叠加方式写入，
+  与 clip、呼吸互不打架。
+- 表演指令来自后端映射（`Emerald-presence` 的 `performance_mapping` 配置，可整体关闭）；
+  关闭后角色回到"只有 mood 基调表情"的现状。
 
 ---
 
@@ -265,6 +307,7 @@ public/room/
 - [ ] 场景/道具真实米制、原点规范；场景灯可不导出。
 - [ ] 文件名纯 ASCII，放对文件夹。
 - [ ] 想覆盖默认表情/构图/物理参数 → 放 `character.json`。
+- [ ] **ARP（Auto-Rig Pro）导出**（已实测验证的路径）：用 Blender 通用 glTF 导出即可，但必须勾 **Data → Armature → 仅导出形变骨骼**（否则 300+ 控制/参考骨全进包，动画通道数爆炸）；动画只保留命名 `idle` 的单个 action；自定义属性经实测在通用导出下存活；ARP 控制器形状网格（`cs_user_*`）导出前排除；真实米制、面朝 +Z、Shape Keys / Custom Properties 勾选。
 
 ---
 

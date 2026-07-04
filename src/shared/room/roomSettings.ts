@@ -39,6 +39,11 @@ export interface RoomProp {
   scale: number;
 }
 
+export interface CharacterCfg {
+  boneMap?: BoneMap;
+  physicsBones?: PhysicsBonesCfg;
+}
+
 export interface RoomSettings {
   characterFile: string;
   sceneFile: string;
@@ -51,10 +56,23 @@ export interface RoomSettings {
   anchorMode: 'floor' | 'free';
   lights: RoomLights;
   props: RoomProp[];
+  // Legacy global fields — migrated into `perCharacter[characterFile]` on load (see `validate`).
+  // Kept optional here only so old persisted blobs still type-check through the migration path.
   boneMap?: BoneMap;
   physicsBones?: PhysicsBonesCfg;
+  perCharacter?: Record<string, CharacterCfg>;
   idleClip?: string;
   renderMode?: RenderMode;
+}
+
+// Rig config is keyed by characterFile so switching between models with incompatible
+// skeletons (e.g. Rigify ↔ Auto-Rig Pro) doesn't leak one model's boneMap/physicsBones
+// onto the other. Falls back to the legacy top-level fields for stores not yet migrated.
+export function getCharacterCfg(settings: RoomSettings, characterFile: string): CharacterCfg {
+  return settings.perCharacter?.[characterFile] ?? {
+    boneMap: settings.boneMap,
+    physicsBones: settings.physicsBones,
+  };
 }
 
 export const DEFAULT_LIGHTS: RoomLights = {
@@ -137,6 +155,17 @@ function validateSpringParamsCfg(raw: unknown): SpringParamsCfg | undefined {
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
+function validateBoneMap(raw: unknown): BoneMap | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const bm = raw as Record<string, unknown>;
+  const roles: BoneRole[] = ['head', 'chest', 'spine', 'shoulderL', 'shoulderR', 'leftEye', 'rightEye'];
+  const out: BoneMap = {};
+  for (const role of roles) {
+    if (typeof bm[role] === 'string' && bm[role]) out[role] = bm[role] as string;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 function validatePhysicsBones(raw: unknown): PhysicsBonesCfg | undefined {
   if (!raw || typeof raw !== 'object') return undefined;
   const r = raw as Record<string, unknown>;
@@ -154,10 +183,43 @@ function validatePhysicsBones(raw: unknown): PhysicsBonesCfg | undefined {
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
+function validateCharacterCfg(raw: unknown): CharacterCfg | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const r = raw as Record<string, unknown>;
+  const out: CharacterCfg = {};
+  const boneMap = validateBoneMap(r.boneMap);
+  if (boneMap) out.boneMap = boneMap;
+  const physicsBones = validatePhysicsBones(r.physicsBones);
+  if (physicsBones) out.physicsBones = physicsBones;
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function validatePerCharacter(raw: unknown): Record<string, CharacterCfg> | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const out: Record<string, CharacterCfg> = {};
+  for (const [file, v] of Object.entries(raw as Record<string, unknown>)) {
+    const cfg = validateCharacterCfg(v);
+    if (cfg) out[file] = cfg;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 function validate(raw: unknown): RoomSettings {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const characterFile = typeof r.characterFile === 'string' ? r.characterFile : DEFAULT_ROOM_SETTINGS.characterFile;
+
+  // One-time migration: legacy top-level boneMap/physicsBones (global, pre-perCharacter) get
+  // copied into perCharacter[characterFile] the first time this settings blob is validated,
+  // then dropped from the top level so they stop leaking onto other character files.
+  const legacyBoneMap = validateBoneMap(r.boneMap);
+  const legacyPhysicsBones = validatePhysicsBones(r.physicsBones);
+  const perCharacter = validatePerCharacter(r.perCharacter) ?? {};
+  if ((legacyBoneMap || legacyPhysicsBones) && !perCharacter[characterFile]) {
+    perCharacter[characterFile] = { boneMap: legacyBoneMap, physicsBones: legacyPhysicsBones };
+  }
+
   return {
-    characterFile: typeof r.characterFile === 'string' ? r.characterFile : DEFAULT_ROOM_SETTINGS.characterFile,
+    characterFile,
     sceneFile: typeof r.sceneFile === 'string' ? r.sceneFile : DEFAULT_ROOM_SETTINGS.sceneFile,
     framing: (['face', 'upperBody', 'full'] as const).includes(r.framing as Framing)
       ? (r.framing as Framing)
@@ -187,17 +249,11 @@ function validate(raw: unknown): RoomSettings {
     props: Array.isArray(r.props)
       ? (r.props as unknown[]).map(validateProp).filter((p): p is RoomProp => p !== null)
       : [],
-    boneMap: (() => {
-      if (!r.boneMap || typeof r.boneMap !== 'object') return undefined;
-      const bm = r.boneMap as Record<string, unknown>;
-      const roles: BoneRole[] = ['head', 'chest', 'spine', 'shoulderL', 'shoulderR', 'leftEye', 'rightEye'];
-      const out: BoneMap = {};
-      for (const role of roles) {
-        if (typeof bm[role] === 'string' && bm[role]) out[role] = bm[role] as string;
-      }
-      return Object.keys(out).length > 0 ? out : undefined;
-    })(),
-    physicsBones: validatePhysicsBones(r.physicsBones),
+    // Legacy fields are cleared once migrated into perCharacter (see above); getCharacterCfg()
+    // still falls back to reading them for callers holding an unmigrated blob (e.g. presets).
+    boneMap: perCharacter[characterFile] ? undefined : legacyBoneMap,
+    physicsBones: perCharacter[characterFile] ? undefined : legacyPhysicsBones,
+    perCharacter: Object.keys(perCharacter).length > 0 ? perCharacter : undefined,
     idleClip: typeof r.idleClip === 'string' && r.idleClip ? r.idleClip : undefined,
     renderMode: r.renderMode === 'live2d' ? 'live2d' : 'model3d',
   };
