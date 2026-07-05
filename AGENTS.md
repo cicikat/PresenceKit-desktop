@@ -1,4 +1,4 @@
-# AGENTS.md — Emerald-client 工作入口
+# AGENTS.md — PresenceKit-desktop 工作入口
 
 > 每次开始任务前必读。本文档描述 `D:\ai\Emerald-client\` 的真实边界、当前实现和文档入口。
 
@@ -6,7 +6,7 @@
 
 ## 项目定位
 
-Emerald-client 是 `Emerald-presence` AI 陪伴系统的新桌面客户端，技术栈是 Tauri + React + TypeScript。
+PresenceKit-desktop 是 `PresenceKit` AI 陪伴系统的新桌面客户端，技术栈是 Tauri + React + TypeScript。
 
 它目标上包含两个 view：
 

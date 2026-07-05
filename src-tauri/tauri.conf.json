@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "tauri-app",
+  "productName": "PresenceKit Desktop",
   "version": "0.1.0",
-  "identifier": "com.emerald-client.app",
+  "identifier": "com.presencekit.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",

@@ -215,15 +215,25 @@ pub fn load_client_config<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Clien
         }
     }
 
+    let mut hit_path: Option<PathBuf> = None;
     for path in local_config_candidates(app) {
         if let Some(content) = read_json(&path) {
             match serde_json::from_str::<PartialClientConfig>(&content) {
                 Ok(partial) => apply_partial(&mut cfg, partial),
                 Err(e) => eprintln!("[client_config] parse {} failed: {}", path.display(), e),
             }
+            hit_path = Some(path);
             break;
         }
     }
+
+    // P0-1: 诊断「clone 后接上原数据」问题的关键日志——client.local.json 可能命中
+    // 编译期烧死的绝对路径（CARGO_MANIFEST_DIR），与当前 exe 所在盘符无关。
+    match &hit_path {
+        Some(path) => eprintln!("[client_config] 命中配置文件: {}", path.display()),
+        None => eprintln!("[client_config] 未命中任何 client.local.json，使用内置默认值"),
+    }
+    eprintln!("[client_config] backendBase = {}", cfg.backend_base);
 
     cfg
 }

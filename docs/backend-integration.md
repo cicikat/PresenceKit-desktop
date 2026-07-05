@@ -219,7 +219,7 @@ Authorization: Bearer <admin_token>
 
 ```json
 {
-  "user_id": "1043484516",
+  "user_id": "<owner_user_id>",
   "history": [
     {"role": "user", "content": "...", "timestamp": 1748000000}
   ],
