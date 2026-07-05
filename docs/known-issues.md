@@ -247,6 +247,18 @@ ChatPanel 已实现 Dream active 期间按 `msg_id` park Reality `channel_messag
 
 ## 已修复
 
+### 桌宠话语不是主通道，两头不同步；输入框只能在聊天窗（2026-07-04，cc-tasks/14 §D）
+
+**原问题**：桌宠气泡不是独立通道——`ChatPanel.scheduleAssistantSegments`（`ChatPanel.tsx:927`）把回复第一句摘要（`summarizePetReply`，≤92 字）经 `pet://snapshot` 的 `latestAssistantText` 字段转发，依赖 ChatPanel 自身的挂载状态、去重守卫、梦境隐藏与 fallback 竞态；任意一环吞掉渲染，桌宠与聊天框就两头不同步。桌宠窗也没有输入框，无法主动发起对话。
+
+**修复**：新增 `pet://turn` 通道（`src/shared/pet/bridge.ts`，`PetTurnEvent` 判别联合覆盖 `channel_message`/`message_segments`/`message_stream_start|delta|end`）。转发层落在 `ChatWindow.tsx` 顶层（不在 `ChatPanel` 内，绕开其去重/梦境门控），原样订阅 `wsClient` 对应事件后 `emitPetTurn` 广播全文，不再摘要。`PetWindow.tsx` 监听 `pet://turn`，第一版只消费 `channel_message` 渲染全文气泡（展示时长 `max(6s, len*80ms)`），流式 reveal 留给 `windows/room/turnIngest.ts` 复用；`Model3DStage` 的开口动画同样改由 `pet://turn` 驱动（不再读 `snapshot.latestAssistantText`）。`PetSnapshot.latestAssistantText`、`summarizePetReply`、`ChatPanel` 内对应的 `publishPetSnapshot` 调用一并删除。桌宠窗底部新增输入框，回车走 `sendChat()`（HTTP Tauri command，任意窗口可用，桌宠语音热键已在用），回复经 WS → 主窗转发 → 气泡，同轮也会自然出现在主聊天历史。边界：主窗口关闭则桌宠也收不到转发（pet 由主窗口 spawn，可接受）。
+
+### 动向时间轴几分钟重复刷 / 桌宠气泡是摘要非原文 / 缩放跨窗不实时且会顶出头 / 房间切模型丢机位（2026-07-04，cc-tasks/14 §B-1/§C/§E/§F）
+
+**原问题**：`SubFlow.tsx` 时间轴插入判定用 `lastKeyRef`（含 mood）比对，组件重挂即归零必插一条，mood 轮询波动（30–60s）也会插新条；`PetWindow.tsx` 左上/右上渲染 mood/thinking/activity 文案，与聊天区重复且占地方；桌宠模型缩放滑杆 `setUIPref` 只 dispatch 同窗 `CustomEvent`，pet 窗收不到（WebView2 跨窗 storage 事件也不可靠），且正交相机 `camera.zoom` 绕视口中心缩放，放大后头出框；房间 `RoomSettings` 的 framing/fov/scale/offset/yaw/customView/props 是单一全局 blob，切模型或切场景会互相覆盖机位站位。
+
+**修复**：时间轴去重改为比对持久化 `timeline[0].text`（不含 mood），删 `lastKeyRef`；`PetWindow.tsx` 删除左上 mood/thinking 与右上 activity 文案及相关 `MOOD_ATMOSPHERES`/`pickAtmosphere` 轮换逻辑，仅保留 `REC`/`PINNED`；新增 `pet://prefs`（`src/shared/pet/bridge.ts`）广播事件，`ChatWindow.tsx` 滑杆变化时 `emitPetPrefs` 通知 pet 窗实时更新 `Model3DStage`/`Live2DStage` 的 zoom；两个 stage 缩放时保持模型头顶在视口投影位置不变（`Model3DStage` 用 `THREE.Box3` 算 `headY` 反解相机 `position.y`；`Live2DStage` 联动 `model.y` 抵消缩放增量）；`RoomSettings` 新增 `perPlacement: Record<'${sceneFile}|${characterFile}', PlacementCfg>`（`src/shared/room/roomSettings.ts`），`switchRoomPlacement()` 在 `CallSettingsPage.tsx` 切模型/场景时快照旧 key、应用新 key（无记录则保留当前值，legacy 兜底），`saveRoomSettings()` 每次保存同步回写当前 key。
+
 ### Sidebar tab 缺 ErrorBoundary，单 panel 渲染异常会拖垮整个聊天窗口（2026-07-02，cc-tasks/08 #3）
 
 **原问题**：全仓库没有任何 `ErrorBoundary`。`Sidebar.tsx` 里 `flow/garden/diary/status` tab 切换用普通三元表达式渲染，任意一个 panel（尤其 `SubStatus.tsx`，接了 sensor 轮询 + mood 订阅 + 多个 `setInterval`）渲染期抛异常时，React 会卸载整棵树，表现为“点进某个 tab 就黑屏”而不是只黑那一块。静态审查未发现 `SubStatus.tsx` 有明显的 undefined 调用（`MOOD_HUE`/`MOOD_LABEL_EN`/`engine.get()` 等都有 `?? fallback`），本次沙箱环境无法起 Tauri 窗口做浏览器目检，未能复现拿到真实堆栈，因此这次只做了止血。

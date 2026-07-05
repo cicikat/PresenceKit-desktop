@@ -44,6 +44,19 @@ export interface CharacterCfg {
   physicsBones?: PhysicsBonesCfg;
 }
 
+// Camera/staging fields that make sense per scene×character combination — see `perPlacement`.
+export interface PlacementCfg {
+  framing: Framing;
+  fovDeg: number;
+  scaleMul: number;
+  offset: [number, number, number];
+  yawDeg: number;
+  customView: { pos: [number, number, number]; target: [number, number, number] } | null;
+  anchorMode: 'floor' | 'free';
+  props: RoomProp[];
+  idleClip?: string;
+}
+
 export interface RoomSettings {
   characterFile: string;
   sceneFile: string;
@@ -63,6 +76,10 @@ export interface RoomSettings {
   perCharacter?: Record<string, CharacterCfg>;
   idleClip?: string;
   renderMode?: RenderMode;
+  // Remembered placement (framing/fov/scale/offset/yaw/customView/anchorMode/props/idleClip) per
+  // `${sceneFile}|${characterFile}` combo — see `switchRoomPlacement`/`saveRoomSettings`. A combo
+  // with no entry yet just keeps whatever the top-level fields currently are (legacy fallback).
+  perPlacement?: Record<string, PlacementCfg>;
 }
 
 // Rig config is keyed by characterFile so switching between models with incompatible
@@ -112,6 +129,14 @@ function isHex(s: unknown): s is string {
 function validatePos(v: unknown): [number, number, number] | undefined {
   if (!Array.isArray(v) || v.length !== 3 || !v.every(x => typeof x === 'number')) return undefined;
   return v as [number, number, number];
+}
+
+function validateCustomView(raw: unknown): { pos: [number, number, number]; target: [number, number, number] } | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const c = raw as Record<string, unknown>;
+  const pos = validatePos(c.pos);
+  const target = validatePos(c.target);
+  return pos && target ? { pos, target } : null;
 }
 
 function validateLightCfg(raw: unknown, def: LightCfg): LightCfg {
@@ -204,6 +229,35 @@ function validatePerCharacter(raw: unknown): Record<string, CharacterCfg> | unde
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
+function validatePlacementCfg(raw: unknown): PlacementCfg {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  return {
+    framing: (['face', 'upperBody', 'full'] as const).includes(r.framing as Framing)
+      ? (r.framing as Framing)
+      : DEFAULT_ROOM_SETTINGS.framing,
+    fovDeg: clamp(typeof r.fovDeg === 'number' ? r.fovDeg : DEFAULT_ROOM_SETTINGS.fovDeg, 20, 80),
+    scaleMul: clamp(typeof r.scaleMul === 'number' ? r.scaleMul : DEFAULT_ROOM_SETTINGS.scaleMul, 0.2, 3),
+    offset: validatePos(r.offset) ?? DEFAULT_ROOM_SETTINGS.offset,
+    yawDeg: clamp(typeof r.yawDeg === 'number' ? r.yawDeg : DEFAULT_ROOM_SETTINGS.yawDeg, -180, 180),
+    customView: validateCustomView(r.customView),
+    anchorMode: r.anchorMode === 'floor' ? 'floor' : 'free',
+    props: Array.isArray(r.props)
+      ? (r.props as unknown[]).map(validateProp).filter((p): p is RoomProp => p !== null)
+      : DEFAULT_ROOM_SETTINGS.props,
+    idleClip: typeof r.idleClip === 'string' && r.idleClip ? r.idleClip : undefined,
+  };
+}
+
+function validatePerPlacement(raw: unknown): Record<string, PlacementCfg> | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const out: Record<string, PlacementCfg> = {};
+  for (const [key, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (!v || typeof v !== 'object') continue;
+    out[key] = validatePlacementCfg(v);
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 function validate(raw: unknown): RoomSettings {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   const characterFile = typeof r.characterFile === 'string' ? r.characterFile : DEFAULT_ROOM_SETTINGS.characterFile;
@@ -233,17 +287,7 @@ function validate(raw: unknown): RoomSettings {
       return [0, 0, 0] as [number, number, number];
     })(),
     yawDeg: clamp(typeof r.yawDeg === 'number' ? r.yawDeg : DEFAULT_ROOM_SETTINGS.yawDeg, -180, 180),
-    customView: (() => {
-      const cv = r.customView;
-      if (!cv || typeof cv !== 'object') return null;
-      const c = cv as Record<string, unknown>;
-      if (!Array.isArray(c.pos) || c.pos.length !== 3 || !c.pos.every((v: unknown) => typeof v === 'number')) return null;
-      if (!Array.isArray(c.target) || c.target.length !== 3 || !c.target.every((v: unknown) => typeof v === 'number')) return null;
-      return {
-        pos: c.pos as [number, number, number],
-        target: c.target as [number, number, number],
-      };
-    })(),
+    customView: validateCustomView(r.customView),
     anchorMode: r.anchorMode === 'floor' ? 'floor' : 'free',
     lights: validateLights(r.lights),
     props: Array.isArray(r.props)
@@ -256,6 +300,7 @@ function validate(raw: unknown): RoomSettings {
     perCharacter: Object.keys(perCharacter).length > 0 ? perCharacter : undefined,
     idleClip: typeof r.idleClip === 'string' && r.idleClip ? r.idleClip : undefined,
     renderMode: r.renderMode === 'live2d' ? 'live2d' : 'model3d',
+    perPlacement: validatePerPlacement(r.perPlacement),
   };
 }
 
@@ -263,9 +308,53 @@ export function loadRoomSettings(): RoomSettings {
   return validate(getUIPref<unknown>(STORAGE_KEY, {}));
 }
 
+export function placementKey(sceneFile: string, characterFile: string): string {
+  return `${sceneFile}|${characterFile}`;
+}
+
+export function snapshotPlacement(settings: RoomSettings): PlacementCfg {
+  return {
+    framing: settings.framing,
+    fovDeg: settings.fovDeg,
+    scaleMul: settings.scaleMul,
+    offset: settings.offset,
+    yawDeg: settings.yawDeg,
+    customView: settings.customView,
+    anchorMode: settings.anchorMode,
+    props: settings.props,
+    idleClip: settings.idleClip,
+  };
+}
+
+// Snapshots the currently-active scene×model placement, then applies the target combo's
+// remembered placement — or leaves the top-level fields untouched if that combo has never
+// been configured (legacy fallback: behaves exactly like the pre-perPlacement global blob).
+export function switchRoomPlacement(
+  settings: RoomSettings,
+  next: { characterFile?: string; sceneFile?: string },
+): RoomSettings {
+  const oldKey = placementKey(settings.sceneFile, settings.characterFile);
+  const perPlacement = { ...(settings.perPlacement ?? {}), [oldKey]: snapshotPlacement(settings) };
+
+  const characterFile = next.characterFile ?? settings.characterFile;
+  const sceneFile = next.sceneFile ?? settings.sceneFile;
+  const newKey = placementKey(sceneFile, characterFile);
+
+  const base: RoomSettings = { ...settings, characterFile, sceneFile, perPlacement };
+  const remembered = perPlacement[newKey];
+  return remembered ? { ...base, ...remembered } : base;
+}
+
 export function saveRoomSettings(settings: RoomSettings): void {
-  setUIPref<RoomSettings>(STORAGE_KEY, settings);
-  window.dispatchEvent(new CustomEvent(CHANGE_EVENT, { detail: settings }));
+  // Keep the single source of truth (top-level fields) mirrored into perPlacement[currentKey]
+  // on every save, so in-place tweaks (offset drag, fov slider, …) aren't lost on the next switch.
+  const key = placementKey(settings.sceneFile, settings.characterFile);
+  const next: RoomSettings = {
+    ...settings,
+    perPlacement: { ...(settings.perPlacement ?? {}), [key]: snapshotPlacement(settings) },
+  };
+  setUIPref<RoomSettings>(STORAGE_KEY, next);
+  window.dispatchEvent(new CustomEvent(CHANGE_EVENT, { detail: next }));
 }
 
 export function subscribeRoomSettings(fn: (s: RoomSettings) => void): () => void {

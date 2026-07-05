@@ -180,9 +180,12 @@ src/windows/toy/
 
 文件：`src/windows/pet/`
 
-- `PetWindow.tsx`：独立透明置顶窗口入口，订阅 Chat 广播的 `PetSnapshot`，保留左键拖拽。
+- `PetWindow.tsx`：独立透明置顶窗口入口，订阅 Chat 广播的 `PetSnapshot`（mood/presence/thinking，
+  不含文案），保留左键拖拽；底部自带输入框，回车 `sendChat()`（Tauri command，任意窗口可用）。
 - `components/ParticleCanvas.tsx`：三种粒子视觉风格（流体光球 fluid / 散点粒子 scatter / 神经网络 network），
   均响应情绪配色 lerp 与 shy/nuzzle 视觉脉冲；通过 `styleRef` 订阅 `petVisualStyle` 设置实时切换。
+- `components/Model3DStage.tsx` / `components/Live2DStage.tsx`：3D/Live2D 桌宠渲染，缩放时保持模型头顶
+  在视口中的投影位置不变（不会放大后头出框）；开口动画由 `pet://turn` 驱动，不再读快照文案字段。
 - `usePetMouse.ts`：轮询 Tauri `cursorPosition()`，读取窗口位置、尺寸和显示器 work area，
   实现边界内的缓动躲避/靠近；Ctrl 钉住与拖拽期间停止自动移动。
 - `src/shared/pet/mouseSettings.ts`：持久化全局鼠标交互开关与随机靠近间隔。
@@ -190,6 +193,20 @@ src/windows/toy/
 
 当前只读状态映射：`惊讶` mood 触发害羞躲避。该映射不修改 StateEngine，也不新增另一份
 mood 真值。Chat 偏好 “3 · 桌宠” 页可切换粒子风格、关闭全部鼠标自动交互并调整随机靠近间隔。
+
+### 主窗口 ↔ 桌宠窗口的 Tauri 事件（`src/shared/pet/bridge.ts`）
+
+后端 WS 是单连接（新连接顶替旧连接），桌宠窗**不能**自己连 WS，否则会把主窗口踢下线；
+所有跨窗通道都走「主窗口转发」，桌宠窗只 `listen`，不直接碰 `wsClient`：
+
+| 事件 | 方向 | 载荷 | 说明 |
+|---|---|---|---|
+| `pet://snapshot` | Chat → Pet | `PetSnapshot`（mood/presence/thinking/updatedAt） | 状态快照，不含话语文案 |
+| `pet://ready` | Pet → Chat | 无 | 桌宠窗挂载后请求一次当前快照 |
+| `pet://prefs` | Chat → Pet | `{ model3dZoom?, live2dZoom? }` | Chat 侧缩放滑杆变化时广播，`Model3DStage`/`Live2DStage` 实时应用；跨窗 storage 事件在 WebView2 下不可靠，不能只靠 localStorage + `storage` 事件 |
+| `pet://turn` | Chat → Pet | `PetTurnEvent`（`channel_message` \| `message_segments` \| `message_stream_start\|delta\|end` 判别联合） | `ChatWindow.tsx` 顶层原样转发 `wsClient` 对应事件的全文，不摘要、不经过 `ChatPanel` 的去重/梦境门控；桌宠气泡与开口动画消费它，第一版只处理 `channel_message` |
+
+边界：主窗口关闭则桌宠也收不到转发（pet 由主窗口 spawn，可接受）。
 
 ## PresenceNagWindow
 
@@ -226,7 +243,7 @@ mood 真值。Chat 偏好 “3 · 桌宠” 页可切换粒子风格、关闭全
 - `focusPhrase`：7 个固定映射，均以 `，` 开头、`。` 结尾；无匹配时降级为 `。`
 - `idleTrailing`：`presence === 'idle'` 时追加 `（他安静了一会儿。）`
 
-Ring buffer：`useState<FlowEntry[]>` 长度上限 10；按 `text|mood` 联合键去重（连续相同不 push）；显示文本 = `activity.text`，activity 为 null 时用 `state.focus` 中文名兜底；30s 定时器驱动时间标签重渲染。
+Timeline：`localStorage`（key `subflow_timeline`）持久化，8 小时窗口内的条目全部保留；去重按持久化首条 `timeline[0].text` 比对（不含 mood——同文案不同心情不再刷新条目），而非 render-scoped 的 ref，天然抗组件重挂（切 Sidebar tab 等）触发的误插入；显示文本 = `activity.text`，activity 为 null 时用 `state.focus` 中文名兜底；30s 定时器驱动时间标签重渲染。
 
 数据源：
 

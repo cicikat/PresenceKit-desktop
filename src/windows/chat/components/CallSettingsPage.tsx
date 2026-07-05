@@ -5,6 +5,7 @@ import {
   DEFAULT_ROOM_SETTINGS,
   subscribeRoomSettings,
   getCharacterCfg,
+  switchRoomPlacement,
 } from '../../../shared/room/roomSettings';
 import type { RoomSettings, Framing, LightCfg, RoomLights, RoomProp } from '../../../shared/room/roomSettings';
 import { listRoomCharacters, listRoomScenes, listRoomPropCategories, listRoomPropFiles } from '../../../shared/room/roomAssets';
@@ -152,6 +153,14 @@ export function CallSettingsPage() {
     saveRoomSettings(next);
   }
 
+  // Switching model/scene snapshots the outgoing combo's placement (framing/fov/scale/offset/
+  // yaw/customView/props) and restores the target combo's remembered placement, if any.
+  function switchPlacement(next: { characterFile?: string; sceneFile?: string }) {
+    const updated = switchRoomPlacement(settings, next);
+    setSettings(updated);
+    saveRoomSettings(updated);
+  }
+
   function patchOffset(idx: 0 | 1 | 2, v: number) {
     const next: [number, number, number] = [...settings.offset] as [number, number, number];
     next[idx] = v;
@@ -243,7 +252,7 @@ export function CallSettingsPage() {
       <div>
         <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink)', marginBottom: 2 }}>模型与场景</div>
         <div className="mono" style={{ fontSize: 9.5, color: 'var(--ink-3)', letterSpacing: 1.1 }}>
-          扫描 public/room/ 下的 glb 文件，选择后即时替换
+          扫描 public/room/ 下的 glb 文件，选择后即时替换；机位/站位按「场景×模型」自动记忆，切回去自动复原
         </div>
       </div>
 
@@ -256,7 +265,7 @@ export function CallSettingsPage() {
       <Row label="角色模型" hint="public/room/character/ 下的 glb">
         <select
           value={settings.characterFile}
-          onChange={e => patch({ characterFile: e.target.value })}
+          onChange={e => switchPlacement({ characterFile: e.target.value })}
           style={{ ...selectStyle, width: 170 }}
         >
           {chars.length === 0 && <option value={settings.characterFile}>{settings.characterFile}</option>}
@@ -267,7 +276,7 @@ export function CallSettingsPage() {
       <Row label="场景模型" hint="public/room/scene/ 下的 glb">
         <select
           value={settings.sceneFile}
-          onChange={e => patch({ sceneFile: e.target.value })}
+          onChange={e => switchPlacement({ sceneFile: e.target.value })}
           style={{ ...selectStyle, width: 170 }}
         >
           {scenes.length === 0 && <option value={settings.sceneFile}>{settings.sceneFile}</option>}
@@ -476,9 +485,9 @@ export function CallSettingsPage() {
       <Divider />
 
       <div>
-        <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink)', marginBottom: 2 }}>预设</div>
+        <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink)', marginBottom: 2 }}>手动预设</div>
         <div className="mono" style={{ fontSize: 9.5, color: 'var(--ink-3)', letterSpacing: 1.1 }}>
-          保存当前所有参数为命名预设，随时一键应用
+          保存当前所有参数为命名预设，随时一键应用——区别于上方「模型与场景」的自动记忆（每个场景×模型独立，切换即复原，无需手动保存）
         </div>
       </div>
 

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PetRendererProps } from '../../../shared/pet/petRenderer';
 import { useLive2DStage } from '../../../shared/live2d/useLive2DStage';
-import { getUIPref, onUIPrefChange } from '../../../shared/uiPreferences';
+import { getUIPref } from '../../../shared/uiPreferences';
+import { listenPetPrefs } from '../../../shared/pet/bridge';
 import type { Mood } from '../../../shared/state/store';
 
 const PET_LIVE2D_ZOOM_KEY = 'pet.live2d.zoom';
@@ -17,9 +18,18 @@ export function Live2DStage({ snapshot, reaction, volume }: PetRendererProps) {
   useEffect(() => { volumeRef.current = volume ?? 0; }, [volume]);
 
   useEffect(() => {
-    return onUIPrefChange(key => {
-      if (key === PET_LIVE2D_ZOOM_KEY) setZoom(getUIPref<number>(PET_LIVE2D_ZOOM_KEY, 1));
-    });
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    listenPetPrefs(patch => {
+      if (typeof patch.live2dZoom === 'number') setZoom(patch.live2dZoom);
+    }).then(fn => {
+      if (disposed) fn();
+      else unlisten = fn;
+    }).catch(error => console.warn('[pet] prefs 监听失败:', error));
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
   }, []);
 
   const { error, pulse } = useLive2DStage(mountRef, {

@@ -1,6 +1,6 @@
 /* SubFlow — Live Feed 面板 (Phase 2d.1) */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Tag, MicroLabel } from './UIKit';
 import { MOOD_HUE, MOOD_LABEL_EN, FOCUS_LABEL_EN } from './UIKit';
 import { MOOD_TABLE } from '../../../shared/state/store';
@@ -70,16 +70,16 @@ export function SubFlow({ engine }: { engine: any }) {
   }
 
   const [timeline, setTimeline] = useState<FlowEntry[]>(loadTimeline);
-  const lastKeyRef = useRef('');
 
   useEffect(() => {
     const entryText = state.activity
       ? state.activity.text.replace(/{book}/g, '读着书')
       : state.focus;
-    const key = `${entryText}|${state.mood}`;
-    if (key === lastKeyRef.current) return;
-    lastKeyRef.current = key;
     setTimeline(prev => {
+      // dedup against the persisted first entry (not a render-scoped ref) so this
+      // survives component remounts; mood is intentionally excluded from the check —
+      // same wording with a different mood shouldn't spawn a new timeline entry.
+      if (prev[0]?.text === entryText) return prev;
       const next = [
         { id: String(Date.now()), text: entryText, mood: state.mood as Mood, timestamp: Date.now() },
         ...prev.filter(e => Date.now() - e.timestamp < EIGHT_HOURS),

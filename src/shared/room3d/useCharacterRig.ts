@@ -89,7 +89,7 @@ export function normalizeCharacter(model: THREE.Object3D, scaleMul = 1): void {
   model.position.z -= center.z;
 }
 
-export function useCharacterRig(characterUrl: string, boneMap?: BoneMap): CharacterRigHandle {
+export function useCharacterRig(characterUrl: string, boneMap?: BoneMap, onModelLoaded?: () => void): CharacterRigHandle {
   const charGroupRef = useRef<THREE.Group | null>(null);
   if (!charGroupRef.current) charGroupRef.current = new THREE.Group();
   const charGroup = charGroupRef.current;
@@ -148,6 +148,7 @@ export function useCharacterRig(characterUrl: string, boneMap?: BoneMap): Charac
         }
         if (res.shoulderL) shLBasePosYRef.current = res.shoulderL.position.y;
         if (res.shoulderR) shRBasePosYRef.current = res.shoulderR.position.y;
+        onModelLoaded?.();
       },
       undefined,
       () => {
@@ -160,6 +161,7 @@ export function useCharacterRig(characterUrl: string, boneMap?: BoneMap): Charac
         const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 12), mat);
         head.position.set(0, 1.25, 0);
         charGroup.add(head);
+        onModelLoaded?.();
       },
     );
 

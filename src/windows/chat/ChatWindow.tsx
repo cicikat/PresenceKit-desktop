@@ -27,6 +27,8 @@ import {
   publishPetSnapshot,
   setPetWindowVisible,
   startPetSnapshotResponder,
+  emitPetPrefs,
+  emitPetTurn,
 } from '../../shared/pet/bridge';
 import {
   loadPetMouseSettings,
@@ -83,6 +85,7 @@ import {
 import { ChatColorPage } from './components/ChatColorPage';
 import { applyMoodOverlay, clearMoodOverlay } from '../../shared/theme/moodReactive';
 import { CallSettingsPage } from './components/CallSettingsPage';
+import { ConnectionSettingsPage } from './components/ConnectionSettingsPage';
 
 const SIDEBAR_MIN     = 250;
 const SIDEBAR_MAX     = 540;
@@ -91,7 +94,7 @@ const SIDEBAR_DEFAULT = 340;
 /* ── 偏好面板 ── */
 function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHeaderVisible, onChatHeaderToggle, appearance, onAppearanceChange, onCharacterAvatarChange, onCharacterSwitched, petMouseSettings, onPetMouseSettingsChange, petVisualStyle, onPetVisualStyleChange, model3dZoom, onModel3dZoomChange, live2dZoom, onLive2dZoomChange, presenceNagEnabled, onPresenceNagToggle, proactiveGapHours, onProactiveGapChange, playModeEnabled, onPlayModeToggle, petRoamEnabled, onPetRoamToggle, petRippleEnabled, onPetRippleToggle, onYandereOpen }: any) {
   const [avatars, setAvatars] = useState(avatarStore.get());
-  const [tab, setTab] = useState<'appearance' | 'color' | 'world' | 'pet' | 'chat' | 'call' | 'other'>('appearance');
+  const [tab, setTab] = useState<'system' | 'appearance' | 'color' | 'world' | 'pet' | 'chat' | 'call' | 'other'>('appearance');
   const [cropSrc, setCropSrc] = useState<string | null>(null);
   const [cropRole, setCropRole] = useState<'her' | 'you' | null>(null);
   const [bgCropSrc, setBgCropSrc] = useState<string | null>(null);
@@ -186,6 +189,7 @@ function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHea
           </div>
           <div style={{ padding: '10px 20px 0', display: 'flex', gap: 2, borderBottom: '1px solid var(--paper-edge)' }}>
             {([
+              ['system', '0', '系统设置'],
               ['appearance', '1', '外观'],
               ['color', '2', '色彩自定义'],
               ['world', '3', '世界'],
@@ -208,7 +212,9 @@ function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHea
             ))}
           </div>
           <div style={{ padding: '18px 22px', display: 'grid', gap: 18, flex: 1, minHeight: 0, overflowY: 'auto' }}>
-            {tab === 'appearance' ? (
+            {tab === 'system' ? (
+              <ConnectionSettingsPage />
+            ) : tab === 'appearance' ? (
               <>
                 <PrefRow label="日间主题" hint="手动切换至日间或自动模式日间时段使用的主题">
                   <ThemePicker slot="day" />
@@ -1247,7 +1253,6 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivi
       publishPetSnapshot({
         mood: state.mood,
         presence: state.presence,
-        activityText: state.activity?.text ?? null,
       });
     };
     publishEngineSnapshot();
@@ -1297,12 +1302,14 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivi
     const clamped = Math.max(0.3, Math.min(4, zoom));
     setModel3dZoom(clamped);
     setUIPref('pet.model3d.zoom', clamped);
+    void emitPetPrefs({ model3dZoom: clamped });
   }, []);
 
   const updateLive2dZoom = useCallback((zoom: number) => {
     const clamped = Math.max(0.3, Math.min(4, zoom));
     setLive2dZoom(clamped);
     setUIPref('pet.live2d.zoom', clamped);
+    void emitPetPrefs({ live2dZoom: clamped });
   }, []);
 
   const handleYandereOpen = useCallback(() => {
@@ -1387,6 +1394,21 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivi
     setDreamAfterglow(false);
     setDreamWindowOpen(true);
   }), []);
+
+  // Pet main-channel forward layer (cc-tasks/14 §D): re-broadcast WS turn events to the pet
+  // window verbatim, full text, no summarizing. Deliberately at this shell level rather than
+  // inside ChatPanel so its dedup guard / dream gating / fallback races can never swallow a
+  // pet bubble the way they could when the pet bubble was just a ChatPanel-side summary.
+  useEffect(() => {
+    const offs = [
+      wsClient.on('channel_message', payload => { void emitPetTurn({ kind: 'channel_message', ...payload }); }),
+      wsClient.on('message_segments', payload => { void emitPetTurn({ kind: 'message_segments', ...payload }); }),
+      wsClient.on('message_stream_start', payload => { void emitPetTurn({ kind: 'message_stream_start', ...payload }); }),
+      wsClient.on('message_stream_delta', payload => { void emitPetTurn({ kind: 'message_stream_delta', ...payload }); }),
+      wsClient.on('message_stream_end', payload => { void emitPetTurn({ kind: 'message_stream_end', ...payload }); }),
+    ];
+    return () => offs.forEach(off => off());
+  }, []);
 
   // 玩耍模式邀请：仅在开关开启时自动开窗，关闭时忽略（仍正常 ack）。
   useEffect(() => wsClient.on('toy_invite', () => {

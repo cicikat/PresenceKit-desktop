@@ -19,7 +19,7 @@ import { getClientConfig } from '../../../shared/api/config';
 import { wsClient } from '../../../shared/api/ws';
 import { notifyOnMessage } from '../../../shared/api/notify';
 import { chatThemeFontSize } from '../../../shared/chatAppearance';
-import { publishPetSnapshot, summarizePetReply } from '../../../shared/pet/bridge';
+import { publishPetSnapshot } from '../../../shared/pet/bridge';
 import { TypingDots } from '../../../shared/ui/TypingDots';
 import type { ChatLogEntry, UploadError, NarrativeSegment } from '../../../shared/api/types';
 import { normalizeChatDisplayText } from '../chatDisplay';
@@ -924,10 +924,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
     }
 
     console.log('[chat] scheduleAssistantSegments | appendSource:', appendSource, '| msg_id:', wsMsgId ?? '(none)', '| partsCount:', textParts.length, '| contentHash:', contentHashRaw, '| normalizedHash:', contentHashNormalized, '| pendingWake:', !!pendingWakeReplyRef.current, '| pendingSend:', !!pendingSendReplyRef.current, '| timestamp:', Date.now());
-    publishPetSnapshot({
-      thinking: false,
-      latestAssistantText: summarizePetReply(fullText),
-    });
+    publishPetSnapshot({ thinking: false });
 
     const m = engine.get();
     const moodHue = MOOD_HUE[m.mood];

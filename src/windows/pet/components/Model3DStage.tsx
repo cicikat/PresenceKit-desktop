@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import type { PetRendererProps } from '../../../shared/pet/petRenderer';
 import { useCharacterRig } from '../../../shared/room3d/useCharacterRig';
 import { loadRoomSettings, subscribeRoomSettings, getCharacterCfg } from '../../../shared/room/roomSettings';
-import { getUIPref, onUIPrefChange } from '../../../shared/uiPreferences';
+import { getUIPref } from '../../../shared/uiPreferences';
+import { listenPetPrefs, listenPetTurn } from '../../../shared/pet/bridge';
 import { getActiveDirective } from '../../room/avatarDirective';
 import type { Mood } from '../../../shared/state/store';
 
@@ -13,6 +14,8 @@ const PET_MODEL3D_ZOOM_KEY = 'pet.model3d.zoom';
 const CAM_Y = 0.9;
 const CAM_DIST = 5;
 const FRUSTUM_HH = 0.70; // half-height at zoom=1
+// Fraction from the top of the viewport where the head should stay anchored while zooming.
+const HEAD_TOP_MARGIN = 0.14;
 
 export function Model3DStage({ snapshot }: PetRendererProps) {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -20,42 +23,86 @@ export function Model3DStage({ snapshot }: PetRendererProps) {
   const [zoom, setZoom] = useState(() => getUIPref<number>(PET_MODEL3D_ZOOM_KEY, 1));
 
   const moodRef = useRef<Mood>(snapshot.mood);
-  const prevTextUpdatedAt = useRef(0);
+
+  // Camera ref + head anchor so zoom/model-load can reframe the shot
+  const cameraRef = useRef<THREE.OrthographicCamera | null>(null);
+  const headYRef = useRef<number | null>(null);
+  const charGroupRef = useRef<THREE.Group | null>(null);
+  const zoomRef = useRef(zoom);
+  useEffect(() => { zoomRef.current = zoom; }, [zoom]);
+
+  const applyFraming = useCallback((z: number) => {
+    const cam = cameraRef.current;
+    if (!cam) return;
+    const clampedZoom = Math.max(0.3, Math.min(4, z));
+    cam.zoom = clampedZoom;
+    const headY = headYRef.current;
+    if (headY != null) {
+      const halfHeight = FRUSTUM_HH / clampedZoom;
+      cam.position.y = headY - (1 - 2 * HEAD_TOP_MARGIN) * halfHeight;
+    }
+    cam.updateProjectionMatrix();
+  }, []);
+
+  const handleModelLoaded = useCallback(() => {
+    const group = charGroupRef.current;
+    if (!group) return;
+    const box = new THREE.Box3().setFromObject(group);
+    headYRef.current = box.isEmpty() ? null : box.max.y;
+    applyFraming(zoomRef.current);
+  }, [applyFraming]);
 
   const characterUrl = `/room/character/${encodeURIComponent(settings.characterFile)}`;
-  const { charGroup, animate, onNewSpeech } = useCharacterRig(characterUrl, getCharacterCfg(settings, settings.characterFile).boneMap);
+  const { charGroup, animate, onNewSpeech } = useCharacterRig(
+    characterUrl,
+    getCharacterCfg(settings, settings.characterFile).boneMap,
+    handleModelLoaded,
+  );
+  charGroupRef.current = charGroup;
 
   // Subscribe to room settings (for character file / boneMap changes)
   useEffect(() => subscribeRoomSettings(setSettings), []);
 
-  // Subscribe to zoom pref changes (triggered from ChatWindow slider)
+  // Subscribe to zoom pref changes (broadcast from ChatWindow slider via pet bridge —
+  // cross-window storage events are unreliable under WebView2, see cc-tasks/14 §E-1)
   useEffect(() => {
-    return onUIPrefChange(key => {
-      if (key === PET_MODEL3D_ZOOM_KEY) setZoom(getUIPref<number>(PET_MODEL3D_ZOOM_KEY, 1));
-    });
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    listenPetPrefs(patch => {
+      if (typeof patch.model3dZoom === 'number') setZoom(patch.model3dZoom);
+    }).then(fn => {
+      if (disposed) fn();
+      else unlisten = fn;
+    }).catch(error => console.warn('[pet] prefs 监听失败:', error));
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
   }, []);
 
   // Sync mood ref
   useEffect(() => { moodRef.current = snapshot.mood; }, [snapshot.mood]);
 
-  // Trigger speech animation when assistant text updates
+  // Trigger speech animation on each forwarded turn (cc-tasks/14 §D.4 — replaces the old
+  // snapshot.latestAssistantText path now that the pet bubble is driven by pet://turn)
   useEffect(() => {
-    if (!snapshot.latestAssistantText) return;
-    if (snapshot.updatedAt === prevTextUpdatedAt.current) return;
-    prevTextUpdatedAt.current = snapshot.updatedAt;
-    onNewSpeech(snapshot.latestAssistantText);
-  }, [snapshot.latestAssistantText, snapshot.updatedAt, onNewSpeech]);
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    listenPetTurn(turn => {
+      if (disposed || turn.kind !== 'channel_message') return;
+      onNewSpeech(turn.content);
+    }).then(fn => {
+      if (disposed) fn();
+      else unlisten = fn;
+    }).catch(error => console.warn('[pet] turn 监听失败:', error));
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [onNewSpeech]);
 
-  // Camera ref so zoom effect can update it
-  const cameraRef = useRef<THREE.OrthographicCamera | null>(null);
-
-  // Apply zoom changes to existing camera
-  useEffect(() => {
-    const cam = cameraRef.current;
-    if (!cam) return;
-    cam.zoom = Math.max(0.3, Math.min(4, zoom));
-    cam.updateProjectionMatrix();
-  }, [zoom]);
+  // Apply zoom changes to existing camera, keeping the head anchored near the top
+  useEffect(() => { applyFraming(zoom); }, [zoom, applyFraming]);
 
   // Main scene setup — runs once
   useEffect(() => {

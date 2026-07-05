@@ -248,7 +248,9 @@ export function useLive2DStage(
       baseScaleRef.current = scale;
       model.scale.set(scale, scale);
       model.x = w / 2 + settings.offset[0] * w;
-      model.y = h / 2 + settings.offset[1] * h;
+      // keep the model's top edge (head) fixed at its zoom=1 screen position as zoom changes
+      const baselineH = h * 0.95 * settings.scaleMul;
+      model.y = h / 2 + settings.offset[1] * h + (targetH - baselineH) / 2;
     }
 
     async function loadModel(dir: string): Promise<void> {
@@ -568,9 +570,13 @@ export function useLive2DStage(
     if (h === 0) return;
     const model = modelRef.current;
     const baseH = (model.internalModel?.height as number | undefined) || model.height || 1;
-    const scale = (h * 0.95 * settings.scaleMul * zoom) / baseH;
+    const targetH = h * 0.95 * settings.scaleMul * zoom;
+    const scale = targetH / baseH;
     baseScaleRef.current = scale;
     model.scale.set(scale, scale);
+    // keep the model's top edge (head) fixed at its zoom=1 screen position as zoom changes
+    const baselineH = h * 0.95 * settings.scaleMul;
+    model.y = h / 2 + settings.offset[1] * h + (targetH - baselineH) / 2;
     const transparent = opts.transparent || settings.bgKind === 'transparent';
     app.renderer.background.alpha = transparent ? 0 : app.renderer.background.alpha;
     // eslint-disable-next-line react-hooks/exhaustive-deps
