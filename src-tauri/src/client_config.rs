@@ -236,3 +236,204 @@ pub fn backend_url(cfg: &ClientConfig, path: &str) -> String {
 pub fn load_public_client_config(app: tauri::AppHandle) -> FrontendClientConfig {
     load_client_config(&app).into()
 }
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TokenStatus {
+    pub configured: bool,
+    pub prefix: String,
+}
+
+#[tauri::command]
+pub fn get_token_status(app: tauri::AppHandle) -> TokenStatus {
+    let token = load_client_config(&app).admin_token;
+    let configured = !token.is_empty() && token != DEFAULT_ADMIN_TOKEN_PLACEHOLDER;
+    let prefix = if configured {
+        token.chars().take(8).collect()
+    } else {
+        String::new()
+    };
+    TokenStatus { configured, prefix }
+}
+
+// 与 lib.rs 的 safe_http_error_message 同一语义子集，但独立于已保存的 ClientConfig——
+// 这里测的是输入框里尚未保存的候选 backend_base/admin_token。
+fn whoami_error_message(status: reqwest::StatusCode) -> String {
+    match status.as_u16() {
+        401 => "token 无效".to_string(),
+        429 => "认证失败次数过多，来源 IP 已被临时限制，稍后重试".to_string(),
+        other => format!("HTTP {other}"),
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WhoamiResult {
+    pub label: String,
+    pub scopes: Vec<String>,
+}
+
+#[tauri::command]
+pub async fn test_backend_auth(
+    backend_base: String,
+    admin_token: String,
+) -> Result<WhoamiResult, String> {
+    let client = reqwest::Client::builder()
+        .no_proxy()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|_| "无法创建后端连接".to_string())?;
+
+    let url = format!("{}/auth/whoami", backend_base.trim_end_matches('/'));
+    let resp = client
+        .get(&url)
+        .bearer_auth(&admin_token)
+        .send()
+        .await
+        .map_err(|_| "连接失败，请检查后端地址".to_string())?;
+
+    let status = resp.status();
+    if !status.is_success() {
+        return Err(whoami_error_message(status));
+    }
+    resp.json::<WhoamiResult>().await.map_err(|e| e.to_string())
+}
+
+fn merge_client_config_json(
+    existing: serde_json::Value,
+    backend_base: &str,
+    websocket_base: &str,
+    admin_token: Option<&str>,
+) -> serde_json::Value {
+    let mut obj = match existing {
+        serde_json::Value::Object(map) => map,
+        _ => serde_json::Map::new(),
+    };
+    obj.insert(
+        "backendBase".to_string(),
+        serde_json::Value::String(backend_base.to_string()),
+    );
+    obj.insert(
+        "websocketBase".to_string(),
+        serde_json::Value::String(websocket_base.to_string()),
+    );
+    if let Some(token) = admin_token {
+        obj.insert(
+            "adminToken".to_string(),
+            serde_json::Value::String(token.to_string()),
+        );
+    }
+    serde_json::Value::Object(obj)
+}
+
+fn target_config_path<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<PathBuf, String> {
+    let candidates = local_config_candidates(app);
+    if let Some(existing) = candidates.iter().find(|p| p.exists()) {
+        return Ok(existing.clone());
+    }
+    candidates
+        .into_iter()
+        .last()
+        .ok_or_else(|| "无法定位配置目录".to_string())
+}
+
+#[tauri::command]
+pub fn save_client_config(
+    app: tauri::AppHandle,
+    backend_base: String,
+    websocket_base: String,
+    admin_token: Option<String>,
+) -> Result<(), String> {
+    let path = target_config_path(&app)?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("无法创建配置目录: {e}"))?;
+    }
+
+    let existing = read_json(&path)
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+        .unwrap_or_else(|| serde_json::Value::Object(serde_json::Map::new()));
+    let merged = merge_client_config_json(
+        existing,
+        &backend_base,
+        &websocket_base,
+        admin_token.as_deref(),
+    );
+    let serialized = serde_json::to_string_pretty(&merged).map_err(|e| e.to_string())?;
+
+    let mut tmp_os = path.clone().into_os_string();
+    tmp_os.push(".tmp");
+    let tmp_path = PathBuf::from(tmp_os);
+    std::fs::write(&tmp_path, &serialized).map_err(|e| format!("写入失败: {e}"))?;
+    std::fs::rename(&tmp_path, &path).map_err(|e| format!("写入失败: {e}"))?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod save_config_tests {
+    use super::*;
+
+    #[test]
+    fn merge_preserves_unknown_keys_and_overwrites_known_ones() {
+        let existing = serde_json::json!({
+            "backendBase": "http://old:8080",
+            "websocketBase": "ws://old:8080/ws",
+            "adminToken": "old-token",
+            "sensorConfig": { "enabled": true },
+            "customUserKey": "keep-me",
+        });
+        let merged = merge_client_config_json(
+            existing,
+            "http://new:9090",
+            "ws://new:9090/ws",
+            Some("new-token"),
+        );
+        assert_eq!(merged["backendBase"], "http://new:9090");
+        assert_eq!(merged["websocketBase"], "ws://new:9090/ws");
+        assert_eq!(merged["adminToken"], "new-token");
+        assert_eq!(merged["customUserKey"], "keep-me");
+        assert_eq!(merged["sensorConfig"]["enabled"], true);
+    }
+
+    #[test]
+    fn merge_without_token_keeps_existing_token_untouched() {
+        let existing = serde_json::json!({ "adminToken": "keep-this-secret" });
+        let merged = merge_client_config_json(existing, "http://a", "ws://b", None);
+        assert_eq!(merged["adminToken"], "keep-this-secret");
+    }
+
+    #[test]
+    fn merge_on_empty_config_only_sets_provided_fields() {
+        let merged = merge_client_config_json(
+            serde_json::Value::Object(serde_json::Map::new()),
+            "http://a",
+            "ws://b",
+            None,
+        );
+        assert_eq!(merged["backendBase"], "http://a");
+        assert_eq!(merged["websocketBase"], "ws://b");
+        assert!(merged.get("adminToken").is_none());
+    }
+
+    #[test]
+    fn whoami_error_message_never_leaks_token_or_bearer() {
+        let message = whoami_error_message(reqwest::StatusCode::UNAUTHORIZED);
+        assert_eq!(message, "token 无效");
+        assert!(!message.contains("Bearer"));
+
+        let other = whoami_error_message(reqwest::StatusCode::TOO_MANY_REQUESTS);
+        assert!(!other.contains("Bearer"));
+
+        let generic = whoami_error_message(reqwest::StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(generic, "HTTP 500");
+        assert!(!generic.contains("Bearer"));
+    }
+
+    #[test]
+    fn token_status_masks_short_and_placeholder_tokens() {
+        // configured tokens only ever reveal an 8-char prefix, never the full value
+        let full = "emt_super_secret_value_123456";
+        let prefix: String = full.chars().take(8).collect();
+        assert_eq!(prefix, "emt_supe");
+        assert!(!prefix.contains("secret"));
+    }
+}

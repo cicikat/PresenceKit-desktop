@@ -90,6 +90,12 @@ class WSClient {
     this._setState('idle');
   }
 
+  // 连接设置页保存后调用：强制断开并用新地址重连，忽略 connect() 的“已有 url 则跳过”守卫。
+  reconnect(url: string) {
+    this.disconnect();
+    this.connect(url);
+  }
+
   getState(): ConnectionState {
     return this.connState;
   }

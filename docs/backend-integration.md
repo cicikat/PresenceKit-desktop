@@ -40,7 +40,9 @@ config/client.example.json
 config/client.local.json
 ```
 
-`config/client.local.json` 已加入 `.gitignore`，不要提交真实 admin token。文件不存在或字段缺失时，客户端使用当前兼容默认值：
+`config/client.local.json` 已加入 `.gitignore`，不要提交真实 admin token。也可跳过手改 JSON：客户端内
+偏好 → 系统设置 页提供了可视化编辑（backendBase / websocketBase / token 三字段 + 测试连接 + 保存），
+详见下方「HTTP：连接设置页」一节。文件不存在或字段缺失时，客户端使用当前兼容默认值：
 
 | 字段 | 默认值 | 说明 |
 |---|---|---|
@@ -72,6 +74,30 @@ Rust/Tauri HTTP client 统一显式禁用代理并设置超时：普通请求 15
 | `src/windows/chat/components/SubGarden.tsx` | 读取并展示花园状态 |
 | `src/windows/chat/components/SubDiary.tsx` | 读取并展示日记列表和详情 |
 | `src/windows/chat/ChatWindow.tsx` | Chat 偏好「世界」页读取并保存 Reality Prompt Assets |
+| `src/shared/api/connectionSettings.ts` | `getTokenStatus()`、`testBackendAuth()`、`saveClientConfig()`，由偏好面板「系统设置」tab 的 `ConnectionSettingsPage` 调用 |
+| `src-tauri/src/client_config.rs` | `get_token_status`、`test_backend_auth`、`save_client_config` |
+
+---
+
+## HTTP：连接设置页（偏好 → 系统设置）
+
+桌面端不再要求手改 `config/client.local.json` 才能配置后端连接：偏好面板新增「系统设置」tab（编号 0，
+`ConnectionSettingsPage`），提供 backendBase / websocketBase / token 三个字段与「测试连接」「保存」两个按钮。
+
+- **Token 不回显明文**：`load_public_client_config` 一直不返回 token；这里新增的 `get_token_status`
+  只返回 `{configured, prefix}`（prefix 为已保存 token 的前 8 位），页面上 token 输入框永远从空白开始，
+  只用于填写新值，留空保存即保留原值不变。
+- **测试连接** 用输入框里的候选值（而非已保存值）调 `test_backend_auth(backendBase, adminToken)` →
+  Rust reqwest GET `{backendBase}/auth/whoami`（该端点零 scope 依赖，任意有效 token 可调，见后端仓
+  `docs/security.md`）。成功显示 `{label, scopes}`；401 显示「token 无效」，其余走通用 HTTP 状态码文案。
+- **保存** 调 `save_client_config(backendBase, websocketBase, adminToken?)`，写回
+  `local_config_candidates()` 中第一个已存在的文件（都不存在则用 `app_config_dir()`，自动建目录），
+  读→JSON 层面 merge→原子写（先写 `.tmp` 再 `rename`），只覆盖这三个字段，文件内其他自定义键保持不变。
+  Token 字段为空则不写入 `adminToken` 键，即不改动磁盘上已有的值。
+- **即时生效范围**：HTTP 请求每次都经 Rust `load_client_config()` 重新读文件，保存后无需重启即可生效；
+  WebSocket 连接不会自动重连，保存成功后页面出现「立即重连」按钮，调用 `wsClient.reconnect(url)`
+  （断开当前连接后用新地址重新连接一次）。
+- 前端页面在改动 token 前会弹一次确认对话框（仅当输入框非空、确实要覆盖已保存 token 时触发）。
 
 ---
 

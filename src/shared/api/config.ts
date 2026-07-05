@@ -34,3 +34,8 @@ export function getClientConfig(): Promise<ClientConfig> {
   }
   return configPromise;
 }
+
+// 连接设置页保存新配置后调用，使下次 getClientConfig() 重新从 Rust 侧读取。
+export function invalidateClientConfig() {
+  configPromise = null;
+}

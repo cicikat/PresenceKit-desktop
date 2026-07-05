@@ -1,4 +1,5 @@
 {
+  "_comment": "也可在客户端内 偏好 → 系统设置 页内配置（无需手改本文件）",
   "backendBase": "http://127.0.0.1:8080",
   "websocketBase": "ws://127.0.0.1:8080/ws/desktop",
   "adminToken": "replace-with-desktop-profile-token (emt_...; legacy admin secret still accepted)",
