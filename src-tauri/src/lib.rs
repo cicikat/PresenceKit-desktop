@@ -8,6 +8,7 @@
 // publisher.rs 另有 /sensor/realtime。后端路由变更时需手动同步这两个文件。
 mod actions;
 mod client_config;
+mod ui_prefs;
 mod ws_bridge;
 pub mod sensor;
 
@@ -2130,6 +2131,8 @@ pub fn run() {
             client_config::get_token_status,
             client_config::test_backend_auth,
             client_config::save_client_config,
+            ui_prefs::load_ui_prefs,
+            ui_prefs::save_ui_prefs,
             ws_bridge::native_ws_connect,
             ws_bridge::native_ws_send,
             ws_bridge::native_ws_disconnect,

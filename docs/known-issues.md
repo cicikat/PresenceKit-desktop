@@ -247,6 +247,56 @@ ChatPanel 已实现 Dream active 期间按 `msg_id` park Reality `channel_messag
 
 ## 已修复
 
+### 梦境流动一直显示假数据；客户端硬编码「叶瑄/yexuan」到处都是（2026-07-06，cc-tasks/15 §E/§G，配合 backend Brief 25）
+
+**原问题（§E）**：`DreamSidebar.tsx` 读 `dreamState.flow_entries / dream_events / events`，但后端 `GET /dream/state` 从不返回这三个字段，`getBackendFlowEntries` 永远拿到空数组，侧栏「梦境流动」永远显示 `buildFallbackFlowEntries` 的三条固定文案，看起来像接了实际没接。`dream-types.ts` 里的 `DreamFlowEntry`/`DreamFlowEntrySource` 类型也是当时猜测的形状（`type`/`description`/`label` 等字段），和后端实际产出对不上。
+
+**原问题（§G）**：全仓 grep 大量硬编码「叶瑄」「yexuan」——不止 Brief 里列出的几个已知点（`ChatPanel.tsx` 通知标题、`RoomWindow.tsx` 视频通话标签、`presence-nag` 映射表、`ws.ts`/`actions.rs` 兜底），活动陪聊面板、活动设置页、玩具聊天面板/侧栏、五子棋/象棋对手枚举等也都是字面量，换角色部署时界面到处露出「叶瑄」。
+
+**修复（后端 Brief 25 §2/§3 P2 落地后）**：
+- `GET /dream/state` 新增规则驱动的 `flow_entries: {ts, kind, summary}[]`（零额外 LLM 调用，FIFO 上限 10 条），`char_tension`（`yexuan_tension` 作为迁移期双发的废弃别名保留一段时间），五子棋/象棋对手枚举 `yexuan_ai` → `character_ai`（读路径旧值归一化，响应始终发新值）。
+- `dream-types.ts` 的 `DreamFlowEntry` 按后端实际形状重定型，删掉猜测字段和 `dream_events`/`events`；`DreamSidebar.tsx` 直接消费 `flow_entries`，展示条数从 3 提到 5、最新在上、带相对时间（`formatAgo` 风格）；仅在为空时回退固定文案。`char_tension ?? yexuan_tension` 兼容读取（`DreamSidebar.tsx`、`DreamControlBar.tsx`——后者此前只读了旧字段，属于遗漏）。
+- 新增 `shared/activeCharacter.ts`：基于 `uiPreferences` 的跨窗口「当前激活角色」缓存（`StateEngine` 不跨窗口，无法承担这个角色），`ChatWindow.tsx` 是唯一 writer，其余窗口/组件用 `getActiveCharacterName()` 只读。替换了 `ChatPanel.tsx`、`GroupChatPanel.tsx`（含 group 场景下按 `speakerId` 解析而非用单一 active 角色名）、`RoomWindow.tsx`、`presence-nag/PresenceNagWindow.tsx`（删掉 `CHARACTER_NAMES` 映射表）、`ws.ts`、`ActivityCompanionPanel.tsx`、`ActivitySettingsPage.tsx`、`ToyChatPanel.tsx`、`ToySidebar.tsx`、`ChatWindow.tsx` 偏好面板提示文案、`DreamStatusSidebar.tsx`/`DreamSidebar.tsx` 里所有硬编码「叶瑄」；`actions.rs::presence_nag` 的 Rust 侧兜底从 `"叶瑄"` 改为中性标识 `"character"`（展示名解析交给客户端）。五子棋/象棋对手常量抽为 `AI_OPPONENT = 'character_ai'`。
+- 新增 `npm run check:naming`（`scripts/check-naming.mjs`）扫描 `src/**/*.{ts,tsx,css}` 断言不出现「叶瑄」/「yexuan」，仅白名单 `char_tension ?? yexuan_tension` 兼容读取的三行（双发窗口结束后连同白名单一起删）。
+
+### 潜意识面板系统味太重、非梦境时也显示假数据（2026-07-05，cc-tasks/15 §F）
+
+**原问题**：`SubHiddenStatePanel.tsx` 挂载即无条件 `loadHiddenStateDebug()`，不管是否在梦境里都渲染数值卡；顶栏 `READ ONLY · Phase 4.5` 标签、每张卡片的「最近来源」badge、`SourceDiagnostic` 驱动源诊断行、`DiffRow` prev/curr 数值对比行、`InertNote`（「H1 接线前仅衰减驱动」）、`DeveloperNotice`、「仅出梦 afterglow 回流」说明行——全是给开发调试看的系统信息，产品要的是沉浸感。
+
+**修复**：新增 `dreamState` prop，复用 `DreamStatusSidebar.tsx` 导出的 `isDreamActive()` 判定；非梦境时只渲染占位文案「还未进入梦境」（复用 `.dream-hud__empty`），不发请求。入梦后：移除上述所有系统味文案/诊断行（`HudMeter` 自带的 delta 箭头保留），开发者模式下的「开发者信息 / SCHEMA v1」整卡（`last_decay_tick`、`display.physiological_arousal` 两行）一并删除，只留「即时敏感」「触碰亏缺」两张数值卡；`DreamSidePane` 的 kicker 从 `READ ONLY · HIDDEN STATE` 改为 `SUBCONSCIOUS`。`SourceBadge`/`SourceDiagnostic`/`DiffRow`/`InertNote`/`DeveloperNotice` 及相关常量（`SOURCE_HUE`/`PASSIVE_SOURCES`）确认无其他引用后整体删除。
+
+### 自定义配色预设无法二次编辑；梦境 env 气泡样式突兀；日间聊天区偏灰（2026-07-05，cc-tasks/15 §B/§C/§D）
+
+**原问题（§B，`ChatColorPage.tsx`）**：三个问题叠加。① token 加载 `useEffect` 依赖 `[selectedPreset]`（对象引用）——`subscribeTheme` 在任何主题事件（切槽位、日夜自动切换定时器等）时都会 `setPresets(loadUserPresets())` 重建数组，`selectedPreset` 引用随之变化，effect 重跑，把用户正在改的颜色静默回滚成已保存值。② 预设下拉框按 `base === 当前槽位` 过滤，白天建的预设晚上打开面板就找不到，看起来像"保存过的预设丢了"。③ `moodReactive.applyMoodOverlay`（mood 每次更新触发）内联覆写 `--accent`/`--forest` 等——正是编辑器里的 token，用户刚选的颜色几秒后被盖掉。
+
+**修复（§B）**：token 加载 effect 依赖改为 `[selectedId]`；下拉框改为显示全部预设并带 `[日]/[夜]` 标记，选中与当前槽 base 不符的预设时自动切换 `editSlot`（原来"切槽位清空选择"的逻辑移进日夜按钮自己的 `switchSlot` 里，避免和"选预设联动切槽"互相打架）；`ChatColorPage` 挂载时 `suspendMoodOverlay()`（内部 `clearMoodOverlay()` + 挂起标志，`applyMoodOverlay` 调用变为 no-op 但仍记录最新 mood/intensity），卸载时 `resumeMoodOverlay()` 用记录的最新状态立即重新应用。顺带修了 `moodReactive.ts` 里 `computeMoodOverrides` 从**已被覆写的当前值**再偏移导致的连续漂移——同一批目标 CSS 变量的"真实基准值"现在只在无覆盖的干净状态下抓取一次并缓存（`baseSnapshot`），`registry.ts` 的 `setTheme()` 在真正切主题时调用新增的 `resetMoodOverlayBase()` 使缓存失效。
+
+**原问题（§C，`DreamTokens.css`）**：梦境第三种气泡类型 `env`（环境描写）用 mono 字体 + 0.86× 字号 + 边框盒样式，和其余类型（尤其视觉上更协调的 `do` 动作描写）风格突兀。
+
+**修复（§C）**：`.dream-segment--env` 规则整体替换为与 `.dream-segment--do` 一致（衬线、oblique、左细线、渐变淡底），删掉 mono/边框盒样式和废弃的 `--dream-segment-env-font-size` 变量；`env` 语义类名和 TSX 判断逻辑不变。
+
+**原问题（§D，`DreamWindow.tsx` / `dreamAppearance.ts`）**：日间模式聊天区偏灰。排查后：`colorOverridesDay` 没有针对已知 token 键集做校验，理论上可能混入非法 key（`dreamAppearance.ts` 的 `load` 校验此前完全不过滤）；`.dream-theme__chat` 顶层白色渐变（`0.58`/`0.38`）叠加 `--dt-bg-1/2/3` 花卉底色后不够亮，读起来发灰。
+
+**修复（§D）**：把 `DREAM_DAY_DEFAULTS`/`DREAM_NIGHT_DEFAULTS`（原本定义在 `DreamPrefsPane.tsx` 里）搬到 `dreamAppearance.ts` 作为唯一权威键集导出，`loadDreamAppearance()` 加载时丢弃 `colorOverridesDay`/`colorOverridesNight` 里不在各自默认键集中的 key；`.dream-theme__chat` 顶层白色渐变从 `0.58`/`0.38` 提到 `0.80`/`0.62`（只影响日间——夜间在 `.dream-theme--night .dream-theme__chat` 里整段覆写 `background`，不受影响）。背景图容器 `.dream-theme__chat-background` 的渲染条件（`backgroundDataUrl &&`）核实后本来就正确，未发现"空 dataUrl 仍渲染空容器"的问题，未改动。
+
+### `tauri.conf.json` 的 `identifier` 改名导致全部 UI 偏好一次性归零（2026-07-05，cc-tasks/15 §A）
+
+**原问题**：commit `67d9a98`（opensource rename）把 `identifier` 从 `com.emerald-client.app`
+改成了 `com.presencekit.desktop`。Windows 上 WebView2 的 user-data 目录按 `identifier`
+派生，改名后 webview 换到全新空 profile，所有 `emerald.ui.*` localStorage（字体大小、主题、
+颜色预设、房间设置、角色绑定、动向时间轴……）全部归零。旧数据还在旧 `identifier` 目录的
+LevelDB 里，无实用导入手段，按丢失处理。
+
+**修复**：`uiPreferences.ts` 改为文件后端——真正的持久化落在 Rust 侧
+`app_config_dir()/ui-preferences.json`（IPC `load_ui_prefs`/`save_ui_prefs`，原子写），
+不再单独依赖 localStorage 的存续。localStorage 仍作为镜像保留（给依赖原生 `storage`
+事件跨窗同步的代码路径用），但即使它被清空，下次启动也会从磁盘文件恢复。详见
+`docs/frontend-structure.md` 「uiPreferences」一节。
+
+**教训**：`identifier` 之类影响 WebView2 profile 路径的 Tauri 配置项，一旦改名等同于
+把所有 localStorage-only 的状态清零；以后再动这个字段前必须先确认关键偏好已经落到
+不依赖它的存储（文件/后端），而不是临时补救。
+
 ### 桌宠话语不是主通道，两头不同步；输入框只能在聊天窗（2026-07-04，cc-tasks/14 §D）
 
 **原问题**：桌宠气泡不是独立通道——`ChatPanel.scheduleAssistantSegments`（`ChatPanel.tsx:927`）把回复第一句摘要（`summarizePetReply`，≤92 字）经 `pet://snapshot` 的 `latestAssistantText` 字段转发，依赖 ChatPanel 自身的挂载状态、去重守卫、梦境隐藏与 fallback 竞态；任意一环吞掉渲染，桌宠与聊天框就两头不同步。桌宠窗也没有输入框，无法主动发起对话。

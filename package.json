@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "check:naming": "node scripts/check-naming.mjs"
   },
   "dependencies": {
     "@pixi/core": "7.4.3",

@@ -112,7 +112,7 @@ export const readingApi = {
 // ── Gomoku ────────────────────────────────────────────────────────────────────
 
 export type GomokuCell = 'black' | 'white' | null;
-export type GomokuOpponent = 'human' | 'yexuan_ai';
+export type GomokuOpponent = 'human' | 'character_ai';
 export type GomokuAiStyle = 'balanced' | 'gentle' | 'serious' | 'teaching';
 
 export interface GomokuLastMove {
@@ -189,7 +189,7 @@ export const gomokuApi = {
 // ── Chess ─────────────────────────────────────────────────────────────────────
 
 export type ChessTurn = 'white' | 'black';
-export type ChessOpponent = 'human' | 'yexuan_ai';
+export type ChessOpponent = 'human' | 'character_ai';
 export type ChessAiStyle = 'balanced' | 'gentle' | 'serious' | 'teaching';
 
 export interface ChessMoveEntry {

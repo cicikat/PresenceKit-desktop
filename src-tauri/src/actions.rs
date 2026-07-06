@@ -113,7 +113,7 @@ pub async fn presence_nag(app: AppHandle, text: String, avatar: Option<String>) 
         .as_deref()
         .map(str::trim)
         .filter(|value| !value.is_empty())
-        .unwrap_or("叶瑄");
+        .unwrap_or("character");
     let window = app
         .get_webview_window("presence-nag")
         .ok_or_else(|| "presence-nag window 不存在".to_string())?;

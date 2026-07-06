@@ -10,6 +10,9 @@ import {
 } from '../../../shared/api/activity-api';
 import { CompanionSidebar } from './CompanionSidebar';
 import { getUIPref, onUIPrefChange } from '../../../shared/uiPreferences';
+import { getActiveCharacterName } from '../../../shared/activeCharacter';
+
+const AI_OPPONENT: ChessOpponent = 'character_ai';
 
 const BOARD_THEMES: Record<string, Record<string, string>> = {
   classic_wood: {},
@@ -436,9 +439,9 @@ export function ChessPage() {
               }}
             >
               <option value="human">本地双人</option>
-              <option value="yexuan_ai">叶瑄执黑 / AI 对手</option>
+              <option value={AI_OPPONENT}>{getActiveCharacterName()}执黑 / AI 对手</option>
             </select>
-            {opponent === 'yexuan_ai' && (
+            {opponent === AI_OPPONENT && (
               <select
                 value={aiStyle}
                 onChange={e => setAiStyle(e.target.value as ChessAiStyle)}
@@ -468,7 +471,7 @@ export function ChessPage() {
         {isActive && (
           <span className="mono" style={{ fontSize: 11.5, color: 'var(--ink-3)', letterSpacing: 0.8 }}>
             当前回合：{gameState?.turn === 'white' ? '♔ 白方' : '♚ 黑方'}
-            {loading && gameState?.opponent === 'yexuan_ai' && gameState?.turn === gameState?.ai_player
+            {loading && gameState?.opponent === AI_OPPONENT && gameState?.turn === gameState?.ai_player
               ? ' · AI 思考中…'
               : loading ? ' · 等待中…' : ''}
           </span>
@@ -503,9 +506,9 @@ export function ChessPage() {
                 操作说明
               </div>
               <div style={{ fontSize: 12, color: 'var(--ink-2)', lineHeight: 1.8 }}>
-                {gameState?.opponent === 'yexuan_ai' ? (
+                {gameState?.opponent === AI_OPPONENT ? (
                   <>
-                    <div>你执白，叶瑄执黑</div>
+                    <div>你执白，{getActiveCharacterName()}执黑</div>
                     <div>走完白方等 AI 应手</div>
                   </>
                 ) : (

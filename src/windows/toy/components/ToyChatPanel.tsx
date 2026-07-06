@@ -7,6 +7,7 @@
 import { useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent } from 'react';
 import { sendChat } from '../../../shared/api/backend';
+import { getActiveCharacterName } from '../../../shared/activeCharacter';
 
 interface Msg {
   id: number;
@@ -80,7 +81,7 @@ export function ToyChatPanel({ chatFontSize = 14 }: { chatFontSize?: number }) {
           <div className="serif" style={{
             margin: 'auto', color: 'var(--ink-3)', fontSize: 13.5, textAlign: 'center', lineHeight: 1.8,
           }}>
-            玩耍模式已开启。<br />在这里和叶瑄说话，左侧能看到设备状态。
+            玩耍模式已开启。<br />在这里和{getActiveCharacterName()}说话，左侧能看到设备状态。
           </div>
         )}
         {messages.map(m => (
@@ -100,7 +101,7 @@ export function ToyChatPanel({ chatFontSize = 14 }: { chatFontSize?: number }) {
           </div>
         ))}
         {sending && (
-          <div style={{ alignSelf: 'flex-start', color: 'var(--ink-3)', fontSize: 12 }}>叶瑄正在回复…</div>
+          <div style={{ alignSelf: 'flex-start', color: 'var(--ink-3)', fontSize: 12 }}>{getActiveCharacterName()}正在回复…</div>
         )}
       </div>
 
@@ -122,7 +123,7 @@ export function ToyChatPanel({ chatFontSize = 14 }: { chatFontSize?: number }) {
           onChange={e => setInput(e.target.value)}
           onKeyDown={onKeyDown}
           rows={1}
-          placeholder="和叶瑄说点什么…"
+          placeholder={`和${getActiveCharacterName()}说点什么…`}
           style={{
             flex: 1, resize: 'none', maxHeight: 120,
             padding: '9px 12px', fontSize: chatFontSize, fontFamily: 'inherit',

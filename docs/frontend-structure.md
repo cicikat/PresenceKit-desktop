@@ -6,14 +6,54 @@
 
 ## 入口
 
-`src/main.tsx` 做三件事：
+`src/main.tsx` 做四件事：
 
 1. 引入全局样式 `src/shared/theme/globals.css`。
-2. 调用 `avatarStore.init()` 读取本地头像配置。
-3. 渲染 `<ChatWindow />`。
+2. `await initUIPrefs()`——渲染前必须等待，见下方「uiPreferences」。
+3. 调用 `initTheme()`（不等待）应用当前主题，随后调用 `avatarStore.init()` 读取本地头像配置。
+4. 渲染 `<ChatWindow />`。
 
 入口按 query 参数选择 view：默认渲染聊天窗口，`?window=pet` 渲染独立 `PetWindow`，
-`?window=presence-nag` 渲染独立、默认隐藏的 `PresenceNagWindow`。
+`?window=presence-nag` 渲染独立、默认隐藏的 `PresenceNagWindow`，`?window=diary-detail` 渲染
+独立的 `DiaryDetailWindow`。四种 view 共用同一个 bundle/入口，不是各自独立的 HTML 页面。
+
+### uiPreferences（`src/shared/uiPreferences.ts`）
+
+所有 `emerald.ui.*` 前缀的偏好统一走这里的 `getUIPref`/`setUIPref`，不直接摸 localStorage：
+
+- 真正的持久化落在 Rust 侧 `app_config_dir()/ui-preferences.json` 文件（IPC：`load_ui_prefs`/
+  `save_ui_prefs`，原子写），不再依赖 localStorage——localStorage 的 user-data 目录按 Tauri
+  `identifier` 派生，`identifier` 一改（例如改包名）localStorage 就会换到全新空 profile，
+  历史偏好全部归零（曾经出过一次事故，见 `docs/known-issues.md`）。
+- `initUIPrefs()` 在渲染前 `invoke('load_ui_prefs')`，解析进内存 `Map`，并镜像写回
+  localStorage（保留给依赖原生 `storage` 事件做跨窗同步的旧代码路径，如 `theme/registry.ts`）。
+  非 Tauri 环境（纯浏览器 `npm run dev`）invoke 会失败，直接 fallback 为纯 localStorage。
+- `getUIPref` 读内存 Map（同步）；`setUIPref` 写内存 + localStorage 镜像 + 300ms debounce
+  invoke `save_ui_prefs`（整份 Map 序列化写文件）。
+- 跨窗口：另一个窗口写偏好会触发本窗口的原生 `storage` 事件，uiPreferences 内部监听并把
+  变更折叠进本窗口的内存 Map，再重新派发同一个 in-process 事件（`onUIPrefChange` 订阅者），
+  调用方不需要区分本地修改和跨窗修改。
+- 迁移：`petVisualStyle.ts`、`pet/mouseSettings.ts`、`petRoamSettings.ts`、
+  `petRippleSettings.ts`、`SubFlow.tsx` 的 timeline 各自原来直接读写 localStorage 裸 key，
+  现改走 `getUIPref`/`setUIPref`；首次读不到新 key 时从旧裸 key 迁移一次并删除旧 key。
+
+### activeCharacter（`src/shared/activeCharacter.ts`）
+
+「当前激活角色是谁」的跨窗口缓存（cc-tasks/15 §G）。每个 client 窗口（chat / room /
+activity / toy / presence-nag）是独立 webview，没有共享的 JS 单例，所以这个缓存直接建在
+`uiPreferences` 之上（key `character.active`，存 `{id, name}`），复用其文件+localStorage
+跨窗同步机制，而不是塞进 `StateEngine`（`shared/state/store.ts` 的 `StateEngine` 只在
+`ChatWindow` 自己的组件树里存活，不跨窗口）。
+
+- `ChatWindow.tsx` 是唯一的 writer：每次 `getPromptAssets()` 解析出 `active.active_character`
+  后调用 `updateActiveCharacterFromAssets(assets)`，从 `characters` 列表里查到对应 `label`
+  写入缓存；`PromptAssetsSettings` 的 `save()` 切换角色成功后同步刷新。
+- 其余窗口/组件只读：`getActiveCharacterName(fallback?)` 同步取「显示名 → 原始 char_id →
+  fallback（默认 'TA'）」；需要随角色切换实时刷新的常驻 UI 另订阅 `subscribeActiveCharacter`。
+- 用于替换所有原先硬编码「叶瑄」的展示位置（通知标题、视频通话姓名标签、活动陪聊面板、
+  presence-nag 弹窗等）；`npm run check:naming`（`scripts/check-naming.mjs`）扫描 `src/` 断言
+  不出现字面量「叶瑄」/「yexuan」（白名单仅保留 `char_tension`/`yexuan_tension` 双发过渡期的
+  兼容读取），防止硬编码回流。
 
 ---
 
@@ -80,7 +120,7 @@ src/windows/dream/
 - 409 / 503 做可见错误提示，不 crash。
 - WAKE 按钮 / ESC：调用 `/dream/exit`，然后关闭窗口并触发 `DreamAfterglowBanner`（位于 `components/DreamAfterglowBanner.tsx`）。
 - Dream Ribbon 顶部聊天图标是固定选中的装饰入口，以短分隔线与功能区隔开；动向 / 状态 / 潜意识打开左侧副栏，其中潜意识挂载只读 hidden state 面板；偏好 / 帮助打开居中 modal，交互层级与 Chat 的偏好 / 帮助窗口一致。
-- Dream 动向 Sidebar 的「梦境流动」区域优先读取 `/dream/state` 可选的 `flow_entries` / `dream_events` / `events` 摘要；旧后端未提供时从当前 dream state 派生 3 条短文案，不读取或展示 chat transcript。
+- Dream 动向 Sidebar 的「梦境流动」区域读取 `/dream/state` 的 `flow_entries: {ts, kind, summary}[]`（后端规则驱动生成，零额外 LLM 调用，见 backend Brief 25 §2）；最多展示 5 条、最新在上，带 `formatAgo` 风格相对时间。旧后端未提供或本轮梦境刚开始（`flow_entries` 为空）时从当前 dream state 派生 3 条短文案兜底，不读取或展示 chat transcript。
 - Dream 状态 Sidebar 读取 `/dream/state` 的 Dream HUD v1.1 字段，以状态 pill 和 0-100 进度条展示；情绪 pill 按边界 / 亲密 / 执念方向做轻量视觉区分，未知标签保持原样显示。缺失数字显示 `—` 且条宽为 0。Dream 未激活时显示空态。`physiological_arousal` 默认隐藏，仅当 `/dream/settings` 返回 `display.physiological_arousal === true` 时展示。
 - Dream 偏好窗口使用顶部横栏分类：当前状态、梦境上下文、系统设置、世界、其他。当前状态只读汇总可信快照；梦境上下文承接记忆读取、感知边界、清明模式和独立 lorebook 开关；系统设置提供聊天字号、主题字号、动态字体包、RGB 自定义配色、日间 / 夜间 Dream 聊天背景分别导入裁切、背景模糊度，以及控制 `display.physiological_arousal` 的开发者模式开关；世界页提供六个 `world_layer` 世界卡和 Dream 独立 `jailbreak_preset` 选择；其他暂留导入占位。Dream 后端偏好通过 `/dream/settings` 读取和保存，请求 5 秒超时；读取失败时显示默认值和重试入口，避免设置页永久停在载入态。梦境进行中修改时明确提示下次入梦生效；外观设置本地即时生效。
 - Sidebar 状态卡与消息气泡分别通过 `DreamGlowPanel` / `DreamGlowBubble` 统一玻璃底、冷色亮边、内外辉光和可选顶部扫光；视觉参数集中在 `features/dream/DreamTokens.css`。
@@ -320,11 +360,18 @@ Ring buffer：`useState<{mood, aura}[]>` 长度 60；2s 采样；mood 轨迹柱�
 
 职责：
 
-- 在 Dream Sidebar 的 `subconscious` tab 中展示「潜意识」状态。
-- 挂载时只调用 `loadHiddenStateDebug()`；前端不直接调用 hidden state 写入、integrator、save 或 mutate API。
-- 常态展示 `embodied_ease`（身体放松度）、`body_memory`（身体记忆线索）、`dream_snapshot`（梦境读取到的状态）和最近来源 badge。
+- 在 Dream Sidebar 的 `subconscious` tab 中展示「潜意识」状态，沉浸化呈现（cc-tasks/15 §F）：不接
+  `dreamState` 就只显示占位文案「还未进入梦境」（复用 `.dream-hud__empty`），不请求也不渲染数据；
+  `isDreamActive()`（`DreamStatusSidebar.tsx` 导出）判定入梦与否。
+- 入梦后挂载时只调用 `loadHiddenStateDebug()`；前端不直接调用 hidden state 写入、integrator、save 或 mutate API。
+- 常态展示 `embodied_ease`（身体放松度）、`body_memory`（身体记忆线索）、`dream_snapshot`（梦境读取到的状态）。
+  不再显示来源 badge、prev/curr 数值对比行、诊断行、`READ ONLY` 标签——去掉这些系统味文案，只保留
+  `HudMeter` 自带的 delta 箭头。
 - `body_memory` 为空时显示「暂无身体记忆线索」，不按错误处理。
-- `sensitivity.current` / `sensitivity.baseline`、`touch_need.deficit` / `touch_need.baseline`、schema 和 decay 等开发者信息仅在返回的 `display.physiological_arousal === true` 时展示；这个标记由 Tauri `load_hidden_state_debug` 只读参考 `/dream/settings` 合并。
+- `sensitivity.current` / `sensitivity.baseline`、`touch_need.deficit` / `touch_need.baseline` 等开发者
+  信息仅在返回的 `display.physiological_arousal === true` 时展示（这个标记由 Tauri
+  `load_hidden_state_debug` 只读参考 `/dream/settings` 合并）；`schema_version`/`last_decay_tick` 的
+  「开发者信息」卡片已整体移除，开发者模式下只剩「即时敏感」「触碰亏缺」两张数值卡。
 
 当前数据来源：
 

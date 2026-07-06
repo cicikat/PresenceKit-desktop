@@ -4,6 +4,7 @@ import { BUILTIN_THEMES } from './builtinThemes';
 import { applyTheme, applyThemeCss, validateTheme } from './loader';
 import { inspectThemeCss } from './cssGuard';
 import { loadUserPresets, presetToManifest } from './userPresets';
+import { resetMoodOverlayBase } from './moodReactive';
 import type { ThemeManifest, ThemeRecord } from './types';
 
 const NIGHT_START = 19; // 19:00 → night
@@ -104,6 +105,7 @@ export async function setTheme(id: string): Promise<void> {
   document.documentElement.classList.add('theme-transitioning');
   applyTheme(record.manifest);
   applyThemeCss(record.manifest.id, record.cssText ?? null);
+  resetMoodOverlayBase();
   currentThemeId = record.manifest.id;
   setUIPref('chat.theme', currentThemeId);
   listeners.forEach(listener => listener());

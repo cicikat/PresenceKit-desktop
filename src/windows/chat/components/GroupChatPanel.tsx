@@ -364,6 +364,11 @@ export function GroupChatPanel({
   // Streaming refs — same pattern as ChatPanel
   const streamingLocalIdRef = useRef<Map<string, string[]>>(new Map());
   const streamingTextRef    = useRef<Map<string, string>>(new Map());
+  const streamCharIdRef     = useRef<Map<string, string>>(new Map());
+  // Mirror of rosterMap for the ws-subscribe effect below, which doesn't re-run when
+  // rosterMap updates (its deps are [groupId, replaceStreamingBubbleWithParts]).
+  const rosterMapRef = useRef<Record<string, RosterEntry>>({});
+  useEffect(() => { rosterMapRef.current = rosterMap; }, [rosterMap]);
   const wsMsgIdMapRef       = useRef<Map<string, string[]>>(new Map());
   const scrollRef           = useRef<HTMLDivElement>(null);
   const roundTimerRef       = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -506,7 +511,7 @@ export function GroupChatPanel({
         wsMsgId: i === 0 ? msg_id : undefined,
         speakerId: char_id,
       }))]);
-      void notifyOnMessage(msg_id, char_id, content);
+      void notifyOnMessage(msg_id, rosterMapRef.current[char_id]?.label ?? char_id, content);
     });
 
     // stream_start{char_id} → create streaming bubble with speakerId
@@ -515,6 +520,7 @@ export function GroupChatPanel({
       const firstId = newId();
       streamingLocalIdRef.current.set(msg_id, [firstId]);
       streamingTextRef.current.set(msg_id, '');
+      streamCharIdRef.current.set(msg_id, char_id);
       setMessages(prev => [...prev, {
         id: firstId, role: 'assistant' as const,
         text: '', time: Date.now(),
@@ -561,7 +567,10 @@ export function GroupChatPanel({
       const ids = streamingLocalIdRef.current.get(msg_id);
       if (!ids) return;
       setMessages(prev => prev.map(m => ids.includes(m.id) ? { ...m, streamingDone: true } : m));
-      void notifyOnMessage(msg_id, '叶瑄', streamingTextRef.current.get(msg_id) ?? '');
+      const charId = streamCharIdRef.current.get(msg_id);
+      streamCharIdRef.current.delete(msg_id);
+      const title = (charId && rosterMapRef.current[charId]?.label) || charId || 'TA';
+      void notifyOnMessage(msg_id, title, streamingTextRef.current.get(msg_id) ?? '');
     });
 
     // group_round_start → lock input; timeout fallback 30s

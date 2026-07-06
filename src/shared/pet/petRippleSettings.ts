@@ -1,3 +1,5 @@
+import { getUIPref, setUIPref, onUIPrefChange } from '../uiPreferences';
+
 export interface PetRippleSettings {
   enabled: boolean;
 }
@@ -6,8 +8,8 @@ export const DEFAULT_PET_RIPPLE_SETTINGS: PetRippleSettings = {
   enabled: true,
 };
 
-const STORAGE_KEY = 'emerald.pet.ripple';
-const CHANGE_EVENT = 'emerald:pet-ripple-settings';
+const PREF_KEY = 'pet.ripple';
+const LEGACY_STORAGE_KEY = 'emerald.pet.ripple';
 
 function normalize(value: Partial<PetRippleSettings> | null | undefined): PetRippleSettings {
   return {
@@ -15,36 +17,33 @@ function normalize(value: Partial<PetRippleSettings> | null | undefined): PetRip
   };
 }
 
-export function loadPetRippleSettings(): PetRippleSettings {
+function migrateLegacy(): PetRippleSettings | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return normalize(raw ? JSON.parse(raw) : null);
+    const raw = localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (raw === null) return null;
+    const value = normalize(JSON.parse(raw));
+    setUIPref(PREF_KEY, value);
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
+    return value;
   } catch {
-    return DEFAULT_PET_RIPPLE_SETTINGS;
+    return null;
   }
+}
+
+export function loadPetRippleSettings(): PetRippleSettings {
+  const stored = getUIPref<PetRippleSettings | null>(PREF_KEY, null);
+  if (stored !== null) return normalize(stored);
+  return migrateLegacy() ?? DEFAULT_PET_RIPPLE_SETTINGS;
 }
 
 export function savePetRippleSettings(patch: Partial<PetRippleSettings>): PetRippleSettings {
   const next = normalize({ ...loadPetRippleSettings(), ...patch });
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    window.dispatchEvent(new CustomEvent(CHANGE_EVENT, { detail: next }));
-  } catch {
-    // Keep the in-memory update usable when storage is unavailable.
-  }
+  setUIPref(PREF_KEY, next);
   return next;
 }
 
 export function subscribePetRippleSettings(listener: (settings: PetRippleSettings) => void) {
-  const onCustom = (event: Event) =>
-    listener(normalize((event as CustomEvent<PetRippleSettings>).detail));
-  const onStorage = (event: StorageEvent) => {
-    if (event.key === STORAGE_KEY) listener(loadPetRippleSettings());
-  };
-  window.addEventListener(CHANGE_EVENT, onCustom);
-  window.addEventListener('storage', onStorage);
-  return () => {
-    window.removeEventListener(CHANGE_EVENT, onCustom);
-    window.removeEventListener('storage', onStorage);
-  };
+  return onUIPrefChange(key => {
+    if (key === PREF_KEY) listener(loadPetRippleSettings());
+  });
 }

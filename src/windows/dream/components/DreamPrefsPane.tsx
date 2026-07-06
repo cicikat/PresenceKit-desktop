@@ -20,7 +20,13 @@ import {
   type DreamBackgroundAsset,
   type DreamBackgroundTone,
 } from '../../../shared/avatars/store';
-import { listDreamFonts, type DreamAppearance, type DreamFontOption } from '../../../shared/dreamAppearance';
+import {
+  listDreamFonts,
+  DREAM_DAY_DEFAULTS,
+  DREAM_NIGHT_DEFAULTS,
+  type DreamAppearance,
+  type DreamFontOption,
+} from '../../../shared/dreamAppearance';
 import { Icon } from '../../chat/components/UIKit';
 import { DreamBackgroundCropper } from './DreamBackgroundCropper';
 
@@ -471,22 +477,6 @@ function BackgroundImportCard({
 }
 
 // ── Dream color editor ───────────────────────────────────────────────────────
-
-const DREAM_DAY_DEFAULTS: Record<string, string> = {
-  '--dt-bg-1': '#f8f3e9', '--dt-bg-2': '#f0e7f3', '--dt-bg-3': '#ebf5f2',
-  '--dt-ink': '#48404e', '--dt-ink-2': '#716679', '--dt-ink-3': '#9a8fa0', '--dt-ink-4': '#c8becb',
-  '--dt-flower-dandelion': '#d6b6ef', '--dt-flower-rose': '#efa5a2',
-  '--dt-flower-bluebell': '#accbe9', '--dt-flower-daisy': '#ead884', '--dt-flower-sun': '#efd477',
-  '--dt-accent-rose': '#e96c6c', '--dt-accent-violet': '#b97fe8', '--dt-accent-azure': '#7fbfe8',
-};
-
-const DREAM_NIGHT_DEFAULTS: Record<string, string> = {
-  '--dt-bg-1': '#0b1020', '--dt-bg-2': '#11182b', '--dt-bg-3': '#151d32',
-  '--dt-ink': '#d9dce8', '--dt-ink-2': '#a7aec3', '--dt-ink-3': '#8a90a8', '--dt-ink-4': '#6a7090',
-  '--dt-flower-dandelion': '#8f78d6', '--dt-flower-rose': '#efa5a2',
-  '--dt-flower-bluebell': '#7cb8ff', '--dt-flower-daisy': '#ead884', '--dt-flower-sun': '#efd477',
-  '--dt-accent-rose': '#e96c6c', '--dt-accent-violet': '#b97fe8', '--dt-accent-azure': '#7fbfe8',
-};
 
 const DREAM_COLOR_GROUPS: Array<{ label: string; tokens: string[] }> = [
   { label: '背景', tokens: ['--dt-bg-1', '--dt-bg-2', '--dt-bg-3'] },

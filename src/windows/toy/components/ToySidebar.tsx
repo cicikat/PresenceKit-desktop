@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { getHardwareDevices, connectHardware } from '../../../shared/api/hardware';
 import type { HardwareStatus } from '../../../shared/api/types';
+import { getActiveCharacterName } from '../../../shared/activeCharacter';
 
 const POLL_MS = 6000;
 
@@ -146,7 +147,7 @@ export function ToySidebar() {
         padding: '12px 14px', border: '1px dashed var(--paper-edge)', borderRadius: 'var(--radius-md, 8px)',
         color: 'var(--ink-3)', fontSize: 12, lineHeight: 1.7,
       }}>
-        设备控制由叶瑄在对话里按你的话触发，这里只显示状态。
+        设备控制由{getActiveCharacterName()}在对话里按你的话触发，这里只显示状态。
       </div>
     </div>
   );

@@ -916,6 +916,8 @@ v1 目标新增或替换：
 | `set_chat_mode(mode)` | 前端 → Rust → 后端 | PUT `/chat-mode`，`mode` 取值 `"chat"` \| `"roleplay"` |
 | `set_chat_style(style)` | 前端 → Rust → 后端 | PUT `/chat-style`，`style` 取值 `"chat"` \| `"roleplay"` |
 | `set_chat_multi_message(enabled)` | 前端 → Rust → 后端 | PUT `/chat-multi-message`，`enabled` 布尔 |
+| `load_ui_prefs()` | 前端 → Rust | 读 `app_config_dir()/ui-preferences.json` 全文，不存在返回 `"{}"`；无后端参与，纯本地文件 |
+| `save_ui_prefs(contents)` | 前端 → Rust | 原子写（临时文件 + rename）`app_config_dir()/ui-preferences.json`；`contents` 是前端整份 uiPreferences Map 的 JSON 序列化 |
 | `greet(name)` | 前端 → Rust | Tauri 模板遗留，当前未使用 |
 
 HTTP command 必须使用：
@@ -1034,3 +1036,38 @@ Mirror 入梦只提交模式，不提交 `script_id`：
   `last_blocked_events` 仅用于只读 dev/debug 展示；stage transition 由后端负责。
 - Mirror dev 信息可显示 `version`、`source`、`snapshot_buckets` 和 `symbolic_hints`；客户端
   不读取 hidden_state、不计算 bucket、不写回 Mirror 状态。
+
+### `flow_entries` / `char_tension`（backend Brief 25 §2、§3 P2）
+
+`GET /dream/state` 现在额外返回：
+
+```json
+{
+  "flow_entries": [{ "ts": "2026-07-06T08:00:00+00:00", "kind": "scene_shift", "summary": "场景转入：..." }],
+  "char_tension": 0.42,
+  "yexuan_tension": 0.42
+}
+```
+
+- `flow_entries`：后端规则驱动生成（零额外 LLM 调用），FIFO 上限 10 条，`/dream/enter` 时清空。
+  `DreamSidebar.tsx` 的 `getBackendFlowEntries()` 直接消费，展示最近 5 条、最新在上，带相对时间；
+  为空（旧后端 / 梦刚开始）时回退到本地派生的 3 条固定文案。
+- `char_tension` 是新名字；`yexuan_tension` 是迁移期双发的废弃别名，会在过渡窗口结束后从响应里
+  移除。客户端一律读 `char_tension ?? yexuan_tension`（`DreamSidebar.tsx`、`DreamControlBar.tsx`），
+  过渡期结束、后端确认停止双发后再删掉 `?? yexuan_tension` 分支和 `dream-types.ts` 里的
+  `yexuan_tension` 字段。
+
+### 五子棋/象棋对手枚举更名（backend Brief 25 §3 P2）
+
+`yexuan_ai` → `character_ai`（`GomokuOpponent`/`ChessOpponent`，`shared/api/activity-api.ts`）。
+后端在读路径做旧值归一化（旧存档 `yexuan_ai` 就地改写），响应始终返回新值——客户端因此完全不需要
+识别旧字符串，只需统一用 `AI_OPPONENT = 'character_ai'` 常量发送/比较（`GomokuPage.tsx`、
+`ChessPage.tsx`）。
+
+### 角色名去硬编码（backend Brief 25 §1/§3 P0，client cc-tasks/15 §G）
+
+客户端不再有任何硬编码的「叶瑄」字面量（`npm run check:naming` 守门）。展示名统一走
+`shared/activeCharacter.ts` 的 `getActiveCharacterName()`，数据源是 `GET /get_prompt_assets`
+（Tauri IPC `get_prompt_assets` → 后端 prompt-assets）里 `characters[].label` 按
+`active.active_character` 查到的角色标签，详见 `docs/frontend-structure.md` 的
+「activeCharacter」小节。

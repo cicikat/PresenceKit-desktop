@@ -5,6 +5,7 @@ import { Tag, MicroLabel } from './UIKit';
 import { MOOD_HUE, MOOD_LABEL_EN, FOCUS_LABEL_EN } from './UIKit';
 import { MOOD_TABLE } from '../../../shared/state/store';
 import { chatThemeFontSize } from '../../../shared/chatAppearance';
+import { getUIPref, setUIPref } from '../../../shared/uiPreferences';
 import type { Mood } from '../../../shared/state/store';
 
 interface FlowEntry {
@@ -54,19 +55,27 @@ export function SubFlow({ engine }: { engine: any }) {
   const [state, setState] = useState(engine.get());
   useEffect(() => engine.subscribe(setState), [engine]);
 
-  // ── persistent timeline (localStorage, 8-hour window) ────────────────────
+  // ── persistent timeline (uiPreferences file backend, 8-hour window) ──────
   const EIGHT_HOURS = 8 * 3_600_000;
   const STORAGE_KEY = 'subflow_timeline';
 
   function loadTimeline(): FlowEntry[] {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return [];
-      const parsed: FlowEntry[] = JSON.parse(raw);
-      return parsed.filter(e => Date.now() - e.timestamp < EIGHT_HOURS);
-    } catch {
-      return [];
+    let parsed = getUIPref<FlowEntry[] | null>(STORAGE_KEY, null);
+    if (parsed === null) {
+      // one-time migration from the pre-uiPreferences bare localStorage key
+      try {
+        const legacy = localStorage.getItem(STORAGE_KEY);
+        if (legacy) {
+          parsed = JSON.parse(legacy);
+          setUIPref(STORAGE_KEY, parsed);
+          localStorage.removeItem(STORAGE_KEY);
+        }
+      } catch {
+        parsed = null;
+      }
     }
+    if (!parsed) return [];
+    return parsed.filter(e => Date.now() - e.timestamp < EIGHT_HOURS);
   }
 
   const [timeline, setTimeline] = useState<FlowEntry[]>(loadTimeline);
@@ -84,7 +93,7 @@ export function SubFlow({ engine }: { engine: any }) {
         { id: String(Date.now()), text: entryText, mood: state.mood as Mood, timestamp: Date.now() },
         ...prev.filter(e => Date.now() - e.timestamp < EIGHT_HOURS),
       ];
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
+      setUIPref(STORAGE_KEY, next);
       return next;
     });
   }, [state.activity, state.mood, state.focus]);

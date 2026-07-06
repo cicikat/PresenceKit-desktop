@@ -1,3 +1,5 @@
+import { getUIPref, setUIPref, onUIPrefChange } from '../uiPreferences';
+
 export interface PetMouseSettings {
   enabled: boolean;
   botherMinMinutes: number;
@@ -10,8 +12,8 @@ export const DEFAULT_PET_MOUSE_SETTINGS: PetMouseSettings = {
   botherMaxMinutes: 5,
 };
 
-const STORAGE_KEY = 'emerald.pet.mouse';
-const CHANGE_EVENT = 'emerald:pet-mouse-settings';
+const PREF_KEY = 'pet.mouse';
+const LEGACY_STORAGE_KEY = 'emerald.pet.mouse';
 
 function clampMinutes(value: unknown, fallback: number) {
   const parsed = typeof value === 'number' ? value : Number(value);
@@ -28,37 +30,33 @@ function normalizeSettings(value: Partial<PetMouseSettings> | null | undefined):
   };
 }
 
-export function loadPetMouseSettings(): PetMouseSettings {
+function migrateLegacy(): PetMouseSettings | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return normalizeSettings(raw ? JSON.parse(raw) : null);
+    const raw = localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (raw === null) return null;
+    const value = normalizeSettings(JSON.parse(raw));
+    setUIPref(PREF_KEY, value);
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
+    return value;
   } catch {
-    return DEFAULT_PET_MOUSE_SETTINGS;
+    return null;
   }
+}
+
+export function loadPetMouseSettings(): PetMouseSettings {
+  const stored = getUIPref<PetMouseSettings | null>(PREF_KEY, null);
+  if (stored !== null) return normalizeSettings(stored);
+  return migrateLegacy() ?? DEFAULT_PET_MOUSE_SETTINGS;
 }
 
 export function savePetMouseSettings(patch: Partial<PetMouseSettings>): PetMouseSettings {
   const next = normalizeSettings({ ...loadPetMouseSettings(), ...patch });
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    window.dispatchEvent(new CustomEvent(CHANGE_EVENT, { detail: next }));
-  } catch {
-    // Keep the in-memory update usable when storage is unavailable.
-  }
+  setUIPref(PREF_KEY, next);
   return next;
 }
 
 export function subscribePetMouseSettings(listener: (settings: PetMouseSettings) => void) {
-  const onCustom = (event: Event) => {
-    listener(normalizeSettings((event as CustomEvent<PetMouseSettings>).detail));
-  };
-  const onStorage = (event: StorageEvent) => {
-    if (event.key === STORAGE_KEY) listener(loadPetMouseSettings());
-  };
-  window.addEventListener(CHANGE_EVENT, onCustom);
-  window.addEventListener('storage', onStorage);
-  return () => {
-    window.removeEventListener(CHANGE_EVENT, onCustom);
-    window.removeEventListener('storage', onStorage);
-  };
+  return onUIPrefChange(key => {
+    if (key === PREF_KEY) listener(loadPetMouseSettings());
+  });
 }

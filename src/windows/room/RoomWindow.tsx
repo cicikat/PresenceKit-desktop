@@ -14,6 +14,7 @@ import { sendChat } from '../../shared/api/backend';
 import { wsClient } from '../../shared/api/ws';
 import { useVoiceInput } from '../../shared/voice/useVoiceInput';
 import { VnBubble } from './VnBubble';
+import { getActiveCharacterName, subscribeActiveCharacter } from '../../shared/activeCharacter';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -35,6 +36,8 @@ function formatTime(secs: number): string {
 // ── component ─────────────────────────────────────────────────────────────────
 
 export function RoomWindow({ onClose }: { onClose: () => void }) {
+  const [charName, setCharName] = useState(() => getActiveCharacterName());
+  useEffect(() => subscribeActiveCharacter(() => setCharName(getActiveCharacterName())), []);
   const [mood, setMood] = useState<Mood>(DEFAULT_PET_SNAPSHOT.mood);
   const [roomSettings, setRoomSettings] = useState<RoomSettings>(loadRoomSettings);
   const elapsed = useTick();
@@ -174,7 +177,7 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
           color: 'oklch(0.88 0.04 240)', fontSize: 14, fontWeight: 500,
           flex: 1, fontFamily: 'var(--font-ui, inherit)',
         }}>
-          叶瑄
+          {charName}
         </span>
         <span style={{
           color: 'oklch(0.60 0.03 240)', fontSize: 13,
@@ -201,7 +204,7 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
         {/* Assistant VN bubble — bottom center */}
         {presenter.bubble && (
           <VnBubble
-            name="叶瑄"
+            name={charName}
             text={presenter.bubble.text}
             nameAlign="left"
             visible={presenter.bubble.visible}

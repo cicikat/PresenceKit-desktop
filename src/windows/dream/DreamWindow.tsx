@@ -538,12 +538,12 @@ function DreamSidePane({
         <div className="dream-side-placeholder__head">
           <div>
             <div className="dream-side-placeholder__title">潜意识</div>
-            <div className="dream-side-placeholder__kicker">READ ONLY · HIDDEN STATE</div>
+            <div className="dream-side-placeholder__kicker">SUBCONSCIOUS</div>
           </div>
           <button type="button" className="dream-side-placeholder__close" onClick={onClose} aria-label="关闭侧栏">×</button>
         </div>
         <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-          <SubHiddenStatePanel />
+          <SubHiddenStatePanel dreamState={dreamState} />
         </div>
       </aside>
     );

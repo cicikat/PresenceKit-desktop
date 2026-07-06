@@ -9,13 +9,10 @@ export type DreamStatus =
 
 /** Projected dream state from GET /dream/state — UI panel fields only. */
 export interface DreamFlowEntry {
-  type?: string;
-  summary?: string;
-  description?: string;
-  label?: string;
+  ts: string;
+  kind: string;
+  summary: string;
 }
-
-export type DreamFlowEntrySource = string | DreamFlowEntry;
 
 export interface DreamScenarioState {
   script_id?: string | null;
@@ -64,14 +61,14 @@ export interface DreamState {
     sensitivity: number;
     tension: number;
   };
-  /** 叶瑄's dream-local emotional tension, 0.0–1.0. */
-  yexuan_tension: number;
+  /** Character's dream-local emotional tension, 0.0–1.0. */
+  char_tension?: number;
+  /** @deprecated backend double-send alias for char_tension during the Brief 25 §3 P2 migration window — drop once the backend stops sending it. */
+  yexuan_tension?: number;
   scene_state?: string;
   symbolic_anchors?: string[];
-  /** Optional backend-projected dream flow summaries. Older backends omit these fields. */
-  flow_entries?: DreamFlowEntrySource[];
-  dream_events?: DreamFlowEntrySource[];
-  events?: DreamFlowEntrySource[];
+  /** Backend-projected dream flow ticker (rule-driven, zero extra LLM calls). Empty/absent on older backends or before the first flow event of a dream. */
+  flow_entries?: DreamFlowEntry[];
   /** Dream HUD v1.1 — derived fields appended by backend. Absent on older backends. */
   emotion_label?: string;
   scene_label?: string;

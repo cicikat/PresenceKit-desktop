@@ -9,6 +9,7 @@ import type {
   NarrativeSegment,
 } from './types';
 import { isPresenceNagEnabled } from '../presenceNag';
+import { getActiveCharacterInfo } from '../activeCharacter';
 
 type EventMap = {
   state: ConnectionState;
@@ -305,7 +306,7 @@ class WSClient {
         if (!isPresenceNagEnabled()) return;
         const text = stringParam(action, ['text', 'message', 'body']);
         if (!text) throw new Error('presence_nag 缺少 text');
-        const avatar = stringParam(action, ['avatar', 'character', 'char_id'], '叶瑄');
+        const avatar = stringParam(action, ['avatar', 'character', 'char_id'], getActiveCharacterInfo().id);
         await invoke('presence_nag', { text, avatar });
         return;
       }

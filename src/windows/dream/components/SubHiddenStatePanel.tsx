@@ -6,21 +6,13 @@ import type {
   HiddenStateDebugResponse,
   HiddenStateBodyMemoryEntry,
 } from '../../../shared/api/types';
+import type { DreamState } from '../../../shared/api/dream-types';
+import { isDreamActive } from './DreamStatusSidebar';
 import { HudMeter } from './hud/HudMeter';
 import { HudPill, type HudPillTone } from './hud/HudPill';
 import { HudGroup } from './hud/HudGroup';
 
 // ── Constants ────────────────────────────────────────────────────────────────
-
-const SOURCE_HUE: Record<string, number> = {
-  dream_impression: 280,
-  dream_afterglow: 260,
-  dream_body_event: 240,
-  reality_behavior: 145,
-  time_decay: 72,
-  consolidation: 200,
-  init: 0,
-};
 
 const BUCKET_LABELS: Record<string, string> = {
   low: '低',
@@ -40,29 +32,7 @@ const BUCKET_TONE: Record<string, HudPillTone> = {
   easy: 'intimacy',
 };
 
-// Sources that indicate no real-conversation writes have happened
-const PASSIVE_SOURCES = new Set([
-  'time_decay',
-  'init',
-  'consolidation',
-  'dream_afterglow',
-  'dream_impression',
-  'dream_body_event',
-]);
-
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-function deltaArrow(delta: number, threshold = 0.05): '↑' | '↓' | '→' {
-  if (delta > threshold) return '↑';
-  if (delta < -threshold) return '↓';
-  return '→';
-}
-
-function formatDelta(delta: number, threshold = 0.05): string {
-  const arrow = deltaArrow(delta, threshold);
-  const sign = delta >= 0 ? '+' : '';
-  return `${arrow} ${sign}${delta.toFixed(1)}`;
-}
 
 function fs(px: number): string {
   return `calc(${px}px * var(--dream-theme-font-scale, 1))`;
@@ -97,130 +67,6 @@ function SectionHeader({ label, tag }: { label: string; tag?: string }) {
           {tag}
         </span>
       )}
-    </div>
-  );
-}
-
-function SourceBadge({ source }: { source: string }) {
-  const hue = SOURCE_HUE[source] ?? 168;
-  return (
-    <span
-      className="mono"
-      title={`source: ${source}`}
-      style={{
-        display: 'inline-block',
-        padding: '1px 6px',
-        fontSize: fs(8.5),
-        letterSpacing: 0.9,
-        fontWeight: 700,
-        background: hue > 0 ? `oklch(0.32 0.08 ${hue})` : 'var(--dt-surface-deep)',
-        color: hue > 0 ? `oklch(0.92 0.06 ${hue})` : 'var(--dt-ink-3)',
-        borderRadius: 3,
-        whiteSpace: 'nowrap',
-      }}
-    >
-      {source || 'unknown'}
-    </span>
-  );
-}
-
-// ── Diff row (prev-snapshot delta) ───────────────────────────────────────────
-
-function DiffRow({ label, curr, prev }: { label: string; curr: number; prev: number | undefined }) {
-  if (prev === undefined) return null;
-  const delta = curr - prev;
-  if (Math.abs(delta) < 0.05) {
-    return (
-      <div style={{ fontSize: fs(8.5), color: 'var(--dt-ink-3)', letterSpacing: 0.5, marginTop: 4 }}>
-        <span className="mono">{label}: </span>
-        <span style={{ opacity: 0.6 }}>自上次刷新无变化</span>
-      </div>
-    );
-  }
-  const color = delta > 0 ? 'oklch(0.72 0.10 145)' : 'oklch(0.70 0.10 20)';
-  return (
-    <div style={{ fontSize: fs(8.5), letterSpacing: 0.5, marginTop: 4 }}>
-      <span className="mono" style={{ color: 'var(--dt-ink-3)' }}>{label}: </span>
-      <span className="mono" style={{ color, fontWeight: 700 }}>{formatDelta(delta)}</span>
-      <span style={{ color: 'var(--dt-ink-3)', opacity: 0.6, marginLeft: 4 }}>自上次刷新</span>
-    </div>
-  );
-}
-
-// ── Compact source diagnostic (replaces full SourceOverview card) ─────────────
-
-function SourceDiagnostic({ data }: { data: HiddenStateDebugResponse }) {
-  const sources = [
-    data.sensitivity.last_update_source,
-    data.touch_need.last_update_source,
-    data.embodied_ease.last_update_source,
-  ];
-  const allPassive = sources.every(s => PASSIVE_SOURCES.has(s));
-  const hasRealityWrite = sources.some(s => s === 'reality_behavior');
-
-  return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        padding: '5px 0 9px',
-        flexWrap: 'wrap',
-      }}
-    >
-      <span className="mono" style={{ fontSize: fs(8.5), color: 'var(--dt-ink-3)', letterSpacing: 1 }}>
-        驱动源
-      </span>
-      {hasRealityWrite ? (
-        <span
-          className="mono"
-          style={{
-            fontSize: fs(8.5),
-            letterSpacing: 0.8,
-            padding: '1px 7px',
-            borderRadius: 3,
-            background: 'oklch(0.26 0.06 145 / 0.6)',
-            border: '1px solid oklch(0.42 0.10 145 / 0.5)',
-            color: 'oklch(0.82 0.10 145)',
-          }}
-        >
-          检测到现实写入 ✓
-        </span>
-      ) : allPassive ? (
-        <span
-          className="mono"
-          style={{
-            fontSize: fs(8.5),
-            letterSpacing: 0.8,
-            padding: '1px 7px',
-            borderRadius: 3,
-            background: 'oklch(0.26 0.04 72 / 0.45)',
-            border: '1px solid oklch(0.42 0.08 72 / 0.40)',
-            color: 'oklch(0.78 0.07 72)',
-          }}
-        >
-          全惰性 · H1 接线前
-        </span>
-      ) : (
-        <span className="mono" style={{ fontSize: fs(8.5), color: 'var(--dt-ink-3)', letterSpacing: 0.8 }}>
-          混合驱动
-        </span>
-      )}
-      <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-        {[
-          { label: '敏感', source: data.sensitivity.last_update_source },
-          { label: '触碰', source: data.touch_need.last_update_source },
-          { label: '放松', source: data.embodied_ease.last_update_source },
-        ].map(({ label, source }) => (
-          <span
-            key={label}
-            className="mono"
-            style={{ fontSize: fs(8), color: 'var(--dt-ink-3)', letterSpacing: 0.5 }}
-          >
-            {label}:<SourceBadge source={source} />
-          </span>
-        ))}
-      </div>
     </div>
   );
 }
@@ -291,49 +137,17 @@ function BodyMemoryTable({ entries }: { entries: HiddenStateBodyMemoryEntry[] })
   );
 }
 
-// ── "H1 接线前惰性" annotation for dev fields ───────────────────────────────
-
-function InertNote() {
-  return (
-    <div
-      className="mono"
-      style={{
-        marginTop: 6,
-        fontSize: fs(8),
-        color: 'oklch(0.78 0.07 72)',
-        letterSpacing: 0.6,
-        padding: '2px 6px',
-        borderRadius: 3,
-        background: 'oklch(0.26 0.04 72 / 0.35)',
-        border: '1px solid oklch(0.42 0.08 72 / 0.30)',
-        display: 'inline-block',
-      }}
-    >
-      H1 接线前仅衰减驱动，不反映现实
-    </div>
-  );
-}
-
-function DeveloperNotice() {
-  return (
-    <PanelCard>
-      <div className="serif" style={{ fontSize: fs(12.5), lineHeight: 1.55, color: 'var(--dt-ink-3)' }}>
-        更细的敏感度与触碰需求数值会跟随 Dream 系统设置里的开发者模式显示。
-      </div>
-    </PanelCard>
-  );
-}
-
 // ── Main component ───────────────────────────────────────────────────────────
 
-export function SubHiddenStatePanel() {
+export function SubHiddenStatePanel({ dreamState }: { dreamState: DreamState | null }) {
+  const active = isDreamActive(dreamState);
+
   const [data, setData] = useState<HiddenStateDebugResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
-  // Track the data from the previous fetch for diff display
+  // Track the data from the previous fetch for delta computations (no longer displayed, kept for HudMeter's delta arrow)
   const prevDataRef = useRef<HiddenStateDebugResponse | null>(null);
-  // Always points to the current data so fetchPanel closure can read it
   const currentDataRef = useRef<HiddenStateDebugResponse | null>(null);
 
   const fetchPanel = async () => {
@@ -352,10 +166,19 @@ export function SubHiddenStatePanel() {
   };
 
   useEffect(() => {
+    if (!active) return;
     void fetchPanel();
-  }, []);
+  }, [active]);
 
-  if (loading) {
+  if (!active) {
+    return (
+      <div className="dream-hud__empty">
+        还未进入梦境
+      </div>
+    );
+  }
+
+  if (loading && !data) {
     return (
       <div style={{ padding: '20px 14px' }}>
         <span className="mono" style={{ fontSize: fs(10), color: 'var(--dt-ink-3)', letterSpacing: 1.1 }}>
@@ -404,11 +227,8 @@ export function SubHiddenStatePanel() {
   return (
     <div style={{ padding: '10px 14px 20px', overflowY: 'auto', height: '100%' }}>
 
-      {/* Top bar: READ ONLY label + refresh */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-        <span className="mono" style={{ fontSize: fs(8.5), color: 'var(--dt-ink-3)', letterSpacing: 1.1 }}>
-          READ ONLY · Phase 4.5
-        </span>
+      {/* Top bar: refresh only, right-aligned */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
         <button
           type="button"
           onClick={() => void fetchPanel()}
@@ -490,18 +310,6 @@ export function SubHiddenStatePanel() {
             {easeFromCenter >= 0 ? '+' : ''}{easeFromCenter.toFixed(1)}
           </span>
         </div>
-        <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span className="mono" style={{ fontSize: fs(8.5), color: 'var(--dt-ink-3)', letterSpacing: 0.9 }}>
-            最近来源
-          </span>
-          <SourceBadge source={data.embodied_ease.last_update_source} />
-        </div>
-        <div className="mono" style={{ marginTop: 5, fontSize: fs(8), color: 'var(--dt-ink-3)', letterSpacing: 0.6, opacity: 0.8 }}>
-          仅出梦 afterglow 回流 + 时间衰减驱动
-        </div>
-        {easeDelta !== null && (
-          <DiffRow label="放松度" curr={data.embodied_ease.value} prev={prev?.embodied_ease.value} />
-        )}
       </PanelCard>
 
       {/* Card 3: body_memory */}
@@ -510,11 +318,8 @@ export function SubHiddenStatePanel() {
         <BodyMemoryTable entries={data.body_memory} />
       </PanelCard>
 
-      {/* Compact source diagnostic line */}
-      <SourceDiagnostic data={data} />
-
-      {/* Dev fields: sensitivity / touch_need / meta */}
-      {showDeveloperFields ? (
+      {/* Dev fields: sensitivity / touch_need */}
+      {showDeveloperFields && (
         <>
           <PanelCard>
             <SectionHeader label="即时敏感" tag="DEVELOPER" />
@@ -546,13 +351,6 @@ export function SubHiddenStatePanel() {
                 {sensFromBaseline >= 0 ? '+' : ''}{sensFromBaseline.toFixed(1)}
               </span>
             </div>
-            <div style={{ marginTop: 7 }}>
-              <SourceBadge source={data.sensitivity.last_update_source} />
-            </div>
-            {sensDelta !== null && (
-              <DiffRow label="即时敏感" curr={data.sensitivity.current} prev={prev?.sensitivity.current} />
-            )}
-            <InertNote />
           </PanelCard>
 
           <PanelCard>
@@ -570,25 +368,8 @@ export function SubHiddenStatePanel() {
               background="linear-gradient(90deg, var(--dt-flower-dandelion), var(--dt-accent-rose))"
               delta={touchDelta}
             />
-            <div style={{ marginTop: 7 }}>
-              <SourceBadge source={data.touch_need.last_update_source} />
-            </div>
-            {touchDelta !== null && (
-              <DiffRow label="触碰亏缺" curr={data.touch_need.deficit} prev={prev?.touch_need.deficit} />
-            )}
-            <InertNote />
-          </PanelCard>
-
-          <PanelCard>
-            <SectionHeader label="开发者信息" tag={`SCHEMA v${data.schema_version}`} />
-            <div className="mono" style={{ fontSize: fs(9), color: 'var(--dt-ink-3)', lineHeight: 1.7, letterSpacing: 0.5 }}>
-              <div>last_decay_tick: {data.last_decay_tick ? data.last_decay_tick.slice(0, 19) : '—'}</div>
-              <div>display.physiological_arousal: true</div>
-            </div>
           </PanelCard>
         </>
-      ) : (
-        <DeveloperNotice />
       )}
     </div>
   );

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Icon } from '../../chat/components/UIKit';
 import { ThemePicker } from '../../../shared/theme/ThemePicker';
 import { getUIPref, setUIPref } from '../../../shared/uiPreferences';
+import { getActiveCharacterName } from '../../../shared/activeCharacter';
 
 type SettingsTab = '外观' | '系统设置' | '其他';
 type MetaMode = { mode: 'safe' | 'danger'; expires_at: number | null };
@@ -247,8 +248,8 @@ export function ActivityPreferencesPanel({ open, onClose }: { open: boolean; onC
                 <SettingRow
                   label={dangerActive ? '危险模式已开启' : '安全模式'}
                   hint={dangerActive
-                    ? `允许叶瑄操作电脑${remaining ? `，将在 ${remaining} 后自动收回` : ''}`
-                    : '叶瑄不能打开网页、播放歌曲、最小化窗口或发送系统通知'}
+                    ? `允许${getActiveCharacterName()}操作电脑${remaining ? `，将在 ${remaining} 后自动收回` : ''}`
+                    : `${getActiveCharacterName()}不能打开网页、播放歌曲、最小化窗口或发送系统通知`}
                 >
                   <button
                     type="button"
@@ -277,7 +278,7 @@ export function ActivityPreferencesPanel({ open, onClose }: { open: boolean; onC
                   color: dangerActive ? 'oklch(0.42 0.12 35)' : 'var(--ink-3)',
                   fontSize: 11.5, lineHeight: 1.65,
                 }}>
-                  危险模式允许叶瑄操作你的电脑，包括开浏览器、放歌、最小化窗口和通知。
+                  危险模式允许{getActiveCharacterName()}操作你的电脑，包括开浏览器、放歌、最小化窗口和通知。
                   开启后 2 小时自动回到安全模式；关机和睡眠仍需单独确认。
                 </div>
                 {modeError && (

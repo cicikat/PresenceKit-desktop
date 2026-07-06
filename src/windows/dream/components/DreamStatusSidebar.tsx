@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { dreamGetSettings } from '../../../shared/api/dream';
 import type { DreamSettings, DreamState } from '../../../shared/api/dream-types';
+import { getActiveCharacterName } from '../../../shared/activeCharacter';
 import { HudMeter } from './hud/HudMeter';
 import { HudPill, type HudPillTone } from './hud/HudPill';
 import { HudGroup } from './hud/HudGroup';
@@ -28,7 +29,7 @@ function getEmotionTone(value: unknown): HudPillTone {
   return 'emotion';
 }
 
-function isDreamActive(state: DreamState | null): boolean {
+export function isDreamActive(state: DreamState | null): boolean {
   return state?.status === 'DREAM_ACTIVE' || state?.status === 'DREAM_EXIT_REQUESTED';
 }
 
@@ -173,7 +174,7 @@ export function DreamStatusSidebar({ dreamState, onClose }: DreamStatusSidebarPr
             <DreamSummaryBar current={dreamState} prev={prevStateRef.current} />
           )}
           <div className="dream-hud__groups">
-            <HudGroup title="叶瑄 · YEXUAN">
+            <HudGroup title={`${getActiveCharacterName()} · CHARACTER`}>
               <HudLabel label="情绪" value={dreamState?.emotion_label} tone={getEmotionTone(dreamState?.emotion_label)} />
               <div className="dream-hud__metrics">
                 <HudMeter label="情绪张力" value={dreamState?.emotion_tension ?? null} background="linear-gradient(90deg, var(--dt-flower-bluebell), var(--dt-flower-dandelion))" />

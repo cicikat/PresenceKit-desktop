@@ -9,6 +9,9 @@ import {
 } from '../../../shared/api/activity-api';
 import { CompanionSidebar } from './CompanionSidebar';
 import { getUIPref, onUIPrefChange } from '../../../shared/uiPreferences';
+import { getActiveCharacterName } from '../../../shared/activeCharacter';
+
+const AI_OPPONENT: GomokuOpponent = 'character_ai';
 
 const BOARD_THEMES: Record<string, Record<string, string>> = {
   classic_wood: {},
@@ -198,7 +201,7 @@ export function GomokuPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [selectedOpponent, setSelectedOpponent] = useState<GomokuOpponent>('yexuan_ai');
+  const [selectedOpponent, setSelectedOpponent] = useState<GomokuOpponent>(AI_OPPONENT);
   const [selectedStyle, setSelectedStyle] = useState<GomokuAiStyle>('balanced');
   const [boardTheme, setBoardTheme] = useState(() => getUIPref('activity.board.theme', 'classic_wood'));
   const [showDebug, setShowDebug] = useState(() => getUIPref('activity.debug', false));
@@ -243,7 +246,7 @@ export function GomokuPage() {
 
   const handleStart = async () => {
     setLoading(true); setError(null);
-    const ai_style = selectedOpponent === 'yexuan_ai' ? selectedStyle : undefined;
+    const ai_style = selectedOpponent === AI_OPPONENT ? selectedStyle : undefined;
     console.log('[gomoku] start invoke', { opponent: selectedOpponent, ai_style });
     try {
       const s = await gomokuApi.start({ opponent: selectedOpponent, ai_style });
@@ -255,7 +258,7 @@ export function GomokuPage() {
         ai_style: normalized.ai_style,
         current_turn: normalized.current_turn,
       });
-      if (selectedOpponent === 'yexuan_ai' && normalized.opponent !== 'yexuan_ai') {
+      if (selectedOpponent === AI_OPPONENT && normalized.opponent !== AI_OPPONENT) {
         setError('AI 对局启动失败：后端返回了本地双人模式（payload 未传达）');
         return;
       }
@@ -306,7 +309,7 @@ export function GomokuPage() {
 
   const isActive = gameState?.status === 'active';
   const isFinished = gameState?.status === 'completed' || !!gameState?.winner;
-  const isAIMode = gameState?.opponent === 'yexuan_ai';
+  const isAIMode = gameState?.opponent === AI_OPPONENT;
   const boardDisabled = !isActive || loading || (isAIMode && gameState?.current_turn === 'white');
 
   const emptyBoard: GomokuCell[][] = Array.from({ length: BOARD_SIZE }, () =>
@@ -348,10 +351,10 @@ export function GomokuPage() {
       }}>
         {gameState
           ? isAIMode
-            ? '叶瑄执白。你落子后，他会自动回应一手。'
+            ? `${getActiveCharacterName()}执白。你落子后，他会自动回应一手。`
             : '本地双人裁判模式：黑白轮流落子。'
-          : selectedOpponent === 'yexuan_ai'
-            ? '叶瑄执白。你落子后，他会自动回应一手。'
+          : selectedOpponent === AI_OPPONENT
+            ? `${getActiveCharacterName()}执白。你落子后，他会自动回应一手。`
             : '本地双人裁判模式：黑白轮流落子。'
         }
       </div>
@@ -381,11 +384,11 @@ export function GomokuPage() {
           <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
             <label style={{ fontSize: 12, color: 'var(--ink-2)', whiteSpace: 'nowrap' }}>对手</label>
             <Select value={selectedOpponent} onChange={v => setSelectedOpponent(v as GomokuOpponent)} disabled={loading}>
-              <option value="yexuan_ai">叶瑄 AI（推荐）</option>
+              <option value={AI_OPPONENT}>{getActiveCharacterName()} AI（推荐）</option>
               <option value="human">本地双人</option>
             </Select>
           </div>
-          {selectedOpponent === 'yexuan_ai' && (
+          {selectedOpponent === AI_OPPONENT && (
             <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
               <label style={{ fontSize: 12, color: 'var(--ink-2)', whiteSpace: 'nowrap' }}>风格</label>
               <Select value={selectedStyle} onChange={v => setSelectedStyle(v as GomokuAiStyle)} disabled={loading}>
@@ -414,7 +417,7 @@ export function GomokuPage() {
           {isActive && (
             <span className="mono" style={{ fontSize: 11.5, color: 'var(--ink-3)', letterSpacing: 0.8 }}>
               {isAIMode && gameState?.current_turn === 'white' && loading
-                ? '叶瑄思考中…'
+                ? `${getActiveCharacterName()}思考中…`
                 : `当前回合：${gameState?.current_turn === 'black' ? '⚫ 黑棋' : '⚪ 白棋'}`
               }
             </span>
@@ -439,8 +442,8 @@ export function GomokuPage() {
                 对局信息
               </div>
               <div style={{ fontSize: 12, color: 'var(--ink-2)', lineHeight: 1.9 }}>
-                <div>对手：{gameState?.opponent === 'yexuan_ai' ? '叶瑄 AI' : '本地双人'}</div>
-                {gameState?.opponent === 'yexuan_ai' && (
+                <div>对手：{gameState?.opponent === AI_OPPONENT ? `${getActiveCharacterName()} AI` : '本地双人'}</div>
+                {gameState?.opponent === AI_OPPONENT && (
                   <>
                     <div>AI 执：白棋</div>
                     <div>风格：{AI_STYLE_LABELS[gameState.ai_style as GomokuAiStyle] ?? gameState.ai_style ?? '—'}</div>
@@ -450,7 +453,7 @@ export function GomokuPage() {
               </div>
               {isActive && (
                 <div className="mono" style={{ marginTop: 12, fontSize: 10, letterSpacing: 0.8, color: 'var(--ink-3)' }}>
-                  {gameState?.opponent === 'yexuan_ai' ? '点击棋盘落黑棋' : '点击棋盘落子'}
+                  {gameState?.opponent === AI_OPPONENT ? '点击棋盘落黑棋' : '点击棋盘落子'}
                 </div>
               )}
             </div>

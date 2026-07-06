@@ -29,6 +29,13 @@ const MOOD_THEME_SHIFT: Record<Mood, MoodShift> = {
 };
 
 let appliedVars: Set<string> = new Set();
+let suspended = false;
+let lastArgs: { mood: Mood; intensity: number } | null = null;
+
+// Overlay writes land on the same inline `style` object the theme itself uses, so a
+// naive "read current computed value" would read our own previous shift on the next
+// tick and compound it. Cache the true base once per clean (unshifted) state instead.
+let baseSnapshot: Map<string, string> = new Map();
 
 // ── oklch parsing ────────────────────────────────────────────────────────────
 
@@ -45,6 +52,19 @@ function parseOklch(value: string): { l: number; c: number; h: number; alpha: nu
 
 function resolveTokenValue(varName: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+}
+
+function resolveBaseValue(varName: string): string {
+  const cached = baseSnapshot.get(varName);
+  if (cached !== undefined) return cached;
+  const value = resolveTokenValue(varName);
+  baseSnapshot.set(varName, value);
+  return value;
+}
+
+/** Call after the underlying theme's own tokens change so the next overlay shifts from the new base, not a stale/shifted one. */
+export function resetMoodOverlayBase(): void {
+  baseSnapshot.clear();
 }
 
 // ── Overlay computation ──────────────────────────────────────────────────────
@@ -64,7 +84,7 @@ export function computeMoodOverrides(
 
   const overrides: Record<string, string> = {};
   for (const varName of shift.targetVars) {
-    const raw = resolveTokenValue(varName);
+    const raw = resolveBaseValue(varName);
     if (!raw) continue;
 
     const parsed = parseOklch(raw);
@@ -82,6 +102,9 @@ export function computeMoodOverrides(
 // ── Apply / clear ────────────────────────────────────────────────────────────
 
 export function applyMoodOverlay(mood: Mood, intensity: number): void {
+  lastArgs = { mood, intensity };
+  if (suspended) return;
+
   const overrides = computeMoodOverrides(mood, intensity);
   const root = document.documentElement;
 
@@ -102,6 +125,18 @@ export function clearMoodOverlay(): void {
     root.style.removeProperty(v);
   }
   appliedVars = new Set();
+  baseSnapshot.clear();
+}
+
+/** Suspend overlay writes without losing the enabled/intensity state (e.g. while ChatColorPage is editing the very tokens the overlay would overwrite). */
+export function suspendMoodOverlay(): void {
+  suspended = true;
+  clearMoodOverlay();
+}
+
+export function resumeMoodOverlay(): void {
+  suspended = false;
+  if (lastArgs) applyMoodOverlay(lastArgs.mood, lastArgs.intensity);
 }
 
 // Kept for reference by callers that want the aura hue from MOOD_TABLE

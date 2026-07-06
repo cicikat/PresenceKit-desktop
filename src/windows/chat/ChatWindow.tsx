@@ -11,6 +11,7 @@ import { Icon } from './components/UIKit';
 import { StateEngine } from '../../shared/state/store';
 import { avatarStore } from '../../shared/avatars/store';
 import { getPromptAssets, patchPromptAssets, getCharacterAvatar, uploadCharacterAvatar, deleteCharacterAvatar } from '../../shared/api/backend';
+import { updateActiveCharacterFromAssets, refreshActiveCharacterInfo, getActiveCharacterName, subscribeActiveCharacter } from '../../shared/activeCharacter';
 import {
   getLoreEntries, addLoreEntry, updateLoreEntry, deleteLoreEntry,
   getJailbreakEntries, addJailbreakEntry, updateJailbreakEntry, deleteJailbreakEntry,
@@ -101,10 +102,12 @@ function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHea
   const [bgSaving, setBgSaving] = useState(false);
   const [fonts, setFonts] = useState<ChatFontOption[]>([]);
   const [fontLoadError, setFontLoadError] = useState<string | null>(null);
+  const [activeCharName, setActiveCharName] = useState(() => getActiveCharacterName());
   const herFileRef = useRef<HTMLInputElement>(null);
   const youFileRef = useRef<HTMLInputElement>(null);
   const bgFileRef = useRef<HTMLInputElement>(null);
   useEffect(() => avatarStore.subscribe(setAvatars), []);
+  useEffect(() => subscribeActiveCharacter(() => setActiveCharName(getActiveCharacterName())), []);
   useEffect(() => {
     if (!open) return;
     listChatFonts()
@@ -531,7 +534,7 @@ function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHea
                     />
                   </div>
                 </PrefRow>
-                <PrefRow label="玩耍模式" hint="开启后，叶瑄在对话里表达想一起玩 toy 时会自动进入玩耍模式；Ribbon 也会出现手动入口。默认关闭">
+                <PrefRow label="玩耍模式" hint={`开启后，${activeCharName}在对话里表达想一起玩 toy 时会自动进入玩耍模式；Ribbon 也会出现手动入口。默认关闭`}>
                   <PrefSwitch active={playModeEnabled} onClick={onPlayModeToggle} />
                 </PrefRow>
                 <div style={{ height: 1, background: 'var(--paper-edge)' }} />
@@ -554,10 +557,10 @@ function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHea
               <>
                 <ChatSettingsSection />
                 <div style={{ height: 1, background: 'var(--paper-edge)' }} />
-                <PrefRow label="允许存在感弹窗" hint="开启后，叶瑄被冷落久了会用带头像的弹窗找你；默认关闭">
+                <PrefRow label="允许存在感弹窗" hint={`开启后，${activeCharName}被冷落久了会用带头像的弹窗找你；默认关闭`}>
                   <PrefSwitch active={presenceNagEnabled} onClick={onPresenceNagToggle} />
                 </PrefRow>
-                <PrefRow label="主动消息最小间隔" hint={`叶瑄每隔至少 ${proactiveGapHours} h 才会主动发消息 · 范围 0.5–12`}>
+                <PrefRow label="主动消息最小间隔" hint={`${activeCharName}每隔至少 ${proactiveGapHours} h 才会主动发消息 · 范围 0.5–12`}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                     <button
                       onClick={() => onProactiveGapChange(Math.max(0.5, proactiveGapHours - 0.5))}
@@ -712,6 +715,7 @@ function PromptAssetsSettings({ onCharacterAvatarChange, onCharacterSwitched }: 
     try {
       const result = await getPromptAssets();
       setAssets(result);
+      updateActiveCharacterFromAssets(result);
       if (result.active.active_character) {
         void loadActiveCharAvatar(result.active.active_character, result.characters);
       }
@@ -748,6 +752,7 @@ function PromptAssetsSettings({ onCharacterAvatarChange, onCharacterSwitched }: 
       const response = await patchPromptAssets(patch);
       setAssets(current => current ? { ...current, active: response.active } : current);
       if (patch.active_character && assets) {
+        updateActiveCharacterFromAssets({ ...assets, active: response.active });
         onCharacterSwitched?.();
         void loadActiveCharAvatar(patch.active_character, assets.characters);
       }
@@ -1327,6 +1332,7 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivi
   }, []);
 
   useEffect(() => {
+    void refreshActiveCharacterInfo();
     getPromptAssets()
       .then(assets => loadCharacterAvatar(assets.active.active_character || null))
       .catch(() => {});

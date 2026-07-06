@@ -10,6 +10,7 @@ import { PresenceNagWindow } from "./windows/presence-nag/PresenceNagWindow";
 import { DiaryDetailWindow } from "./windows/diary-detail/DiaryDetailWindow";
 import { avatarStore } from "./shared/avatars/store";
 import { initTheme } from "./shared/theme/registry";
+import { initUIPrefs } from "./shared/uiPreferences";
 
 const windowView = new URLSearchParams(window.location.search).get("window");
 const isPetWindow = windowView === "pet";
@@ -38,14 +39,15 @@ function AppRoot() {
   );
 }
 
-initTheme().catch(error => console.warn("[theme] 初始化失败:", error));
-
 function Root() {
   if (isPetWindow) return <PetWindow />;
   if (isPresenceNagWindow) return <PresenceNagWindow />;
   if (isDiaryDetailWindow) return <DiaryDetailWindow />;
   return <AppRoot />;
 }
+
+await initUIPrefs();
+initTheme().catch(error => console.warn("[theme] 初始化失败:", error));
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

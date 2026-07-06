@@ -1,8 +1,10 @@
-import type { DreamFlowEntrySource, DreamState } from '../../../shared/api/dream-types';
+import type { DreamFlowEntry, DreamState } from '../../../shared/api/dream-types';
+import { getActiveCharacterName } from '../../../shared/activeCharacter';
 import { DreamGlowPanel, type DreamGlowTag } from './DreamGlowPanel';
 
 const FLOW_ENTRY_MIN_LENGTH = 20;
 const FLOW_ENTRY_MAX_LENGTH = 32;
+const FLOW_ENTRY_DISPLAY_COUNT = 5;
 
 const STATUS_LABEL: Record<string, string> = {
   DREAM_ACTIVE: '梦境进行中',
@@ -21,12 +23,6 @@ const WORLD_LABEL: Record<string, string> = {
   cat: '既定',
   flower_bud: '花苞',
   custom: '自定义',
-};
-
-const EVENT_SUMMARY: Record<string, string> = {
-  scene_stable: '当前场景保持稳定，梦境空间仍在原有层次中缓慢延展',
-  attention_on_user: '叶瑄的注意力停留在你身上，情绪张力维持平稳',
-  boundary_stable: '梦境边界保持清晰完整，暂未观察到明显断裂',
 };
 
 interface DreamSidebarProps {
@@ -54,29 +50,36 @@ function normalizeFlowSummary(text: string): string | null {
   return `${summary}。`;
 }
 
-function summarizeFlowEntry(entry: DreamFlowEntrySource): string | null {
-  if (typeof entry === 'string') return normalizeFlowSummary(entry);
-
-  const source = entry.summary ?? entry.description ?? entry.label ?? (entry.type ? EVENT_SUMMARY[entry.type] : undefined);
-  return source ? normalizeFlowSummary(source) : null;
+interface FlowEntryDisplay {
+  summary: string;
+  ts: string | null;
 }
 
-function getBackendFlowEntries(dreamState: DreamState | null): string[] {
-  const entries = dreamState?.flow_entries?.length
-    ? dreamState.flow_entries
-    : dreamState?.dream_events?.length
-      ? dreamState.dream_events
-      : dreamState?.events ?? [];
+function formatAgo(iso: string): string {
+  const dt = Math.max(0, Date.now() - new Date(iso).getTime());
+  if (dt < 60_000)     return `${Math.floor(dt / 1000)}s ago`;
+  if (dt < 3_600_000)  return `${Math.floor(dt / 60_000)}m ago`;
+  if (dt < 86_400_000) return `${Math.floor(dt / 3_600_000)}h ago`;
+  return `${Math.floor(dt / 86_400_000)}d ago`;
+}
 
+function summarizeFlowEntry(entry: DreamFlowEntry): FlowEntryDisplay | null {
+  const summary = normalizeFlowSummary(entry.summary ?? '');
+  return summary ? { summary, ts: entry.ts } : null;
+}
+
+function getBackendFlowEntries(dreamState: DreamState | null): FlowEntryDisplay[] {
+  const entries = dreamState?.flow_entries ?? [];
   return entries
     .map(summarizeFlowEntry)
-    .filter((entry): entry is string => Boolean(entry))
-    .slice(-3);
+    .filter((entry): entry is FlowEntryDisplay => Boolean(entry))
+    .slice(-FLOW_ENTRY_DISPLAY_COUNT)
+    .reverse(); // newest first
 }
 
-function buildFallbackFlowEntries(dreamState: DreamState | null): string[] {
+function buildFallbackFlowEntries(dreamState: DreamState | null): FlowEntryDisplay[] {
   const world = dreamState?.frozen_world ? (WORLD_LABEL[dreamState.frozen_world] ?? '当前') : '当前';
-  const tension = dreamState?.yexuan_tension ?? 0;
+  const tension = dreamState?.char_tension ?? dreamState?.yexuan_tension ?? 0;
   const boundaryIsClosing = dreamState?.status === 'DREAM_EXIT_REQUESTED'
     || dreamState?.status === 'DREAM_CLOSING'
     || dreamState?.status === 'REALITY_AFTERGLOW';
@@ -84,12 +87,15 @@ function buildFallbackFlowEntries(dreamState: DreamState | null): string[] {
   return [
     `场景稳定在${world}梦境层，空间轮廓仍在缓慢延展`,
     tension >= 0.65
-      ? '叶瑄的注意力仍停留在你身上，情绪张力正在轻微上升'
-      : '叶瑄的注意力停留在你身上，情绪张力维持平稳',
+      ? '他的注意力仍停留在你身上，情绪张力正在轻微上升'
+      : '他的注意力停留在你身上，情绪张力维持平稳',
     boundaryIsClosing
       ? '梦境边界正在逐渐松动，现实感从远处缓慢回流'
       : '梦境边界保持清晰完整，暂未观察到明显断裂',
-  ].map(normalizeFlowSummary).filter((entry): entry is string => Boolean(entry));
+  ]
+    .map(normalizeFlowSummary)
+    .filter((summary): summary is string => Boolean(summary))
+    .map(summary => ({ summary, ts: null }));
 }
 
 function BodyAxisBar({ label, value, color }: {
@@ -153,7 +159,7 @@ function HerBodyPanel({ body }: { body: { heat: number; sensitivity: number; ten
 
 export function DreamSidebar({ dreamState, herDataUrl, onClose }: DreamSidebarProps) {
   const status = dreamState?.status;
-  const tension = dreamState?.yexuan_tension;
+  const tension = dreamState?.char_tension ?? dreamState?.yexuan_tension;
   const scene = dreamState?.scene_state;
   const anchors = dreamState?.symbolic_anchors ?? [];
   const body = dreamState?.body;
@@ -215,11 +221,11 @@ export function DreamSidebar({ dreamState, herDataUrl, onClose }: DreamSidebarPr
         tags={statusTags}
       />
 
-      {/* Emotional tension (叶瑄 tension) */}
+      {/* Emotional tension (character's dream-local tension) */}
       {tension !== undefined && tension > 0 && (
         <div>
           <div className="mono" style={{ fontSize: 'calc(9.5px * var(--dream-theme-font-scale, 1))', letterSpacing: 1.5, color: 'var(--dt-ink-3)', marginBottom: 8 }}>
-            叶瑄·情绪张力
+            {getActiveCharacterName()}·情绪张力
           </div>
           <div style={{ height: 4, borderRadius: 2, background: 'var(--dt-surface-2)', overflow: 'hidden' }}>
             <div style={{
@@ -276,12 +282,19 @@ export function DreamSidebar({ dreamState, herDataUrl, onClose }: DreamSidebarPr
           <div className="mono" style={{ fontSize: 'calc(9.5px * var(--dream-theme-font-scale, 1))', letterSpacing: 1.5, color: 'var(--dt-ink-3)', marginBottom: 8 }}>梦境流动</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {flowEntries.map((entry, index) => (
-              <div key={`${entry}-${index}`} className="dream-theme__garden-item" style={{
-                fontSize: 'calc(12px * var(--dream-theme-font-scale, 1))', lineHeight: 1.5, fontStyle: 'italic',
-                overflow: 'hidden', display: '-webkit-box',
-                WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
-              }}>
-                {entry}
+              <div key={`${entry.summary}-${index}`} className="dream-theme__garden-item" style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <div style={{
+                  fontSize: 'calc(12px * var(--dream-theme-font-scale, 1))', lineHeight: 1.5, fontStyle: 'italic',
+                  overflow: 'hidden', display: '-webkit-box',
+                  WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                }}>
+                  {entry.summary}
+                </div>
+                {entry.ts && (
+                  <div className="mono" style={{ fontSize: 'calc(9px * var(--dream-theme-font-scale, 1))', color: 'var(--dt-ink-4)', letterSpacing: 0.8 }}>
+                    {formatAgo(entry.ts)}
+                  </div>
+                )}
               </div>
             ))}
           </div>

@@ -5,13 +5,14 @@ import {
   type ChessGroundingFacts,
   type ReadingGroundingFacts,
 } from '../../../shared/api/activity-api';
+import { getActiveCharacterName } from '../../../shared/activeCharacter';
 
 type ActivityId = 'gomoku' | 'chess' | 'reading';
 
 type AnyGrounding = GomokuGroundingFacts | ChessGroundingFacts | ReadingGroundingFacts;
 
 interface ChatMessage {
-  role: 'user' | 'yexuan';
+  role: 'user' | 'assistant';
   text: string;
   error?: boolean;
   grounding?: AnyGrounding;
@@ -33,7 +34,7 @@ function GomokuGroundingHint({ grounding }: { grounding?: GomokuGroundingFacts }
     ? buildUserMoveHint(grounding.last_user_move_facts)
     : null;
   const aiHint = grounding?.last_ai_move_facts?.summary
-    ? `叶瑄上一手：${grounding.last_ai_move_facts.summary}`
+    ? `${getActiveCharacterName()}上一手：${grounding.last_ai_move_facts.summary}`
     : null;
   const hasContent = userHint || aiHint;
   return (
@@ -167,9 +168,9 @@ export function ActivityCompanionPanel({ activityId, sessionId, sessionActive, s
       const result = await callChat(activityId, sessionId, text);
       console.debug(`[${activityId}-chat] control`, result.control);
       console.debug(`[${activityId}-chat] grounding`, result.grounding);
-      setMessages(prev => [...prev, { role: 'yexuan', text: result.reply, grounding: result.grounding }]);
+      setMessages(prev => [...prev, { role: 'assistant', text: result.reply, grounding: result.grounding }]);
     } catch (e: any) {
-      setMessages(prev => [...prev, { role: 'yexuan', text: String(e?.message ?? e), error: true }]);
+      setMessages(prev => [...prev, { role: 'assistant', text: String(e?.message ?? e), error: true }]);
     } finally {
       setSending(false);
     }
@@ -196,7 +197,7 @@ export function ActivityCompanionPanel({ activityId, sessionId, sessionActive, s
         flexShrink: 0,
         display: 'flex', alignItems: 'center',
       }}>
-        <span style={{ flex: 1 }}>和叶瑄说说</span>
+        <span style={{ flex: 1 }}>和{getActiveCharacterName()}说说</span>
         <button
           onClick={() => onCollapse?.()}
           title="收起"
@@ -242,7 +243,7 @@ export function ActivityCompanionPanel({ activityId, sessionId, sessionActive, s
             }}>
               {msg.text}
             </div>
-            {msg.role === 'yexuan' && !msg.error && (
+            {msg.role === 'assistant' && !msg.error && (
               <GroundingHint activityId={activityId} grounding={msg.grounding} />
             )}
           </div>
@@ -279,7 +280,7 @@ export function ActivityCompanionPanel({ activityId, sessionId, sessionActive, s
             onKeyDown={e => {
               if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
             }}
-            placeholder="和叶瑄说一句……"
+            placeholder={`和${getActiveCharacterName()}说一句……`}
             disabled={!canSend}
             style={{
               flex: 1, fontFamily: 'inherit', fontSize: 12,

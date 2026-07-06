@@ -1,3 +1,5 @@
+import { getUIPref, setUIPref, onUIPrefChange } from '../uiPreferences';
+
 export interface PetRoamSettings {
   enabled: boolean;
 }
@@ -6,8 +8,8 @@ export const DEFAULT_PET_ROAM_SETTINGS: PetRoamSettings = {
   enabled: false,
 };
 
-const STORAGE_KEY = 'emerald.pet.roam';
-const CHANGE_EVENT = 'emerald:pet-roam-settings';
+const PREF_KEY = 'pet.roam';
+const LEGACY_STORAGE_KEY = 'emerald.pet.roam';
 
 function normalize(value: Partial<PetRoamSettings> | null | undefined): PetRoamSettings {
   return {
@@ -15,36 +17,33 @@ function normalize(value: Partial<PetRoamSettings> | null | undefined): PetRoamS
   };
 }
 
-export function loadPetRoamSettings(): PetRoamSettings {
+function migrateLegacy(): PetRoamSettings | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return normalize(raw ? JSON.parse(raw) : null);
+    const raw = localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (raw === null) return null;
+    const value = normalize(JSON.parse(raw));
+    setUIPref(PREF_KEY, value);
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
+    return value;
   } catch {
-    return DEFAULT_PET_ROAM_SETTINGS;
+    return null;
   }
+}
+
+export function loadPetRoamSettings(): PetRoamSettings {
+  const stored = getUIPref<PetRoamSettings | null>(PREF_KEY, null);
+  if (stored !== null) return normalize(stored);
+  return migrateLegacy() ?? DEFAULT_PET_ROAM_SETTINGS;
 }
 
 export function savePetRoamSettings(patch: Partial<PetRoamSettings>): PetRoamSettings {
   const next = normalize({ ...loadPetRoamSettings(), ...patch });
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    window.dispatchEvent(new CustomEvent(CHANGE_EVENT, { detail: next }));
-  } catch {
-    // Keep the in-memory update usable when storage is unavailable.
-  }
+  setUIPref(PREF_KEY, next);
   return next;
 }
 
 export function subscribePetRoamSettings(listener: (settings: PetRoamSettings) => void) {
-  const onCustom = (event: Event) =>
-    listener(normalize((event as CustomEvent<PetRoamSettings>).detail));
-  const onStorage = (event: StorageEvent) => {
-    if (event.key === STORAGE_KEY) listener(loadPetRoamSettings());
-  };
-  window.addEventListener(CHANGE_EVENT, onCustom);
-  window.addEventListener('storage', onStorage);
-  return () => {
-    window.removeEventListener(CHANGE_EVENT, onCustom);
-    window.removeEventListener('storage', onStorage);
-  };
+  return onUIPrefChange(key => {
+    if (key === PREF_KEY) listener(loadPetRoamSettings());
+  });
 }

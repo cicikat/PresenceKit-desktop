@@ -16,6 +16,7 @@ import {
 } from '../../../shared/theme/registry';
 import { applyTheme } from '../../../shared/theme/loader';
 import { PAPER_THEME, DARK_THEME } from '../../../shared/theme/builtinThemes';
+import { suspendMoodOverlay, resumeMoodOverlay } from '../../../shared/theme/moodReactive';
 
 // ── Token groups shown in the editor ────────────────────────────────────────
 
@@ -108,22 +109,36 @@ export function ChatColorPage() {
 
   const selectedPreset = presets.find(p => p.id === selectedId) ?? null;
 
-  // Sync day/night slot → selectedId when slot changes
-  useEffect(() => {
+  // Explicit slot switch (day/night toggle buttons) — resets selection since the
+  // user hasn't picked anything for the new slot yet. Deliberately NOT a useEffect
+  // keyed on `editSlot`: selecting a preset from the other slot (see handleSelectPreset)
+  // also changes `editSlot`, and that path must NOT wipe the selection it just made.
+  const switchSlot = (slot: 'day' | 'night') => {
+    if (slot === editSlot) return;
     const dn = getDayNight();
-    originalThemeRef.current = editSlot === 'day' ? dn.day : dn.night;
-    // Don't auto-select a preset when switching slot; let user pick
+    originalThemeRef.current = slot === 'day' ? dn.day : dn.night;
+    setEditSlot(slot);
     setSelectedId(null);
     setTokens({});
     setDirty(false);
-  }, [editSlot]);
+  };
 
-  // Subscribe to registry changes (e.g. external slot switch)
+  // Subscribe to registry changes (e.g. day/night auto-switch timer, another window's
+  // edits). This refreshes the preset list only — it must not touch selectedId/tokens/
+  // dirty, otherwise an unrelated theme event silently rolls back an in-progress edit.
   useEffect(() => subscribeTheme(() => {
     setPresets(loadUserPresets());
   }), []);
 
-  // Load token values when a preset is selected
+  // Suspend the mood-reactive overlay while this page can edit the exact tokens
+  // it would otherwise overwrite a few seconds later; restore on close.
+  useEffect(() => {
+    suspendMoodOverlay();
+    return () => resumeMoodOverlay();
+  }, []);
+
+  // Load token values when the *selected id* changes (not the preset object reference,
+  // which gets rebuilt — and thus reference-changes — every time `presets` reloads).
   useEffect(() => {
     if (!selectedPreset) { setTokens({}); return; }
     setTokens({ ...selectedPreset.tokens as Record<string, string> });
@@ -135,7 +150,7 @@ export function ChatColorPage() {
       base: selectedPreset.base,
       tokens: selectedPreset.tokens,
     });
-  }, [selectedPreset]);
+  }, [selectedId]);
 
   // Live-preview token edits as user picks colors
   const handleTokenChange = useCallback((token: string, hex: string) => {
@@ -260,9 +275,18 @@ export function ChatColorPage() {
     border: '1px solid transparent', fontWeight: 600,
   };
 
-  const filteredPresets = presets.filter(p =>
-    p.base === (editSlot === 'day' ? 'light' : 'dark'),
-  );
+  const handleSelectPreset = (id: string | null) => {
+    setSelectedId(id);
+    if (!id) return;
+    const preset = presets.find(p => p.id === id);
+    if (!preset) return;
+    const wantSlot: 'day' | 'night' = preset.base === 'light' ? 'day' : 'night';
+    if (wantSlot !== editSlot) {
+      const dn = getDayNight();
+      originalThemeRef.current = wantSlot === 'day' ? dn.day : dn.night;
+      setEditSlot(wantSlot);
+    }
+  };
 
   return (
     <div style={{ display: 'grid', gap: 16 }}>
@@ -279,7 +303,7 @@ export function ChatColorPage() {
               borderColor: editSlot === slot ? 'transparent' : undefined,
               fontWeight: editSlot === slot ? 600 : 400,
             }}
-            onClick={() => setEditSlot(slot)}
+            onClick={() => switchSlot(slot)}
           >
             {slot === 'day' ? '☀ 日间' : '☾ 夜间'}
           </button>
@@ -291,7 +315,7 @@ export function ChatColorPage() {
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
           <select
             value={selectedId ?? ''}
-            onChange={e => setSelectedId(e.target.value || null)}
+            onChange={e => handleSelectPreset(e.target.value || null)}
             style={{
               flex: '1 1 140px', padding: '6px 9px',
               border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-sm)',
@@ -300,8 +324,8 @@ export function ChatColorPage() {
             }}
           >
             <option value="">— 选择自定义预设 —</option>
-            {filteredPresets.map(p => (
-              <option key={p.id} value={p.id}>{p.name}</option>
+            {presets.map(p => (
+              <option key={p.id} value={p.id}>[{p.base === 'light' ? '日' : '夜'}] {p.name}</option>
             ))}
           </select>
           <button style={btnStyle} onClick={createNew}>新建</button>

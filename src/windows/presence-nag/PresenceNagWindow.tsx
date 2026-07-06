@@ -3,22 +3,23 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { avatarStore } from '../../shared/avatars/store';
 import type { PresenceNagPayload } from '../../shared/presenceNag';
+import { getActiveCharacterInfo } from '../../shared/activeCharacter';
 import './PresenceNagWindow.css';
 
-const CHARACTER_NAMES: Record<string, string> = {
-  yexuan: '叶瑄',
-  emerald: '叶瑄',
-};
-
+// The payload's `avatar` field is a raw char_id (see actions.rs::presence_nag), not a
+// display name. Resolve it against the cross-window active-character cache (cc-tasks/15
+// §G); if it doesn't match anything we know about, fall back to the generic 'TA'.
 function characterName(avatar: string): string {
   const value = avatar.trim();
-  return CHARACTER_NAMES[value.toLowerCase()] ?? (value || '叶瑄');
+  const info = getActiveCharacterInfo();
+  if (value && value === info.id && info.name) return info.name;
+  return value || info.name || 'TA';
 }
 
 export function PresenceNagWindow() {
   const [payload, setPayload] = useState<PresenceNagPayload>({
     text: '',
-    avatar: '叶瑄',
+    avatar: '',
   });
   const [avatarDataUrl, setAvatarDataUrl] = useState<string | null>(null);
 
@@ -72,7 +73,7 @@ export function PresenceNagWindow() {
           <div className="presence-nag__avatar" aria-hidden={!avatarDataUrl}>
             {avatarDataUrl
               ? <img src={avatarDataUrl} alt="" />
-              : <span>叶</span>}
+              : <span>{characterName(payload.avatar).charAt(0) || '?'}</span>}
           </div>
           <div className="presence-nag__content">
             <div className="presence-nag__name">{characterName(payload.avatar)}</div>
