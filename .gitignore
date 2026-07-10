@@ -1,3 +1,7 @@
+# Python test cache (sensor-service pytest runs)
+.pytest_cache/
+__pycache__/
+
 # Logs
 logs
 *.log
