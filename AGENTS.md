@@ -171,6 +171,12 @@ Vite 固定端口是 `1420`，见 `vite.config.ts`。
 
 ---
 
+## 测试约定
+
+- 前端纯逻辑测试用 vitest，`npm test` 运行；测试文件与被测文件同级、同名加 `.test.ts` 后缀（例如 `activity-api.ts` → `activity-api.test.ts`），不使用 `__tests__/` 目录。
+- 不引入 jsdom 或组件测试栈；只测纯函数/纯逻辑。若某文件的顶层 import 链会触碰 `window`/`localStorage`（如 `ws.ts` 经 `presenceNag`/`activeCharacter` 引到 `uiPreferences.ts`），把要测的纯函数拆到独立、无副作用 import 的模块（如 `wsActionParams.ts`）里，再测那个模块。
+- `src/shared/api/activity-api.ts` 的 Tauri command 名称和请求/响应字段形状，是本仓对 Emerald-presence `tests/test_activity_contract.py` 的己方权威锁定：改字段名或 command 名时 `npm test` 必须能感知到。
+
 ## 文档维护约定
 
 - 改接口、协议、IPC command 时，同步更新 `docs/backend-integration.md`。

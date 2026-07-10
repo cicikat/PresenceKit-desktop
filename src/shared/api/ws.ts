@@ -10,6 +10,7 @@ import type {
 } from './types';
 import { isPresenceNagEnabled } from '../presenceNag';
 import { getActiveCharacterInfo } from '../activeCharacter';
+import { actionType, actionParams, stringParam } from './wsActionParams';
 
 type EventMap = {
   state: ConnectionState;
@@ -31,26 +32,6 @@ type NativeCloseEvent = {
   code: number;
   replacedByNewConnection: boolean;
 };
-
-function actionType(action: DesktopActionPayload): string | null {
-  const raw = action.action_type ?? action.type;
-  return typeof raw === 'string' && raw.trim() ? raw.trim() : null;
-}
-
-function actionParams(action: DesktopActionPayload): Record<string, unknown> {
-  return action.params && typeof action.params === 'object' && !Array.isArray(action.params)
-    ? action.params
-    : {};
-}
-
-function stringParam(action: DesktopActionPayload, keys: string[], fallback = ''): string {
-  const params = actionParams(action);
-  for (const key of keys) {
-    const value = params[key] ?? action[key];
-    if (typeof value === 'string' && value.trim()) return value.trim();
-  }
-  return fallback;
-}
 
 class WSClient {
   private connectionId: number | null = null;
