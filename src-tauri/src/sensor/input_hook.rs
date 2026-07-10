@@ -44,6 +44,9 @@ impl InputSampler for StubSampler {
 }
 
 /// Windows 平台的默认 InputSampler 实现
+// 需真实环境,见手工测试:WindowsInputSampler 靠 device_query 轮询真实键鼠
+// 状态、维护后台线程,行为已在 platform/windows.rs 的
+// sampler_start_stop_does_not_panic 里做"不 panic"级别验证,不在这里补更细的单测。
 #[cfg(target_os = "windows")]
 pub fn create_default_sampler() -> Box<dyn InputSampler> {
     Box::new(crate::sensor::platform::windows::WindowsInputSampler::new())
@@ -69,6 +72,51 @@ mod tests {
         assert_eq!(c.mouse_clicks, 0);
         assert_eq!(c.mouse_distance_px, 0);
         assert_eq!(c.idle_seconds, 0);
+        s.stop();
+    }
+
+    /// 边界:空活动窗口 —— `InputCounters::default()` 是 runner 在没有真实
+    /// 采样器数据时的兜底值,四个字段都必须是 0,不能缺省成别的哨兵值。
+    #[test]
+    fn input_counters_default_is_all_zero() {
+        let c = InputCounters::default();
+        assert_eq!(c.keystrokes, 0);
+        assert_eq!(c.mouse_clicks, 0);
+        assert_eq!(c.mouse_distance_px, 0);
+        assert_eq!(c.idle_seconds, 0);
+    }
+
+    /// 边界:重复事件 —— runner 的 stop/重连路径可能对同一个采样器重复调用
+    /// start(),stub 实现没有"已启动"守卫(不像 WindowsInputSampler 会返回
+    /// Err),重复调用必须仍然 Ok,不能 panic。
+    #[test]
+    fn stub_sampler_double_start_is_ok() {
+        let mut s = StubSampler;
+        assert!(s.start().is_ok());
+        assert!(s.start().is_ok());
+        s.stop();
+    }
+
+    /// 边界:快速连续读取 —— runner 每个 tick 都调用一次
+    /// snapshot_and_reset(),连续多次调用(模拟高频 tick)必须每次都拿到
+    /// 干净的零值,不会因为"重置"逻辑缺失而累积残留计数。
+    #[test]
+    fn stub_sampler_snapshot_and_reset_is_idempotent_across_calls() {
+        let mut s = StubSampler;
+        for _ in 0..5 {
+            let c = s.snapshot_and_reset();
+            assert_eq!(c.keystrokes, 0);
+            assert_eq!(c.mouse_clicks, 0);
+            assert_eq!(c.mouse_distance_px, 0);
+            assert_eq!(c.idle_seconds, 0);
+        }
+    }
+
+    #[test]
+    fn stub_sampler_stop_after_multiple_starts_does_not_panic() {
+        let mut s = StubSampler;
+        s.start().unwrap();
+        s.start().unwrap();
         s.stop();
     }
 }
