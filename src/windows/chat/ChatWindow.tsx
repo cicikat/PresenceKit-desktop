@@ -87,6 +87,8 @@ import { ChatColorPage } from './components/ChatColorPage';
 import { applyMoodOverlay, clearMoodOverlay } from '../../shared/theme/moodReactive';
 import { CallSettingsPage } from './components/CallSettingsPage';
 import { ConnectionSettingsPage } from './components/ConnectionSettingsPage';
+import { ToolLoopSettingsPage } from './components/ToolLoopSettingsPage';
+import { ThinkingSettingsPage } from './components/ThinkingSettingsPage';
 
 const SIDEBAR_MIN     = 250;
 const SIDEBAR_MAX     = 540;
@@ -216,7 +218,13 @@ function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHea
           </div>
           <div style={{ padding: '18px 22px', display: 'grid', gap: 18, flex: 1, minHeight: 0, overflowY: 'auto' }}>
             {tab === 'system' ? (
-              <ConnectionSettingsPage />
+              <>
+                <ConnectionSettingsPage />
+                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
+                <ToolLoopSettingsPage />
+                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
+                <ThinkingSettingsPage />
+              </>
             ) : tab === 'appearance' ? (
               <>
                 <PrefRow label="日间主题" hint="手动切换至日间或自动模式日间时段使用的主题">

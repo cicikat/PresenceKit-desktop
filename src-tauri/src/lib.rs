@@ -4,7 +4,8 @@
 // /settings/prompt-assets、/debug/user-hidden-state、/hardware/devices|connect、
 // /activity/reading/…(5)、/activity/gomoku/…(5)、/activity/chess/…(5)、
 // /group/list|create|{id}|{id}/send|{id}/history|{id}/settings|{id}/roster(7)、
-// /system/meta-mode、/lorebook(4)、/jailbreak-entries(4)，共 52 个不同路径）均为字面量硬编码。
+// /system/meta-mode、/lorebook(4)、/jailbreak-entries(4)、/settings/tool-loop、
+// /settings/thinking，共 54 个不同路径）均为字面量硬编码。
 // publisher.rs 另有 /sensor/realtime。后端路由变更时需手动同步这两个文件。
 mod actions;
 mod client_config;
@@ -1944,6 +1945,78 @@ async fn set_chat_multi_message(app: tauri::AppHandle, enabled: bool) -> Result<
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
 
+// ── Tool Loop (cc-tasks/16) ────────────────────────────────────────────────────
+
+#[tauri::command]
+async fn get_tool_loop_settings(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let resp = authorized_request(&cfg, client.get(backend_url(&cfg, "/settings/tool-loop")))
+        .send().await.map_err(|e| e.to_string())?;
+    let resp = require_success(resp).await?;
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn update_tool_loop_settings(
+    app: tauri::AppHandle,
+    enabled: Option<bool>,
+    max_steps: Option<u32>,
+) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let mut body = serde_json::Map::new();
+    if let Some(v) = enabled {
+        body.insert("enabled".into(), v.into());
+    }
+    if let Some(v) = max_steps {
+        body.insert("max_steps".into(), v.into());
+    }
+    let resp = authorized_request(&cfg, client.post(backend_url(&cfg, "/settings/tool-loop")))
+        .json(&serde_json::Value::Object(body))
+        .send().await.map_err(|e| e.to_string())?;
+    let resp = require_success(resp).await?;
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+// ── Thinking (cc-tasks/17) ──────────────────────────────────────────────────────
+
+#[tauri::command]
+async fn get_thinking_settings(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let resp = authorized_request(&cfg, client.get(backend_url(&cfg, "/settings/thinking")))
+        .send().await.map_err(|e| e.to_string())?;
+    let resp = require_success(resp).await?;
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn update_thinking_settings(
+    app: tauri::AppHandle,
+    enabled: Option<bool>,
+    mode: Option<String>,
+    apply_to_proactive: Option<bool>,
+) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let mut body = serde_json::Map::new();
+    if let Some(v) = enabled {
+        body.insert("enabled".into(), v.into());
+    }
+    if let Some(v) = mode {
+        body.insert("mode".into(), v.into());
+    }
+    if let Some(v) = apply_to_proactive {
+        body.insert("apply_to_proactive".into(), v.into());
+    }
+    let resp = authorized_request(&cfg, client.post(backend_url(&cfg, "/settings/thinking")))
+        .json(&serde_json::Value::Object(body))
+        .send().await.map_err(|e| e.to_string())?;
+    let resp = require_success(resp).await?;
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
 // ── Dream Seed ────────────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -2225,6 +2298,10 @@ pub fn run() {
             set_chat_mode,
             set_chat_style,
             set_chat_multi_message,
+            get_tool_loop_settings,
+            update_tool_loop_settings,
+            get_thinking_settings,
+            update_thinking_settings,
             get_lorebook_entries,
             add_lorebook_entry,
             update_lorebook_entry,
