@@ -41,6 +41,89 @@ function toSquareName(row: number, col: number): string {
   return String.fromCharCode(97 + col) + String(8 - row);
 }
 
+// UCI square name → row/col (inverse of toSquareName)
+function squareNameToRowCol(sq: string): [number, number] {
+  const col = sq.charCodeAt(0) - 97;
+  const row = 8 - Number(sq[1]);
+  return [row, col];
+}
+
+// Resolve a click on `sq` given the currently selected piece (`fromSq`/`piece`) and its
+// full legal-move UCI list. Handles: normal moves, promotion (defaults to queen),
+// castling by clicking the rook, and en passant by clicking the captured pawn's square.
+function resolveChessMove(
+  sq: string,
+  fromSq: string,
+  piece: string,
+  selectedMoves: string[],
+): string | null {
+  const direct = selectedMoves.filter(m => m.slice(2, 4) === sq);
+  if (direct.length > 0) {
+    const promoQueen = direct.find(m => m.length === 5 && m.endsWith('q'));
+    return promoQueen ?? direct[0];
+  }
+
+  const pieceType = piece.toUpperCase();
+
+  // castling: king selected, click lands on own rook's home square
+  if (pieceType === 'K' && (fromSq === 'e1' || fromSq === 'e8')) {
+    const rank = fromSq[1];
+    if (sq === `h${rank}`) {
+      const uci = `${fromSq}g${rank}`;
+      if (selectedMoves.includes(uci)) return uci;
+    }
+    if (sq === `a${rank}`) {
+      const uci = `${fromSq}c${rank}`;
+      if (selectedMoves.includes(uci)) return uci;
+    }
+  }
+
+  // en passant: pawn selected, click lands on the enemy pawn being captured
+  // (actual UCI target is the empty square diagonally behind it)
+  if (pieceType === 'P') {
+    const file = sq[0];
+    const candidate = selectedMoves.find(m => m.slice(2, 4)[0] === file && m.slice(2, 4) !== sq);
+    if (candidate) return candidate;
+  }
+
+  return null;
+}
+
+// Visible target squares for the selected piece: normal move targets plus the
+// "alias" squares users intuitively click — own rook for castling, the captured
+// pawn's square for en passant.
+function deriveChessTargets(
+  selectedMoves: string[],
+  fromSq: string | null,
+  piece: string | null,
+  board: (string | null)[][],
+): string[] {
+  if (!fromSq || !piece) return [];
+  const targets = new Set<string>();
+  for (const m of selectedMoves) targets.add(m.slice(2, 4));
+
+  const pieceType = piece.toUpperCase();
+  if (pieceType === 'K' && (fromSq === 'e1' || fromSq === 'e8')) {
+    const rank = fromSq[1];
+    if (selectedMoves.includes(`${fromSq}g${rank}`)) targets.add(`h${rank}`);
+    if (selectedMoves.includes(`${fromSq}c${rank}`)) targets.add(`a${rank}`);
+  }
+
+  if (pieceType === 'P') {
+    const fromFile = fromSq[0];
+    for (const m of selectedMoves) {
+      const target = m.slice(2, 4);
+      if (target[0] === fromFile) continue; // straight push, not a diagonal capture
+      const [r, c] = squareNameToRowCol(target);
+      if ((board[r]?.[c] ?? null) === null) {
+        targets.add(`${target[0]}${fromSq[1]}`); // en passant: alias to captured pawn's square
+      }
+    }
+  }
+
+  return Array.from(targets);
+}
+
 function fenToBoard(fen: string): (string | null)[][] {
   const rows = fen.split(' ')[0]?.split('/') ?? [];
   if (rows.length !== 8) return Array.from({ length: 8 }, () => Array(8).fill(null));
@@ -236,7 +319,8 @@ function ChessBoard({
 export function ChessPage() {
   const [gameState, setGameState] = useState<ChessState | null>(null);
   const [selected, setSelected] = useState<[number, number] | null>(null);
-  const [legalTargets, setLegalTargets] = useState<string[]>([]);
+  const [selectedPiece, setSelectedPiece] = useState<string | null>(null);
+  const [selectedMoves, setSelectedMoves] = useState<string[]>([]); // full legal UCI list for the selected piece
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [boardTheme, setBoardTheme] = useState(() => getUIPref('activity.board.theme', 'classic_wood'));
@@ -296,7 +380,7 @@ export function ChessPage() {
 
   const handleStart = async () => {
     setLoading(true); setError(null);
-    setSelected(null); setLegalTargets([]);
+    setSelected(null); setSelectedPiece(null); setSelectedMoves([]);
     try {
       const s = await chessApi.start({ opponent, ai_style: aiStyle });
       setGameState(normalizeChessState({
@@ -315,7 +399,7 @@ export function ChessPage() {
 
   const handleClose = async () => {
     setLoading(true); setError(null);
-    setSelected(null); setLegalTargets([]);
+    setSelected(null); setSelectedPiece(null); setSelectedMoves([]);
     try {
       if (gameState?.session_id) {
         await chessApi.close(gameState.session_id);
@@ -339,25 +423,23 @@ export function ChessPage() {
     if (!selected) {
       if (isCurrentTurnPiece(piece, gameState.turn)) {
         setSelected([row, col]);
+        setSelectedPiece(piece);
         try {
           const { legal_moves } = await chessApi.legalMoves(gameState.session_id!);
           const fromSq = toSquareName(row, col);
-          const targets = legal_moves
-            .filter(m => m.startsWith(fromSq))
-            .map(m => m.slice(2, 4));
-          setLegalTargets(targets);
+          setSelectedMoves(legal_moves.filter(m => m.startsWith(fromSq)));
         } catch {
-          setLegalTargets([]);
+          setSelectedMoves([]);
         }
       }
       return;
     }
 
     const fromSq = toSquareName(selected[0], selected[1]);
-    if (legalTargets.includes(sqName)) {
-      const uci = fromSq + sqName;
+    const uci = selectedPiece ? resolveChessMove(sqName, fromSq, selectedPiece, selectedMoves) : null;
+    if (uci) {
       const sid = gameState.session_id!;
-      setSelected(null); setLegalTargets([]);
+      setSelected(null); setSelectedPiece(null); setSelectedMoves([]);
       setLoading(true); setError(null);
       try {
         const result = await chessApi.move(sid, uci);
@@ -373,17 +455,15 @@ export function ChessPage() {
       }
     } else if (isCurrentTurnPiece(piece, gameState.turn)) {
       setSelected([row, col]);
+      setSelectedPiece(piece);
       try {
         const { legal_moves } = await chessApi.legalMoves(gameState.session_id!);
-        const targets = legal_moves
-          .filter(m => m.startsWith(sqName))
-          .map(m => m.slice(2, 4));
-        setLegalTargets(targets);
+        setSelectedMoves(legal_moves.filter(m => m.startsWith(sqName)));
       } catch {
-        setLegalTargets([]);
+        setSelectedMoves([]);
       }
     } else {
-      setSelected(null); setLegalTargets([]);
+      setSelected(null); setSelectedPiece(null); setSelectedMoves([]);
     }
   };
 
@@ -391,6 +471,8 @@ export function ChessPage() {
   const isFinished = !isActive && !!gameState?.session_id;
 
   const displayBoard = fenToBoard(gameState?.fen ?? '8/8/8/8/8/8/8/8 w - - 0 1');
+  const selectedSqName = selected ? toSquareName(selected[0], selected[1]) : null;
+  const legalTargets = deriveChessTargets(selectedMoves, selectedSqName, selectedPiece, displayBoard);
 
   return (
     <div style={{
