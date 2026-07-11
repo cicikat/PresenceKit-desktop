@@ -1,7 +1,8 @@
 # pet-window-reference.md - desktop companion UI reference
 
 This document extracts the useful design intent from the old
-`D:\ai\Emerald-desktopUI\pet.jsx` and `D:\ai\Emerald-desktopUI\spec.jsx`.
+`pet.jsx` and `spec.jsx` in the `Emerald-desktopUI` repo (usually a sibling
+of this repo).
 It is a reference for a future `Emerald-client` pet window. It is not a
 requirement to preserve the old JSX implementation or file structure.
 
@@ -287,7 +288,7 @@ Old files are not needed for:
 
 ## Deletion note
 
-After this document exists, deleting `D:\ai\Emerald-desktopUI` would no longer
+After this document exists, deleting the `Emerald-desktopUI` repo would no longer
 lose the high-level pet-window design principles. Deletion should still wait
 until the project explicitly decides whether the desktop pet is:
 

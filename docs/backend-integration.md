@@ -6,7 +6,7 @@
 
 ## 后端来源
 
-后端项目：`D:\ai\Emerald-presence\`
+后端项目：`Emerald-presence` 仓库（通常与本仓库同级）
 
 关键后端文件：
 
@@ -261,9 +261,9 @@ Authorization: Bearer <admin_token>
 
 后端文件：
 
-- `D:\ai\Emerald-presence\admin\routers\garden.py`
-- `D:\ai\Emerald-presence\core\garden\manager.py`
-- `D:\ai\Emerald-presence\docs\garden.md`
+- `Emerald-presence` 仓库（通常与本仓库同级）的 `admin\routers\garden.py`
+- 同仓库的 `core\garden\manager.py`
+- 同仓库的 `docs\garden.md`
 
 返回结构：
 
@@ -310,7 +310,7 @@ Sidebar diary tab
   → Rust reqwest GET http://127.0.0.1:8080/diary/list
 ```
 
-后端要求 Bearer token。数据源目录：`D:\ai\Emerald-presence\data\yexuan_inner\diary\`，文件名严格匹配 `^\d{4}-\d{2}-\d{2}\.md$`。
+后端要求 Bearer token。数据源目录：`Emerald-presence` 仓库（通常与本仓库同级）的 `data\yexuan_inner\diary\`，文件名严格匹配 `^\d{4}-\d{2}-\d{2}\.md$`。
 
 返回结构：
 
@@ -353,7 +353,7 @@ SubDiary 点击 entry
 
 `body` 是 strip 掉首行 `# ` heading 后的剩余正文，保留 `##` 子标题和段落结构，原样 markdown 文本。
 
-后端文件：`D:\ai\Emerald-presence\admin\routers\diary.py`
+后端文件：`Emerald-presence` 仓库（通常与本仓库同级）的 `admin\routers\diary.py`
 
 ---
 
@@ -428,7 +428,7 @@ ChatPanel 启动或滚顶触发
 WebSocket 消息；`time` 仅用于旧响应兼容和显示。assistant-only trigger turn 的
 `user` 为空字符串，客户端仍渲染 assistant 消息。
 
-后端文件：`D:\ai\Emerald-presence\admin\routers\chat_log.py`
+后端文件：`Emerald-presence` 仓库（通常与本仓库同级）的 `admin\routers\chat_log.py`
 
 ---
 
@@ -444,7 +444,7 @@ loadMoodState()
 
 后端要求 Bearer token。数据源：`core/memory/mood_state.py load()`，返回持久化的情绪状态（两轮漂移才切换，非即时检测值）。
 
-后端文件：`D:\ai\Emerald-presence\admin\routers\mood.py`、`D:\ai\Emerald-presence\core\memory\mood_state.py`
+后端文件：`Emerald-presence` 仓库（通常与本仓库同级）的 `admin\routers\mood.py`、`core\memory\mood_state.py`
 
 返回结构：
 
@@ -474,7 +474,7 @@ loadActivityState()
 
 后端要求 Bearer token。调用 `core.activity_manager.get_current()`，必要时自动切换到新活动（15-45 分钟随机间隔）。
 
-后端文件：`D:\ai\Emerald-presence\admin\routers\activity.py`、`D:\ai\Emerald-presence\core\activity_manager.py`
+后端文件：`Emerald-presence` 仓库（通常与本仓库同级）的 `admin\routers\activity.py`、`core\activity_manager.py`
 
 返回结构：
 
@@ -561,7 +561,7 @@ Authorization: Bearer <admin_token>
 - 聊天软件、Other、未知应用、Explorer / Office / PDF / 压缩工具：直接置空字符串
 - 黑名单关键词（密码、银行、医疗等）整条置空
 
-后端文件：`D:\ai\Emerald-presence\admin\routers\sensor.py`、`D:\ai\Emerald-presence\core\memory\realtime_state.py`
+后端文件：`Emerald-presence` 仓库（通常与本仓库同级）的 `admin\routers\sensor.py`、`core\memory\realtime_state.py`
 
 ---
 
@@ -637,7 +637,7 @@ Emerald-client SubStatus
 
 `stale_seconds` 是后端算的"距上次 POST 多少秒",SubStatus 用这个判断 sensor 模块是否还在采集(比如 >120 视为掉线,UI 显示降级)。
 
-后端文件：`D:\ai\Emerald-presence\admin\routers\sensor.py`、`D:\ai\Emerald-presence\core\memory\realtime_state.py`
+后端文件：`Emerald-presence` 仓库（通常与本仓库同级）的 `admin\routers\sensor.py`、`core\memory\realtime_state.py`
 
 > `sensor_aware` 触发器默认关闭，后端 `config.yaml` 设置
 > `scheduler.sensor_aware.enabled: true` 才生效，重启服务后 scheduler 启动日志会打出 `ENABLED` 确认。
@@ -646,7 +646,7 @@ Emerald-client SubStatus
 
 ## /sensor/realtime（GET）
 
-读取最新一份 sensor 快照。后端 `D:\ai\Emerald-presence\admin\routers\sensor.py:213`。
+读取最新一份 sensor 快照。后端 `Emerald-presence` 仓库（通常与本仓库同级）的 `admin\routers\sensor.py:213`。
 
 ### 响应 schema
 
@@ -693,7 +693,7 @@ Emerald-client SubStatus
 ws://127.0.0.1:8080/ws/desktop
 ```
 
-后端实现：`D:\ai\Emerald-presence\channels\desktop_ws.py`
+后端实现：`Emerald-presence` 仓库（通常与本仓库同级）的 `channels\desktop_ws.py`
 
 当前客户端实现：`src/shared/api/ws.ts`
 
@@ -854,11 +854,11 @@ P-01 已接入的最小执行动作：
 
 ## v1 目标协议
 
-旧方案文档位置：
+旧方案文档位置（相对 `Emerald-desktop` 仓库根，通常与本仓库同级）：
 
 ```text
-D:\ai\Emerald-desktop\docs\desktop-client-protocol.md
-D:\ai\Emerald-desktop\docs\desktop-client-plan.md
+docs\desktop-client-protocol.md
+docs\desktop-client-plan.md
 ```
 
 v1 目标新增或替换：

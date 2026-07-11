@@ -1,6 +1,6 @@
 # docs/memory.md — 记忆与潜意识 UI 边界
 
-本文记录 Emerald-client 内与记忆、潜意识状态、hidden state 观察相关的前端边界。后端记忆系统本体仍以 `D:\ai\Emerald-presence\` 为准。
+本文记录 Emerald-client 内与记忆、潜意识状态、hidden state 观察相关的前端边界。后端记忆系统本体仍以 `Emerald-presence` 仓库（通常与本仓库同级）为准。
 
 ---
 

@@ -16,7 +16,7 @@
 
 ## P1：客户端和目标 v1 WS 协议不一致
 
-**位置**：`src/shared/api/ws.ts`、`src/shared/api/types.ts`、`D:\ai\Emerald-presence\channels\desktop_ws.py`
+**位置**：`src/shared/api/ws.ts`、`src/shared/api/types.ts`、`Emerald-presence` 仓库（通常与本仓库同级）的 `channels\desktop_ws.py`
 
 当前实际协议是 legacy：
 
@@ -97,17 +97,17 @@ Phase 2c+ 之后，ChatPanel 启动历史改走 `/chat-log/*` 接口，owner_qq 
 
 **位置**：文档路径
 
-旧入口说明曾写：
+旧入口说明曾写（相对 `Emerald-presence` 仓库根，通常与本仓库同级）：
 
 ```text
-D:\ai\Emerald-presence\docs\desktop-client-protocol.md
-D:\ai\Emerald-presence\docs\desktop-client-plan.md
+docs\desktop-client-protocol.md
+docs\desktop-client-plan.md
 ```
 
-当前实际同名文件在：
+当前实际同名文件在 `Emerald-desktop` 仓库（通常与本仓库同级）的：
 
 ```text
-D:\ai\Emerald-desktop\docs\
+docs\
 ```
 
 **影响**：后续协作者按旧路径找不到协议文档，容易重复设计或误判状态。

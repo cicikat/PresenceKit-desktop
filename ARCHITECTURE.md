@@ -1,6 +1,6 @@
 # ARCHITECTURE.md — Emerald-client 架构总览
 
-Emerald-client 是 `Emerald-presence` 的新桌面客户端。它不拥有角色记忆、调度、工具、情绪判断等核心数据；这些都属于 `D:\ai\Emerald-presence\`。客户端负责把后端的陪伴系统可视化：聊天窗口、桌宠形象、用户交互、桌面动作执行和未来的感知 UI。
+Emerald-client 是 `Emerald-presence` 的新桌面客户端。它不拥有角色记忆、调度、工具、情绪判断等核心数据；这些都属于 `Emerald-presence` 仓库（通常与本仓库同级）。客户端负责把后端的陪伴系统可视化：聊天窗口、桌宠形象、用户交互、桌面动作执行和未来的感知 UI。
 
 ---
 
@@ -190,7 +190,7 @@ Tauri Rust 在 `src-tauri/src/lib.rs`：
 
 当前 engine 是前端本地对象。`STATE_FIELD_OWNERSHIP` 明确字段当前 owner；`useBackendStatePolling()` 是 mood/activity 后端轮询的唯一入口，并统一通过 `applyBackendState(source, patch)` 写入；本地 focus 推断走 `setLocalFocus()`。WS `state_update` 尚未接入，`state-update` source 仅作为未来入口保留。sensor 快照当前不写入 engine，只在 `SubStatus` 内派生信号。
 
-旧原型 `D:\ai\Emerald-desktopUI\state-engine.js` 里有完整 behavior loop；当前 TypeScript 版删掉了 mock 行为循环，等待后端状态推送。
+旧原型 `Emerald-desktopUI` 仓库（通常与本仓库同级）的 `state-engine.js` 里有完整 behavior loop；当前 TypeScript 版删掉了 mock 行为循环，等待后端状态推送。
 
 ---
 
@@ -318,8 +318,8 @@ Dream 背景按 `day` / `night` 分开记录。旧版单字段 `dream_background
 
 `Emerald-client` 主要从两个来源迁移：
 
-- `D:\ai\Emerald-desktopUI\`：HTML/JSX UI 原型。
-- `D:\ai\Emerald-desktop\`：旧 PyQt 桌宠和 Python 感知/行为层。
+- `Emerald-desktopUI` 仓库（通常与本仓库同级）：HTML/JSX UI 原型。
+- `Emerald-desktop` 仓库（通常与本仓库同级）：旧 PyQt 桌宠和 Python 感知/行为层。
 
 已迁：
 
