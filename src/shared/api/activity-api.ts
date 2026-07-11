@@ -114,6 +114,7 @@ export const readingApi = {
 export type GomokuCell = 'black' | 'white' | null;
 export type GomokuOpponent = 'human' | 'character_ai';
 export type GomokuAiStyle = 'balanced' | 'gentle' | 'serious' | 'teaching';
+export type GomokuAiResponseMode = 'auto' | 'pending';
 
 export interface GomokuLastMove {
   x: number;  // col
@@ -132,11 +133,14 @@ export interface GomokuState {
   opponent?: GomokuOpponent | null;
   ai_player?: 'white' | null;
   ai_style?: GomokuAiStyle | null;
+  ai_response_mode?: GomokuAiResponseMode | null;
+  pending_ai_turn?: boolean;
 }
 
 export interface GomokuStartRequest {
   opponent?: GomokuOpponent;
   ai_style?: GomokuAiStyle;
+  ai_response_mode?: GomokuAiResponseMode;
 }
 
 export interface GomokuUserMoveFacts {
@@ -173,6 +177,7 @@ export const gomokuApi = {
     invokeActivity('activity_gomoku_start', {
       opponent: req?.opponent ?? null,
       aiStyle: req?.ai_style ?? null,
+      aiResponseMode: req?.ai_response_mode ?? null,
     }),
   state: (): Promise<GomokuState | { active: false }> =>
     invokeActivity('activity_gomoku_state'),

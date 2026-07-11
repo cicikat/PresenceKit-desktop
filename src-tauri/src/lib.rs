@@ -1464,14 +1464,16 @@ async fn activity_reading_close(app: tauri::AppHandle, payload: ActivitySessionP
 // ── Gomoku ────────────────────────────────────────────────────────────────────
 
 #[tauri::command]
-async fn activity_gomoku_start(app: tauri::AppHandle, opponent: Option<String>, ai_style: Option<String>) -> Result<serde_json::Value, String> {
-    println!("[activity] rust command activity_gomoku_start opponent={:?} ai_style={:?}", opponent, ai_style);
+async fn activity_gomoku_start(app: tauri::AppHandle, opponent: Option<String>, ai_style: Option<String>, ai_response_mode: Option<String>) -> Result<serde_json::Value, String> {
+    println!("[activity] rust command activity_gomoku_start opponent={:?} ai_style={:?} ai_response_mode={:?}", opponent, ai_style, ai_response_mode);
     let actual_opponent = opponent.as_deref().unwrap_or("human");
-    let body = if let Some(style) = &ai_style {
-        serde_json::json!({"opponent": actual_opponent, "ai_style": style})
-    } else {
-        serde_json::json!({"opponent": actual_opponent})
-    };
+    let mut body = serde_json::json!({"opponent": actual_opponent});
+    if let Some(style) = &ai_style {
+        body["ai_style"] = serde_json::json!(style);
+    }
+    if let Some(mode) = &ai_response_mode {
+        body["ai_response_mode"] = serde_json::json!(mode);
+    }
     println!("[activity] POST /activity/gomoku/start body={}", body);
     activity_post(&app, "/activity/gomoku/start", body).await
 }

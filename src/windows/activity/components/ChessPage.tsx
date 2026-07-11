@@ -322,6 +322,7 @@ export function ChessPage() {
   const [selectedPiece, setSelectedPiece] = useState<string | null>(null);
   const [selectedMoves, setSelectedMoves] = useState<string[]>([]); // full legal UCI list for the selected piece
   const [loading, setLoading] = useState(false);
+  const [aiThinking, setAiThinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [boardTheme, setBoardTheme] = useState(() => getUIPref('activity.board.theme', 'classic_wood'));
   const [pieceStyle, setPieceStyle] = useState(() => getUIPref('activity.chess.pieceStyle', 'unicode'));
@@ -331,6 +332,16 @@ export function ChessPage() {
 
   const boardContainerRef = useRef<HTMLDivElement>(null);
   const [dynamicSquare, setDynamicSquare] = useState(SQUARE);
+  const aiTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearAiTimer = useCallback(() => {
+    if (aiTimerRef.current) {
+      clearTimeout(aiTimerRef.current);
+      aiTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => clearAiTimer, [clearAiTimer]);
 
   useEffect(() => {
     const el = boardContainerRef.current;
@@ -374,11 +385,21 @@ export function ChessPage() {
     } catch (e: any) {
       setError(String(e?.message ?? e));
     } finally {
-      setLoading(false);
+      setAiThinking(false);
     }
   }, []);
 
+  const scheduleAiMove = useCallback((sessionId: string) => {
+    setAiThinking(true);
+    const delay = 3000 + Math.random() * 5000; // 3–8s thinking window
+    aiTimerRef.current = setTimeout(() => {
+      aiTimerRef.current = null;
+      triggerAiMove(sessionId);
+    }, delay);
+  }, [triggerAiMove]);
+
   const handleStart = async () => {
+    clearAiTimer(); setAiThinking(false);
     setLoading(true); setError(null);
     setSelected(null); setSelectedPiece(null); setSelectedMoves([]);
     try {
@@ -398,6 +419,7 @@ export function ChessPage() {
   };
 
   const handleClose = async () => {
+    clearAiTimer(); setAiThinking(false);
     setLoading(true); setError(null);
     setSelected(null); setSelectedPiece(null); setSelectedMoves([]);
     try {
@@ -413,7 +435,7 @@ export function ChessPage() {
   };
 
   const handleSquareClick = async (row: number, col: number) => {
-    if (!gameState || gameState.status !== 'active' || loading) return;
+    if (!gameState || gameState.status !== 'active' || loading || aiThinking) return;
     if (gameState.turn === gameState.ai_player) return;
 
     const board = fenToBoard(gameState.fen);
@@ -445,8 +467,7 @@ export function ChessPage() {
         const result = await chessApi.move(sid, uci);
         setGameState(prev => normalizeChessState(result, prev));
         if (result.pending_ai_turn) {
-          await triggerAiMove(sid);
-          return;
+          scheduleAiMove(sid);
         }
       } catch (e: any) {
         setError(String(e?.message ?? e));
@@ -553,8 +574,8 @@ export function ChessPage() {
         {isActive && (
           <span className="mono" style={{ fontSize: 11.5, color: 'var(--ink-3)', letterSpacing: 0.8 }}>
             当前回合：{gameState?.turn === 'white' ? '♔ 白方' : '♚ 黑方'}
-            {loading && gameState?.opponent === AI_OPPONENT && gameState?.turn === gameState?.ai_player
-              ? ' · AI 思考中…'
+            {aiThinking
+              ? ` · ${getActiveCharacterName()}思考中…`
               : loading ? ' · 等待中…' : ''}
           </span>
         )}
@@ -573,7 +594,7 @@ export function ChessPage() {
               selected={selected}
               legalTargets={legalTargets}
               onSquareClick={handleSquareClick}
-              disabled={!isActive || loading || gameState?.turn === gameState?.ai_player}
+              disabled={!isActive || loading || aiThinking || gameState?.turn === gameState?.ai_player}
               pieceStyle={pieceStyle}
               squareSize={dynamicSquare}
             />

@@ -199,6 +199,7 @@ function GomokuBoard({
 export function GomokuPage() {
   const [gameState, setGameState] = useState<GomokuState | null>(null);
   const [loading, setLoading] = useState(false);
+  const [aiThinking, setAiThinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [selectedOpponent, setSelectedOpponent] = useState<GomokuOpponent>(AI_OPPONENT);
@@ -208,6 +209,16 @@ export function GomokuPage() {
 
   const boardContainerRef = useRef<HTMLDivElement>(null);
   const [dynamicCell, setDynamicCell] = useState(CELL);
+  const aiTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearAiTimer = useCallback(() => {
+    if (aiTimerRef.current) {
+      clearTimeout(aiTimerRef.current);
+      aiTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => clearAiTimer, [clearAiTimer]);
 
   useEffect(() => {
     const el = boardContainerRef.current;
@@ -244,12 +255,34 @@ export function GomokuPage() {
 
   useEffect(() => { refreshState(); }, [refreshState]);
 
+  const triggerAiMove = useCallback(async (sessionId: string) => {
+    try {
+      const s = await gomokuApi.aiMove(sessionId);
+      setGameState(prev => normalizeGomokuState(s, prev));
+    } catch (e: any) {
+      setError(String(e?.message ?? e));
+    } finally {
+      setAiThinking(false);
+    }
+  }, []);
+
+  const scheduleAiMove = useCallback((sessionId: string) => {
+    setAiThinking(true);
+    const delay = 3000 + Math.random() * 5000; // 3–8s thinking window
+    aiTimerRef.current = setTimeout(() => {
+      aiTimerRef.current = null;
+      triggerAiMove(sessionId);
+    }, delay);
+  }, [triggerAiMove]);
+
   const handleStart = async () => {
+    clearAiTimer(); setAiThinking(false);
     setLoading(true); setError(null);
     const ai_style = selectedOpponent === AI_OPPONENT ? selectedStyle : undefined;
-    console.log('[gomoku] start invoke', { opponent: selectedOpponent, ai_style });
+    const ai_response_mode = selectedOpponent === AI_OPPONENT ? 'pending' as const : undefined;
+    console.log('[gomoku] start invoke', { opponent: selectedOpponent, ai_style, ai_response_mode });
     try {
-      const s = await gomokuApi.start({ opponent: selectedOpponent, ai_style });
+      const s = await gomokuApi.start({ opponent: selectedOpponent, ai_style, ai_response_mode });
       console.log('[gomoku] start result', s);
       const normalized = normalizeGomokuState(s);
       console.log('[gomoku] start backend state', {
@@ -271,7 +304,7 @@ export function GomokuPage() {
   };
 
   const handlePlace = async (row: number, col: number) => {
-    if (!gameState || gameState.status !== 'active' || loading || !gameState.session_id) return;
+    if (!gameState || gameState.status !== 'active' || loading || aiThinking || !gameState.session_id) return;
     const session_id = gameState.session_id;
     setLoading(true); setError(null);
     console.log('[gomoku] move invoke', { session_id, x: col, y: row, opponent: gameState.opponent });
@@ -287,6 +320,9 @@ export function GomokuPage() {
         });
         return next;
       });
+      if (s.pending_ai_turn) {
+        scheduleAiMove(session_id);
+      }
     } catch (e: any) {
       setError(String(e?.message ?? e));
     } finally {
@@ -295,6 +331,7 @@ export function GomokuPage() {
   };
 
   const handleClose = async () => {
+    clearAiTimer(); setAiThinking(false);
     if (!gameState?.session_id) { setGameState(null); return; }
     setLoading(true); setError(null);
     try {
@@ -310,7 +347,7 @@ export function GomokuPage() {
   const isActive = gameState?.status === 'active';
   const isFinished = gameState?.status === 'completed' || !!gameState?.winner;
   const isAIMode = gameState?.opponent === AI_OPPONENT;
-  const boardDisabled = !isActive || loading || (isAIMode && gameState?.current_turn === 'white');
+  const boardDisabled = !isActive || loading || aiThinking || (isAIMode && gameState?.current_turn === 'white');
 
   const emptyBoard: GomokuCell[][] = Array.from({ length: BOARD_SIZE }, () =>
     Array.from({ length: BOARD_SIZE }, () => null)
@@ -416,7 +453,7 @@ export function GomokuPage() {
           <Btn onClick={handleClose} disabled={loading}>结束棋局</Btn>
           {isActive && (
             <span className="mono" style={{ fontSize: 11.5, color: 'var(--ink-3)', letterSpacing: 0.8 }}>
-              {isAIMode && gameState?.current_turn === 'white' && loading
+              {isAIMode && aiThinking
                 ? `${getActiveCharacterName()}思考中…`
                 : `当前回合：${gameState?.current_turn === 'black' ? '⚫ 黑棋' : '⚪ 白棋'}`
               }
