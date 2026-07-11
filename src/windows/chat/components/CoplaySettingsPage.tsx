@@ -49,16 +49,19 @@ export function CoplaySettingsPage() {
   const [state, setState] = useState<CoplayState | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // loadError：刷新状态（GET /coplay/state）失败；actionError：arm/disarm 操作失败。
+  // 两者分开保存，避免周期性 refresh 成功时把刚展示给用户的操作报错静默冲掉。
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   async function refresh() {
     try {
       const s = await loadCoplayState();
       setState(s);
-      setError(null);
+      setLoadError(null);
     } catch (e) {
-      setError(String(e));
+      setLoadError(String(e));
     } finally {
       setLoading(false);
     }
@@ -73,7 +76,7 @@ export function CoplaySettingsPage() {
   async function handleToggle() {
     if (!state) return;
     setBusy(true);
-    setError(null);
+    setActionError(null);
     try {
       if (state.status === 'off') {
         const r = await armCoplay();
@@ -83,7 +86,8 @@ export function CoplaySettingsPage() {
         setState(prev => prev ? { ...prev, status: r.status as CoplayStatus, game_id: null, game_name: null } : prev);
       }
     } catch (e) {
-      setError(String(e));
+      // 不允许静默：invoke reject / 后端非 2xx（含 enabled=false 时 arm 的 409）都要可见展示
+      setActionError(String(e));
     } finally {
       setBusy(false);
       void refresh();
@@ -96,6 +100,10 @@ export function CoplaySettingsPage() {
 
   const status = state?.status ?? 'off';
   const isOn = status !== 'off';
+  // 后端未下发 enabled 字段（旧版本）时按启用兜底，避免误伤；仅显式 false 才禁用
+  const enabled = state?.enabled !== false;
+  const lastProbe = state?.last_probe ?? null;
+  const displayError = actionError ?? loadError;
 
   return (
     <div style={{ display: 'grid', gap: 14 }}>
@@ -113,8 +121,14 @@ export function CoplaySettingsPage() {
             {STATUS_LABEL[status]}
           </div>
         </div>
-        <Switch active={isOn} disabled={busy} onClick={() => void handleToggle()} />
+        <Switch active={isOn} disabled={busy || !enabled} onClick={() => void handleToggle()} />
       </div>
+
+      {!enabled && (
+        <div className="mono" style={{ fontSize: 10.5, letterSpacing: 0.6, color: 'var(--danger)' }}>
+          后端配置未启用陪玩功能（coplay.enabled）
+        </div>
+      )}
 
       {status === 'active' && state?.game_name && (
         <div className="serif" style={{
@@ -125,8 +139,8 @@ export function CoplaySettingsPage() {
         </div>
       )}
 
-      {error && (
-        <div className="mono" style={{ fontSize: 10.5, letterSpacing: 0.6, color: 'var(--danger)' }}>{error}</div>
+      {displayError && (
+        <div className="mono" style={{ fontSize: 10.5, letterSpacing: 0.6, color: 'var(--danger)' }}>{displayError}</div>
       )}
 
       <div style={{ display: 'flex', gap: 8 }}>
@@ -141,6 +155,12 @@ export function CoplaySettingsPage() {
         由后端 watcher 每 60 秒轮询一次判定，不是本开关直接控制。游戏退出后自动进入收尾并回到「等待检测」，
         持续开着也不会一直陪玩到底——关闭需要显式点这个开关。
       </div>
+
+      {lastProbe && (
+        <div className="mono" style={{ fontSize: 9.5, letterSpacing: 0.6, color: 'var(--ink-3)', lineHeight: 1.6 }}>
+          last_probe · app_id={lastProbe.running_app_id ?? '-'} · process={lastProbe.matched_process ?? '-'} · ts={lastProbe.ts ?? '-'}
+        </div>
+      )}
     </div>
   );
 }

@@ -107,10 +107,20 @@ export interface GardenState {
 
 export type CoplayStatus = 'off' | 'armed' | 'active' | 'closing';
 
+export interface CoplayLastProbe {
+  running_app_id: string | null;
+  matched_process: string | null;
+  ts: string | number | null;
+}
+
 export interface CoplayState {
   status: CoplayStatus;
   game_id: string | null;
   game_name: string | null;
+  /** 部署级开关（coplay.enabled），后端配置禁用时为 false；旧后端未下发时按 true 兜底 */
+  enabled?: boolean;
+  /** 54-A 新增调试字段：watcher 最近一次探测结果，fail-open 不影响主流程 */
+  last_probe?: CoplayLastProbe | null;
 }
 
 export interface DiaryListItem {
