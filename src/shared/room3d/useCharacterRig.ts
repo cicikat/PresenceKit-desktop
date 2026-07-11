@@ -179,7 +179,11 @@ export function useCharacterRig(characterUrl: string, boneMap?: BoneMap, onModel
   }, [characterUrl]);
 
   const onNewSpeech = useCallback((text: string) => {
-    const talkMs = Math.max(800, Math.min(6000, text.length * 60));
+    // Keep mouth-open duration in the same order of magnitude as the pet bubble's
+    // own TTL (PetWindow.tsx: Math.max(6000, text.length * 80)) — the old 6s cap
+    // made the mouth stop long before a longer reply's bubble disappeared, which
+    // reads as "the pet doesn't talk" even though the turn/kind plumbing is fine.
+    const talkMs = Math.max(6000, text.length * 80);
     talkEndsAtRef.current = performance.now() + talkMs;
   }, []);
 

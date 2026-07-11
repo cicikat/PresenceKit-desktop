@@ -89,7 +89,12 @@ export function Model3DStage({ snapshot }: PetRendererProps) {
     let disposed = false;
     let unlisten: (() => void) | undefined;
     listenPetTurn(turn => {
-      if (disposed || turn.kind !== 'channel_message') return;
+      if (disposed) return;
+      if (turn.kind !== 'channel_message') return;
+      // Edge-triggered (one line per turn, not per frame) — cc-tasks/20 §20-C:
+      // keeps a trace of "did the mouth-open signal actually arrive" without
+      // being a periodic/noisy log.
+      console.debug('[pet] 说话信号触发 msg_id=%s len=%d', turn.msg_id, turn.content.length);
       onNewSpeech(turn.content);
     }).then(fn => {
       if (disposed) fn();
