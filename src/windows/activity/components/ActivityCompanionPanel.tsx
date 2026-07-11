@@ -156,6 +156,19 @@ export function ActivityCompanionPanel({ activityId, sessionId, sessionActive, s
     }
   }, [messages, sending]);
 
+  // §I: proactive AI comments pushed from the game page (after AI moves / game end)
+  useEffect(() => {
+    function onPush(e: Event) {
+      const detail = (e as CustomEvent).detail as
+        | { activityId: ActivityId; sessionId: string | null; text: string; grounding?: AnyGrounding }
+        | undefined;
+      if (!detail || detail.activityId !== activityId || detail.sessionId !== sessionId) return;
+      setMessages(prev => [...prev, { role: 'assistant', text: detail.text, grounding: detail.grounding }]);
+    }
+    window.addEventListener('activity-companion-push', onPush);
+    return () => window.removeEventListener('activity-companion-push', onPush);
+  }, [activityId, sessionId]);
+
   const canSend = !!sessionId && sessionActive && !sending;
 
   const handleSend = async () => {

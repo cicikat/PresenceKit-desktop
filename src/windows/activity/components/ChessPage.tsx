@@ -378,16 +378,26 @@ export function ChessPage() {
 
   useEffect(() => { refreshState(); }, [refreshState]);
 
+  const fireComment = useCallback((sessionId: string) => {
+    chessApi.comment(sessionId).then(res => {
+      if (!res.comment) return;
+      window.dispatchEvent(new CustomEvent('activity-companion-push', {
+        detail: { activityId: 'chess', sessionId, text: res.comment, grounding: res.grounding },
+      }));
+    }).catch(e => console.debug('[chess] comment fetch failed', e));
+  }, []);
+
   const triggerAiMove = useCallback(async (sessionId: string) => {
     try {
       const result = await chessApi.aiMove(sessionId);
       setGameState(prev => normalizeChessState(result, prev));
+      fireComment(sessionId);
     } catch (e: any) {
       setError(String(e?.message ?? e));
     } finally {
       setAiThinking(false);
     }
-  }, []);
+  }, [fireComment]);
 
   const scheduleAiMove = useCallback((sessionId: string) => {
     setAiThinking(true);
@@ -468,6 +478,8 @@ export function ChessPage() {
         setGameState(prev => normalizeChessState(result, prev));
         if (result.pending_ai_turn) {
           scheduleAiMove(sid);
+        } else if (result.status !== 'active') {
+          fireComment(sid);
         }
       } catch (e: any) {
         setError(String(e?.message ?? e));

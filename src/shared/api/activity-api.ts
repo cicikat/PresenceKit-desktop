@@ -143,6 +143,12 @@ export interface GomokuStartRequest {
   ai_response_mode?: GomokuAiResponseMode;
 }
 
+export interface GomokuCommentResult {
+  session_id: string;
+  comment: string | null;
+  grounding?: GomokuGroundingFacts;
+}
+
 export interface GomokuUserMoveFacts {
   created_chain?: number | null;
   blocked_opponent_chain?: number | null;
@@ -189,6 +195,8 @@ export const gomokuApi = {
     invokeActivity('activity_gomoku_chat', { payload: { session_id: params.session_id, message: params.message } }),
   aiMove: (session_id: string): Promise<Omit<GomokuState, 'session_id'>> =>
     invokeActivity('activity_gomoku_ai_move', { payload: { session_id } }),
+  comment: (session_id: string): Promise<GomokuCommentResult> =>
+    invokeActivity('activity_gomoku_comment', { payload: { session_id } }),
 };
 
 // ── Chess ─────────────────────────────────────────────────────────────────────
@@ -254,6 +262,12 @@ export interface ChessChatResult {
   grounding?: ChessGroundingFacts;
 }
 
+export interface ChessCommentResult {
+  session_id: string;
+  comment: string | null;
+  grounding?: ChessGroundingFacts;
+}
+
 export const chessApi = {
   start: (req?: ChessStartRequest): Promise<ChessState> =>
     invokeActivity('activity_chess_start', {
@@ -272,6 +286,8 @@ export const chessApi = {
     invokeActivity('activity_chess_chat', { payload: { session_id: params.session_id, message: params.message } }),
   aiMove: (session_id: string): Promise<ChessMoveResult> =>
     invokeActivity('activity_chess_ai_move', { payload: { session_id } }),
+  comment: (session_id: string): Promise<ChessCommentResult> =>
+    invokeActivity('activity_chess_comment', { payload: { session_id } }),
 };
 
 // ── Dream Seed ────────────────────────────────────────────────────────────────

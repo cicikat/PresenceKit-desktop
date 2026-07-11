@@ -255,16 +255,26 @@ export function GomokuPage() {
 
   useEffect(() => { refreshState(); }, [refreshState]);
 
+  const fireComment = useCallback((sessionId: string) => {
+    gomokuApi.comment(sessionId).then(res => {
+      if (!res.comment) return;
+      window.dispatchEvent(new CustomEvent('activity-companion-push', {
+        detail: { activityId: 'gomoku', sessionId, text: res.comment, grounding: res.grounding },
+      }));
+    }).catch(e => console.debug('[gomoku] comment fetch failed', e));
+  }, []);
+
   const triggerAiMove = useCallback(async (sessionId: string) => {
     try {
       const s = await gomokuApi.aiMove(sessionId);
       setGameState(prev => normalizeGomokuState(s, prev));
+      fireComment(sessionId);
     } catch (e: any) {
       setError(String(e?.message ?? e));
     } finally {
       setAiThinking(false);
     }
-  }, []);
+  }, [fireComment]);
 
   const scheduleAiMove = useCallback((sessionId: string) => {
     setAiThinking(true);
@@ -322,6 +332,8 @@ export function GomokuPage() {
       });
       if (s.pending_ai_turn) {
         scheduleAiMove(session_id);
+      } else if (s.status !== 'active') {
+        fireComment(session_id);
       }
     } catch (e: any) {
       setError(String(e?.message ?? e));

@@ -1504,6 +1504,11 @@ async fn activity_gomoku_ai_move(app: tauri::AppHandle, payload: ActivitySession
     activity_post(&app, "/activity/gomoku/ai_move", serde_json::json!({ "session_id": payload.session_id })).await
 }
 
+#[tauri::command]
+async fn activity_gomoku_comment(app: tauri::AppHandle, payload: ActivitySessionPayload) -> Result<serde_json::Value, String> {
+    activity_post(&app, "/activity/gomoku/comment", serde_json::json!({ "session_id": payload.session_id })).await
+}
+
 // ── Chess ─────────────────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -1551,6 +1556,11 @@ async fn activity_chess_chat(app: tauri::AppHandle, payload: GomokuChatPayload) 
 #[tauri::command]
 async fn activity_chess_ai_move(app: tauri::AppHandle, payload: ActivitySessionPayload) -> Result<serde_json::Value, String> {
     activity_post(&app, "/activity/chess/ai_move", serde_json::json!({ "session_id": payload.session_id })).await
+}
+
+#[tauri::command]
+async fn activity_chess_comment(app: tauri::AppHandle, payload: ActivitySessionPayload) -> Result<serde_json::Value, String> {
+    activity_post(&app, "/activity/chess/comment", serde_json::json!({ "session_id": payload.session_id })).await
 }
 
 #[tauri::command]
@@ -2271,6 +2281,7 @@ pub fn run() {
             activity_gomoku_close,
             activity_gomoku_chat,
             activity_gomoku_ai_move,
+            activity_gomoku_comment,
             activity_chess_start,
             activity_chess_state,
             activity_chess_move,
@@ -2278,6 +2289,7 @@ pub fn run() {
             activity_chess_close,
             activity_chess_chat,
             activity_chess_ai_move,
+            activity_chess_comment,
             activity_dream_seed_start,
             activity_dream_seed_state,
             activity_dream_seed_chat,
