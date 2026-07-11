@@ -188,12 +188,21 @@ fn local_config_candidates<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Vec<
         paths.push(dir.join("..").join("config").join("client.local.json"));
     }
 
-    paths.push(
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("..")
-            .join("config")
-            .join("client.local.json"),
-    );
+    if cfg!(debug_assertions) {
+        paths.push(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("..")
+                .join("config")
+                .join("client.local.json"),
+        );
+    }
+
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            paths.push(dir.join("config").join("client.local.json"));
+            paths.push(dir.join("client.local.json"));
+        }
+    }
 
     if let Ok(dir) = app.path().app_config_dir() {
         paths.push(dir.join("client.local.json"));
