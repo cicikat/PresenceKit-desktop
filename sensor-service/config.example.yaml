@@ -1,0 +1,25 @@
+backend:
+  url: "http://127.0.0.1:8080"
+  token: "emt_REPLACE-with-sensor-profile-token"   # 填 sensor profile token（仅 sensor.write 权限），由后端 POST /auth/tokens 签发；
+                              # 不要复用桌面/admin token（legacy admin secret 仍兼容，但不建议在此使用）
+
+sensor:
+  # 每次采集窗口时长（秒），同时也是 POST 频率
+  window_seconds: 30
+
+  process:
+    enabled: true              # psutil 进程扫描（只读进程名，较轻）
+    interval_windows: 2        # 每 N 个 window 扫一次（默认 60s）
+
+  screen:
+    enabled: false             # 识屏默认关闭，显式设为 true 才开启
+    interval_windows: 2        # 每 N 个 window 截屏一次（默认 60s）
+    glm_api_key: "REPLACE-with-glm-api-key"
+    glm_base_url: "https://open.bigmodel.cn/api/paas/v4/"
+    glm_model: "glm-4v-flash"
+
+  input:
+    enabled: true              # 键鼠计数（无内容，只统计次数/频率）
+
+logging:
+  level: INFO
