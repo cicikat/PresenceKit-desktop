@@ -115,6 +115,8 @@ pub fn spawn_sensor_runner(cfg: SensorRunnerConfig) -> Result<SensorRunnerHandle
         let mut elapsed_in_window: u32 = 0;
         let mut input = input; // move 进 async block
         let focus = focus;
+        // 记边沿、不记电平：持续发布成功不重复打印，只在首次成功/从失败恢复时打印一次。
+        let mut last_publish_ok: Option<bool> = None;
 
         eprintln!(
             "[sensor_runner] 启动: window={}s tick={}s backend={} version={}",
@@ -142,10 +144,14 @@ pub fn spawn_sensor_runner(cfg: SensorRunnerConfig) -> Result<SensorRunnerHandle
                 elapsed_in_window = 0;
                 match publisher.publish(window).await {
                     Ok(()) => {
-                        eprintln!("[sensor_runner] 窗口发布成功");
+                        if last_publish_ok != Some(true) {
+                            eprintln!("[sensor_runner] 窗口发布成功");
+                        }
+                        last_publish_ok = Some(true);
                     }
                     Err(e) => {
                         eprintln!("[sensor_runner] 窗口发布失败: {e}");
+                        last_publish_ok = Some(false);
                     }
                 }
             }

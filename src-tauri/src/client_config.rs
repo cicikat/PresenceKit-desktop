@@ -1,6 +1,12 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::sync::Once;
 use tauri::Manager;
+
+// load_client_config 会在几乎每个 tauri command 里被调用（本文件 + lib.rs 共 70+ 处），
+// 但「命中配置文件」「backendBase =」这两条诊断日志只在进程生命周期内需要看一次
+// （P0-1 排查用，见下方注释），所以用 Once 去重，避免刷屏。
+static LOG_CONFIG_SOURCE_ONCE: Once = Once::new();
 
 const DEFAULT_BACKEND_BASE: &str = "http://127.0.0.1:8080";
 const DEFAULT_WEBSOCKET_BASE: &str = "ws://127.0.0.1:8080/ws/desktop";
@@ -238,11 +244,15 @@ pub fn load_client_config<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Clien
 
     // P0-1: 诊断「clone 后接上原数据」问题的关键日志——client.local.json 可能命中
     // 编译期烧死的绝对路径（CARGO_MANIFEST_DIR），与当前 exe 所在盘符无关。
-    match &hit_path {
-        Some(path) => eprintln!("[client_config] 命中配置文件: {}", path.display()),
-        None => eprintln!("[client_config] 未命中任何 client.local.json，使用内置默认值"),
-    }
-    eprintln!("[client_config] backendBase = {}", cfg.backend_base);
+    // load_client_config 每个 command 都会调用一次，这两行只在进程内打第一次（Once），
+    // 之后即使配置文件/backendBase 没变也不再重复刷屏。
+    LOG_CONFIG_SOURCE_ONCE.call_once(|| {
+        match &hit_path {
+            Some(path) => eprintln!("[client_config] 命中配置文件: {}", path.display()),
+            None => eprintln!("[client_config] 未命中任何 client.local.json，使用内置默认值"),
+        }
+        eprintln!("[client_config] backendBase = {}", cfg.backend_base);
+    });
 
     cfg
 }
