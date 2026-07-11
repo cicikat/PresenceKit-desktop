@@ -1,4 +1,4 @@
 @echo off
-cd /d D:\ai\Emerald-client
+cd /d %~dp0
 npm run tauri dev
 pause
