@@ -105,6 +105,14 @@ export interface GardenState {
   vase_count: number;
 }
 
+export type CoplayStatus = 'off' | 'armed' | 'active' | 'closing';
+
+export interface CoplayState {
+  status: CoplayStatus;
+  game_id: string | null;
+  game_name: string | null;
+}
+
 export interface DiaryListItem {
   date: string;
   title: string;

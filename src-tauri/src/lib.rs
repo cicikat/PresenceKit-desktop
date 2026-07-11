@@ -597,6 +597,57 @@ async fn load_garden_state(app: tauri::AppHandle) -> Result<serde_json::Value, S
 }
 
 #[tauri::command]
+async fn coplay_state(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+
+    let resp = authorized_request(&cfg, client.get(backend_url(&cfg, "/coplay/state")))
+        .send()
+        .await
+        .map_err(|_| "陪玩状态请求失败".to_string())?;
+
+    if !resp.status().is_success() {
+        return Err(safe_http_error(resp).await);
+    }
+
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn coplay_arm(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+
+    let resp = authorized_request(&cfg, client.post(backend_url(&cfg, "/coplay/arm")))
+        .send()
+        .await
+        .map_err(|_| "开启陪玩模式请求失败".to_string())?;
+
+    if !resp.status().is_success() {
+        return Err(safe_http_error(resp).await);
+    }
+
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn coplay_disarm(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+
+    let resp = authorized_request(&cfg, client.post(backend_url(&cfg, "/coplay/disarm")))
+        .send()
+        .await
+        .map_err(|_| "关闭陪玩模式请求失败".to_string())?;
+
+    if !resp.status().is_success() {
+        return Err(safe_http_error(resp).await);
+    }
+
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 async fn load_diary_list(app: tauri::AppHandle, char_id: Option<String>) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
     let client = http_client()?;
@@ -2230,6 +2281,9 @@ pub fn run() {
             send_chat,
             load_history,
             load_garden_state,
+            coplay_state,
+            coplay_arm,
+            coplay_disarm,
             load_diary_list,
             load_diary_entry,
             load_chat_log_dates,

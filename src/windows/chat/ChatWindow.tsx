@@ -86,6 +86,7 @@ import {
 import { ChatColorPage } from './components/ChatColorPage';
 import { applyMoodOverlay, clearMoodOverlay } from '../../shared/theme/moodReactive';
 import { CallSettingsPage } from './components/CallSettingsPage';
+import { CoplaySettingsPage } from './components/CoplaySettingsPage';
 import { ConnectionSettingsPage } from './components/ConnectionSettingsPage';
 import { ToolLoopSettingsPage } from './components/ToolLoopSettingsPage';
 import { ThinkingSettingsPage } from './components/ThinkingSettingsPage';
@@ -588,6 +589,8 @@ function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHea
                   <button onClick={onYandereOpen} style={prefActionButtonStyle}>启动</button>
                 </PrefRow>
               </>
+            ) : tab === 'other' ? (
+              <CoplaySettingsPage />
             ) : (
               <div className="serif" style={{ color: 'var(--ink-3)', fontSize: 13.5, textAlign: 'center', padding: '48px 0', fontStyle: 'italic' }}>
                 未完待续

@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { ChatResponse, DesktopWakeResponse, GardenState, DiaryListResponse, DiaryEntry, ChatLogDatesResponse, ChatLogDay, MoodState, ActivityState, SensorRealtimeResponse, UploadIngestResponse, UploadError, PromptAssetsResponse, PromptAssetsPatch, PromptAssetsPatchResponse, HiddenStateDebugResponse, PromptAssetCharacter, PromptAssetOption, ActivePromptAssets, GroupSummary, GroupDetail, GroupSendResponse, GroupSettings } from './types';
+import type { ChatResponse, DesktopWakeResponse, GardenState, CoplayState, DiaryListResponse, DiaryEntry, ChatLogDatesResponse, ChatLogDay, MoodState, ActivityState, SensorRealtimeResponse, UploadIngestResponse, UploadError, PromptAssetsResponse, PromptAssetsPatch, PromptAssetsPatchResponse, HiddenStateDebugResponse, PromptAssetCharacter, PromptAssetOption, ActivePromptAssets, GroupSummary, GroupDetail, GroupSendResponse, GroupSettings } from './types';
 
 export async function sendChat(message: string): Promise<ChatResponse> {
   return invoke<ChatResponse>('send_chat', { message });
@@ -20,6 +20,19 @@ export async function loadHistory(): Promise<HistoryEntry[]> {
 
 export async function loadGardenState(): Promise<GardenState> {
   return invoke<GardenState>('load_garden_state');
+}
+
+// ── Coplay（陪玩模式）── 见 Emerald-presence docs/coplay.md
+export async function loadCoplayState(): Promise<CoplayState> {
+  return invoke<CoplayState>('coplay_state');
+}
+
+export async function armCoplay(): Promise<{ ok: boolean; status: string }> {
+  return invoke('coplay_arm');
+}
+
+export async function disarmCoplay(): Promise<{ ok: boolean; status: string }> {
+  return invoke('coplay_disarm');
 }
 
 export async function loadDiaryList(charId?: string): Promise<DiaryListResponse> {
