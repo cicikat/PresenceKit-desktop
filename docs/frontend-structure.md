@@ -11,7 +11,8 @@
 1. 引入全局样式 `src/shared/theme/globals.css`。
 2. `await initUIPrefs()`——渲染前必须等待，见下方「uiPreferences」。
 3. 调用 `initTheme()`（不等待）应用当前主题，随后调用 `avatarStore.init()` 读取本地头像配置。
-4. 渲染 `<ChatWindow />`。
+4. 默认渲染 `<ChatWindow />`；主 view 内按本地状态叠加 Activity / Toy / Room，独立 Webview
+   则按 query 参数渲染 Pet / PresenceNag / DiaryDetail。
 
 入口按 query 参数选择 view：默认渲染聊天窗口，`?window=pet` 渲染独立 `PetWindow`，
 `?window=presence-nag` 渲染独立、默认隐藏的 `PresenceNagWindow`，`?window=diary-detail` 渲染
@@ -128,7 +129,8 @@ src/windows/dream/
 
 共享 API 层：
 
-- `src/shared/api/dream.ts`：`dreamGetState / dreamEnter / dreamChat / dreamExit / dreamUpdateSettings`（均用 `fetch` + `getClientConfig().backendBase`）
+- `src/shared/api/dream.ts`：`dreamGetState / dreamEnter / dreamChat / dreamExit / dreamUpdateSettings`
+  等均使用 Tauri `invoke()`；Rust 侧 HTTP bridge 负责 Bearer 鉴权与 `reqwest.no_proxy()`。
 - `src/shared/api/dream-types.ts`：`DreamStatus / DreamState / DreamMessage / DreamChatResponse` 等
 
 ---
@@ -171,6 +173,49 @@ src/windows/toy/
 - 入口受「玩耍模式」开关（`src/shared/playMode.ts`，localStorage `playMode.enabled`，默认关闭）门控：开启后 ChatWindow 订阅的 WS `toy_invite` 才自动开窗，Ribbon 才显示手动入口按钮。
 - 硬件状态经 `src/shared/api/hardware.ts`（`getHardwareDevices` / `connectHardware`）调 Tauri `hardware_get_devices` / `hardware_connect` 代理后端 `/hardware/*`。`connected` 即 Intiface 蓝牙连接状态，`devices` 即 toy 列表。
 - 设备控制（振动等）仍由后端 owner 门控工具在对话里触发，ToyWindow 只做状态显示与聊天。
+
+---
+
+## ActivityWindow（活动空间）
+
+文件：`src/windows/activity/`
+
+- `ActivityWindow.tsx` 是固定全屏 overlay（`z-index: 110`），由 `main.tsx` 的 `activeWindow`
+  在 ChatWindow 仍挂载时切换显示；关闭后回到聊天，不拥有或改写聊天 session / StateEngine。
+- `ActivityRibbon` 负责首页、阅读、五子棋、国际象棋、梦种和偏好入口；`ReadingPage`、`GomokuPage`、
+  `ChessPage`、`DreamSeedPanel` 分别持有各自页面会话，`ActivityCompanionPanel` 承接活动内陪聊。
+- 所有活动请求集中在 `src/shared/api/activity-api.ts`，通过 Tauri `invoke` 转给 Rust；Rust 侧以
+  Bearer token + `no_proxy()` 调后端 `/activity/reading/*`、`/activity/gomoku/*`、
+  `/activity/chess/*`、`/activity/dream_seed/*`。阅读书库和上传同属该 bridge。
+- 活动陪聊返回值由页面局部消费；若后端主动推送，页面通过 `activity-companion-push` 事件更新，
+  不借用 ChatPanel 的消息数组。
+
+## RoomWindow（视频通话房间）
+
+文件：`src/windows/room/`，共享配置与资源接口在 `src/shared/room/`。
+
+- `RoomWindow.tsx` 与 Activity/Toy 同级，是主 view 内的全屏 overlay；顶栏、输入栏、VN 气泡、
+  语音输入和挂断控制由窗口层统一编排。
+- `roomSettings.renderMode` 选择互斥的 `ThreeCallStage`（GLB、场景、摆放和自由视角）或
+  `Live2DCallStage`；`useVnPresenter` / `turnIngest.ts` 订阅既有 `wsClient` 的流式和最终消息，
+  `avatarDirective.ts` 将角色动作指令分发给两种舞台。
+- 用户输入仍调用共享 `sendChat()` → Tauri `send_chat` → `POST /desktop/chat`；房间不另建会话协议。
+  mood 从主窗口广播的 `pet://snapshot` 读取，当前角色名/房间设置经共享偏好跨窗口同步。
+- 资源浏览请求由 `roomAssets.ts` 调 Tauri `list_room_assets` / `list_room_props`，读取打包或开发期
+  `public/room/` 资源；它们不是后端 HTTP 接口。
+
+## DiaryDetailWindow（日记详情）
+
+文件：`src/windows/diary-detail/DiaryDetailWindow.tsx`，内容组件复用
+`src/windows/chat/components/SubDiary.tsx` 的 `DiaryDetailPane`。
+
+- 聊天侧栏的日记列表先以 `loadDiaryList(charId)` 读取轻量条目；点击后用唯一的
+  `diary-detail-<char>-<date>` label 创建或聚焦独立 `WebviewWindow`，携带
+  `?window=diary-detail&date=…&char=…`。详情窗口只显示这一篇内容并自行初始化主题。
+- `DiaryDetailPane` 通过 `loadDiaryEntry(date, charId)` 懒加载正文；两个函数均在
+  `src/shared/api/backend.ts`，经 Tauri `load_diary_list` / `load_diary_entry` 调后端
+  `GET /diary/list` 与 `GET /diary/{date}`，使用 Bearer token 和 `reqwest.no_proxy()`。
+- 日记为只读展示：窗口不写入日记、不轮询，也不把内容放进 StateEngine。
 
 ---
 

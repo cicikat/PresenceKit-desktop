@@ -40,7 +40,7 @@ npm run tauri build   # production build
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Current architecture overview |
 | [docs/backend-integration.md](docs/backend-integration.md) | Backend HTTP, WebSocket, and Tauri IPC details |
 | [docs/frontend-structure.md](docs/frontend-structure.md) | React window/component/state guide |
-| [docs/migration-status.md](docs/migration-status.md) | Migration map from the old desktop projects |
+| [docs/design-constraints.md](docs/design-constraints.md) | Cross-pipeline and transport constraints |
 | [docs/known-issues.md](docs/known-issues.md) | Bugs, risks, and technical debt |
 
 ---

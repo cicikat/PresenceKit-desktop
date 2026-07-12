@@ -43,8 +43,9 @@ admin secret 永远等价于 `admin` scope（零破坏迁移）。本仓触达�
 
 - **桌面 Tauri 客户端**（本仓 `src-tauri/`）：`desktop` profile token（`emt_…`），字段仍叫
   `admin_token` / env `EMERALD_ADMIN_TOKEN`，不改名。
-- **手机 sensor-service**（本仓 `sensor-service/`）：`sensor` profile token，仅 `sensor.write`
-  权限，不得复用桌面/admin token。
+- **已废弃的手机 sensor-service**（本仓 `sensor-service/`）：历史 Python 独立进程方案，
+  不再是运行路径；感知现嵌入 `src-tauri/src/sensor/`。其历史 `sensor` profile token 仅有
+  `sensor.write` 权限，不得复用桌面/admin token。
 - **设备侧**（仓外，ESP32 固件等）：各自最小 scope token。
 
 Token 由后端 `POST /auth/tokens` 签发；scope 表、profile 表、管理操作见后端仓
@@ -58,8 +59,10 @@ Token 由后端 `POST /auth/tokens` 签发；scope 表、profile 表、管理操
 
 - 初始化头像 / Dream 背景 store：`avatarStore.init()`。
 - 挂载全局样式：`src/shared/theme/globals.css`。
-- 渲染唯一主 view：`<ChatWindow />`。
-- Activity 打开时继续保持 `<ChatWindow />` 挂载，由 `<ActivityWindow />` 作为 overlay 覆盖，避免卸载 ChatPanel 和 WS 订阅。
+- 默认渲染 `<ChatWindow />`；`?window=pet`、`?window=presence-nag` 和 `?window=diary-detail`
+  分别进入独立 Webview view。
+- 在默认主 view 中由 `activeWindow` 在保持 `<ChatWindow />` 挂载的前提下覆盖
+  `<ActivityWindow />`、`<ToyWindow />` 或 `<RoomWindow />`，避免卸载 ChatPanel 和 WS 订阅。
 
 主窗口是 `src/windows/chat/ChatWindow.tsx`：
 
@@ -294,7 +297,13 @@ Dream 背景按 `day` / `night` 分开记录。旧版单字段 `dream_background
 |---|---|
 | `src/main.tsx` | React 入口 |
 | `src/windows/chat/` | 主聊天窗口 |
+| `src/windows/activity/` | 全屏活动空间（阅读、棋类、梦种） |
+| `src/windows/diary-detail/` | 单篇日记独立 Webview 窗口 |
+| `src/windows/dream/` | Dream overlay、HUD、潜意识只读面板 |
 | `src/windows/pet/` | 独立桌宠窗口、粒子视觉和鼠标交互 |
+| `src/windows/presence-nag/` | 单实例存在感提醒透明窗口 |
+| `src/windows/room/` | 视频通话 3D/Live2D 场景和 VN 呈现 |
+| `src/windows/toy/` | 玩耍模式窗口 |
 | `src/shared/pet/` | Chat/Pet 窗口快照桥和桌宠本地设置 |
 | `src/windows/chat/components/` | Ribbon、Sidebar、ChatPanel、浮动 pane、偏好/帮助等 UI |
 | `src/features/dream/` | Dream UI v2 纯前端 preview：tokens、overlay、入口按钮、afterglow |
@@ -341,7 +350,7 @@ Dream 背景按 `day` / `night` 分开记录。旧版单字段 `dream_background
 - 花园交互能力和 harvest/vase 详情展示。
 - 日记 emotion 字段（后端未产出，当前全为 null）。
 
-详情见 `docs/migration-status.md`。
+旧的逐项迁移状态专档已移除；仍未完成的迁移缺口以上表和 `docs/known-issues.md` 为准。
 
 ---
 

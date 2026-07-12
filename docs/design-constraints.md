@@ -3,6 +3,10 @@
 > 这个文件不是 roadmap。
 > 这是系统边界、历史事故、以及“为什么不要随便优化”的记录。
 
+> 2026-07-12 客户端审计：第 1–12 条仍是有效约束。Dream API 已统一改为
+> Tauri `invoke` → Rust `reqwest.no_proxy()`，不再存在本文件末尾曾记录的浏览器 `fetch`
+> 绕代理旧路径；原始事故说明已移除，避免被误当作当前实现。
+
 ---
 
 # 1. Dream 必须是独立 pipeline
@@ -219,87 +223,44 @@ Claude / CC / GPT 可以：
 * GPT 猜一点
 * 人类反而不知道当前真实状态
 
-因此：
-任何大改前，
-优先做只读审计。
+因此：任何大改前，优先做只读审计。跨仓后端约束的实现细节以
+`Emerald-presence` 的架构与测试为准；本仓只记录和执行其客户端边界。
 
-第一章：系统不是单 pipeline
+---
 
-必须写：
+# 8. 生成文本不等于事实
 
-Dream 不共享 reality prompt_builder
-Dream 不走 reality post_process
-duplicated logic 比 shared contamination 更安全
-freeze snapshot 是故意的
+文学输出、摘要和临时情绪痕迹都不能直接固化为长期人格事实。任何进入 memory 的内容必须
+经过独立的候选、验证和衰减语义；`summary ≠ truth`。否则一次对话、外部工具内容或短暂状态会
+被误写成永久人格记忆。
 
-因为以后一定有人：
+---
 
-“统一一下更优雅”
-第二章：生成文本不等于事实
+# 9. 连接替换不是普通网络错误
 
-这是你最大的 PTSD。
+legacy WS 采用单连接语义，新连接替换旧连接是预期行为。独立 Pet Webview 不得自行连 WS，
+必须订阅主窗口转发的 Tauri 事件；watchdog、心跳和重连也不得演变为多窗口抢占连接。传输状态
+要与“后端业务失败”分开呈现和诊断。
 
-必须写：
+---
 
-literary output 不直接写长期记忆
-summary ≠ truth
-emotional trace 必须 decay
-temporary state 不得固化成人格事实
+# 10. 空结果、降级和错误必须可观察
 
-因为这是人格坍缩根源。
+“0 entries”不等于“没有历史”。网络错误、鉴权失败、响应畸形、明确空结果和 fallback 必须在
+调用方可区分；不得把鉴权或网络失败伪装成空状态。新增 fallback 时，同时记录触发条件和可见
+诊断路径。
 
-第三章：状态语义 ≠ 网络错误
+---
 
-这是今天 websocket 学到的。
+# 11. RP 层不得控制退出语义
 
-必须写：
+`/stop`、hard exit 等退出语义属于 system-level，必须在 LLM/RP 文本解释之前处理。沉浸感不能
+接管用户的退出权限；逃生语义优先于角色扮演。
 
-replaced by new connection 是 intentional replacement
-不得自动重连抢占
-watchdog 必须配 heartbeat
-单连接假设来自旧桌宠时代
+---
 
-这个以后一定还会有人踩。
+# 12. 旧路径和 fallback 会绕开新边界
 
-第四章：错误必须 observable
-
-history 那轮特别典型。
-
-必须写：
-
-“0 entries” ≠ “没有历史”
-
-还有：
-
-fallback 必须 observable
-auth failure 不得伪装为空状态
-network/malformed/empty 必须区分
-第五章：RP层不得控制逃生语义
-
-这个其实特别值钱。
-
-必须写：
-
-/stop 是 system-level
-hard_exit pre-LLM
-roleplay 不得接管退出权限
-escape semantics 高于沉浸感
-
-这个属于“数字心理安全”。
-
-第六章：系统会偷偷绕旧路
-
-这是你代理 PTSD 那条。
-
-必须写：
-
-fallback 会绕过新边界
-shared helper 会偷污染
-老 fetch 会漏 auth
-grep 只能找到代码，找不到旧假设
-
-这个是维护哲学。
-
-dream.ts 用浏览器原生 fetch()，WebView2 会经过系统代理 127.0.0.1:7897，该代理不转发 localhost 流量，返回 502。
-
-修法：Dream 的 5 个端点改为和其他所有 API 一样走 Tauri invoke → Rust reqwest .no_proxy()，完全绕开代理。
+共享 helper、fallback 和遗留请求最容易悄悄绕过鉴权、代理或数据边界。新 HTTP 一律经 Tauri
+`invoke` → Rust `reqwest.no_proxy()`；不要恢复浏览器 `fetch` 直连后端。代码检索只能发现路径，
+不能证明旧假设仍成立，因此改动后还要核对实际运行链路与本文档。

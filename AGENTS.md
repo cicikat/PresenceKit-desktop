@@ -19,10 +19,11 @@ PresenceKit-desktop 是 `PresenceKit` AI 陪伴系统的新桌面客户端，技
 - Sidebar 的花园 tab 已接入后端 `GET /garden/state`，当前是只读展示。
 - Dream Sidebar 的潜意识 tab 已将 Phase 4.5 Hidden State UI 从 debug-only 入口提升为单用户只读状态面板。
 - WebSocket 目前是 legacy 协议订阅层，不是最终 v1 协议实现。
-- 桌宠 view 还没有在 `src/windows/pet/` 落地；Ribbon 的桌宠按钮目前只切本地状态。
+- 桌宠 view 已落地在 `src/windows/pet/`：独立透明置顶窗口支持粒子、3D 和 Live2D 舞台，
+  通过主窗口转发的 Tauri 事件接收状态/说话信号；鼠标躲避、靠近和拖拽由 `usePetMouse.ts` /
+  `usePetRoam.ts` 驱动。它不自行连接 WebSocket。
 - sensor 感知功能将嵌入 Tauri Rust 侧(`src-tauri/src/sensor/`),
-  不再使用 `sensor-service/` Python 独立进程方案。该目录骨架
-  已废弃,后续清理。
+  不再使用 `sensor-service/` Python 独立进程方案。该目录为已废弃骨架，后续清理。
 
 不在本项目范围内的事：
 
@@ -38,6 +39,18 @@ PresenceKit-desktop 是 `PresenceKit` AI 陪伴系统的新桌面客户端，技
 
 ---
 
+## 协作约定（Claude / Codex 共用）
+
+本节同步 `CLAUDE.md` 的协作规则，使 Codex 在默认读取本 `AGENTS.md` 时也获得同一施工约定：
+
+1. 用中文回复；默认自主推进、替用户拍板，只在删数据、改契约、对外发布等不可逆决策前提问。
+2. 先按本文件和 `ARCHITECTURE.md` 定位，再做精确检索；检索排除 `node_modules/`、`dist/`、`src-tauri/gen/`、`src-tauri/target/`。
+3. 多个独立交付物一次性批量输出，并标明可并行项与前置依赖；每个独立修复验收后应小步 commit。
+4. 代码、脚本和文档不得写盘符绝对路径，统一相对仓库根；`start-dev.bat` 用 `%~dp0`。
+5. 本机密钥仅放在 gitignore 文件（`config/client.local.json`、`sensor-service/config.yaml`）；提交的仅为 `*.example.*` 占位文件。
+
+---
+
 ## 必读文档
 
 | 任务类型 | 必读文档 |
@@ -46,7 +59,10 @@ PresenceKit-desktop 是 `PresenceKit` AI 陪伴系统的新桌面客户端，技
 | 改聊天窗口、Ribbon、Sidebar、样式 | `docs/frontend-structure.md` |
 | 改后端通信、协议、Tauri IPC | `docs/backend-integration.md` |
 | 改记忆 / 潜意识 / hidden state UI | `docs/memory.md` |
-| 继续旧客户端迁移 | `docs/migration-status.md` |
+| 改 Dream HUD / 梦境状态展示 | `docs/dream-hud.md` |
+| 改桌宠窗口、模型舞台或鼠标互动 | `docs/pet-window-reference.md` |
+| 改系统边界或跨 pipeline 行为 | `docs/design-constraints.md` |
+| 导入 Live2D / Room 模型 | `docs/人类说明书/` 下对应导入指南 |
 | 查 bug、技术债、迁移缺口 | `docs/known-issues.md` |
 
 后端系统本身的细节以 `Emerald-presence` 仓库（通常与本仓库同级）的 `AGENTS.md` 和它的 `ARCHITECTURE.md` / `docs/` 为准。
@@ -61,18 +77,14 @@ PresenceKit-desktop 是 `PresenceKit` AI 陪伴系统的新桌面客户端，技
 src/
 ├── main.tsx
 ├── windows/
-│   └── chat/
-│       ├── ChatWindow.tsx
-│       └── components/
-│           ├── AvatarCropper.tsx
-│           ├── ChatPanel.tsx
-│           ├── Panes.tsx
-│           ├── Ribbon.tsx
-│           ├── Sidebar.tsx
-│           ├── SubGarden.tsx
-│           ├── SubHiddenStatePanel.tsx
-│           ├── SpecPanel.tsx
-│           └── UIKit.tsx
+│   ├── activity/       # 全屏活动空间：阅读、五子棋、国际象棋、梦种
+│   ├── chat/           # 主聊天布局、Ribbon、Sidebar 和聊天面板
+│   ├── diary-detail/   # 单篇日记独立 Webview 窗口
+│   ├── dream/          # 正式 Dream overlay、HUD、潜意识只读面板
+│   ├── pet/            # 透明置顶桌宠、模型/粒子舞台和鼠标互动
+│   ├── presence-nag/   # 单实例存在感提醒透明窗口
+│   ├── room/           # 视频通话场景：3D/Live2D 舞台与 VN 对话呈现
+│   └── toy/            # 玩耍模式：硬件状态和独立聊天界面
 ├── shared/
 │   ├── api/
 │   │   ├── backend.ts
@@ -103,8 +115,11 @@ sensor-service/
 | Tauri IPC / 后端 HTTP 桥 | `src-tauri/src/lib.rs` |
 | Tauri 权限 / 窗口配置 | `src-tauri/tauri.conf.json`、`src-tauri/capabilities/default.json` |
 | 头像本地存储 | `src/shared/avatars/store.ts` + `src-tauri/src/lib.rs` |
-| sensor 感知(键鼠/焦点窗口) | `src-tauri/src/sensor/`(规划中) |
+| sensor 感知(键鼠/焦点窗口) | `src-tauri/src/sensor/` |
 | 潜意识 / hidden state 只读展示 | `src/windows/dream/components/SubHiddenStatePanel.tsx` + `src/shared/api/backend.ts` |
+| 活动空间 | `src/windows/activity/` + `src/shared/api/activity-api.ts` |
+| 视频通话房间 | `src/windows/room/` + `src/shared/room/` |
+| 日记详情独立窗口 | `src/windows/diary-detail/` + `src/windows/chat/components/SubDiary.tsx` |
 
 ---
 
@@ -179,5 +194,5 @@ Vite 固定端口是 `1420`，见 `vite.config.ts`。
 
 - 改接口、协议、IPC command 时，同步更新 `docs/backend-integration.md`。
 - 改窗口结构、状态流、组件职责时，同步更新 `ARCHITECTURE.md` 和 `docs/frontend-structure.md`。
-- 继续迁移旧桌宠或原型 UI 时，同步更新 `docs/migration-status.md`。
+- 继续迁移旧桌宠或原型 UI 时，同步更新 `ARCHITECTURE.md` 的「迁移关系」和 `docs/frontend-structure.md` 的对应窗口章节。
 - 发现未修问题，先记到 `docs/known-issues.md`，标明影响、证据和建议修复方向。

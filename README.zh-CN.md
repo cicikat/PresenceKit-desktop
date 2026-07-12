@@ -40,7 +40,7 @@ npm run tauri build   # 生产构建
 | [ARCHITECTURE.md](ARCHITECTURE.md) | 当前架构总览 |
 | [docs/backend-integration.md](docs/backend-integration.md) | 后端 HTTP、WebSocket、Tauri IPC 细节 |
 | [docs/frontend-structure.md](docs/frontend-structure.md) | React 窗口/组件/状态结构指南 |
-| [docs/migration-status.md](docs/migration-status.md) | 从旧桌面项目迁移的状态地图 |
+| [docs/design-constraints.md](docs/design-constraints.md) | 跨 pipeline 与传输约束 |
 | [docs/known-issues.md](docs/known-issues.md) | 已知问题与技术债 |
 
 ---

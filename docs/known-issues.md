@@ -116,6 +116,14 @@ docs\
 
 ---
 
+## P3：旧客户端迁移没有独立状态地图
+
+旧的 `docs/migration-status.md` 已随基本迁移完成而移除。剩余迁移缺口只在
+`ARCHITECTURE.md` 的「迁移关系」和本文档维护；新增或关闭迁移缺口时必须同步更新这两处，
+避免再次留下失效入口。
+
+---
+
 ## P3：Tauri 项目名和窗口标题仍是模板名
 
 **位置**：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`
