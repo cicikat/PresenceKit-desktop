@@ -41,7 +41,7 @@ export function ToolLoopSettingsPage() {
     return () => { mounted = false; };
   }, []);
 
-  async function patch(next: { enabled?: boolean; max_steps?: number }) {
+  async function patch(next: { enabled?: boolean; max_steps?: number; total_timeout_s?: number; categories?: string[]; exclude_tools?: string[]; nudge_hint?: string }) {
     if (!settings) return;
     setSaving(true);
     setError(null);
@@ -125,6 +125,23 @@ export function ToolLoopSettingsPage() {
         </div>
       </div>
 
+      <div style={{ display: 'grid', gap: 8, opacity: settings.enabled ? 1 : 0.5 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink)' }}>总超时（秒）</div>
+        <input type="number" min={5} max={600} value={settings.total_timeout_s} disabled={disabled || !settings.enabled}
+          onChange={e => void patch({ total_timeout_s: Number(e.target.value) })} style={{ width: 100, padding: '6px 9px', border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-sm)', background: 'var(--paper-2)', color: 'var(--ink)' }} />
+      </div>
+      <div style={{ display: 'grid', gap: 8, opacity: settings.enabled ? 1 : 0.5 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink)' }}>允许类别</div>
+        <input value={settings.categories.join(', ')} disabled={disabled || !settings.enabled}
+          onChange={e => setSettings({ ...settings, categories: e.target.value.split(',').map(x => x.trim()).filter(Boolean) })}
+          onBlur={() => void patch({ categories: settings.categories })} style={{ padding: '6px 9px', border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-sm)', background: 'var(--paper-2)', color: 'var(--ink)' }} />
+      </div>
+      <div style={{ display: 'grid', gap: 8, opacity: settings.enabled ? 1 : 0.5 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink)' }}>排除工具</div>
+        <input value={settings.exclude_tools.join(', ')} disabled={disabled || !settings.enabled}
+          onChange={e => setSettings({ ...settings, exclude_tools: e.target.value.split(',').map(x => x.trim()).filter(Boolean) })}
+          onBlur={() => void patch({ exclude_tools: settings.exclude_tools })} style={{ padding: '6px 9px', border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-sm)', background: 'var(--paper-2)', color: 'var(--ink)' }} />
+      </div>
       {error && (
         <div className="mono" style={{ fontSize: 10.5, letterSpacing: 0.6, color: 'var(--danger)' }}>
           {error}

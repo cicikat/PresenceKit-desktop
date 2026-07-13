@@ -194,3 +194,8 @@ Vite 固定端口是 `1420`，见 `vite.config.ts`。
 - 改窗口结构、状态流、组件职责时，同步更新 `ARCHITECTURE.md` 和 `docs/frontend-structure.md`。
 - 继续迁移旧桌宠或原型 UI 时，同步更新 `ARCHITECTURE.md` 的「迁移关系」和 `docs/frontend-structure.md` 的对应窗口章节。
 - 发现未修问题，先记到 `docs/known-issues.md`，标明影响、证据和建议修复方向。
+
+
+## 设置控制面文档
+
+修改模型路由、TTS、scheduler、relay、thinking、tool loop 或高级功能开关时，必须同步 docs/settings-control-audit.md，不得把配置字段存在写成已有 UI。

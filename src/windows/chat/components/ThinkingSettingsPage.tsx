@@ -50,7 +50,7 @@ export function ThinkingSettingsPage() {
     return () => { mounted = false; };
   }, []);
 
-  async function patch(next: { enabled?: boolean; mode?: ThinkingMode; apply_to_proactive?: boolean }) {
+  async function patch(next: { enabled?: boolean; mode?: ThinkingMode; apply_to_proactive?: boolean; monologue_max_tokens?: number }) {
     if (!settings) return;
     setSaving(true);
     setError(null);
@@ -130,6 +130,14 @@ export function ThinkingSettingsPage() {
         />
       </div>
 
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, opacity: settings.enabled ? 1 : 0.5 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink)' }}>前置独白 token 上限</div>
+          <div className="mono" style={{ fontSize: 9.5, color: 'var(--ink-3)', letterSpacing: 1.1, marginTop: 2 }}>仅 monologue 或 auto 回退到独白时使用</div>
+        </div>
+        <input type="number" min={32} max={2000} value={settings.monologue_max_tokens} disabled={disabled || !settings.enabled}
+          onChange={e => void patch({ monologue_max_tokens: Number(e.target.value) })} style={{ ...selectStyle, width: 100 }} />
+      </div>
       {error && (
         <div className="mono" style={{ fontSize: 10.5, letterSpacing: 0.6, color: 'var(--danger)' }}>
           {error}

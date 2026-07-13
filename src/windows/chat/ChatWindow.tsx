@@ -4,7 +4,7 @@
  * ============================================================ */
 
 import { useState, useEffect, useRef, useCallback, type CSSProperties } from 'react';
-import { getChatSettings, setChatStyle, setChatMultiMessage } from '../../shared/api/chat-settings';
+import { getChatSettings, setChatMode, setChatStyle, setChatMultiMessage } from '../../shared/api/chat-settings';
 import type { ChatSettings } from '../../shared/api/types';
 import { invoke } from '@tauri-apps/api/core';
 import { Icon } from './components/UIKit';
@@ -91,6 +91,8 @@ import { CoplaySettingsPage } from './components/CoplaySettingsPage';
 import { ConnectionSettingsPage } from './components/ConnectionSettingsPage';
 import { ToolLoopSettingsPage } from './components/ToolLoopSettingsPage';
 import { ThinkingSettingsPage } from './components/ThinkingSettingsPage';
+import { ModelRoutingSettingsPage } from './components/ModelRoutingSettingsPage';
+import { DesktopTtsSettingsPage } from './components/DesktopTtsSettingsPage';
 
 const SIDEBAR_MIN     = 250;
 const SIDEBAR_MAX     = 540;
@@ -222,6 +224,10 @@ function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHea
             {tab === 'system' ? (
               <>
                 <ConnectionSettingsPage />
+                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
+                <ModelRoutingSettingsPage />
+                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
+                <DesktopTtsSettingsPage />
                 <div style={{ height: 1, background: 'var(--paper-edge)' }} />
                 <ToolLoopSettingsPage />
                 <div style={{ height: 1, background: 'var(--paper-edge)' }} />
@@ -1108,6 +1114,16 @@ function ChatSettingsSection() {
     timerRef.current = setTimeout(() => setStatus(null), 3000);
   };
 
+  const saveMode = async (mode: ChatSettings['mode']) => {
+    if (!settings || saving) return;
+    setSaving(true);
+    const prev = settings.mode;
+    setSettings(s => s ? { ...s, mode } : s);
+    try { await setChatMode(mode); flash(true, '聊天模式已保存'); }
+    catch (e) { setSettings(s => s ? { ...s, mode: prev } : s); flash(false, `保存失败：${String(e)}`); }
+    finally { setSaving(false); }
+  };
+
   const saveStyle = async (style: ChatSettings['style']) => {
     if (!settings || saving) return;
     setSaving(true);
@@ -1135,6 +1151,17 @@ function ChatSettingsSection() {
   return (
     <div>
       <div style={{ display: 'grid', gap: 14 }}>
+        <PrefRow label="聊天模式" hint="chat：日常陪伴 / roleplay：完整角色扮演管线">
+          <select
+            value={settings?.mode ?? 'chat'}
+            disabled={saving || !settings}
+            onChange={e => void saveMode(e.target.value as ChatSettings['mode'])}
+            style={{ ...prefSelectStyle, width: 140 }}
+          >
+            <option value="chat">日常陪伴</option>
+            <option value="roleplay">角色扮演</option>
+          </select>
+        </PrefRow>
         <PrefRow label="对话风格" hint="chat：以对白与回应为核心 / roleplay：第一人称沉浸，动作心理用括号表达">
           <select
             value={settings?.style ?? 'roleplay'}

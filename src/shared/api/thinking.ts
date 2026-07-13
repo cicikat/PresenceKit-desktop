@@ -18,9 +18,10 @@ export function updateThinkingSettings(patch: {
   enabled?: boolean;
   mode?: ThinkingMode;
   apply_to_proactive?: boolean;
+  monologue_max_tokens?: number;
 }): Promise<ThinkingSettings> {
   return invoke<{ thinking: Omit<ThinkingSettings, 'chat_preset_reasoning_native'>; chat_preset_reasoning_native: boolean }>(
     'update_thinking_settings',
-    { enabled: patch.enabled, mode: patch.mode, applyToProactive: patch.apply_to_proactive },
+    { enabled: patch.enabled, mode: patch.mode, applyToProactive: patch.apply_to_proactive, monologueMaxTokens: patch.monologue_max_tokens },
   ).then(res => ({ ...res.thinking, chat_preset_reasoning_native: res.chat_preset_reasoning_native }));
 }

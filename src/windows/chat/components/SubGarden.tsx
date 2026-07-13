@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Tag, Btn, MicroLabel } from './UIKit';
 import { loadGardenState } from '../../../shared/api/backend';
+import { waterGarden } from '../../../shared/api/runtimeSettings';
 import type { GardenState, GardenSlot } from '../../../shared/api/types';
 import { chatThemeFontSize } from '../../../shared/chatAppearance';
 
@@ -26,6 +27,8 @@ export function SubGarden() {
   const [data, setData] = useState<GardenState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [watering, setWatering] = useState(false);
+  const [actionStatus, setActionStatus] = useState<string | null>(null);
 
   const fetchData = async () => {
     try {
@@ -76,7 +79,19 @@ export function SubGarden() {
       }}>
         每种心情都让对应的植物多长出一点。它在你不看的时候，也在生长。
       </div>
-      <div style={{ display: 'grid', gap: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+        <Btn onClick={async () => {
+          if (watering) return;
+          setWatering(true); setActionStatus(null);
+          try { await waterGarden(); await fetchData(); setActionStatus('已经浇过了。'); }
+          catch (e) { setActionStatus(`浇水失败：${String(e)}`); }
+          finally { setWatering(false); }
+        }}>{watering ? '浇水中…' : '给花园浇水'}</Btn>
+        <MicroLabel style={{ color: 'var(--on-forest-2)' }}>
+          收获 {data.harvest_count ?? 0} · 花瓶 {data.vase_count ?? 0}
+        </MicroLabel>
+      </div>
+      {actionStatus && <div className="mono" style={{ fontSize: chatThemeFontSize(9.5), color: 'var(--on-forest-2)', marginBottom: 10 }}>{actionStatus}</div>}      <div style={{ display: 'grid', gap: 10 }}>
         {(data.slots ?? []).map(slot => (
           <SlotCard key={slot.slot_key} slot={slot} />
         ))}

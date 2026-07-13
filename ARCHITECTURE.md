@@ -388,3 +388,8 @@ Dream 模式只在正式 Dream 系统内显示，不进入 Chat 侧边栏。当�
 - 只有 `dream_mode ?? mode` 等于 `mirror` 时才渲染“镜像模式状态”分组；优先读取
   `mirror_core`，并兼容 `mirror`。MirrorCore、hidden state snapshot、afterglow 和 impression
   均由后端负责，客户端只读显示 version/source/buckets/hints。
+
+
+## P0–P2 设置控制面
+
+桌面设置、管理面板、权限边界和降级路径的当前事实以 docs/settings-control-audit.md 为准。模型密钥只在后端管理面维护；桌面只切已有 routing profile。

@@ -14,6 +14,8 @@ import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { sendChat, uploadDocument, desktopWake } from '../../../shared/api/backend';
 import { shouldSkipDesktopWake, markDesktopWakeFired } from '../../../shared/desktopWakeGate';
 import { useVoiceInput } from '../../../shared/voice/useVoiceInput';
+import { getDesktopTtsEnabled } from '../../../shared/api/runtimeSettings';
+import { VoiceMessageBar } from './VoiceMessageBar';
 import { loadChatLogDates, loadChatLogDay } from '../../../shared/api/backend';
 import { getClientConfig } from '../../../shared/api/config';
 import { wsClient } from '../../../shared/api/ws';
@@ -319,7 +321,7 @@ function BreathingAvatar({
   );
 }
 
-const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, youVisible, assistantFontSize, userFontSize }: any) {
+const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, youVisible, assistantFontSize, userFontSize, ttsEnabled }: any) {
   const fromUser = msg.role === 'user';
   const hue = msg.moodHue ?? currentHue;
   const time = msg.time ? new Date(msg.time).toLocaleTimeString('zh', { hour: '2-digit', minute: '2-digit' }) : '';
@@ -429,7 +431,9 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
           {msg.deleted && (
             <div style={{ textDecoration: 'line-through', opacity: 0.45, fontSize: assistantFontSize - 1.5, marginBottom: 4 }}>{normalizeChatDisplayText(msg.deleted)}</div>
           )}
-          {msg.isStreaming
+          {ttsEnabled && !msg.isStreaming ? (
+            <VoiceMessageBar text={normalizeChatDisplayText(msg.segmentedContent ?? msg.text)} />
+          ) : msg.isStreaming
             ? renderStreamingContent(msg.text, msg.streamingDone ?? false)
             : renderInlineStyled(normalizeChatDisplayText(msg.segmentedContent ?? msg.text))
           }
@@ -460,6 +464,14 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
   const [isDraggingOver, setIsDraggingOver] = useState(false);
 
   const voice = useVoiceInput();
+  const [ttsEnabled, setTtsEnabled] = useState(false);
+  useEffect(() => {
+    let mounted = true;
+    getDesktopTtsEnabled().then(value => { if (mounted) setTtsEnabled(value); }).catch(() => {});
+    const sync = (event: Event) => setTtsEnabled(Boolean((event as CustomEvent<{ enabled: boolean }>).detail?.enabled));
+    window.addEventListener('desktop-tts-settings', sync);
+    return () => { mounted = false; window.removeEventListener('desktop-tts-settings', sync); };
+  }, []);
   const handleMicClick = async () => {
     if (voice.isRecording) {
       const text = await voice.stop();
@@ -1775,6 +1787,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
               youVisible={youVisible}
               assistantFontSize={fontSizes.assistant}
               userFontSize={fontSizes.user}
+              ttsEnabled={ttsEnabled}
             />
           </div>
         ))}

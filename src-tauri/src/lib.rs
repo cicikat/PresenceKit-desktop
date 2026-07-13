@@ -2008,6 +2008,55 @@ async fn set_chat_multi_message(app: tauri::AppHandle, enabled: bool) -> Result<
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
 
+// ── Runtime feature settings ─────────────────────────────────────────────────
+
+#[tauri::command]
+async fn get_model_routing(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let resp = authorized_request(&cfg, http_client()?.get(backend_url(&cfg, "/settings/model-routing")))
+        .send().await.map_err(|e| e.to_string())?;
+    require_success(resp).await?.json().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn set_model_routing(app: tauri::AppHandle, active_routing: String) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let resp = authorized_request(&cfg, http_client()?.put(backend_url(&cfg, "/settings/model-routing")))
+        .json(&serde_json::json!({ "active_routing": active_routing })).send().await.map_err(|e| e.to_string())?;
+    require_success(resp).await?.json().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_desktop_tts(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let resp = authorized_request(&cfg, http_client()?.get(backend_url(&cfg, "/settings/tts-desktop")))
+        .send().await.map_err(|e| e.to_string())?;
+    require_success(resp).await?.json().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn set_desktop_tts(app: tauri::AppHandle, enabled: bool) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let resp = authorized_request(&cfg, http_client()?.post(backend_url(&cfg, "/settings/tts-desktop")))
+        .json(&serde_json::json!({ "enabled": enabled })).send().await.map_err(|e| e.to_string())?;
+    require_success(resp).await?.json().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn synthesize_desktop_voice(app: tauri::AppHandle, text: String, emotion: String) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let resp = authorized_request(&cfg, llm_http_client()?.post(backend_url(&cfg, "/tts/synthesize")))
+        .json(&serde_json::json!({ "text": text, "emotion": emotion })).send().await.map_err(|e| e.to_string())?;
+    require_success(resp).await?.json().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn water_garden(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let resp = authorized_request(&cfg, http_client()?.post(backend_url(&cfg, "/garden/water")))
+        .send().await.map_err(|e| e.to_string())?;
+    require_success(resp).await?.json().await.map_err(|e| e.to_string())
+}
 // ── Tool Loop (cc-tasks/16) ────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -2025,6 +2074,10 @@ async fn update_tool_loop_settings(
     app: tauri::AppHandle,
     enabled: Option<bool>,
     max_steps: Option<u32>,
+    total_timeout_s: Option<u32>,
+    categories: Option<Vec<String>>,
+    exclude_tools: Option<Vec<String>>,
+    nudge_hint: Option<String>,
 ) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
     let client = http_client()?;
@@ -2032,9 +2085,11 @@ async fn update_tool_loop_settings(
     if let Some(v) = enabled {
         body.insert("enabled".into(), v.into());
     }
-    if let Some(v) = max_steps {
-        body.insert("max_steps".into(), v.into());
-    }
+    if let Some(v) = max_steps { body.insert("max_steps".into(), v.into()); }
+    if let Some(v) = total_timeout_s { body.insert("total_timeout_s".into(), v.into()); }
+    if let Some(v) = categories { body.insert("categories".into(), serde_json::json!(v)); }
+    if let Some(v) = exclude_tools { body.insert("exclude_tools".into(), serde_json::json!(v)); }
+    if let Some(v) = nudge_hint { body.insert("nudge_hint".into(), v.into()); }
     let resp = authorized_request(&cfg, client.post(backend_url(&cfg, "/settings/tool-loop")))
         .json(&serde_json::Value::Object(body))
         .send().await.map_err(|e| e.to_string())?;
@@ -2060,6 +2115,7 @@ async fn update_thinking_settings(
     enabled: Option<bool>,
     mode: Option<String>,
     apply_to_proactive: Option<bool>,
+    monologue_max_tokens: Option<u32>,
 ) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
     let client = http_client()?;
@@ -2070,9 +2126,8 @@ async fn update_thinking_settings(
     if let Some(v) = mode {
         body.insert("mode".into(), v.into());
     }
-    if let Some(v) = apply_to_proactive {
-        body.insert("apply_to_proactive".into(), v.into());
-    }
+    if let Some(v) = apply_to_proactive { body.insert("apply_to_proactive".into(), v.into()); }
+    if let Some(v) = monologue_max_tokens { body.insert("monologue_max_tokens".into(), v.into()); }
     let resp = authorized_request(&cfg, client.post(backend_url(&cfg, "/settings/thinking")))
         .json(&serde_json::Value::Object(body))
         .send().await.map_err(|e| e.to_string())?;
@@ -2366,6 +2421,12 @@ pub fn run() {
             set_chat_mode,
             set_chat_style,
             set_chat_multi_message,
+            get_model_routing,
+            set_model_routing,
+            get_desktop_tts,
+            set_desktop_tts,
+            synthesize_desktop_voice,
+            water_garden,
             get_tool_loop_settings,
             update_tool_loop_settings,
             get_thinking_settings,

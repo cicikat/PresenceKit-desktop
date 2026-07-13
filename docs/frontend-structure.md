@@ -653,3 +653,8 @@ Tauri 命令：
 - 仅当 mode 为 `mirror` 时显示 Mirror dev 分组；兼容 `mirror_core` 或 `mirror`，字段缺失时显示 `—`。
 - `ending_state === "completed"` 显示“剧本已完成”，但不触发退出。
 - 前端不推进 stage、不模拟 `satisfied_streak`、不写回 scenario progress，也不读取或计算 hidden state / Mirror bucket。
+
+
+## 设置页运行时控制（2026-07-13）
+
+系统设置沿用现有 PreferencesPanel，加入 ModelRoutingSettingsPage、DesktopTtsSettingsPage，并扩展 ToolLoopSettingsPage / ThinkingSettingsPage。助手非流式消息在桌面 TTS 开启时使用 VoiceMessageBar；语音按点击懒生成，可播放/暂停并展开文字。

@@ -887,3 +887,8 @@ Mirror 入梦只提交模式，不提交 `script_id`：
 （Tauri IPC `get_prompt_assets` → 后端 prompt-assets）里 `characters[].label` 按
 `active.active_character` 查到的角色标签，详见 `docs/frontend-structure.md` 的
 「activeCharacter」小节。
+
+
+## P0–P2 设置接口（2026-07-13）
+
+新增 persona 接口：GET/PUT /settings/model-routing、GET/POST /settings/tts-desktop、POST /tts/synthesize；均经 Tauri command 调用。管理端另有 /model-presets/bootstrap 和 /settings/feature-flags。完整权限与降级边界见 settings-control-audit.md。
