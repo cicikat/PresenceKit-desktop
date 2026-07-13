@@ -153,7 +153,7 @@ src-tauri/
 
 协议状态：
 
-- 后端当前实际 WS 协议仍是 legacy：`hello` / `hello_ack` / `channel_message` / `action` / `ack` / `ping` / `pong`。
+- 后端当前实际 WS 协议是 v0.1 冻结的 legacy 集合；消息全集、字段、ack/nack 语义和 action allowlist 以 `docs/protocol-v0.md` 为唯一权威，不要依据本入口文件中的简写自行扩展。
 - v1 目标协议文档目前在旧项目：`Emerald-desktop` 仓库（通常与本仓库同级）的 `docs/desktop-client-protocol.md`。
 - `Emerald-presence/docs/` 目前没有 `desktop-client-protocol.md` 和 `desktop-client-plan.md`，不要按旧路径假定存在。
 

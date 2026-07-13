@@ -4,7 +4,7 @@
 
 ## 连接
 
-端点默认是 `ws://127.0.0.1:8080/ws/desktop`。连接由 Tauri Rust bridge 建立，并以 Bearer header 鉴权；token 不进入 URL 或 WebView。后端每 30 秒发送 `ping`，客户端回复 `pong`；客户端 60 秒无入站消息时重连，退避上限 30 秒。认证失败不自动重连。
+端点默认是 `ws://127.0.0.1:8080/ws/desktop`。连接由 Tauri Rust bridge 建立，并以 Bearer header 鉴权；token 不进入 URL 或 WebView。后端每 20 秒发送 `ping`，超过约 70 秒未收到 `pong` 时断开；客户端收到 `ping` 即回复 `pong`，60 秒无入站消息时主动重连，退避上限 30 秒。认证失败不自动重连。
 
 ## WebSocket 消息全集
 
