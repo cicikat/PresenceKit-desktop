@@ -9,6 +9,7 @@ import type { ChatSettings } from '../../shared/api/types';
 import { invoke } from '@tauri-apps/api/core';
 import { Icon } from './components/UIKit';
 import { StateEngine } from '../../shared/state/store';
+import { useBackendStatePolling } from '../../shared/state/useBackendStatePolling';
 import { avatarStore } from '../../shared/avatars/store';
 import { getPromptAssets, patchPromptAssets, getCharacterAvatar, uploadCharacterAvatar, deleteCharacterAvatar } from '../../shared/api/backend';
 import { updateActiveCharacterFromAssets, refreshActiveCharacterInfo, getActiveCharacterName, subscribeActiveCharacter } from '../../shared/activeCharacter';
@@ -1214,6 +1215,7 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivi
   const engineRef = useRef<StateEngine | null>(null);
   if (!engineRef.current) engineRef.current = new StateEngine();
   const engine = engineRef.current;
+  useBackendStatePolling(engine, { moodMs: 120_000, activityMs: 180_000 });
 
   const [theme, setTheme]                         = useState(() => getUIPref('chat.theme', 'paper'));
   const [themeMode, setThemeMode_]               = useState<'manual' | 'auto'>(() => getDayNight().mode);

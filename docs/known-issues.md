@@ -4,118 +4,31 @@
 
 ---
 
-## 语音（TTS）功能完全未接入
+## post-v0.1：TTS 语音播放
 
-**影响**：后端已有完整 TTS 合成（`config.yaml: tts.enabled`、情绪音色映射、`/tts-config` 接口），但客户端从未实现音频播放端，`/tts-config` 的开关也无处放置——控制一个不存在的功能没有意义。
-
-**证据**：全仓 grep `tts|voice|audio` 仅命中 avatar 等无关项，无任何音频播放代码。
-
-**建议**：单开"语音接入"工单，最小形态：① Rust command 请求后端合成音频 → ② 前端播放 → ③ 偏好面板加 TTS 开关（音色映射属部署期，留 `config.yaml`）。目前对话设置（Fix 1）已先行独立上线，不依赖本项。
+客户端当前没有 TTS 合成音频播放端；文字对话和语音输入不受影响。该增强明确不属于 v0.1，见 [release-v0.1.md](release-v0.1.md)。
 
 ---
 
-## P1：客户端和目标 v1 WS 协议不一致
+## post-v0.1：v1 WS 协议与用户输入 WS 化
 
-**位置**：`src/shared/api/ws.ts`、`src/shared/api/types.ts`、`Emerald-presence` 仓库（通常与本仓库同级）的 `channels\desktop_ws.py`
+v0.1 已正式冻结现有 legacy WS + HTTP `/desktop/chat` 路径，不再把它描述为临时过渡。`assistant_message`、`state_update`、`user_message`、`client_event`、统一 envelope 和 capabilities 均为未排期 roadmap，见 [protocol-v0.md](protocol-v0.md)。
 
-当前实际协议是 legacy：
-
-- `hello` / `hello_ack`
-- `channel_message`
-- `action`
-- `ack`
-- `ping` / `pong`
-
-旧 v1 协议文档要求：
-
-- envelope：`v` / `ts` / `payload`
-- `assistant_message`
-- `state_update`
-- `user_message`
-- `client_event`
-- capabilities 声明
-
-**影响**：后续接手者容易误以为 Phase 2b 已完成；状态推送、用户输入 WS 化、模式切换都还没落地。
-
-**建议**：先决定是短期继续 legacy，还是直接推动后端和客户端一起升 v1。不要在客户端单边实现 v1。
+当前 mood/activity 由 `useBackendStatePolling()` 更新：ChatWindow 常驻低频轮询，Sidebar flow/status 打开时叠加高频轮询；presence 仍由本地交互驱动。
 
 ---
 
-## P1：用户发送仍走 HTTP `/desktop/chat`，不是 WS `user_message`
+## 已完成：客户端鉴权配置迁出前端源码
 
-**位置**：`src/windows/chat/components/ChatPanel.tsx`、`src/shared/api/backend.ts`、`src-tauri/src/lib.rs`
-
-当前 `send()` 调用 `sendChat()`，Tauri command 再 POST `/desktop/chat`。
-
-**影响**：与 v1 协议文档中“用户输入走 WS，回复走 assistant_message”的目标不一致；也导致 HTTP 返回回复和 WS 主动消息两条路径并存。
-
-**建议**：协议升级时把 `sendChat()` 改为 WS `user_message`，或明确文档标记 HTTP 为过渡路径。
+`admin_token` 仅由 Rust 本地配置读取，前端不保存或传递 token；`config/client.local.json` 已被忽略。`bot_user_id` 默认为空，`load_history` 收到空 id 时返回空历史；默认 token `CHANGE_ME` 只是不可用占位符。ChatPanel 正常历史路径使用 `/chat-log/*`，不依赖 QQ 号。
 
 ---
 
-## P2：admin token 已从前端源码迁出（QQ 号 ChatPanel 已绕过）
+## 已完成：桌面协议权威位置固定
 
-**位置**：`src-tauri/src/client_config.rs`、`config/client.local.json`
-
-Phase 2c+ 之后，ChatPanel 启动历史改走 `/chat-log/*` 接口，owner_qq 由后端从 `config.yaml` 读取，客户端不再直接使用 `BOT_USER_ID`。但 `BOT_USER_ID` 仍出现在 `loadHistory()`（现备用）及可能的 future 模块里。
-
-**当前状态**：
-
-- `ADMIN_TOKEN` 已迁移到 Rust 侧本地配置读取，前端不再保存或传递 token。
-- `config/client.local.json` 已加入 `.gitignore`，真实 token 不应提交。
-- `/memory/{uid}/short-term` 不再被 ChatPanel 调用，但其他模块未来可能仍用。
-
-**剩余建议**：`BOT_USER_ID` 遗留可在确认无其他调用者后清理；长期仍可考虑后端专用本机鉴权替代静态 token。
+当前正式协议唯一权威是 [protocol-v0.md](protocol-v0.md)，ChatPanel 双路径对账契约见 [chat-correlation.md](chat-correlation.md)。旧 `Emerald-desktop` 中的 v1 文档仅作 post-v0.1 roadmap 参考。
 
 ---
-
-## P1：`state_update` 没有接入 StateEngine
-
-**位置**：`src/shared/state/store.ts`、`src/shared/api/ws.ts`
-
-`StateEngine.applyBackendState('state-update', patch)` 已保留未来 source，但 WS 类型里没有 `state_update`，`wsClient` 也没有处理；当前 mood/activity/presence ownership 也未切换为推送。
-
-**影响**：后端推送的情绪、活动、presence 不能驱动 UI；当前 mood/activity 来自轮询，presence 仍由本地交互驱动。
-
-**建议**：协议对齐后先明确推送字段 ownership，再把后端状态变化统一转成 `engine.applyBackendState('state-update', patch)`。
-
----
-
-## P2：`sensor-service/` 只有空目录骨架
-
-**位置**：`sensor-service/`
-
-目录存在，但没有 Python 实现文件。
-
-**影响**：项目结构看起来像已迁感知服务，但实际不可运行。
-
-**建议**：迁移旧 `Emerald-desktop` 感知层时，先写启动入口、数据路径和后端 `/sensor/*` 对接文档。
-
----
-
-## P2：桌面协议文档路径漂移
-
-**位置**：文档路径
-
-旧入口说明曾写（相对 `Emerald-presence` 仓库根，通常与本仓库同级）：
-
-```text
-docs\desktop-client-protocol.md
-docs\desktop-client-plan.md
-```
-
-当前实际同名文件在 `Emerald-desktop` 仓库（通常与本仓库同级）的：
-
-```text
-docs\
-```
-
-**影响**：后续协作者按旧路径找不到协议文档，容易重复设计或误判状态。
-
-**建议**：要么把协议文档复制/迁到本仓库或后端仓库，要么持续在 `docs/backend-integration.md` 标明权威位置。
-
----
-
 ## P3：旧客户端迁移没有独立状态地图
 
 旧的 `docs/migration-status.md` 已随基本迁移完成而移除。剩余迁移缺口只在
@@ -135,7 +48,7 @@ docs\
 - window title: `tauri-app`
 - Rust package description: `A Tauri App`
 
-**影响**：开发和打包时显示不符合 Emerald-client。
+**影响**：开发和打包时显示不符合 PresenceKit-desktop。
 
 **建议**：在正式打包前统一改名。
 

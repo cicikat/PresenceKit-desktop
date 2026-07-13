@@ -19,6 +19,14 @@ import type { Mood } from '../state/store';
 import { backendMoodToFrontend } from '../state/mood-mapping';
 import { getActiveDirective } from '../../windows/room/avatarDirective';
 import { microNoise } from '../../windows/room/boneResolver';
+import {
+  attachDriver,
+  disableBuiltinEyeBlink,
+  getExpressionNames,
+  getMotionGroupNames,
+  getModelHeight,
+  getParamDefault,
+} from './motionAdapter';
 
 // pixi-live2d-display-lipsyncpatch's Cubism4 core model type isn't exported from the package's public
 // entry point — treated as `any` throughout this file. // TODO: type
@@ -106,27 +114,6 @@ function getParamValue(coreModel: CoreModel, id: string): number | null {
   }
 }
 
-/**
- * A parameter's neutral value is its model-defined DEFAULT, not 0 — e.g. ParamEyeLOpen
- * defaults to 1 (eyes open). Resetting expression params to 0 drives the eyes shut.
- */
-function getParamDefault(coreModel: CoreModel, id: string): number {
-  const idx = getParamIndex(coreModel, id);
-  if (idx === -1) return 0;
-  try {
-    if (typeof coreModel.getParameterDefaultValue === 'function') {
-      const v = coreModel.getParameterDefaultValue(idx) as number;
-      if (Number.isFinite(v)) return v;
-    }
-  } catch { /* fall through */ }
-  try {
-    const dv = coreModel.getModel?.()?.parameters?.defaultValues;
-    const v = dv?.[idx];
-    if (typeof v === 'number' && Number.isFinite(v)) return v;
-  } catch { /* fall through */ }
-  return id === 'ParamEyeLOpen' || id === 'ParamEyeROpen' ? 1 : 0;
-}
-
 export interface UseLive2DStageOptions {
   getMood: () => Mood;
   getTalking: () => boolean;
@@ -178,6 +165,7 @@ export function useLive2DStage(
     if (!mount) return;
 
     let disposed = false;
+    let detachDriver: (() => void) | null = null;
 
     const app = new PIXI.Application({
       resizeTo: mount,
@@ -242,7 +230,7 @@ export function useLive2DStage(
       if (w === 0 || h === 0) return;
       const settings = settingsRef.current;
       const zoom = optsRef.current.zoom ?? 1;
-      const baseH = (model.internalModel?.height as number | undefined) || model.height || 1;
+      const baseH = getModelHeight(model);
       const targetH = h * 0.95 * settings.scaleMul * zoom;
       const scale = targetH / baseH;
       baseScaleRef.current = scale;
@@ -256,6 +244,8 @@ export function useLive2DStage(
     async function loadModel(dir: string): Promise<void> {
       const token = ++loadTokenRef.current;
       if (modelRef.current) {
+        detachDriver?.();
+        detachDriver = null;
         app.stage.removeChild(modelRef.current);
         modelRef.current.destroy();
         modelRef.current = null;
@@ -303,23 +293,8 @@ export function useLive2DStage(
           return;
         }
         model.anchor.set(0.5, 0.5);
-        if (model.internalModel) {
-          (model.internalModel as unknown as { eyeBlink?: unknown }).eyeBlink = undefined;
-        }
-        const mm = model.internalModel?.motionManager as unknown as
-          { update: (coreModel: CoreModel, now: number) => boolean } | undefined;
-        if (mm) {
-          const origUpdate = mm.update.bind(mm);
-          mm.update = (coreModel: CoreModel, now: number) => {
-            const changed = origUpdate(coreModel, now);
-            try {
-              driveFrame(coreModel, now);
-            } catch {
-              // a driver step touching a param this model doesn't have shouldn't kill the model
-            }
-            return changed;
-          };
-        }
+        disableBuiltinEyeBlink(model);
+        detachDriver = attachDriver(model, driveFrame);
         modelRef.current = model;
         app.stage.addChild(model);
         setError(null);
@@ -339,10 +314,7 @@ export function useLive2DStage(
       const intensity = directive?.expression ? directive.intensity : 0.85;
 
       // ── expression layer (priority) / param fallback ──
-      const expressionManager = (modelRef.current?.internalModel?.motionManager as unknown as {
-        expressionManager?: { definitions: { Name: string }[] };
-      } | undefined)?.expressionManager;
-      const availableNames = expressionManager?.definitions.map(d => d.Name) ?? [];
+      const availableNames = getExpressionNames(modelRef.current);
       const matched = matchExpressionName(availableNames, mood);
 
       // Reset target for a param is its model default (NOT 0 — eyes default open at 1);
@@ -386,10 +358,7 @@ export function useLive2DStage(
       if (lastMotionMoodRef.current !== mood) {
         lastMotionMoodRef.current = mood;
         const groupToken = MOOD_TO_EXPRESSION[mood]?.toLowerCase();
-        const groups = (modelRef.current?.internalModel?.motionManager as unknown as {
-          definitions?: Record<string, unknown[]>;
-        } | undefined)?.definitions ?? {};
-        const matchedGroup = Object.keys(groups).find(g => g.toLowerCase() === groupToken);
+        const matchedGroup = getMotionGroupNames(modelRef.current).find(g => g.toLowerCase() === groupToken);
         if (matchedGroup && groupToken !== 'neutral' && cubism4) {
           modelRef.current?.motion(matchedGroup, undefined, cubism4.MotionPriority.NORMAL).catch(() => {});
         }
@@ -547,6 +516,8 @@ export function useLive2DStage(
       resizeObs.disconnect();
       unsubscribe();
       if (modelRef.current) {
+        detachDriver?.();
+        detachDriver = null;
         app.stage.removeChild(modelRef.current);
         modelRef.current.destroy();
         modelRef.current = null;
@@ -569,7 +540,7 @@ export function useLive2DStage(
     const { clientHeight: h } = mount;
     if (h === 0) return;
     const model = modelRef.current;
-    const baseH = (model.internalModel?.height as number | undefined) || model.height || 1;
+    const baseH = getModelHeight(model);
     const targetH = h * 0.95 * settings.scaleMul * zoom;
     const scale = targetH / baseH;
     baseScaleRef.current = scale;

@@ -103,6 +103,7 @@ describe('gomokuApi', () => {
     expect(invokeMock).toHaveBeenCalledWith('activity_gomoku_start', {
       opponent: 'human',
       aiStyle: 'gentle',
+      aiResponseMode: null,
     });
   });
 
@@ -111,6 +112,7 @@ describe('gomokuApi', () => {
     expect(invokeMock).toHaveBeenCalledWith('activity_gomoku_start', {
       opponent: null,
       aiStyle: null,
+      aiResponseMode: null,
     });
   });
 

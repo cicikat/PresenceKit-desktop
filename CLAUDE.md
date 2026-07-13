@@ -1,4 +1,4 @@
-# Emerald-client — 开发说明
+# PresenceKit-desktop — 开发说明
 
 ## 协作偏好
 
@@ -15,5 +15,5 @@
 - 不在代码、脚本、文档中写盘符绝对路径；一律相对仓库根。仓库可整体改名/移盘。
 - `start-dev.bat` 用 `%~dp0`；`client.local.json` 按 cwd → (debug) CARGO_MANIFEST_DIR → exe 目录 →
   app_config_dir 顺序探测。
-- 本机密钥只放 gitignore 的文件（`config/client.local.json`、`sensor-service/config.yaml`），
+- 本机密钥只放 gitignore 的文件（`config/client.local.json`），
   入库的只有 `*.example.*` 占位版本。

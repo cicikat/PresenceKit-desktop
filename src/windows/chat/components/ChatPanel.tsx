@@ -25,6 +25,14 @@ import { TypingDots } from '../../../shared/ui/TypingDots';
 import type { ChatLogEntry, UploadError, NarrativeSegment } from '../../../shared/api/types';
 import { normalizeChatDisplayText } from '../chatDisplay';
 import { renderInlineStyled } from '../inlineStyle';
+import {
+  findRenderedFallback,
+  hasRegisteredMessage,
+  matchesCorrelation,
+  prunePendingSegments,
+  pruneRenderedFallbacks,
+  setBoundedMapEntry,
+} from '../correlation';
 
 function splitReply(text: string): string[] {
   return text.split(/\n+/).map(s => s.trim()).filter(s => s.length > 0);
@@ -102,23 +110,9 @@ interface ParkedRealityMessage extends RealityChannelMessage {
 
 const MAX_PARKED_REALITY_MESSAGES = 50;
 const MAX_WS_MSG_ID_MAPPINGS = 200;
-const PENDING_SEGMENTS_TTL_MS = 5 * 60_000;
-
-function setBoundedMapEntry<K, V>(map: Map<K, V>, key: K, value: V, maxSize: number) {
-  map.delete(key);
-  map.set(key, value);
-  while (map.size > maxSize) {
-    const oldestKey = map.keys().next().value as K | undefined;
-    if (oldestKey === undefined) break;
-    map.delete(oldestKey);
-  }
-}
 
 function pruneStalePendingSegments(map: Map<string, PendingRealitySegments>, now = Date.now()) {
-  const staleBefore = now - PENDING_SEGMENTS_TTL_MS;
-  map.forEach((value, key) => {
-    if (value.receivedAt < staleBefore) map.delete(key);
-  });
+  prunePendingSegments(map, now);
 }
 
 let _msgIdCounter = 0;
@@ -702,7 +696,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
                 const _wakeHash = normalizeForDedup(wakeResp.reply);
                 const _wsRenderedAt = recentWSContentHashesRef.current.get(_wakeHash);
                 const _wsAlreadyRendered = msgId
-                  ? wsMsgIdToLocalIdsRef.current.has(msgId)
+                  ? hasRegisteredMessage(wsMsgIdToLocalIdsRef.current, msgId)
                   : _wsRenderedAt !== undefined && Date.now() - _wsRenderedAt < 30_000;
                 if (_wsAlreadyRendered) {
                   pendingWakeReplyRef.current = null;
@@ -918,7 +912,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
     const appendSource = wsMsgId ? 'ws' : 'fallback';
 
     // Guard: if this wsMsgId was already processed (e.g. double channel_message), drop it.
-    if (wsMsgId && wsMsgIdToLocalIdsRef.current.has(wsMsgId)) {
+    if (wsMsgId && hasRegisteredMessage(wsMsgIdToLocalIdsRef.current, wsMsgId)) {
       pendingSegmentsByMsgIdRef.current.delete(wsMsgId);
       console.warn('[chat] BUG-duplicate-scheduleAssistantSegments | msg_id:', wsMsgId, '| already processed — skipping to prevent double-render');
       return;
@@ -1121,9 +1115,11 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         ? normalizeForDedup(pendingWakeReplyRef.current.parts.join('\n'))
         : '';
       const pendingWakeMatches = pendingWakeReplyRef.current
-        && (pendingWakeReplyRef.current.msgId
-          ? pendingWakeReplyRef.current.msgId === msg_id
-          : pendingWakeHash === normalizedHash);
+        && matchesCorrelation(
+          { msgId: pendingWakeReplyRef.current.msgId, normalizedHash: pendingWakeHash },
+          msg_id,
+          normalizedHash,
+        );
       if (pendingWakeMatches) {
         clearTimeout(pendingWakeReplyRef.current.timerId);
         pendingWakeReplyRef.current = null;
@@ -1138,9 +1134,11 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         ? normalizeForDedup(pendingSendReplyRef.current.reply)
         : '';
       const pendingSendMatches = pendingSendReplyRef.current
-        && (pendingSendReplyRef.current.msgId
-          ? pendingSendReplyRef.current.msgId === msg_id
-          : pendingSendHash === normalizedHash);
+        && matchesCorrelation(
+          { msgId: pendingSendReplyRef.current.msgId, normalizedHash: pendingSendHash },
+          msg_id,
+          normalizedHash,
+        );
       if (pendingSendMatches) {
         clearTimeout(pendingSendReplyRef.current.timerId);
         pendingSendReplyRef.current = null;
@@ -1152,10 +1150,12 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       // Check if a fallback was already rendered (timer fired before WS arrived).
       // In that case, wire the fallback bubble IDs to this msg_id and return early —
       // message_segments will then update those bubbles' segmentedContent in place.
-      const now = Date.now();
-      recentFallbacksRef.current = recentFallbacksRef.current.filter(r => now - r.renderedAt < 15000);
-      const matchedFallback = recentFallbacksRef.current.find(r => r.msgId === msg_id)
-        ?? recentFallbacksRef.current.find(r => !r.msgId && r.normalizedHash === normalizedHash);
+      recentFallbacksRef.current = pruneRenderedFallbacks(recentFallbacksRef.current);
+      const matchedFallback = findRenderedFallback(
+        recentFallbacksRef.current,
+        msg_id,
+        normalizedHash,
+      );
       if (matchedFallback) {
         recentFallbacksRef.current = recentFallbacksRef.current.filter(r => r !== matchedFallback);
         // Wire fallback bubble IDs to this msg_id so message_segments can update segmentedContent
@@ -1433,7 +1433,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         const normalizedHash = normalizeForDedup(reply);
         const wsRenderedAt = recentWSContentHashesRef.current.get(normalizedHash);
         const wsAlreadyRendered = msgId
-          ? wsMsgIdToLocalIdsRef.current.has(msgId)
+          ? hasRegisteredMessage(wsMsgIdToLocalIdsRef.current, msgId)
           : wsRenderedAt !== undefined && Date.now() - wsRenderedAt < 30_000;
         if (wsAlreadyRendered) {
           pendingSendReplyRef.current = null;
@@ -1506,7 +1506,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         const normalizedHash = normalizeForDedup(reply);
         const wsRenderedAt = recentWSContentHashesRef.current.get(normalizedHash);
         const wsAlreadyRendered = msgId
-          ? wsMsgIdToLocalIdsRef.current.has(msgId)
+          ? hasRegisteredMessage(wsMsgIdToLocalIdsRef.current, msgId)
           : wsRenderedAt !== undefined && Date.now() - wsRenderedAt < 30_000;
         if (wsAlreadyRendered) {
           pendingSendReplyRef.current = null;

@@ -1,6 +1,6 @@
-# ARCHITECTURE.md — Emerald-client 架构总览
+# ARCHITECTURE.md — PresenceKit-desktop 架构总览
 
-Emerald-client 是 `Emerald-presence` 的新桌面客户端。它不拥有角色记忆、调度、工具、情绪判断等核心数据；这些都属于 `Emerald-presence` 仓库（通常与本仓库同级）。客户端负责把后端的陪伴系统可视化：聊天窗口、桌宠形象、用户交互、桌面动作执行和未来的感知 UI。
+PresenceKit-desktop（仓库目录名可为 Emerald-client 等）是 `Emerald-presence` 的新桌面客户端。它不拥有角色记忆、调度、工具、情绪判断等核心数据；这些都属于 `Emerald-presence` 仓库（通常与本仓库同级）。客户端负责把后端的陪伴系统可视化：聊天窗口、桌宠形象、用户交互、桌面动作执行和未来的感知 UI。
 
 ---
 
@@ -17,20 +17,19 @@ Emerald-client 是 `Emerald-presence` 的新桌面客户端。它不拥有角色
              │ HTTP / WS on 127.0.0.1:8080
              ▼
 ┌──────────────────────────┐
-│ Emerald-client            │
+│ PresenceKit-desktop       │
 │ Tauri shell               │
-│ React chat window         │
+│ React chat + pet windows  │
 │ shared StateEngine mirror │
-│ future pet window         │
 └────────────┬─────────────┘
              │
              │ HTTP POST /sensor/realtime (本机或内网穿透)
              ▼
 ┌──────────────────────────┐
-│ Emerald-client (Tauri)    │
+│ PresenceKit-desktop       │
 │ src-tauri/src/sensor/     │
 │ Rust 嵌入式键鼠/焦点采集    │
-│ 规划中,尚未实施            │
+│ 已实施并随 Tauri 运行       │
 └──────────────────────────┘
 ```
 
@@ -43,9 +42,7 @@ admin secret 永远等价于 `admin` scope（零破坏迁移）。本仓触达�
 
 - **桌面 Tauri 客户端**（本仓 `src-tauri/`）：`desktop` profile token（`emt_…`），字段仍叫
   `admin_token` / env `EMERALD_ADMIN_TOKEN`，不改名。
-- **已废弃的手机 sensor-service**（本仓 `sensor-service/`）：历史 Python 独立进程方案，
-  不再是运行路径；感知现嵌入 `src-tauri/src/sensor/`。其历史 `sensor` profile token 仅有
-  `sensor.write` 权限，不得复用桌面/admin token。
+- **历史 sensor 客户端**：旧 Python 独立进程方案已从本仓删除；其历史 `sensor` profile token 仅有`r`n  `sensor.write` 权限，不得复用桌面/admin token。当前感知运行于 `src-tauri/src/sensor/`。
 - **设备侧**（仓外，ESP32 固件等）：各自最小 scope token。
 
 Token 由后端 `POST /auth/tokens` 签发；scope 表、profile 表、管理操作见后端仓
@@ -191,7 +188,7 @@ Tauri Rust 在 `src-tauri/src/lib.rs`：
 - `mode`：`companion` / `chat-only`
 - `wantToSpeak`、`behaviorId`、`bodyTiltOverride` 等视觉信号
 
-当前 engine 是前端本地对象。`STATE_FIELD_OWNERSHIP` 明确字段当前 owner；`useBackendStatePolling()` 是 mood/activity 后端轮询的唯一入口，并统一通过 `applyBackendState(source, patch)` 写入；本地 focus 推断走 `setLocalFocus()`。WS `state_update` 尚未接入，`state-update` source 仅作为未来入口保留。sensor 快照当前不写入 engine，只在 `SubStatus` 内派生信号。
+当前 engine 是前端本地对象。`STATE_FIELD_OWNERSHIP` 明确字段当前 owner；`useBackendStatePolling()` 是 mood/activity 后端轮询的唯一入口，ChatWindow 常驻低频轮询（120s/180s），Sidebar flow/status tab 叠加原有高频轮询，并统一通过 `applyBackendState(source, patch)` 写入；本地 focus 推断走 `setLocalFocus()`。WS `state_update` 尚未接入，`state-update` source 仅作为未来入口保留。sensor 快照当前不写入 engine，只在 `SubStatus` 内派生信号。
 
 旧原型 `Emerald-desktopUI` 仓库（通常与本仓库同级）的 `state-engine.js` 里有完整 behavior loop；当前 TypeScript 版删掉了 mock 行为循环，等待后端状态推送。
 
@@ -319,13 +316,12 @@ Dream 背景按 `day` / `night` 分开记录。旧版单字段 `dream_background
 | `src/shared/theme/contract.ts` / `registry.ts` | 主题 Mod token 契约、内置与磁盘主题注册、运行期注入 |
 | `src-tauri/src/lib.rs` | Tauri command 和 Rust HTTP 桥 |
 | `src-tauri/src/sensor/` | sensor 感知模块,嵌入 Tauri Rust 进程 |
-| `sensor-service/` | 已废弃,原 Python 独立进程方案 |
 
 ---
 
 ## 迁移关系
 
-`Emerald-client` 主要从两个来源迁移：
+本仓主要从两个来源迁移：
 
 - `Emerald-desktopUI` 仓库（通常与本仓库同级）：HTML/JSX UI 原型。
 - `Emerald-desktop` 仓库（通常与本仓库同级）：旧 PyQt 桌宠和 Python 感知/行为层。
@@ -334,7 +330,7 @@ Dream 背景按 `day` / `night` 分开记录。旧版单字段 `dream_background
 
 - `chat.jsx` → `ChatPanel.tsx`
 - `ribbon.jsx` → `Ribbon.tsx`
-- `sidebar.jsx` → `components/archive/Sidebar.legacy.tsx`，当前 `Sidebar.tsx` 改为占位版
+- `sidebar.jsx` → 当前 `Sidebar.tsx`；legacy 存档已删除，历史由 Git 保留
 - `panes.jsx` → `Panes.tsx`
 - `ui-kit.jsx` → `UIKit.tsx`
 - `state-engine.js` 的状态表 → `shared/state/store.ts`
@@ -371,7 +367,7 @@ Dream 背景按 `day` / `night` 分开记录。旧版单字段 `dream_background
 - 客户端和后端实际仍在 legacy WS 协议。
 - v1 文档目标要求 `assistant_message` / `state_update` / `user_message` / `client_event`，当前未实现。
 - action executor 只覆盖四类基础动作，尚未接入桌宠行为或 v1 capabilities。
-- P-02 已将 backend base、WebSocket base、admin token 和 sensor config 外化到 client config；`config/client.local.json` 不提交。`loadHistory()` 仍保留备用 user id 默认值，默认开发 token 仅作为无本地配置时的兼容 fallback，不代表生产鉴权方案。
+- P-02 已将 backend base、WebSocket base、admin token 和 sensor config 外化到 client config；`config/client.local.json` 不提交。`bot_user_id` 默认为空，`load_history` 在空 id 时返回空历史；token 默认值仅为不可用占位符 `CHANGE_ME`。
 
 完整列表见 `docs/known-issues.md`。
 

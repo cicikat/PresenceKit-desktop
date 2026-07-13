@@ -1,6 +1,6 @@
-# docs/backend-integration.md — 后端接口与协议现状
+# docs/backend-integration.md — 后端接口与接入现状
 
-本文档记录 Emerald-client 当前和 `Emerald-presence` 的连接方式。重点区分“当前实际协议”和“v1 目标协议”。
+本文档记录本仓当前和 `Emerald-presence` 的连接方式。桌面协议统一见 `docs/protocol-v0.md`。
 
 ---
 
@@ -28,7 +28,7 @@
 
 ## 客户端本地配置
 
-P-02 之后，Emerald-client 的后端连接配置从本地配置文件读取。仓库提供模板：
+P-02 之后，本仓 的后端连接配置从本地配置文件读取。仓库提供模板：
 
 ```text
 config/client.example.json
@@ -495,11 +495,11 @@ loadActivityState()
 
 ## HTTP：上传 sensor 实时快照
 
-调用方:**Emerald-client 内嵌 sensor 模块**(Tauri Rust 侧
+调用方:**本仓 内嵌 sensor 模块**(Tauri Rust 侧
 `src-tauri/src/sensor/`,Phase 2f 实施)。
 
 ```text
-Emerald-client (Tauri Rust sensor 模块)
+本仓 (Tauri Rust sensor 模块)
   → POST http://127.0.0.1:8080/sensor/realtime
 ```
 
@@ -567,10 +567,10 @@ Authorization: Bearer <admin_token>
 
 ## HTTP：读取 sensor 实时快照
 
-调用方：**Emerald-client 主进程**（SubStatus 轮询消费）。
+调用方：**本仓 主进程**（SubStatus 轮询消费）。
 
 ```text
-Emerald-client SubStatus
+本仓 SubStatus
   → loadSensorRealtime()
   → Rust load_sensor_realtime
   → GET http://127.0.0.1:8080/sensor/realtime
@@ -578,7 +578,7 @@ Emerald-client SubStatus
 
 后端要求 Bearer token。客户端 Rust command 使用 `reqwest.no_proxy()`；404、JSON `null`、空对象 `{}` 统一映射为 `{ "_no_data": true }`，前端静默降级为 mood 派生信号。
 
-无数据时(sensor 模块未启动或刚重启,例如 Emerald-client 还在启动中)响应:
+无数据时(sensor 模块未启动或刚重启,例如 本仓 还在启动中)响应:
 
 ```json
 {
@@ -632,8 +632,8 @@ Emerald-client SubStatus
 - 由后端 `realtime_state` 在每次 POST 接收时维护，重启清零
 - 当 `idle_seconds < 300` 时累加本次 `window_seconds`
 - 当 `idle_seconds ≥ 300` 时清零（视为用户离开）
-- 当后端发现两次 POST 间隔 > 120s 时保守重置(视为 sensor 模块中断过,例如 Emerald-client 被关闭)
-- Emerald-client 重启或后端重启均清零,无持久化
+- 当后端发现两次 POST 间隔 > 120s 时保守重置(视为 sensor 模块中断过,例如 本仓 被关闭)
+- 本仓 重启或后端重启均清零,无持久化
 
 `stale_seconds` 是后端算的"距上次 POST 多少秒",SubStatus 用这个判断 sensor 模块是否还在采集(比如 >120 视为掉线,UI 显示降级)。
 
@@ -685,197 +685,13 @@ Emerald-client SubStatus
 
 ---
 
-## WebSocket：当前 legacy 协议
+## WebSocket 与桌面协议
 
-端点：
+当前正式协议为 v0.1（legacy 冻结版）。WS 消息全集、连接语义、9 类 desktop action allowlist、HTTP `/desktop/chat` 与 WS 回复的对账契约，以及未排期的 v1 roadmap，统一以 [protocol-v0.md](protocol-v0.md) 为权威。
 
-```text
-ws://127.0.0.1:8080/ws/desktop
-```
-
-后端实现：`Emerald-presence` 仓库（通常与本仓库同级）的 `channels\desktop_ws.py`
-
-当前客户端实现：`src/shared/api/ws.ts`
-
-### 连接语义
-
-- 前端不再调用浏览器原生 `new WebSocket()`；连接由 `src-tauri/src/ws_bridge.rs` 建立。
-- Rust 使用本地 `adminToken` 设置 `Authorization: Bearer <token>`，不会生成 `?token=...` URL。
-- 若旧本地配置的 `websocketBase` 含 `token` query，bridge 会在连接前移除；该值不会进入公开前端配置。
-- 401/403 返回安全认证提示并停止自动重连，避免鉴权失败无限刷屏。
-- 后端只保留一个当前 WS 连接。
-- 新连接进来时，后端关闭旧连接。
-- 后端每 30 秒发 `ping`。
-- 后端 70 秒未收到 `pong` 会关闭连接。
-- 客户端 60 秒未收到任何消息会主动断开并重连。
-- 客户端指数退避：1s → 2s → 4s，最大 30s。
-
-### Client → Server
-
-握手：
-
-```json
-{
-  "type": "hello",
-  "client": "emerald-client",
-  "version": "0.1"
-}
-```
-
-心跳：
-
-```json
-{"type": "pong"}
-```
-
-动作回执：
-
-```json
-{
-  "type": "ack",
-  "msg_id": "1748000000000",
-  "ok": true
-}
-```
-
-### Server → Client
-
-握手确认：
-
-```json
-{
-  "type": "hello_ack",
-  "server_version": "1.0"
-}
-```
-
-主动消息：
-
-```json
-{
-  "type": "channel_message",
-  "content": "……",
-  "msg_id": "1748000000000"
-}
-```
-
-分段元数据：
-
-```json
-{
-  "type": "message_segments",
-  "content": "……",
-  "segments": [],
-  "msg_id": "1748000000000"
-}
-```
-
-同一 assistant 回复的 HTTP `turn_id` / `msg_id`、`channel_message.msg_id` 和 `message_segments.msg_id` 相同。`message_segments` 只更新已关联的消息气泡；先到达时由 ChatPanel 暂存。
-
-**句级表演意图映射**（cc-tasks/12-perform-intent-mapping-client.md，配对 `Emerald-presence` cc-tasks/20）：`segments[]` 的每个元素从 `{type, text}` 扩展为可选携带 `perform`：
-
-```jsonc
-{
-  "type": "say",
-  "text": "才、才没有等你很久呢",
-  "perform": {                  // 可选字段；整体缺失 = 无表演标注
-    "expression": "happy",      // 9 词汇之一（同 avatar_directive）| null=不覆盖基调层
-    "intensity": 0.7,           // 0~1，缺省 0.6
-    "head": "tilt_r",           // nod|shake|tilt_l|tilt_r|dip|null
-    "posture": "lean_in",       // lean_in|lean_back|shrink|straighten|null
-    "gaze": "away",             // user|away|down|wander|null
-    "energy": 0.4               // 0~1 幅度/速度总缩放，缺省 0.5
-  }
-}
-```
-
-`perform` 内字段均可缺省、未知字段忽略、非法值按无效处理。旧后端（无 `perform`）与旧客户端（不识别 `perform`）都零回归。
-
-客户端本地注入（`src/windows/room/avatarDirective.ts`）：VN presenter 在气泡 reveal 到对应句时调用 `setLocalPerform(spec)` 把该句的 perform 写入 `ActiveDirective`（`origin: 'local'`），段落结束/turn 淡出/组件卸载时调用 `clearLocalPerform()`。WS 推来的 `avatar_directive`（mood 基调层插播）与本地句级表演共用同一个 `ActiveDirective` 槽位，遵循 **last-writer-wins**：谁最后写入 `_active` 谁生效；`clearLocalPerform()` 只清除 `origin === 'local'` 的状态，不会误清 WS 指令。
-
-桌面动作：
-
-```json
-{
-  "type": "action",
-  "action": {
-    "action_type": "open_url",
-    "params": {"url": "https://example.com"}
-  },
-  "msg_id": "1748000000000"
-}
-```
-
-Emerald-client 当前保持该 legacy action envelope，不引入 v1 协议字段。前端同时兼容 `action.action_type` 和 `action.type` 作为动作名，参数仍优先从 `action.params` 读取。
-
-P-01 已接入的最小执行动作：
-
-| `action_type` / `type` | `params` | 客户端执行 |
-|---|---|---|
-| `minimize_window` | `{}` | Tauri 当前窗口 `minimize()` |
-| `open_url` | `{"url": "https://example.com"}` | `tauri-plugin-opener` 打开 http/https/mailto/tel URL |
-| `show_notify` | `{"text": "...", "title": "..."}` | `tauri-plugin-dialog` 信息对话框 fallback，并记录 log |
-| `media_play_pause` | `{}` | Windows 发送媒体播放/暂停键；非 Windows 记录 stub log |
-| `dream_invite` | `{}` | emit `dream_invite` UI 事件，由 ChatWindow 打开 Dream 窗口 |
-| `toy_invite` | `{}` | emit `toy_invite` UI 事件；ChatWindow 在「玩耍模式」开启时打开 ToyWindow，关闭时忽略 |
-| `presence_nag` | `{"text": "<LLM 台词>", "avatar": "<角色标识>"}` | 默认关闭；启用后调用同名 Tauri command，更新并显示单实例置顶角色弹窗 |
-
-`sensor_aware` trigger 产出的 action 类型：
-
-| `action_type` | 触发条件 | `params` |
-|---|---|---|
-| `pet_emote` | score ≥ 50，soft_hint 级 | `{"behavior_id": "<语义标签>"}` |
-| `notify` | score ≥ 65，attention_grab 级 | `{"text": "<发言内容>", "bring_to_front": true}` |
-| `execute` | score ≥ 80，direct_act 级 | `{"behavior_id": "<语义标签>"}` |
-
-`behavior_id` 示例：`late_night_lock_hint`、`sit_long_force`、`long_focus_remind`。客户端按 `behavior_id` 决定执行什么，当前全部 console.log + ack（无执行器）。
-
-心跳：
-
-```json
-{"type": "ping"}
-```
-
-### 当前客户端处理
-
-| 消息 | 当前处理 |
-|---|---|
-| `hello_ack` | 设置连接状态为 `connected` |
-| `channel_message` | emit 给 ChatPanel，并立即 ack |
-| `message_segments` | emit 给 ChatPanel，按 `msg_id` 更新对应 assistant 气泡 |
-| `action` | emit 给订阅者，异步 dispatch 到 Tauri action command，按执行结果 ack |
-| `ping` | 回 `pong` |
-
-注意：`dream_invite` / `toy_invite` 都是 UI action，不调用 Tauri command；ChatWindow 收到事件后打开对应窗口并正常回 ack（`toy_invite` 仅在玩耍模式开关开启时开窗，否则忽略仍回 ack）。未知 action 不执行，并回 `ok:false`；这不改变后端协议，也不影响旧桌宠或 file fallback。
-
-玩耍模式硬件状态走 Tauri command 代理：`hardware_get_devices` → `GET /hardware/devices`、`hardware_connect` → `POST /hardware/connect`（与 dream 命令同样用 `authorized_request` 带 bearer token）。
+本文件只记录 HTTP/Tauri 接入细节，不再复制协议定义，避免双份文档漂移。ChatPanel 的回复去重、fallback、早到 segments 与 TTL 规则见 [chat-correlation.md](chat-correlation.md)。
 
 ---
-
-## v1 目标协议
-
-旧方案文档位置（相对 `Emerald-desktop` 仓库根，通常与本仓库同级）：
-
-```text
-docs\desktop-client-protocol.md
-docs\desktop-client-plan.md
-```
-
-v1 目标新增或替换：
-
-| 类型 | 方向 | 目标用途 | 当前状态 |
-|---|---|---|---|
-| `assistant_message` | Server → Client | 替代 `channel_message` | 未实现 |
-| `state_update` | Server → Client | 推 mood/activity/presence | 未实现 |
-| `user_message` | Client → Server | 用户输入走 WS | 未实现 |
-| `client_event` | Client → Server | 模式切换、窗口事件 | 未实现 |
-| envelope `v/ts/payload` | 双向 | 统一协议格式 | 未实现 |
-| `capabilities` | Client hello | 后端按能力降级 | 未实现 |
-
-后端当前代码同样仍是 legacy 协议，不只是客户端没接。
-
----
-
 ## Tauri IPC Commands
 
 文件：`src-tauri/src/lib.rs`
@@ -969,7 +785,7 @@ Client Auth Sync（R9 / SEC-AUTH-1）已同步的受保护调用点：
 data/channel_queue.json
 ```
 
-当前 Emerald-client 不读取这个文件队列。这个 fallback 主要服务旧桌宠。
+当前 本仓 不读取这个文件队列。这个 fallback 主要服务旧桌宠。
 
 ---
 

@@ -3,22 +3,12 @@
 This document extracts the useful design intent from the old
 `pet.jsx` and `spec.jsx` in the `Emerald-desktopUI` repo (usually a sibling
 of this repo).
-It is a reference for a future `Emerald-client` pet window. It is not a
-requirement to preserve the old JSX implementation or file structure.
+It remains a tuning reference for the implemented PresenceKit-desktop pet window;
+it is not a requirement to preserve the old JSX implementation or file structure.
 
 ## Current status
 
-`Emerald-client` already has the main chat UI, sidebar panels, theme tokens,
-floating panes, backend-backed garden, diary, mood, activity, and sensor
-telemetry. The missing part is specifically the desktop companion window:
-
-- A transparent/topmost Tauri window or equivalent pet surface.
-- A rendered companion character outside the chat panel.
-- Continuous micro motion while no message is being sent.
-- Mouse-aware gaze, hesitation, nudge, retreat, and click reactions.
-- A real behavior loop driven by backend `state_update` or another source of
-  truth, rather than the old mock frontend loop.
-
+The pet window is implemented in `src/windows/pet/` as a transparent/topmost Tauri window with particle, 3D, and Live2D stages. It receives state and speaking events from the main window, supports mouse-aware retreat/nuzzle/drag behavior, and does not open its own WebSocket. The richer concrete behavior loop described below remains post-v0.1 reference material.
 Relevant new-client entry points:
 
 - `src/windows/chat/ChatWindow.tsx`
@@ -194,7 +184,7 @@ can change, but the semantics are useful:
 - It should create tension without forcing a chat bubble.
 
 The chat panel already has a related typing flash path in
-`src/windows/chat/components/ChatPanel.tsx`; a future pet window can share the
+`src/windows/chat/components/ChatPanel.tsx`; the current pet window can consume the
 same state signal.
 
 ## Mood and focus mapping

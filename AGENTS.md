@@ -22,8 +22,8 @@ PresenceKit-desktop 是 `PresenceKit` AI 陪伴系统的新桌面客户端，技
 - 桌宠 view 已落地在 `src/windows/pet/`：独立透明置顶窗口支持粒子、3D 和 Live2D 舞台，
   通过主窗口转发的 Tauri 事件接收状态/说话信号；鼠标躲避、靠近和拖拽由 `usePetMouse.ts` /
   `usePetRoam.ts` 驱动。它不自行连接 WebSocket。
-- sensor 感知功能将嵌入 Tauri Rust 侧(`src-tauri/src/sensor/`),
-  不再使用 `sensor-service/` Python 独立进程方案。该目录为已废弃骨架，后续清理。
+- sensor 感知功能已嵌入 Tauri Rust 侧（`src-tauri/src/sensor/`）。
+- v0.1 已冻结发布范围，详见 `docs/release-v0.1.md`。
 
 不在本项目范围内的事：
 
@@ -47,7 +47,7 @@ PresenceKit-desktop 是 `PresenceKit` AI 陪伴系统的新桌面客户端，技
 2. 先按本文件和 `ARCHITECTURE.md` 定位，再做精确检索；检索排除 `node_modules/`、`dist/`、`src-tauri/gen/`、`src-tauri/target/`。
 3. 多个独立交付物一次性批量输出，并标明可并行项与前置依赖；每个独立修复验收后应小步 commit。
 4. 代码、脚本和文档不得写盘符绝对路径，统一相对仓库根；`start-dev.bat` 用 `%~dp0`。
-5. 本机密钥仅放在 gitignore 文件（`config/client.local.json`、`sensor-service/config.yaml`）；提交的仅为 `*.example.*` 占位文件。
+5. 本机密钥仅放在 gitignore 文件（`config/client.local.json`）；提交的仅为 `*.example.*` 占位文件。
 
 ---
 
@@ -97,8 +97,6 @@ src-tauri/
 ├── src/lib.rs
 ├── tauri.conf.json
 └── capabilities/default.json
-sensor-service/
-└── 已废弃(原 Python 方案),sensor 改为嵌入 src-tauri/src/sensor/
 ```
 
 注意：旧入口说明里写过 `src/shared/ws/`，但当前实现实际在 `src/shared/api/ws.ts`。

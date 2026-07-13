@@ -487,7 +487,6 @@ WS 连接状态来自 `wsClient.getState()` 和 `wsClient.on("state")`。
 - `status`：状态，挂 `SubStatus`，读取 engine 并显示共享 poller 的 mood/activity 错误与重试
 - `garden`：陪伴花园，读取后端花园状态
 
-`components/archive/Sidebar.legacy.tsx` 存着原副栏 UI 骨架，供后续真实数据接入时参考，不是当前运行入口。
 
 ---
 
@@ -535,7 +534,7 @@ WS 连接状态来自 `wsClient.getState()` 和 `wsClient.on("state")`。
 
 - 保存 mood / focus / presence / mode / activity。
 - 提供 subscribe/emit/get，以及按 ownership 区分的写入入口。
-- `src/shared/state/useBackendStatePolling.ts` 是 mood/activity 后端轮询的单一入口；由 Sidebar 挂载并按 flow/status tab 使用原有周期。
+- `src/shared/state/useBackendStatePolling.ts` 是 mood/activity 后端轮询的单一入口；ChatWindow 常驻低频轮询（120s/180s），Sidebar 按 flow/status tab 叠加原有高频周期。
 - 后端轮询统一走 `applyBackendState(source, patch)`；`state-update` source 已保留，但尚未接入 WS `state_update`。
 - 本地 focus 推断统一走 `setLocalFocus()`；mode 与交互时间分别走 `setMode()` / `markInteraction()`。
 - focus 有 duration 时会自动回到默认 focus。
@@ -634,7 +633,7 @@ Tauri 命令：
 
 - 新增真实后端数据时，协议和请求包装放进 `src/shared/api/`。
 - mood/activity/presence 只通过 `StateEngine` 改。
-- Sidebar 四个 tab 接数据时优先保留 `Sidebar.tsx` 的占位入口和 `components/archive/Sidebar.legacy.tsx` 的视觉参考关系。
+- Sidebar 四个 tab 接数据时以当前 `Sidebar.tsx` 和各 `Sub*` 组件为准；旧视觉存档已删除，历史由 Git 保留。
 - 桌宠迁入时不要把宠物状态复制成另一份 store；先设计聊天窗口和宠物窗口共享 engine 的方式。
 
 ---
