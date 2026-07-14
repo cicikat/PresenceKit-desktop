@@ -93,6 +93,7 @@ import { ToolLoopSettingsPage } from './components/ToolLoopSettingsPage';
 import { ThinkingSettingsPage } from './components/ThinkingSettingsPage';
 import { ModelRoutingSettingsPage } from './components/ModelRoutingSettingsPage';
 import { DesktopTtsSettingsPage } from './components/DesktopTtsSettingsPage';
+import { useI18n, type Language } from '../../shared/i18n';
 
 const SIDEBAR_MIN     = 250;
 const SIDEBAR_MAX     = 540;
@@ -100,6 +101,7 @@ const SIDEBAR_DEFAULT = 340;
 
 /* ── 偏好面板 ── */
 function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHeaderVisible, onChatHeaderToggle, appearance, onAppearanceChange, onCharacterAvatarChange, onCharacterSwitched, petMouseSettings, onPetMouseSettingsChange, petVisualStyle, onPetVisualStyleChange, model3dZoom, onModel3dZoomChange, live2dZoom, onLive2dZoomChange, presenceNagEnabled, onPresenceNagToggle, proactiveGapHours, onProactiveGapChange, playModeEnabled, onPlayModeToggle, petRoamEnabled, onPetRoamToggle, petRippleEnabled, onPetRippleToggle, onYandereOpen }: any) {
+  const { language, setLanguage, t } = useI18n();
   const [avatars, setAvatars] = useState(avatarStore.get());
   const [tab, setTab] = useState<'system' | 'appearance' | 'color' | 'world' | 'pet' | 'chat' | 'call' | 'other'>('appearance');
   const [cropSrc, setCropSrc] = useState<string | null>(null);
@@ -223,6 +225,17 @@ function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHea
           <div style={{ padding: '18px 22px', display: 'grid', gap: 18, flex: 1, minHeight: 0, overflowY: 'auto' }}>
             {tab === 'system' ? (
               <>
+                <PrefRow label={t('common.language')} hint={t('settings.language.hint')}>
+                  <select
+                    value={language}
+                    onChange={event => setLanguage(event.target.value as Language)}
+                    style={{ ...prefSelectStyle, width: 160 }}
+                  >
+                    <option value="zh-CN">{t('common.chinese')}</option>
+                    <option value="en-US">{t('common.english')}</option>
+                  </select>
+                </PrefRow>
+                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
                 <ConnectionSettingsPage />
                 <div style={{ height: 1, background: 'var(--paper-edge)' }} />
                 <ModelRoutingSettingsPage />

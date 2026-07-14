@@ -11,6 +11,7 @@ import { DiaryDetailWindow } from "./windows/diary-detail/DiaryDetailWindow";
 import { avatarStore } from "./shared/avatars/store";
 import { initTheme } from "./shared/theme/registry";
 import { initUIPrefs } from "./shared/uiPreferences";
+import { initI18n } from "./shared/i18n";
 
 const windowView = new URLSearchParams(window.location.search).get("window");
 const isPetWindow = windowView === "pet";
@@ -48,6 +49,7 @@ function Root() {
 
 await initUIPrefs();
 initTheme().catch(error => console.warn("[theme] 初始化失败:", error));
+initI18n();
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

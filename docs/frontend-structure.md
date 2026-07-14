@@ -624,6 +624,7 @@ Tauri 命令：
 - `src/shared/fontAppearance.ts`：Chat / Dream 共用字体扫描、family 和 URL helper；两套 appearance 配置结构保持独立。
 - `src/shared/images/cropImageToBlob.ts`：AvatarCropper / DreamBackgroundCropper 共用 canvas 裁剪 helper；输出尺寸由调用方传入。
 - `src/shared/ui/TypingDots.tsx` / `TypingDots.css`：Chat / Dream 共用输入中视觉组件；颜色由各自主题变量传入。
+- `src/shared/i18n/`：桌面客户端本地化入口。`locales/zh-CN.ts` / `en-US.ts` 保存语义 key 资源，`useI18n()` 驱动 React 文案和语言切换；Chat 偏好「系统设置」第一行持久化语言选择。`legacy.ts` 与 DOM bridge 只兼容迁移前的既有硬编码文案，新增用户可见文案禁止写入兼容表，必须使用语义 key。
 
 切换统一调用 `src/shared/theme/registry.ts` 的 `setTheme()`。
 

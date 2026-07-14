@@ -136,6 +136,7 @@ src-tauri/
     对原命令申请权限后重跑，不能只跑 `tsc` 就宣称 build 通过。
 11. 跨仓 git 遇到 `dubious ownership` 时使用单命令参数
     `git -c safe.directory=<仓库根> ...`，不要擅自修改全局 git 配置。
+12. 新增或修改用户可见文案必须通过 `src/shared/i18n/` 的语义 i18n key；禁止在组件中继续写死中文。`legacy.ts` 仅用于兼容迁移前的既有文案，不得向其中追加新功能文案。
 
 ---
 

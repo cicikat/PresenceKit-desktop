@@ -312,6 +312,7 @@ Dream 背景按 `day` / `night` 分开记录。旧版单字段 `dream_background
 | `src/shared/fontAppearance.ts` | Chat / Dream 共用字体扫描、family 和 URL helper |
 | `src/shared/images/cropImageToBlob.ts` | 头像和 Dream 背景共用 canvas 裁剪 helper |
 | `src/shared/ui/TypingDots.tsx` / `TypingDots.css` | Chat / Dream 共用输入中视觉组件 |
+| `src/shared/i18n/` | `zh-CN` / `en-US` 语言包、持久化语言选择与 React 订阅 API |
 | `src/shared/theme/globals.css` | 全局主题变量 |
 | `src/shared/theme/contract.ts` / `registry.ts` | 主题 Mod token 契约、内置与磁盘主题注册、运行期注入 |
 | `src-tauri/src/lib.rs` | Tauri command 和 Rust HTTP 桥 |
