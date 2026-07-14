@@ -7,6 +7,8 @@ import { MOOD_TABLE } from '../../../shared/state/store';
 import { chatThemeFontSize } from '../../../shared/chatAppearance';
 import { getUIPref, setUIPref } from '../../../shared/uiPreferences';
 import type { Mood } from '../../../shared/state/store';
+import { useI18n } from '../../../shared/i18n';
+import { translateLegacyText } from '../../../shared/i18n/legacy';
 
 interface FlowEntry {
   id: string;
@@ -52,6 +54,7 @@ function formatAgo(timestamp: number): string {
 }
 
 export function SubFlow({ engine }: { engine: any }) {
+  const { language } = useI18n();
   const [state, setState] = useState(engine.get());
   useEffect(() => engine.subscribe(setState), [engine]);
 
@@ -108,6 +111,7 @@ export function SubFlow({ engine }: { engine: any }) {
   const hue = MOOD_HUE[state.mood] ?? 70;
   const moodCfg = MOOD_TABLE[state.mood] ?? MOOD_TABLE['平静'];
   const narrative = buildNarrative(state.activity, state.focus, state.presence);
+  const localizedNarrative = language === 'en-US' ? translateLegacyText(narrative) : narrative;
 
   return (
     <div style={{ padding: '12px 14px 18px', overflowY: 'auto', height: '100%' }}>
@@ -137,7 +141,7 @@ export function SubFlow({ engine }: { engine: any }) {
           fontStyle: 'italic',
           marginBottom: 12,
         }}>
-          「{narrative}」
+          {language === 'en-US' ? `“${localizedNarrative}”` : `「${localizedNarrative}」`}
         </div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           <Tag hue={hue}>{state.mood}</Tag>

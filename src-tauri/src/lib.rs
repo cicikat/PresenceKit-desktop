@@ -2,6 +2,8 @@
 // /memory/…、/garden/state、/diary/…、/chat-log/…、/mood/state、/activity/current、
 // /sensor/realtime、/upload/ingest、/transcribe、/dream/state|enter|chat|exit|settings、
 // /settings/prompt-assets、/debug/user-hidden-state、/hardware/devices|connect、
+// /growth/…、/perception/visual-trace、/spend/…、/group/{id}/arbiter-trace|relations、
+// /memory/digest/{uid}、/debug/recall、
 // /activity/reading/…(5)、/activity/gomoku/…(5)、/activity/chess/…(5)、
 // /group/list|create|{id}|{id}/send|{id}/history|{id}/settings|{id}/roster(7)、
 // /system/meta-mode、/lorebook(4)、/jailbreak-entries(4)、/settings/tool-loop、
@@ -1281,6 +1283,93 @@ async fn load_hidden_state_debug(app: tauri::AppHandle) -> Result<serde_json::Va
     Ok(hidden_state)
 }
 
+fn observability_route_segments(
+    resource: &str,
+    item_id: Option<&str>,
+    filename: Option<&str>,
+    user_id: &str,
+) -> Result<Vec<String>, String> {
+    let item = || item_id.filter(|value| !value.is_empty()).ok_or_else(|| "Missing observability item id".to_string());
+    let file = || filename.filter(|value| !value.is_empty()).ok_or_else(|| "Missing observability filename".to_string());
+    Ok(match resource {
+        "growth_interests" => vec!["growth".into(), "interests".into()],
+        "growth_works" => vec!["growth".into(), "works".into(), item()?.into()],
+        "growth_work" => vec!["growth".into(), "works".into(), item()?.into(), file()?.into()],
+        "growth_notes" => vec!["growth".into(), "notes".into(), item()?.into()],
+        "growth_practice" => vec!["growth".into(), "practice-log".into()],
+        "visual_trace" => vec!["perception".into(), "visual-trace".into()],
+        "spend_ledger" => vec!["spend".into(), "ledger".into()],
+        "spend_budget" => vec!["spend".into(), "budget".into()],
+        "spend_mandates" => vec!["spend".into(), "mandates".into()],
+        "group_trace" => vec!["group".into(), item()?.into(), "arbiter-trace".into()],
+        "group_relations" => vec!["group".into(), item()?.into(), "relations".into()],
+        "memory_digest" => vec!["memory".into(), "digest".into(), user_id.into()],
+        "memory_recall" => vec!["debug".into(), "recall".into()],
+        _ => return Err("Unsupported observability resource".to_string()),
+    })
+}
+
+#[tauri::command]
+async fn observability_get(
+    app: tauri::AppHandle,
+    resource: String,
+    char_id: Option<String>,
+    item_id: Option<String>,
+    filename: Option<String>,
+    date: Option<String>,
+) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    if cfg.bot_user_id.is_empty() && matches!(resource.as_str(), "memory_digest" | "memory_recall") {
+        return Ok(if resource == "memory_digest" {
+            serde_json::json!({ "user_id": "", "char_id": char_id, "content": "" })
+        } else {
+            serde_json::json!({ "uid": "", "char_id": char_id, "records": [] })
+        });
+    }
+
+    let segments = observability_route_segments(
+        &resource,
+        item_id.as_deref(),
+        filename.as_deref(),
+        &cfg.bot_user_id,
+    )?;
+    let mut url = reqwest::Url::parse(&backend_url(&cfg, "/"))
+        .map_err(|_| "Invalid backend URL".to_string())?;
+    {
+        let mut path = url.path_segments_mut().map_err(|_| "Invalid backend URL".to_string())?;
+        path.pop_if_empty();
+        for segment in &segments {
+            path.push(segment);
+        }
+    }
+    if matches!(
+        resource.as_str(),
+        "growth_interests" | "growth_works" | "growth_work" | "growth_notes" | "memory_digest" | "memory_recall"
+    ) {
+        if let Some(value) = char_id.as_deref().filter(|value| !value.is_empty()) {
+            url.query_pairs_mut().append_pair("char_id", value);
+        }
+    }
+    if resource == "memory_recall" {
+        url.query_pairs_mut().append_pair("uid", &cfg.bot_user_id);
+    }
+    if resource == "visual_trace" {
+        if let Some(value) = date.as_deref().filter(|value| !value.is_empty()) {
+            url.query_pairs_mut().append_pair("date", value);
+        }
+    }
+
+    let response = authorized_request(&cfg, http_client()?.get(url))
+        .send()
+        .await
+        .map_err(|_| "Observability request failed".to_string())?;
+    require_success(response)
+        .await?
+        .json::<serde_json::Value>()
+        .await
+        .map_err(|_| "Invalid observability response".to_string())
+}
+
 #[tauri::command]
 async fn get_character_avatar(app: tauri::AppHandle, char_id: String) -> Result<Option<String>, String> {
     let cfg = load_client_config(&app);
@@ -2368,6 +2457,7 @@ pub fn run() {
             get_prompt_assets,
             patch_prompt_assets,
             load_hidden_state_debug,
+            observability_get,
             desktop_wake,
             get_character_avatar,
             upload_character_avatar,
@@ -2529,6 +2619,31 @@ mod auth_tests {
         // Verifies that http_client() builds successfully (timeout is set internally).
         assert!(http_client().is_ok());
         assert!(llm_http_client().is_ok());
+    }
+
+    #[test]
+    fn observability_routes_are_allowlisted_and_segments_are_encoded() {
+        let segments = observability_route_segments(
+            "growth_work",
+            Some("water/color"),
+            Some("study one.md"),
+            "owner",
+        )
+        .unwrap();
+        let mut url = reqwest::Url::parse("http://127.0.0.1:8080/").unwrap();
+        {
+            let mut path = url.path_segments_mut().unwrap();
+            path.pop_if_empty();
+            for segment in &segments {
+                path.push(segment);
+            }
+        }
+        assert_eq!(
+            url.as_str(),
+            "http://127.0.0.1:8080/growth/works/water%2Fcolor/study%20one.md"
+        );
+        assert!(observability_route_segments("unknown", None, None, "owner").is_err());
+        assert!(observability_route_segments("group_trace", None, None, "owner").is_err());
     }
 }
 

@@ -22,6 +22,7 @@ import { wsClient } from '../../../shared/api/ws';
 import { notifyOnMessage } from '../../../shared/api/notify';
 import { getActiveCharacterName } from '../../../shared/activeCharacter';
 import { chatThemeFontSize } from '../../../shared/chatAppearance';
+import { useI18n } from '../../../shared/i18n';
 import { publishPetSnapshot } from '../../../shared/pet/bridge';
 import { TypingDots } from '../../../shared/ui/TypingDots';
 import type { ChatLogEntry, UploadError, NarrativeSegment } from '../../../shared/api/types';
@@ -449,6 +450,7 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
 // ── 主组件 ──────────────────────────────────────────────────────────────────
 
 export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontSize = 14, dreamActive = false, characterAvatarDataUrl = null, onOpenRoom }: any) {
+  const { language, t } = useI18n();
   const [state, setState] = useState(engine.get());
   useEffect(() => engine.subscribe(setState), [engine]);
 
@@ -1700,7 +1702,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
                 对话
               </h1>
               <span className="mono" style={{ fontSize: chatThemeFontSize(10.5), color: 'var(--ink-3)', letterSpacing: 1.3 }}>
-                CHAPTER · {new Date().toLocaleDateString('zh', { month: 'long', day: 'numeric' }).toUpperCase()}
+                CHAPTER · {new Date().toLocaleDateString(language, { month: 'long', day: 'numeric' }).toUpperCase()}
               </span>
             </div>
             <div style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -1747,7 +1749,11 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         {historyStatus.kind === 'error' && messages.length === 0 && (
           <div style={{ textAlign: 'center', padding: '60px 0 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
             <span className="mono" style={{ fontSize: chatThemeFontSize(10), color: 'var(--ink-4)', letterSpacing: 0.8 }}>
-              正在等待后端连接…（{historyStatus.category === 'network' ? '网络错误' : historyStatus.category === 'unauthorized' ? '未授权' : '格式异常'}）
+              {t(historyStatus.category === 'network'
+                ? 'chat.history.waiting.network'
+                : historyStatus.category === 'unauthorized'
+                  ? 'chat.history.waiting.unauthorized'
+                  : 'chat.history.waiting.invalid')}
             </span>
             <button
               onClick={() => void init()}

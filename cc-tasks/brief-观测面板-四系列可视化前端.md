@@ -1,5 +1,8 @@
 # Brief（client）· 观测面板：四系列可视化前端
 
+> 实施状态（2026-07-14）：五类只读面板、char/group 分桶、空态和 30 秒轮询已完成；
+> confirm/reject 因后端 Brief 63 安全门及写接口尚未落地而保持禁用，不能按本 Brief 原依赖声明完成。
+
 > 依赖：Emerald-presence 侧 Brief 64（观测端点补全）先行——本单只消费其只读 API。
 > 风格与结构对齐现有 SubHiddenStatePanel.tsx；全部只读展示，唯一的写交互是
 > 支出面板的意向单确认/拒绝（走既有 Bearer 鉴权请求层）。

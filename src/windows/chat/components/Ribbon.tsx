@@ -10,6 +10,7 @@ import type { ConnectionState } from '../../../shared/api/types';
 import { DreamEntryButton } from '../../../features/dream';
 import { chatThemeFontSize } from '../../../shared/chatAppearance';
 import { getDayNight, subscribe as subscribeTheme, toggleDayNight } from '../../../shared/theme/registry';
+import { useI18n } from '../../../shared/i18n';
 
 function Sep() {
   return <div style={{ width: 24, height: 1, background: 'var(--forest-line)', margin: '6px 0' }} />;
@@ -30,7 +31,7 @@ function RibBtn({ icon, label, active, onClick, customIcon }: any) {
     <div style={{ position: 'relative' }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}>
-      <button onClick={onClick} style={{
+      <button aria-label={label} onClick={onClick} style={{
         width: 38, height: 38, borderRadius: 'var(--radius-md)',
         background: active ? 'var(--on-forest)' : 'transparent',
         color: active ? 'var(--forest)' : 'var(--on-forest-2)',
@@ -74,6 +75,7 @@ export function Ribbon({
   playModeEnabled,
   onGroupOpen,
 }: any) {
+  const { t } = useI18n();
   const [connState, setConnState] = useState<ConnectionState>(wsClient.getState());
   const [dayNightActive, setDayNightActive] = useState<'day' | 'night'>(() => getDayNight().active);
   useEffect(() => wsClient.on('state', setConnState), []);
@@ -128,6 +130,9 @@ export function Ribbon({
       <RibBtn icon="flower" label="花园"
         active={sidebarOpen && sidebarTab === 'garden'}
         onClick={() => { if (sidebarOpen && sidebarTab === 'garden') onCloseSidebar(); else onSidebarTab('garden'); }} />
+      <RibBtn icon="grid2" label={t('observability.title')}
+        active={sidebarOpen && sidebarTab === 'observability'}
+        onClick={() => { if (sidebarOpen && sidebarTab === 'observability') onCloseSidebar(); else onSidebarTab('observability'); }} />
       <Sep />
       <DreamEntryButton active={dreamWindowOpen} onToggle={onDreamToggle} />
       <RibBtn icon="grid2" label="一起做事" onClick={onActivityOpen} />
