@@ -486,12 +486,9 @@ WS 连接状态来自 `wsClient.getState()` 和 `wsClient.on("state")`。
 - `diary`：他的日记，读取后端日记列表和正文
 - `status`：状态，挂 `SubStatus`，读取 engine 并显示共享 poller 的 mood/activity 错误与重试
 - `garden`：陪伴花园，读取后端花园状态
-- `observability`：观测，挂 `ObservabilityPanel`；按角色 / 群聊分桶读取成长、视觉、支出、群聊仲裁和记忆轨迹，打开时每 30 秒轮询
 
-`ObservabilityPanel.tsx` 的数据入口集中在 `src/shared/api/observability-api.ts`，经 Tauri
-`observability_get` 的固定资源 allowlist 转发，不在组件内拼接 URL。作品正文点击后懒加载；空文件、
-尚未启用的后端工单和无群聊状态均渲染空态。支出意向单当前只读：后端 Brief 63 的确认 / 拒绝安全门
-尚未实现前，客户端不会伪造写接口。
+成长、视觉、支出、群聊仲裁和记忆摘要五类运行观测已迁入 PresenceKit 后端自带管理面板的“观测”分类；
+桌面聊天侧栏不再承载运维诊断入口。
 
 
 ---

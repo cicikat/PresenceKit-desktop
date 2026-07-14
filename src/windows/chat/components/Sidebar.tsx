@@ -7,7 +7,6 @@ import { SubGarden } from './SubGarden';
 import { SubDiary } from './SubDiary';
 import { SubStatus } from './SubStatus';
 import { SubFlow } from './SubFlow';
-import { ObservabilityPanel } from './ObservabilityPanel';
 import { chatThemeFontSize } from '../../../shared/chatAppearance';
 import { ErrorBoundary } from '../../../shared/ui/ErrorBoundary';
 import { useI18n } from '../../../shared/i18n';
@@ -44,9 +43,7 @@ export function SidebarPanel({ engine, sidebarRectRef, tab, onClose }: any) {
     return () => { window.removeEventListener('resize', update); clearInterval(h); };
   }, []);
 
-  const meta = tab === 'observability'
-    ? { title: t('observability.title'), subtitle: t('observability.subtitle') }
-    : SIDEBAR_HEADER[tab] || SIDEBAR_HEADER.flow;
+  const meta = SIDEBAR_HEADER[tab] || SIDEBAR_HEADER.flow;
 
   return (
     <div ref={rootRef} style={{
@@ -82,8 +79,6 @@ export function SidebarPanel({ engine, sidebarRectRef, tab, onClose }: any) {
             <SubGarden />
           ) : tab === 'diary' ? (
             <SubDiary />
-          ) : tab === 'observability' ? (
-            <ObservabilityPanel />
           ) : (
             <SubStatus engine={engine} backendStatePolling={backendStatePolling} />
           )}

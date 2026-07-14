@@ -130,9 +130,6 @@ export function Ribbon({
       <RibBtn icon="flower" label="花园"
         active={sidebarOpen && sidebarTab === 'garden'}
         onClick={() => { if (sidebarOpen && sidebarTab === 'garden') onCloseSidebar(); else onSidebarTab('garden'); }} />
-      <RibBtn icon="grid2" label={t('observability.title')}
-        active={sidebarOpen && sidebarTab === 'observability'}
-        onClick={() => { if (sidebarOpen && sidebarTab === 'observability') onCloseSidebar(); else onSidebarTab('observability'); }} />
       <Sep />
       <DreamEntryButton active={dreamWindowOpen} onToggle={onDreamToggle} />
       <RibBtn icon="grid2" label="一起做事" onClick={onActivityOpen} />

@@ -300,28 +300,8 @@ Authorization: Bearer <admin_token>
 
 ## HTTP：五类观测面板
 
-当前路径：
-
-```text
-Ribbon Observe
-  → Sidebar observability tab
-  → ObservabilityPanel
-  → src/shared/api/observability-api.ts
-  → invoke("observability_get", { resource, charId, itemId, filename })
-  → Rust allowlist + reqwest GET
-```
-
-`observability_get` 只接受以下固定资源，不接受任意 URL：
-
-- 成长：`/growth/interests`、`/growth/works/{interest_id}`、`/growth/works/{interest_id}/{filename}`、`/growth/notes/{interest_id}`、`/growth/practice-log`
-- 视觉：`/perception/visual-trace`
-- 支出：`/spend/ledger`、`/spend/budget`、`/spend/mandates`
-- 群聊：`/group/{group_id}/arbiter-trace`、`/group/{group_id}/relations`
-- 记忆：`/memory/digest/{bot_user_id}`、`/debug/recall?uid={bot_user_id}`
-
-路径参数由 `reqwest::Url::path_segments_mut()` 编码；角色桶通过 `char_id` query 传递。所有请求显式
-`no_proxy()`、使用本地 Bearer token，并复用统一的 401 / 403 / 429 错误处理。面板仅 GET，30 秒轮询；
-`bot_user_id` 为空时记忆接口返回空态，不发出无效请求。支出确认 / 拒绝端点尚不存在，客户端保持只读。
+成长、视觉、支出、群聊仲裁和记忆摘要已迁入 PresenceKit 管理面板的“观测”分类。桌面客户端不再代理
+这些管理端 GET 请求，也不再在聊天 Ribbon 暴露运维入口。
 
 ---
 
