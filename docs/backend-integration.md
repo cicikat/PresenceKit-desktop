@@ -101,6 +101,24 @@ Rust/Tauri HTTP client 统一显式禁用代理并设置超时：普通请求 15
 
 ---
 
+## HTTP：生成后段落兜底开关（偏好 → 系统设置）
+
+`OutputSegmentEnforceSettingsPage` 只展示普通运行时开关与后端返回的有效长度阈值，不承载 Prompt
+检视信息。请求集中在 `src/shared/api/outputSegmentEnforce.ts`，并通过 Tauri command 访问后端：
+
+```text
+页面挂载 → invoke("get_output_segment_enforce_settings")
+  → Rust GET /output-segment-enforce
+
+用户切换 → invoke("update_output_segment_enforce_settings", { enabled })
+  → Rust PUT /output-segment-enforce { "enabled": bool }
+```
+
+两条 Rust 请求均复用本地 Bearer token、`http_client().no_proxy()` 与统一 HTTP 错误处理。PUT 不提交
+`min_len`，因此桌面开关不会覆盖管理面板或配置文件中设置的阈值；响应直接回写 `{enabled, min_len}`。
+
+---
+
 ## HTTP：Reality Prompt Assets 设置
 
 Chat 偏好「世界」页只管理 Reality Prompt Assets，不复用 Dream 设置接口。

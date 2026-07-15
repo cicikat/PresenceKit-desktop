@@ -91,6 +91,7 @@ import { CoplaySettingsPage } from './components/CoplaySettingsPage';
 import { ConnectionSettingsPage } from './components/ConnectionSettingsPage';
 import { ToolLoopSettingsPage } from './components/ToolLoopSettingsPage';
 import { ThinkingSettingsPage } from './components/ThinkingSettingsPage';
+import { OutputSegmentEnforceSettingsPage } from './components/OutputSegmentEnforceSettingsPage';
 import { ModelRoutingSettingsPage } from './components/ModelRoutingSettingsPage';
 import { DesktopTtsSettingsPage } from './components/DesktopTtsSettingsPage';
 import { useI18n, type Language } from '../../shared/i18n';
@@ -245,6 +246,8 @@ function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHea
                 <ToolLoopSettingsPage />
                 <div style={{ height: 1, background: 'var(--paper-edge)' }} />
                 <ThinkingSettingsPage />
+                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
+                <OutputSegmentEnforceSettingsPage />
               </>
             ) : tab === 'appearance' ? (
               <>

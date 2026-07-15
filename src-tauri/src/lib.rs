@@ -2137,6 +2137,28 @@ async fn update_thinking_settings(
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
 
+// ── Post-generation paragraph fallback (Brief 72) ─────────────────────────────
+
+#[tauri::command]
+async fn get_output_segment_enforce_settings(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let resp = authorized_request(&cfg, http_client()?.get(backend_url(&cfg, "/output-segment-enforce")))
+        .send().await.map_err(|e| e.to_string())?;
+    require_success(resp).await?.json().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn update_output_segment_enforce_settings(
+    app: tauri::AppHandle,
+    enabled: bool,
+) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let resp = authorized_request(&cfg, http_client()?.put(backend_url(&cfg, "/output-segment-enforce")))
+        .json(&serde_json::json!({ "enabled": enabled }))
+        .send().await.map_err(|e| e.to_string())?;
+    require_success(resp).await?.json().await.map_err(|e| e.to_string())
+}
+
 // ── Dream Seed ────────────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -2433,6 +2455,8 @@ pub fn run() {
             update_tool_loop_settings,
             get_thinking_settings,
             update_thinking_settings,
+            get_output_segment_enforce_settings,
+            update_output_segment_enforce_settings,
             get_lorebook_entries,
             add_lorebook_entry,
             update_lorebook_entry,
