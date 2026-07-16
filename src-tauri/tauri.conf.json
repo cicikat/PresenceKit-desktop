@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "PresenceKit Desktop",
+  "productName": "PresenceKit-desktop",
   "version": "0.1.0",
   "identifier": "com.presencekit.desktop",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "tauri-app",
+        "title": "PresenceKit-desktop",
         "width": 800,
         "height": 600
       },
