@@ -210,7 +210,7 @@ assistant correlation ID 已对齐：`HTTP turn_id = HTTP msg_id = WS channel_me
 
 `POST /desktop/wake` 有 assistant reply 时同样返回 `turn_id` / `msg_id`，并遵循相同 correlation ID 约束。
 
-重要差异：旧 v1 方案写明 Tauri 客户端最终不应调用 `/desktop/chat`，而应通过 WS `user_message` 发消息，再用 WS `assistant_message` 收回复。当前尚未做到。
+旧 v1 方案的 WS `user_message` 设想已降级为 post-v0.1 roadmap，见 [protocol-v0.md](protocol-v0.md)；当前 HTTP 路径为正式契约。
 
 ---
 
