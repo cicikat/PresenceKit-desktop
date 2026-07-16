@@ -4,6 +4,24 @@
 
 ---
 
+## 当前仍存在（2026-07-16 清盘后权威清单）
+
+- **支出意向单确认 / 拒绝** — `open`（外部前置）。等后端 Brief 63 冻结鉴权、二次确认和审计契约后实现写入口。
+- **v1 WS 协议与用户输入 WS 化** — `post-v0.1`，见 [protocol-v0.md](protocol-v0.md)；v0.1 的 HTTP `/desktop/chat` 是正式契约。
+- **TTS 合成播放** — `post-v0.1`，见 [release-v0.1.md](release-v0.1.md)。
+- **花园 harvest / vase 详情与操作** — `post-v0.1`，后端先冻结详情和写接口；见 [release-v0.1.md](release-v0.1.md)。
+- **日记 emotion 数据** — `post-v0.1`；客户端已安全判空，见 [release-v0.1.md](release-v0.1.md)。
+- **Garden daily lifecycle 端到端体感** — `observe`；需至少一周真实周期记录发言频率和多事件体感。
+- **旧客户端迁移状态地图** — `observe`；继续以 `ARCHITECTURE.md` 迁移关系和本文为准。
+- **ChatPanel 对账 timer 竞态测试** — `post-v0.1`；下一步把 timer orchestration 抽为纯控制器，用 vitest 假时钟覆盖 WS 先到、timer 先到和 fallback 命中。
+
+本轮已关闭：Panes 历史 TS 条目、backend-integration L213、ChatPanel 三处内联 `15000`、Tauri 模板名、Header 偏好死按钮、system 消息气泡、SubFlow 跨角色单桶、Dream 卸载 ChatPanel。后两项经现有代码核对已先于本工单修好；关闭证据保留在下方历史快照和 Git 历史。
+
+## 历史快照（已由上方权威清单覆盖）
+
+<details>
+<summary>展开查看清盘前的原始条目与修复背景</summary>
+
 ## 阻塞：支出意向单确认 / 拒绝仍依赖后端 Brief 63
 
 观测面板已读取 `/spend/mandates` 并展示状态，但后端当前只有 Brief 64 的只读端点，没有经过安全门的
@@ -173,6 +191,8 @@ ChatPanel 已实现 Dream active 期间按 `msg_id` park Reality `channel_messag
 **建议**：像 Activity overlay 一样保持 ChatPanel 挂载，仅在 Dream 期间隐藏 Reality UI，再验证退梦 flush。
 
 ---
+
+</details>
 
 ## 已修复
 
