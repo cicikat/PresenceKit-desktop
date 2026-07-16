@@ -14,8 +14,9 @@
 - **Garden daily lifecycle 端到端体感** — `observe`；需至少一周真实周期记录发言频率和多事件体感。
 - **旧客户端迁移状态地图** — `observe`；继续以 `ARCHITECTURE.md` 迁移关系和本文为准。
 - **ChatPanel 对账 timer 竞态测试** — `post-v0.1`；下一步把 timer orchestration 抽为纯控制器，用 vitest 假时钟覆盖 WS 先到、timer 先到和 fallback 命中。
+- **Dream 期间 Reality park / 退梦 flush 端到端验收** — `open`。当前 `ChatPanel` 已保持挂载，Dream 使用 overlay，静态前置条件已满足；仍需在真实后端连接下于入梦期间注入 Reality `channel_message` + `message_segments`，确认 Dream UI 不显示、退梦只 flush 一次且分段不重复。
 
-本轮已关闭：Panes 历史 TS 条目、backend-integration L213、ChatPanel 三处内联 `15000`、Tauri 模板名、Header 偏好死按钮、system 消息气泡、SubFlow 跨角色单桶、Dream 卸载 ChatPanel。后两项经现有代码核对已先于本工单修好；关闭证据保留在下方历史快照和 Git 历史。
+本轮已关闭：Panes 历史 TS 条目、backend-integration L213、ChatPanel 三处内联 `15000`、Tauri 模板名、Header 偏好死按钮、system 消息气泡、SubFlow 跨角色单桶。system 样式经现有代码核对已先于本工单修好；关闭证据保留在下方历史快照和 Git 历史。
 
 ## 历史快照（已由上方权威清单覆盖）
 
