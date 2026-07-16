@@ -724,7 +724,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
                 const contentHash = wakeResp.reply.slice(0, 32).replace(/\s+/g, ' ');
                 const now = Date.now();
                 recentFallbacksRef.current = [
-                  ...recentFallbacksRef.current.filter(r => now - r.renderedAt < 15000),
+                  ...pruneRenderedFallbacks(recentFallbacksRef.current, now),
                   { sourceKind: 'wake' as const, msgId, normalizedHash, renderedAt: now, renderedMsgIds: fallbackIds },
                 ];
                 if (msgId) setBoundedMapEntry(wsMsgIdToLocalIdsRef.current, msgId, fallbackIds, MAX_WS_MSG_ID_MAPPINGS);
@@ -1468,7 +1468,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         const fallbackIds = parts.map(() => newId());
         const now = Date.now();
         recentFallbacksRef.current = [
-          ...recentFallbacksRef.current.filter(r => now - r.renderedAt < 15000),
+          ...pruneRenderedFallbacks(recentFallbacksRef.current, now),
           { sourceKind: 'send' as const, msgId, normalizedHash, renderedAt: now, renderedMsgIds: fallbackIds },
         ];
         if (msgId) setBoundedMapEntry(wsMsgIdToLocalIdsRef.current, msgId, fallbackIds, MAX_WS_MSG_ID_MAPPINGS);
@@ -1541,7 +1541,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         const fallbackIds = parts.map(() => newId());
         const now = Date.now();
         recentFallbacksRef.current = [
-          ...recentFallbacksRef.current.filter(r => now - r.renderedAt < 15000),
+          ...pruneRenderedFallbacks(recentFallbacksRef.current, now),
           { sourceKind: 'upload' as const, msgId, normalizedHash, renderedAt: now, renderedMsgIds: fallbackIds },
         ];
         if (msgId) setBoundedMapEntry(wsMsgIdToLocalIdsRef.current, msgId, fallbackIds, MAX_WS_MSG_ID_MAPPINGS);
