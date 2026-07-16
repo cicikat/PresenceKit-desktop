@@ -5,10 +5,11 @@ import { Tag, MicroLabel } from './UIKit';
 import { MOOD_HUE, MOOD_LABEL_EN, FOCUS_LABEL_EN } from './UIKit';
 import { MOOD_TABLE } from '../../../shared/state/store';
 import { chatThemeFontSize } from '../../../shared/chatAppearance';
-import { getUIPref, setUIPref } from '../../../shared/uiPreferences';
+import { getUIPref, removeUIPref, setUIPref } from '../../../shared/uiPreferences';
 import type { Mood } from '../../../shared/state/store';
 import { useI18n } from '../../../shared/i18n';
 import { translateLegacyText } from '../../../shared/i18n/legacy';
+import { getActiveCharacterInfo, subscribeActiveCharacter } from '../../../shared/activeCharacter';
 
 interface FlowEntry {
   id: string;
@@ -57,21 +58,33 @@ export function SubFlow({ engine }: { engine: any }) {
   const { language } = useI18n();
   const [state, setState] = useState(engine.get());
   useEffect(() => engine.subscribe(setState), [engine]);
+  const [charId, setCharId] = useState(() => getActiveCharacterInfo().id);
+  useEffect(() => subscribeActiveCharacter(info => setCharId(info.id)), []);
 
   // ── persistent timeline (uiPreferences file backend, 8-hour window) ──────
   const EIGHT_HOURS = 8 * 3_600_000;
-  const STORAGE_KEY = 'subflow_timeline';
+  const LEGACY_STORAGE_KEY = 'subflow_timeline';
+  const storageKey = `subflow_timeline:${charId || 'unassigned'}`;
 
   function loadTimeline(): FlowEntry[] {
-    let parsed = getUIPref<FlowEntry[] | null>(STORAGE_KEY, null);
+    let parsed = getUIPref<FlowEntry[] | null>(storageKey, null);
     if (parsed === null) {
-      // one-time migration from the pre-uiPreferences bare localStorage key
+      // One-time migration: assign the old global bucket to the character active now.
+      const legacyPref = getUIPref<FlowEntry[] | null>(LEGACY_STORAGE_KEY, null);
+      if (legacyPref) {
+        parsed = legacyPref;
+        setUIPref(storageKey, parsed);
+        removeUIPref(LEGACY_STORAGE_KEY);
+      }
+    }
+    if (parsed === null) {
+      // Older migration from the pre-uiPreferences bare localStorage key.
       try {
-        const legacy = localStorage.getItem(STORAGE_KEY);
+        const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
         if (legacy) {
           parsed = JSON.parse(legacy);
-          setUIPref(STORAGE_KEY, parsed);
-          localStorage.removeItem(STORAGE_KEY);
+          setUIPref(storageKey, parsed);
+          localStorage.removeItem(LEGACY_STORAGE_KEY);
         }
       } catch {
         parsed = null;
@@ -82,6 +95,10 @@ export function SubFlow({ engine }: { engine: any }) {
   }
 
   const [timeline, setTimeline] = useState<FlowEntry[]>(loadTimeline);
+
+  useEffect(() => {
+    setTimeline(loadTimeline());
+  }, [storageKey]);
 
   useEffect(() => {
     const entryText = state.activity
@@ -96,10 +113,10 @@ export function SubFlow({ engine }: { engine: any }) {
         { id: String(Date.now()), text: entryText, mood: state.mood as Mood, timestamp: Date.now() },
         ...prev.filter(e => Date.now() - e.timestamp < EIGHT_HOURS),
       ];
-      setUIPref(STORAGE_KEY, next);
+      setUIPref(storageKey, next);
       return next;
     });
-  }, [state.activity, state.mood, state.focus]);
+  }, [state.activity, state.mood, state.focus, storageKey]);
 
   // ── 30s tick so relative timestamps stay live ─────────────────────────────
   const [, setTick] = useState(0);

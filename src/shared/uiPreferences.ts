@@ -92,6 +92,17 @@ export function setUIPref<T>(key: string, value: T): void {
   scheduleSave();
 }
 
+export function removeUIPref(key: string): void {
+  prefs.delete(key);
+  try {
+    localStorage.removeItem(STORAGE_PREFIX + key);
+  } catch {
+    // localStorage unavailable — the file-backed map is still authoritative.
+  }
+  window.dispatchEvent(new CustomEvent(PREF_CHANGE_EVENT, { detail: { key } }));
+  scheduleSave();
+}
+
 export function onUIPrefChange(handler: (key: string) => void): () => void {
   const listener = (e: Event) => handler((e as CustomEvent<{ key: string }>).detail.key);
   window.addEventListener(PREF_CHANGE_EVENT, listener);

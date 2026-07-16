@@ -328,7 +328,7 @@ mood 真值。Chat 偏好 “3 · 桌宠” 页可切换粒子风格、关闭全
 - `focusPhrase`：7 个固定映射，均以 `，` 开头、`。` 结尾；无匹配时降级为 `。`
 - `idleTrailing`：`presence === 'idle'` 时追加 `（他安静了一会儿。）`
 
-Timeline：`localStorage`（key `subflow_timeline`）持久化，8 小时窗口内的条目全部保留；去重按持久化首条 `timeline[0].text` 比对（不含 mood——同文案不同心情不再刷新条目），而非 render-scoped 的 ref，天然抗组件重挂（切 Sidebar tab 等）触发的误插入；显示文本 = `activity.text`，activity 为 null 时用 `state.focus` 中文名兜底；30s 定时器驱动时间标签重渲染。
+Timeline：`uiPreferences` 按激活角色分桶持久化（key `subflow_timeline:{charId}`），8 小时窗口内的条目全部保留；旧的全局 `subflow_timeline` 会在首次读取时一次性归入当时激活角色并删除。去重按持久化首条 `timeline[0].text` 比对（不含 mood——同文案不同心情不再刷新条目），而非 render-scoped 的 ref，天然抗组件重挂（切 Sidebar tab 等）触发的误插入；显示文本 = `activity.text`，activity 为 null 时用 `state.focus` 中文名兜底；30s 定时器驱动时间标签重渲染。
 
 数据源：
 
