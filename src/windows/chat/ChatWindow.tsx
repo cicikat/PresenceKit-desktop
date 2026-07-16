@@ -1550,7 +1550,7 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivi
           )}
           <div style={{ flex: 1, minWidth: 0 }}>
             {groupView === null ? (
-              <ChatPanel key={charSwitchKey} engine={engine} chatRectRef={chatRectRef} headerVisible={chatHeaderVisible} chatFontSize={appearance.chatFontSize} dreamActive={dreamWindowOpen} characterAvatarDataUrl={characterAvatarDataUrl} onOpenRoom={onRoomOpen} />
+              <ChatPanel key={charSwitchKey} engine={engine} chatRectRef={chatRectRef} headerVisible={chatHeaderVisible} chatFontSize={appearance.chatFontSize} dreamActive={dreamWindowOpen} characterAvatarDataUrl={characterAvatarDataUrl} onOpenRoom={onRoomOpen} onOpenPrefs={() => setPrefsOpen(true)} />
             ) : groupView === 'list' ? (
               <GroupListPanel
                 onSelectGroup={id => setGroupView(id)}

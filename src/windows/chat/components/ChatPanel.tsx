@@ -449,7 +449,7 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
 
 // ── 主组件 ──────────────────────────────────────────────────────────────────
 
-export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontSize = 14, dreamActive = false, characterAvatarDataUrl = null, onOpenRoom }: any) {
+export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontSize = 14, dreamActive = false, characterAvatarDataUrl = null, onOpenRoom, onOpenPrefs }: any) {
   const { language, t } = useI18n();
   const [state, setState] = useState(engine.get());
   useEffect(() => engine.subscribe(setState), [engine]);
@@ -1714,7 +1714,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
             </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-            <Btn icon="settings" dense>偏好</Btn>
+            <Btn icon="settings" dense onClick={onOpenPrefs}>偏好</Btn>
             <span className="mono" style={{ fontSize: chatThemeFontSize(9.5), color: 'var(--ink-4)', letterSpacing: 1.4 }}>
               {messages.filter(m => m.role === 'user' || m.role === 'assistant').length} ENTRIES
             </span>
