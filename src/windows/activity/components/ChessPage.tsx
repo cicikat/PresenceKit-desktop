@@ -9,8 +9,10 @@ import {
   type ChessAiStyle,
 } from '../../../shared/api/activity-api';
 import { CompanionSidebar } from './CompanionSidebar';
+import { GameSetupControls, type GameSetupOption } from './GameSetupControls';
 import { getUIPref, onUIPrefChange } from '../../../shared/uiPreferences';
 import { getActiveCharacterName } from '../../../shared/activeCharacter';
+import { useI18n } from '../../../shared/i18n';
 
 const AI_OPPONENT: ChessOpponent = 'character_ai';
 
@@ -327,8 +329,20 @@ export function ChessPage() {
   const [boardTheme, setBoardTheme] = useState(() => getUIPref('activity.board.theme', 'classic_wood'));
   const [pieceStyle, setPieceStyle] = useState(() => getUIPref('activity.chess.pieceStyle', 'unicode'));
   const [showDebug, setShowDebug] = useState(() => getUIPref('activity.debug', false));
-  const [opponent, setOpponent] = useState<ChessOpponent>('human');
+  const [opponent, setOpponent] = useState<ChessOpponent>(AI_OPPONENT);
   const [aiStyle, setAiStyle] = useState<ChessAiStyle>('balanced');
+  const { t } = useI18n();
+
+  const opponentOptions: GameSetupOption[] = [
+    { value: AI_OPPONENT, label: `${getActiveCharacterName()}执黑 / AI 对手` },
+    { value: 'human', label: t('activity.gameSetup.opponent.human') },
+  ];
+  const styleOptions: GameSetupOption[] = [
+    { value: 'balanced', label: t('activity.gameSetup.style.balanced') },
+    { value: 'gentle', label: t('activity.gameSetup.style.gentle') },
+    { value: 'serious', label: t('activity.gameSetup.style.serious') },
+    { value: 'teaching', label: t('activity.gameSetup.style.teaching') },
+  ];
 
   const boardContainerRef = useRef<HTMLDivElement>(null);
   const [dynamicSquare, setDynamicSquare] = useState(SQUARE);
@@ -543,39 +557,18 @@ export function ChessPage() {
       {/* controls */}
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
         {!isActive && !isFinished && (
-          <>
-            <select
-              value={opponent}
-              onChange={e => setOpponent(e.target.value as ChessOpponent)}
-              style={{
-                fontFamily: 'inherit', fontSize: 12, padding: '6px 10px',
-                borderRadius: 'var(--radius-sm)', border: '1px solid var(--paper-edge)',
-                background: 'var(--paper-2)', color: 'var(--ink)', cursor: 'pointer',
-              }}
-            >
-              <option value="human">本地双人</option>
-              <option value={AI_OPPONENT}>{getActiveCharacterName()}执黑 / AI 对手</option>
-            </select>
-            {opponent === AI_OPPONENT && (
-              <select
-                value={aiStyle}
-                onChange={e => setAiStyle(e.target.value as ChessAiStyle)}
-                style={{
-                  fontFamily: 'inherit', fontSize: 12, padding: '6px 10px',
-                  borderRadius: 'var(--radius-sm)', border: '1px solid var(--paper-edge)',
-                  background: 'var(--paper-2)', color: 'var(--ink)', cursor: 'pointer',
-                }}
-              >
-                <option value="balanced">均衡</option>
-                <option value="gentle">温和</option>
-                <option value="serious">严肃</option>
-                <option value="teaching">教学</option>
-              </select>
-            )}
-            <Btn variant="solid" onClick={handleStart} disabled={loading}>
-              {loading ? '准备中…' : '开始对局'}
-            </Btn>
-          </>
+          <GameSetupControls
+            opponentOptions={opponentOptions}
+            opponentValue={opponent}
+            onOpponentChange={v => setOpponent(v as ChessOpponent)}
+            styleOptions={styleOptions}
+            styleValue={aiStyle}
+            onStyleChange={v => setAiStyle(v as ChessAiStyle)}
+            showStyleSelect={opponent === AI_OPPONENT}
+            onStart={handleStart}
+            startLabel={loading ? t('activity.gameSetup.starting') : t('activity.gameSetup.start')}
+            loading={loading}
+          />
         )}
         {(isActive || isFinished) && (
           <>

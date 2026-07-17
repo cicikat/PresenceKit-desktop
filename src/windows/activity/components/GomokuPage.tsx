@@ -8,8 +8,10 @@ import {
   type GomokuAiStyle,
 } from '../../../shared/api/activity-api';
 import { CompanionSidebar } from './CompanionSidebar';
+import { GameSetupControls, type GameSetupOption } from './GameSetupControls';
 import { getUIPref, onUIPrefChange } from '../../../shared/uiPreferences';
 import { getActiveCharacterName } from '../../../shared/activeCharacter';
+import { useI18n } from '../../../shared/i18n';
 
 const AI_OPPONENT: GomokuOpponent = 'character_ai';
 
@@ -24,13 +26,6 @@ const BOARD_THEMES: Record<string, Record<string, string>> = {
 const BOARD_SIZE = 15;
 const CELL = 34;   // default cell size
 const MIN_CELL = 14;
-
-const AI_STYLE_LABELS: Record<GomokuAiStyle, string> = {
-  balanced: '均衡',
-  gentle:   '温和',
-  serious:  '认真',
-  teaching: '教学',
-};
 
 function normalizeGomokuState(
   raw: Omit<GomokuState, 'session_id'> & { session_id?: string | null },
@@ -75,28 +70,6 @@ function Btn({ children, onClick, variant = 'ghost', disabled }: any) {
       color: variant === 'solid' ? 'var(--paper)' : 'var(--ink)',
       fontWeight: variant === 'ghost' ? 500 : 600,
     }}>{children}</button>
-  );
-}
-
-function Select({ value, onChange, children, disabled }: {
-  value: string;
-  onChange: (v: string) => void;
-  children: React.ReactNode;
-  disabled?: boolean;
-}) {
-  return (
-    <select
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      disabled={disabled}
-      style={{
-        fontFamily: 'inherit', fontSize: 12, padding: '5px 8px',
-        borderRadius: 'var(--radius-sm)', border: '1px solid var(--paper-edge)',
-        background: 'var(--paper-2)', color: 'var(--ink)',
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        opacity: disabled ? 0.5 : 1,
-      }}
-    >{children}</select>
   );
 }
 
@@ -206,6 +179,20 @@ export function GomokuPage() {
   const [selectedStyle, setSelectedStyle] = useState<GomokuAiStyle>('balanced');
   const [boardTheme, setBoardTheme] = useState(() => getUIPref('activity.board.theme', 'classic_wood'));
   const [showDebug, setShowDebug] = useState(() => getUIPref('activity.debug', false));
+  const { t } = useI18n();
+
+  const opponentOptions: GameSetupOption[] = [
+    { value: AI_OPPONENT, label: `${getActiveCharacterName()} AI（推荐）` },
+    { value: 'human', label: t('activity.gameSetup.opponent.human') },
+  ];
+  const styleOptions: GameSetupOption[] = [
+    { value: 'balanced', label: t('activity.gameSetup.style.balanced') },
+    { value: 'gentle', label: t('activity.gameSetup.style.gentle') },
+    { value: 'serious', label: t('activity.gameSetup.style.serious') },
+    { value: 'teaching', label: t('activity.gameSetup.style.teaching') },
+  ];
+  const styleLabel = (style: GomokuAiStyle | null | undefined): string =>
+    styleOptions.find(o => o.value === style)?.label ?? style ?? '—';
 
   const boardContainerRef = useRef<HTMLDivElement>(null);
   const [dynamicCell, setDynamicCell] = useState(CELL);
@@ -419,60 +406,39 @@ export function GomokuPage() {
         </div>
       )}
 
-      {/* pre-game settings */}
-      {!isActive && !isFinished && (
-        <div style={{
-          display: 'flex', flexDirection: 'column', gap: 12,
-          padding: '14px 16px', background: 'var(--paper-2)',
-          border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-md)',
-          alignSelf: 'flex-start',
-        }}>
-          <div className="mono" style={{ fontSize: 10, letterSpacing: 1.2, color: 'var(--ink-3)', fontWeight: 600 }}>
-            对局设置
-          </div>
-          <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-            <label style={{ fontSize: 12, color: 'var(--ink-2)', whiteSpace: 'nowrap' }}>对手</label>
-            <Select value={selectedOpponent} onChange={v => setSelectedOpponent(v as GomokuOpponent)} disabled={loading}>
-              <option value={AI_OPPONENT}>{getActiveCharacterName()} AI（推荐）</option>
-              <option value="human">本地双人</option>
-            </Select>
-          </div>
-          {selectedOpponent === AI_OPPONENT && (
-            <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-              <label style={{ fontSize: 12, color: 'var(--ink-2)', whiteSpace: 'nowrap' }}>风格</label>
-              <Select value={selectedStyle} onChange={v => setSelectedStyle(v as GomokuAiStyle)} disabled={loading}>
-                <option value="balanced">均衡</option>
-                <option value="gentle">温和</option>
-                <option value="serious">认真</option>
-                <option value="teaching">教学</option>
-              </Select>
-            </div>
-          )}
-          <div style={{ marginTop: 4 }}>
-            <Btn variant="solid" onClick={handleStart} disabled={loading}>
-              {loading ? '准备中…' : '开始棋局'}
-            </Btn>
-          </div>
-        </div>
-      )}
-
-      {/* in-game controls */}
-      {(isActive || isFinished) && (
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          {isFinished && (
-            <Btn variant="solid" onClick={handleStart} disabled={loading}>再来一局</Btn>
-          )}
-          <Btn onClick={handleClose} disabled={loading}>结束棋局</Btn>
-          {isActive && (
-            <span className="mono" style={{ fontSize: 11.5, color: 'var(--ink-3)', letterSpacing: 0.8 }}>
-              {isAIMode && aiThinking
-                ? `${getActiveCharacterName()}思考中…`
-                : `当前回合：${gameState?.current_turn === 'black' ? '⚫ 黑棋' : '⚪ 白棋'}`
-              }
-            </span>
-          )}
-        </div>
-      )}
+      {/* controls */}
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        {!isActive && !isFinished && (
+          <GameSetupControls
+            opponentOptions={opponentOptions}
+            opponentValue={selectedOpponent}
+            onOpponentChange={v => setSelectedOpponent(v as GomokuOpponent)}
+            styleOptions={styleOptions}
+            styleValue={selectedStyle}
+            onStyleChange={v => setSelectedStyle(v as GomokuAiStyle)}
+            showStyleSelect={selectedOpponent === AI_OPPONENT}
+            onStart={handleStart}
+            startLabel={loading ? t('activity.gameSetup.starting') : t('activity.gameSetup.start')}
+            loading={loading}
+          />
+        )}
+        {(isActive || isFinished) && (
+          <>
+            {isFinished && (
+              <Btn variant="solid" onClick={handleStart} disabled={loading}>再来一局</Btn>
+            )}
+            <Btn onClick={handleClose} disabled={loading}>结束棋局</Btn>
+            {isActive && (
+              <span className="mono" style={{ fontSize: 11.5, color: 'var(--ink-3)', letterSpacing: 0.8 }}>
+                {isAIMode && aiThinking
+                  ? `${getActiveCharacterName()}思考中…`
+                  : `当前回合：${gameState?.current_turn === 'black' ? '⚫ 黑棋' : '⚪ 白棋'}`
+                }
+              </span>
+            )}
+          </>
+        )}
+      </div>
 
       {/* board row: left=board+info, right=companion */}
       <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', position: 'relative' }}>
@@ -495,7 +461,7 @@ export function GomokuPage() {
                 {gameState?.opponent === AI_OPPONENT && (
                   <>
                     <div>AI 执：白棋</div>
-                    <div>风格：{AI_STYLE_LABELS[gameState.ai_style as GomokuAiStyle] ?? gameState.ai_style ?? '—'}</div>
+                    <div>风格：{styleLabel(gameState.ai_style as GomokuAiStyle)}</div>
                   </>
                 )}
                 <div>黑棋先手</div>

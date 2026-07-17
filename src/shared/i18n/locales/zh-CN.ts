@@ -27,6 +27,13 @@ export const zhCN = {
   'chat.history.waiting.network': '正在等待后端连接…（网络错误）',
   'chat.history.waiting.unauthorized': '正在等待后端连接…（未授权）',
   'chat.history.waiting.invalid': '正在等待后端连接…（格式异常）',
+  'activity.gameSetup.opponent.human': '本地双人',
+  'activity.gameSetup.style.balanced': '均衡',
+  'activity.gameSetup.style.gentle': '温和',
+  'activity.gameSetup.style.serious': '严肃',
+  'activity.gameSetup.style.teaching': '教学',
+  'activity.gameSetup.start': '开始对局',
+  'activity.gameSetup.starting': '准备中…',
 } as const;
 
 export type MessageKey = keyof typeof zhCN;

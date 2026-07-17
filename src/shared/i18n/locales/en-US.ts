@@ -29,4 +29,11 @@ export const enUS: Record<MessageKey, string> = {
   'chat.history.waiting.network': 'Waiting for the backend… (Network error)',
   'chat.history.waiting.unauthorized': 'Waiting for the backend… (Unauthorized)',
   'chat.history.waiting.invalid': 'Waiting for the backend… (Invalid format)',
+  'activity.gameSetup.opponent.human': 'Local two-player',
+  'activity.gameSetup.style.balanced': 'Balanced',
+  'activity.gameSetup.style.gentle': 'Gentle',
+  'activity.gameSetup.style.serious': 'Serious',
+  'activity.gameSetup.style.teaching': 'Teaching',
+  'activity.gameSetup.start': 'Start match',
+  'activity.gameSetup.starting': 'Starting…',
 };
