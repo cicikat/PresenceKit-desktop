@@ -40,6 +40,16 @@ export function CompanionSidebar({ activityId, sessionId, sessionActive, session
       flexShrink: 0,
       display: 'flex',
       flexDirection: 'column',
+      minHeight: 0,
+      // Viewport-constrained + sticky (cc-tasks/33 §C): ChessPage/GomokuPage's own root
+      // is the scroll container (overflowY: auto over header+controls+board+companion),
+      // so without a height cap the panel just grows with its message list and drags the
+      // whole page into one long scroll. Sticking it near the top of that scroll viewport
+      // with a viewport-relative maxHeight gives the message list room to become its own
+      // scroll region (see ActivityCompanionPanel) instead.
+      position: 'sticky',
+      top: 20,
+      maxHeight: 'calc(100vh - 40px)',
     }}>
       <ActivityCompanionPanel
         activityId={activityId}

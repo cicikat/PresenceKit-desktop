@@ -237,7 +237,7 @@ export function ActivityCompanionPanel({ activityId, sessionId, sessionActive, s
     <div style={{
       display: 'flex', flexDirection: 'column',
       writingMode: 'horizontal-tb',
-      width: '100%', minWidth: 0, minHeight: 360,
+      width: '100%', minWidth: 0, minHeight: 0, maxHeight: '100%',
       background: 'var(--paper-2)', border: '1px solid var(--paper-edge)',
       borderRadius: 'var(--radius-md)', overflow: 'hidden',
     }}>
