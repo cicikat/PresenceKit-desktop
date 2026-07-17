@@ -3,6 +3,7 @@ import { dreamChat } from '../../../shared/api/dream';
 import type { DreamMessage } from '../../../shared/api/dream-types';
 import type { NarrativeSegment } from '../../../shared/api/types';
 import { armHttpPseudoStream } from '../../../shared/api/pseudoStreamText';
+import { parseIncremental } from '../../../shared/api/incrementalNarrativeParser';
 
 let _id = 0;
 function newId() { return `dm-${Date.now()}-${++_id}`; }
@@ -47,14 +48,18 @@ export function useDreamChat(onExited: () => void) {
     const disarmStream = armHttpPseudoStream(delta => {
       streamText += delta;
       const normalized = normalizeDreamText(streamText);
+      // Recompute segments from the full accumulated buffer each delta (cc-tasks/33 §A):
+      // the reply is short enough that a full re-parse is cheapest, and it naturally
+      // gives the trailing in-flight segment its optimistic render (see parser doc comment).
+      const segments = parseIncremental(normalized);
       if (streamId === null) {
         streamId = newId();
         setStreamingActive(true);
         const id = streamId;
-        setMessages(prev => [...prev, { id, role: 'her', text: normalized }]);
+        setMessages(prev => [...prev, { id, role: 'her', text: normalized, segments }]);
       } else {
         const id = streamId;
-        setMessages(prev => prev.map(m => (m.id === id ? { ...m, text: normalized } : m)));
+        setMessages(prev => prev.map(m => (m.id === id ? { ...m, text: normalized, segments } : m)));
       }
     });
 
