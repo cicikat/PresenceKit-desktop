@@ -93,6 +93,7 @@ import { ToolLoopSettingsPage } from './components/ToolLoopSettingsPage';
 import { ThinkingSettingsPage } from './components/ThinkingSettingsPage';
 import { OutputSegmentEnforceSettingsPage } from './components/OutputSegmentEnforceSettingsPage';
 import { ModelRoutingSettingsPage } from './components/ModelRoutingSettingsPage';
+import { CharacterModelRoutingSettingsPage } from './components/CharacterModelRoutingSettingsPage';
 import { DesktopTtsSettingsPage } from './components/DesktopTtsSettingsPage';
 import { useI18n, type Language } from '../../shared/i18n';
 
@@ -240,6 +241,8 @@ function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHea
                 <ConnectionSettingsPage />
                 <div style={{ height: 1, background: 'var(--paper-edge)' }} />
                 <ModelRoutingSettingsPage />
+                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
+                <CharacterModelRoutingSettingsPage />
                 <div style={{ height: 1, background: 'var(--paper-edge)' }} />
                 <DesktopTtsSettingsPage />
                 <div style={{ height: 1, background: 'var(--paper-edge)' }} />
