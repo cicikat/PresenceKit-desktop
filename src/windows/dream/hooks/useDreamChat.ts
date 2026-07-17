@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from 'react';
 import { dreamChat } from '../../../shared/api/dream';
 import type { DreamMessage } from '../../../shared/api/dream-types';
 import type { NarrativeSegment } from '../../../shared/api/types';
+import { armHttpPseudoStream } from '../../../shared/api/pseudoStreamText';
 
 let _id = 0;
 function newId() { return `dm-${Date.now()}-${++_id}`; }
@@ -10,14 +11,17 @@ function normalizeDreamText(text: string): string {
   return text.replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n');
 }
 
-// Dream chat is HTTP-primary: replies come via the dreamChat() HTTP response.
-// WS channel_message is NOT subscribed here — all WS channel_messages are
-// source="reality" (backend invariant), and the dream pipeline never pushes
-// via WS. Subscribing here would cause reality scheduler triggers to appear
-// in the Dream UI during REALITY_AFTERGLOW or race windows (P0 dream leak fix).
+// Dream chat is HTTP-primary: the reply text comes via the dreamChat() HTTP
+// response. Brief 84 added a server-side pseudo-stream typewriter replay that
+// plays over WS *before* that HTTP response resolves (same message_stream_*
+// frames 1v1 owner chat uses); see armHttpPseudoStream for how frames are told
+// apart from Stage/1v1 traffic on the same connection. Canonical
+// `channel_message`/`message_segments` are still NOT subscribed here — the
+// dream pipeline never pushes those over WS (backend invariant unchanged).
 export function useDreamChat(onExited: () => void) {
   const [messages, setMessages] = useState<DreamMessage[]>([]);
   const [loading, setLoading] = useState(false);
+  const [streamingActive, setStreamingActive] = useState(false);
   const onExitedRef = useRef(onExited);
   onExitedRef.current = onExited;
 
@@ -37,27 +41,59 @@ export function useDreamChat(onExited: () => void) {
 
     setMessages(prev => [...prev, { id: newId(), role: 'user', text: trimmed }]);
     setLoadingState(true);
+
+    let streamId: string | null = null;
+    let streamText = '';
+    const disarmStream = armHttpPseudoStream(delta => {
+      streamText += delta;
+      const normalized = normalizeDreamText(streamText);
+      if (streamId === null) {
+        streamId = newId();
+        setStreamingActive(true);
+        const id = streamId;
+        setMessages(prev => [...prev, { id, role: 'her', text: normalized }]);
+      } else {
+        const id = streamId;
+        setMessages(prev => prev.map(m => (m.id === id ? { ...m, text: normalized } : m)));
+      }
+    });
+
     try {
       const resp = await dreamChat(trimmed);
+      disarmStream();
       if (resp.error) {
+        if (streamId) {
+          const id: string = streamId;
+          setMessages(prev => prev.filter(m => m.id !== id));
+        }
         setMessages(prev => [...prev, { id: newId(), role: 'system', text: `（${resp.error}）` }]);
       } else {
         if (resp.exit_accepted || resp.force_exited) {
           onExitedRef.current();
         }
         if (resp.reply) {
-          const localId = newId();
-          const msg: DreamMessage = {
-            id: localId,
-            role: 'her',
+          const finalPatch = {
             text: normalizeDreamText(resp.reply),
             segments: resp.segments as NarrativeSegment[] | undefined,
             segmentedContent: resp.segmented_content ? normalizeDreamText(resp.segmented_content) : undefined,
           };
-          setMessages(prev => [...prev, msg]);
+          if (streamId) {
+            const id: string = streamId;
+            setMessages(prev => prev.map(m => (m.id === id ? { ...m, ...finalPatch } : m)));
+          } else {
+            setMessages(prev => [...prev, { id: newId(), role: 'her', ...finalPatch }]);
+          }
+        } else if (streamId) {
+          const id: string = streamId;
+          setMessages(prev => prev.filter(m => m.id !== id));
         }
       }
     } catch (e) {
+      disarmStream();
+      if (streamId) {
+        const id: string = streamId;
+        setMessages(prev => prev.filter(m => m.id !== id));
+      }
       const msg = String(e);
       const m = msg.match(/\bHTTP (\d+)/);
       const status = m ? parseInt(m[1], 10) : null;
@@ -68,8 +104,9 @@ export function useDreamChat(onExited: () => void) {
       setMessages(prev => [...prev, { id: newId(), role: 'system', text: errText }]);
     } finally {
       setLoadingState(false);
+      setStreamingActive(false);
     }
   }, []);
 
-  return { messages, loading, send, addSystemMsg };
+  return { messages, loading, streamingActive, send, addSystemMsg };
 }

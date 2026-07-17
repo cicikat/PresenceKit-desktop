@@ -8,6 +8,8 @@ import { TypingDots } from '../../../shared/ui/TypingDots';
 interface DreamChatPanelProps {
   messages: DreamMessage[];
   loading: boolean;
+  /** True once the pseudo-stream typewriter reply has produced a live bubble in `messages` (Brief 84/29). */
+  streamingActive?: boolean;
   inputDisabled: boolean;
   herDataUrl: string | null;
   onSend: (text: string) => void;
@@ -159,6 +161,7 @@ const DreamMsgRow = memo(function DreamMsgRow({
 export function DreamChatPanel({
   messages,
   loading,
+  streamingActive = false,
   inputDisabled,
   herDataUrl,
   onSend,
@@ -194,7 +197,7 @@ export function DreamChatPanel({
           <DreamMsgRow key={m.id} msg={m} herDataUrl={herDataUrl} />
         ))}
 
-        {loading && (
+        {loading && !streamingActive && (
           <div className="dream-msg dream-msg--her">
             <div className="dream-msg__content">
               <DreamGlowBubble side="left" speaker="HIM" className="dream-glow-bubble--typing">

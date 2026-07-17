@@ -94,7 +94,7 @@ export function DreamWindow({ characterAvatarDataUrl = null, onClose }: DreamWin
     setPhase('ended');
   }, [refreshState]);
 
-  const { messages, loading: chatLoading, send, addSystemMsg } = useDreamChat(handleExited);
+  const { messages, loading: chatLoading, streamingActive, send, addSystemMsg } = useDreamChat(handleExited);
 
   // Keep phase in sync with backend state on every poll.
   // Exception: never interrupt an in-progress enter attempt.
@@ -386,6 +386,7 @@ export function DreamWindow({ characterAvatarDataUrl = null, onClose }: DreamWin
               <DreamChatPanel
                 messages={messages}
                 loading={chatLoading}
+                streamingActive={streamingActive}
                 inputDisabled={inputDisabled || retentionText !== null}
                 herDataUrl={herAvatarDataUrl}
                 onSend={send}

@@ -6,12 +6,17 @@ import {
   type ReadingGroundingFacts,
 } from '../../../shared/api/activity-api';
 import { getActiveCharacterName } from '../../../shared/activeCharacter';
+import { armHttpPseudoStream } from '../../../shared/api/pseudoStreamText';
+
+let _msgId = 0;
+function newMsgId() { return `ac-${Date.now()}-${++_msgId}`; }
 
 type ActivityId = 'gomoku' | 'chess' | 'reading';
 
 type AnyGrounding = GomokuGroundingFacts | ChessGroundingFacts | ReadingGroundingFacts;
 
 interface ChatMessage {
+  id?: string;
   role: 'user' | 'assistant';
   text: string;
   error?: boolean;
@@ -139,6 +144,7 @@ export function ActivityCompanionPanel({ activityId, sessionId, sessionActive, s
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [streamingActive, setStreamingActive] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const prevSessionId = useRef<string | null>(null);
 
@@ -177,15 +183,47 @@ export function ActivityCompanionPanel({ activityId, sessionId, sessionActive, s
     setInput('');
     setMessages(prev => [...prev, { role: 'user', text }]);
     setSending(true);
+
+    // Brief 84 (Emerald-presence): *_chat replies now play a server-side pseudo-stream
+    // typewriter replay over WS before the HTTP response resolves. Surface it live
+    // instead of the static "…" placeholder; fail-open if no frames arrive (WS down /
+    // config off) — the HTTP reply lands whole exactly like before.
+    let streamId: string | null = null;
+    let streamText = '';
+    const disarmStream = armHttpPseudoStream(delta => {
+      streamText += delta;
+      if (streamId === null) {
+        streamId = newMsgId();
+        setStreamingActive(true);
+        const id = streamId;
+        setMessages(prev => [...prev, { id, role: 'assistant', text: streamText }]);
+      } else {
+        const id = streamId;
+        setMessages(prev => prev.map(m => (m.id === id ? { ...m, text: streamText } : m)));
+      }
+    });
+
     try {
       const result = await callChat(activityId, sessionId, text);
+      disarmStream();
       console.debug(`[${activityId}-chat] control`, result.control);
       console.debug(`[${activityId}-chat] grounding`, result.grounding);
-      setMessages(prev => [...prev, { role: 'assistant', text: result.reply, grounding: result.grounding }]);
+      if (streamId) {
+        const id: string = streamId;
+        setMessages(prev => prev.map(m => (m.id === id ? { ...m, text: result.reply, grounding: result.grounding } : m)));
+      } else {
+        setMessages(prev => [...prev, { role: 'assistant', text: result.reply, grounding: result.grounding }]);
+      }
     } catch (e: any) {
+      disarmStream();
+      if (streamId) {
+        const id: string = streamId;
+        setMessages(prev => prev.filter(m => m.id !== id));
+      }
       setMessages(prev => [...prev, { role: 'assistant', text: String(e?.message ?? e), error: true }]);
     } finally {
       setSending(false);
+      setStreamingActive(false);
     }
   };
 
@@ -237,7 +275,7 @@ export function ActivityCompanionPanel({ activityId, sessionId, sessionActive, s
           </div>
         )}
         {messages.map((msg, i) => (
-          <div key={i} style={{
+          <div key={msg.id ?? i} style={{
             alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
             maxWidth: '88%',
           }}>
@@ -261,7 +299,7 @@ export function ActivityCompanionPanel({ activityId, sessionId, sessionActive, s
             )}
           </div>
         ))}
-        {sending && (
+        {sending && !streamingActive && (
           <div style={{ alignSelf: 'flex-start' }}>
             <div style={{
               padding: '6px 10px', borderRadius: '10px 10px 10px 2px',
