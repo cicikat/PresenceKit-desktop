@@ -283,6 +283,10 @@ export interface PromptAssetCharacter {
   kind?: string;
   avatar_url: string | null;
   has_runtime_avatar?: boolean;
+  /** 以下三项由后端 resolve_routing_info() 现算，旧后端（无 Brief 87）不带这些字段 */
+  model_routing?: string | null;
+  effective_profile?: string;
+  resolved_chat_preset?: string;
 }
 
 export interface PromptAssetOption {

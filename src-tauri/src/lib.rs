@@ -2037,14 +2037,6 @@ async fn list_routing_profiles(app: tauri::AppHandle) -> Result<serde_json::Valu
 }
 
 #[tauri::command]
-async fn get_character_model_routing(app: tauri::AppHandle, char_id: String) -> Result<serde_json::Value, String> {
-    let cfg = load_client_config(&app);
-    let resp = authorized_request(&cfg, http_client()?.get(backend_url(&cfg, &format!("/character/{}/model-routing", char_id))))
-        .send().await.map_err(|e| e.to_string())?;
-    require_success(resp).await?.json().await.map_err(|e| e.to_string())
-}
-
-#[tauri::command]
 async fn set_character_model_routing(app: tauri::AppHandle, char_id: String, model_routing: Option<String>) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
     let resp = authorized_request(&cfg, http_client()?.patch(backend_url(&cfg, &format!("/character/{}/model-routing", char_id))))
@@ -2473,7 +2465,6 @@ pub fn run() {
             get_model_routing,
             set_model_routing,
             list_routing_profiles,
-            get_character_model_routing,
             set_character_model_routing,
             get_desktop_tts,
             set_desktop_tts,

@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { getPromptAssets } from '../../../shared/api/backend';
 import type { PromptAssetCharacter } from '../../../shared/api/types';
 import {
-  getCharacterModelRouting,
   listRoutingProfiles,
   setCharacterModelRouting,
   type CharacterModelRoutingInfo,
@@ -26,6 +25,15 @@ function isUnprocessable(error: unknown): boolean {
   return String(error).includes('422');
 }
 
+function routingOf(character: PromptAssetCharacter): CharacterModelRoutingInfo | null {
+  if (character.resolved_chat_preset === undefined) return null;
+  return {
+    model_routing: character.model_routing ?? null,
+    effective_profile: character.effective_profile ?? '',
+    resolved_chat_preset: character.resolved_chat_preset,
+  };
+}
+
 export function CharacterModelRoutingSettingsPage() {
   const { t } = useI18n();
   const [unsupported, setUnsupported] = useState(false);
@@ -45,15 +53,7 @@ export function CharacterModelRoutingSettingsPage() {
         if (!mounted) return;
         setProfiles(profilesResp.profiles);
         setCharacters(assets.characters);
-        const entries = await Promise.all(assets.characters.map(async character => {
-          try {
-            return [character.id, await getCharacterModelRouting(character.id)] as const;
-          } catch {
-            return [character.id, null] as const;
-          }
-        }));
-        if (!mounted) return;
-        setRouting(Object.fromEntries(entries));
+        setRouting(Object.fromEntries(assets.characters.map(character => [character.id, routingOf(character)])));
       } catch (error) {
         if (!mounted) return;
         if (isNotFound(error)) {

@@ -20,10 +20,6 @@ export function listRoutingProfiles(): Promise<RoutingProfilesList> {
   return invoke<RoutingProfilesList>('list_routing_profiles');
 }
 
-export function getCharacterModelRouting(charId: string): Promise<CharacterModelRoutingInfo> {
-  return invoke<CharacterModelRoutingInfo>('get_character_model_routing', { charId });
-}
-
 export function setCharacterModelRouting(charId: string, modelRouting: string | null): Promise<CharacterModelRoutingInfo> {
   return invoke<CharacterModelRoutingInfo>('set_character_model_routing', { charId, modelRouting });
 }
