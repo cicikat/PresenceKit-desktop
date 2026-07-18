@@ -14,7 +14,11 @@
 
 预编译 Windows 安装器见本仓 [GitHub Releases](https://github.com/cicikat/PresenceKit-desktop/releases)。兼容的 [PresenceKit 后端](https://github.com/cicikat/PresenceKit/releases) 版本见对应 Release notes。
 
-安装器未做代码签名，首次运行 Windows SmartScreen 会提示"未识别的应用"——点击**更多信息 → 仍要运行**即可。本项目目前不购买代码签名证书。
+安装器未做代码签名（本项目目前不购买代码签名证书），下载安装前请留意：
+
+- **Edge 浏览器可能会直接拦截下载**，下载栏里点「保留」也不一定生效。遇到这种情况，建议改用 Chrome 下载；或按微软官方步骤手动保留被拦截的下载（[管理不安全网站警告](https://support.microsoft.com/zh-cn/topic/e0aae59d-a67c-2b90-8006-b3f2b8f232ed)）。
+- 首次运行 Windows SmartScreen 会提示"未识别的应用"——点击**更多信息 → 仍要运行**即可，这是未签名安装包的预期提示，不代表安装包有问题。
+- 如果有多块盘，**建议安装/解压到非系统盘**（如 `D:\`），放在 `C:\` 下可能会遇到额外的权限提示和杀毒软件扫描开销。
 
 ---
 

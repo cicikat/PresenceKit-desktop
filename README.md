@@ -14,7 +14,11 @@ This client renders the chat window, the desktop pet, and a read-only garden/dia
 
 Prebuilt Windows installers are on this repo's [GitHub Releases](https://github.com/cicikat/PresenceKit-desktop/releases) page. Check the release notes for the compatible [PresenceKit backend](https://github.com/cicikat/PresenceKit/releases) version.
 
-The installer isn't code-signed, so Windows SmartScreen will show an "unrecognized app" warning on first run — click **More info → Run anyway**. We don't currently buy a code-signing certificate for this project.
+A few things to expect, since the installer isn't code-signed (we don't currently buy a code-signing certificate for this project):
+
+- **Microsoft Edge may block the download outright**, and clicking "Keep" in the download bar doesn't always stick. If that happens, either download with Chrome instead, or follow Microsoft's official steps to keep a blocked download ([Manage warnings about unsafe sites](https://support.microsoft.com/en-us/topic/e0aae59d-a67c-2b90-8006-b3f2b8f232ed)).
+- Windows SmartScreen will show an "unrecognized app" warning on first run — click **More info → Run anyway**. This is expected for an unsigned installer, not a sign of anything wrong.
+- **Install or extract to a non-system drive** (e.g. `D:\`) if you have one. Running from `C:\` can hit extra permission prompts and Windows Defender scan overhead.
 
 ---
 
