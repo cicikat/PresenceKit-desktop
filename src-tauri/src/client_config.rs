@@ -273,12 +273,24 @@ pub struct TokenStatus {
     pub prefix: String,
 }
 
+// config/client.example.json 的模板占位串（"replace-with-desktop-profile-token (...)"）与内置
+// DEFAULT_ADMIN_TOKEN_PLACEHOLDER("CHANGE_ME")不是同一个字符串；用户直接照抄模板文件时，旧的
+// `token != "CHANGE_ME"` 判定会把这串占位符误判成"已配置"。这里额外判 trim 后为空、内置占位符，
+// 以及 example 模板占位符的公共前缀（cc-tasks/35 §1）。
+fn is_placeholder_token(token: &str) -> bool {
+    let trimmed = token.trim();
+    if trimmed.is_empty() || trimmed == DEFAULT_ADMIN_TOKEN_PLACEHOLDER {
+        return true;
+    }
+    trimmed.to_ascii_lowercase().starts_with("replace-with")
+}
+
 #[tauri::command]
 pub fn get_token_status(app: tauri::AppHandle) -> TokenStatus {
     let token = load_client_config(&app).admin_token;
-    let configured = !token.is_empty() && token != DEFAULT_ADMIN_TOKEN_PLACEHOLDER;
+    let configured = !is_placeholder_token(&token);
     let prefix = if configured {
-        token.chars().take(8).collect()
+        token.trim().chars().take(8).collect()
     } else {
         String::new()
     };
@@ -464,5 +476,17 @@ mod save_config_tests {
         let prefix: String = full.chars().take(8).collect();
         assert_eq!(prefix, "emt_supe");
         assert!(!prefix.contains("secret"));
+    }
+
+    #[test]
+    fn placeholder_detection_covers_empty_whitespace_and_both_placeholder_styles() {
+        assert!(is_placeholder_token(""));
+        assert!(is_placeholder_token("   "));
+        assert!(is_placeholder_token("CHANGE_ME"));
+        assert!(is_placeholder_token(
+            "replace-with-desktop-profile-token (emt_...; legacy admin secret still accepted)"
+        ));
+        assert!(is_placeholder_token("  CHANGE_ME  "));
+        assert!(!is_placeholder_token("emt_real_token_value"));
     }
 }

@@ -53,30 +53,65 @@ fn authorized_request(
 
 // 401 = token 无效；403 = token 有效但 scope 不足（后端语义，见 docs/security.md）。
 // 403 的 detail 里含所需 scope，可以展示给用户；401/403 文案均不得包含 token 值。
-fn safe_http_error_message(status: reqwest::StatusCode, detail: Option<&str>) -> String {
+// 401 的 detail 现为结构化 {"message":..., "hint":...}（后端 Brief 93 §6），hint 指引去管理
+// 面板「打开密钥本」取 token；旧后端仍可能只回纯字符串或缺失该字段，此时落回本地兜底文案
+// （cc-tasks/34 §2）。429 响应可能带 Retry-After 头，前端指数退避优先遵守它（cc-tasks/35 §2）。
+fn safe_http_error_message(
+    status: reqwest::StatusCode,
+    scope_detail: Option<&str>,
+    unauthorized_hint: Option<&str>,
+    retry_after_secs: Option<u64>,
+) -> String {
     match status.as_u16() {
-        401 => "HTTP 401: 认证失败，请检查本地 token 配置".to_string(),
+        401 => match unauthorized_hint {
+            Some(hint) => format!("HTTP 401: {hint}"),
+            None => "HTTP 401: 认证失败，请检查本地 token 配置".to_string(),
+        },
         403 => format!(
             "HTTP 403: token 权限不足（缺少 scope，检查该 token 的 profile 是否为 desktop）：{}",
-            detail.unwrap_or("未知")
+            scope_detail.unwrap_or("未知")
         ),
-        429 => "HTTP 429: 认证失败次数过多，来源 IP 已被临时限制，稍后重试".to_string(),
+        429 => {
+            let base = "HTTP 429: 认证失败次数过多，来源 IP 已被临时限制，稍后重试".to_string();
+            match retry_after_secs {
+                Some(secs) => format!("{base}|retry_after={secs}"),
+                None => base,
+            }
+        }
         other => format!("HTTP {other}"),
     }
 }
 
 async fn safe_http_error(response: reqwest::Response) -> String {
     let status = response.status();
-    let detail = if status.as_u16() == 403 {
-        response
-            .json::<serde_json::Value>()
-            .await
-            .ok()
-            .and_then(|v| v.get("detail").and_then(|d| d.as_str()).map(|s| s.to_string()))
-    } else {
-        None
-    };
-    safe_http_error_message(status, detail.as_deref())
+    let retry_after_secs = response
+        .headers()
+        .get(reqwest::header::RETRY_AFTER)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.parse::<u64>().ok());
+
+    let mut scope_detail: Option<String> = None;
+    let mut unauthorized_hint: Option<String> = None;
+    if status.as_u16() == 401 || status.as_u16() == 403 {
+        if let Ok(body) = response.json::<serde_json::Value>().await {
+            if let Some(detail) = body.get("detail") {
+                if let Some(s) = detail.as_str() {
+                    scope_detail = Some(s.to_string());
+                } else {
+                    unauthorized_hint = detail
+                        .get("hint")
+                        .and_then(|h| h.as_str())
+                        .map(|s| s.to_string());
+                }
+            }
+        }
+    }
+    safe_http_error_message(
+        status,
+        scope_detail.as_deref(),
+        unauthorized_hint.as_deref(),
+        retry_after_secs,
+    )
 }
 
 async fn require_success(response: reqwest::Response) -> Result<reqwest::Response, String> {
@@ -2555,10 +2590,24 @@ mod auth_tests {
 
     #[test]
     fn invalid_token_reports_401_without_leaking_token() {
-        let message = safe_http_error_message(reqwest::StatusCode::UNAUTHORIZED, None);
+        let message = safe_http_error_message(reqwest::StatusCode::UNAUTHORIZED, None, None, None);
         assert_eq!(message, "HTTP 401: 认证失败，请检查本地 token 配置");
         assert!(!message.contains("Bearer"));
         assert!(!message.contains("secret-value"));
+    }
+
+    #[test]
+    fn invalid_token_passes_through_backend_hint_when_present() {
+        let message = safe_http_error_message(
+            reqwest::StatusCode::UNAUTHORIZED,
+            None,
+            Some("token 未配置或已失效，请到后端管理面板右下角『打开密钥本』获取对应 token"),
+            None,
+        );
+        assert_eq!(
+            message,
+            "HTTP 401: token 未配置或已失效，请到后端管理面板右下角『打开密钥本』获取对应 token"
+        );
     }
 
     #[test]
@@ -2566,6 +2615,8 @@ mod auth_tests {
         let message = safe_http_error_message(
             reqwest::StatusCode::FORBIDDEN,
             Some("need: hardware"),
+            None,
+            None,
         );
         assert!(message.contains("scope"));
         assert!(message.contains("desktop"));
@@ -2576,11 +2627,22 @@ mod auth_tests {
 
     #[test]
     fn rate_limited_reports_429_without_leaking_token() {
-        let message = safe_http_error_message(reqwest::StatusCode::TOO_MANY_REQUESTS, None);
+        let message = safe_http_error_message(reqwest::StatusCode::TOO_MANY_REQUESTS, None, None, None);
         assert!(message.contains("429"));
         assert!(message.contains("认证失败次数过多"));
         assert!(!message.contains("Bearer"));
         assert!(!message.contains("secret-value"));
+    }
+
+    #[test]
+    fn rate_limited_appends_retry_after_when_backend_supplies_it() {
+        let message = safe_http_error_message(
+            reqwest::StatusCode::TOO_MANY_REQUESTS,
+            None,
+            None,
+            Some(30),
+        );
+        assert!(message.ends_with("|retry_after=30"));
     }
 
     #[test]
