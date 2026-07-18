@@ -18,9 +18,13 @@ dist-ssr
 config/client.local.json
 .claude/
 
-# 3D model assets (large binary files, not tracked in git)
-public/room/character/
-public/room/scene/
+# 3D model assets (large binary files, not tracked in git).
+# Directory itself stays tracked (via README.md placeholder) so `tauri build`'s
+# resource bundling of ../public/room/ doesn't fail on a fresh checkout/CI.
+public/room/character/*
+!public/room/character/README.md
+public/room/scene/*
+!public/room/scene/README.md
 
 # Live2D Cubism Core runtime (proprietary Live2D license, cannot be redistributed)
 public/live2d/core/
