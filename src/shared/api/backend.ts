@@ -1,8 +1,8 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invokeGated } from './authGate';
 import type { ChatResponse, DesktopWakeResponse, GardenState, CoplayState, DiaryListResponse, DiaryEntry, ChatLogDatesResponse, ChatLogDay, MoodState, ActivityState, SensorRealtimeResponse, UploadIngestResponse, UploadError, PromptAssetsResponse, PromptAssetsPatch, PromptAssetsPatchResponse, HiddenStateDebugResponse, PromptAssetCharacter, PromptAssetOption, ActivePromptAssets, GroupSummary, GroupDetail, GroupSendResponse, GroupSettings } from './types';
 
 export async function sendChat(message: string): Promise<ChatResponse> {
-  return invoke<ChatResponse>('send_chat', { message });
+  return invokeGated<ChatResponse>('send_chat', { message });
 }
 
 export interface HistoryEntry {
@@ -12,55 +12,55 @@ export interface HistoryEntry {
 }
 
 export async function loadHistory(): Promise<HistoryEntry[]> {
-  const result = await invoke<{ user_id: string; history: HistoryEntry[]; count: number }>(
+  const result = await invokeGated<{ user_id: string; history: HistoryEntry[]; count: number }>(
     'load_history',
   );
   return result.history;
 }
 
 export async function loadGardenState(): Promise<GardenState> {
-  return invoke<GardenState>('load_garden_state');
+  return invokeGated<GardenState>('load_garden_state');
 }
 
 // ── Coplay（陪玩模式）── 见 Emerald-presence docs/coplay.md
 export async function loadCoplayState(): Promise<CoplayState> {
-  return invoke<CoplayState>('coplay_state');
+  return invokeGated<CoplayState>('coplay_state');
 }
 
 export async function armCoplay(): Promise<{ ok: boolean; status: string }> {
-  return invoke('coplay_arm');
+  return invokeGated('coplay_arm');
 }
 
 export async function disarmCoplay(): Promise<{ ok: boolean; status: string }> {
-  return invoke('coplay_disarm');
+  return invokeGated('coplay_disarm');
 }
 
 export async function loadDiaryList(charId?: string): Promise<DiaryListResponse> {
-  return invoke<DiaryListResponse>('load_diary_list', charId ? { charId } : {});
+  return invokeGated<DiaryListResponse>('load_diary_list', charId ? { charId } : {});
 }
 
 export async function loadDiaryEntry(date: string, charId?: string): Promise<DiaryEntry> {
-  return invoke<DiaryEntry>('load_diary_entry', charId ? { date, charId } : { date });
+  return invokeGated<DiaryEntry>('load_diary_entry', charId ? { date, charId } : { date });
 }
 
 export async function loadChatLogDates(): Promise<ChatLogDatesResponse> {
-  return invoke<ChatLogDatesResponse>('load_chat_log_dates');
+  return invokeGated<ChatLogDatesResponse>('load_chat_log_dates');
 }
 
 export async function loadChatLogDay(date: string): Promise<ChatLogDay> {
-  return invoke<ChatLogDay>('load_chat_log_day', { date });
+  return invokeGated<ChatLogDay>('load_chat_log_day', { date });
 }
 
 export async function loadMoodState(): Promise<MoodState> {
-  return invoke<MoodState>('load_mood_state');
+  return invokeGated<MoodState>('load_mood_state');
 }
 
 export async function loadActivityState(): Promise<ActivityState> {
-  return invoke<ActivityState>('load_activity_state');
+  return invokeGated<ActivityState>('load_activity_state');
 }
 
 export async function loadSensorRealtime(): Promise<SensorRealtimeResponse> {
-  return invoke<SensorRealtimeResponse>('load_sensor_realtime');
+  return invokeGated<SensorRealtimeResponse>('load_sensor_realtime');
 }
 
 export const UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
@@ -87,36 +87,36 @@ export function validateUploadFile(filePath: string, fileSize: number): UploadEr
 }
 
 export async function getPromptAssets(): Promise<PromptAssetsResponse> {
-  const response = await invoke<unknown>('get_prompt_assets');
+  const response = await invokeGated<unknown>('get_prompt_assets');
   return normalizePromptAssets(response);
 }
 
 export async function getCharacterAvatar(charId: string): Promise<string | null> {
-  return invoke<string | null>('get_character_avatar', { charId });
+  return invokeGated<string | null>('get_character_avatar', { charId });
 }
 
 export async function uploadCharacterAvatar(charId: string, file: File): Promise<void> {
   const buffer = await file.arrayBuffer();
   const data = Array.from(new Uint8Array(buffer));
-  await invoke('upload_character_avatar', { charId, data, contentType: file.type });
+  await invokeGated('upload_character_avatar', { charId, data, contentType: file.type });
 }
 
 export async function deleteCharacterAvatar(charId: string): Promise<void> {
-  await invoke('delete_character_avatar', { charId });
+  await invokeGated('delete_character_avatar', { charId });
 }
 
 export async function loadHiddenStateDebug(): Promise<HiddenStateDebugResponse> {
-  return invoke<HiddenStateDebugResponse>('load_hidden_state_debug');
+  return invokeGated<HiddenStateDebugResponse>('load_hidden_state_debug');
 }
 
 export async function desktopWake(lastSeen?: number): Promise<DesktopWakeResponse> {
-  return invoke<DesktopWakeResponse>('desktop_wake', {
+  return invokeGated<DesktopWakeResponse>('desktop_wake', {
     lastSeen: lastSeen ?? null,
   });
 }
 
 export async function patchPromptAssets(patch: PromptAssetsPatch): Promise<PromptAssetsPatchResponse> {
-  const response = await invoke<unknown>('patch_prompt_assets', {
+  const response = await invokeGated<unknown>('patch_prompt_assets', {
     activeCharacter: patch.active_character ?? null,
     enabledLorebooks: patch.enabled_lorebooks ?? null,
     enabledJailbreaks: patch.enabled_jailbreaks ?? null,
@@ -204,7 +204,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 // ── Group Chat (spec-10) ──────────────────────────────────────────────────────
 
 export async function listGroups(): Promise<GroupSummary[]> {
-  return invoke<GroupSummary[]>('group_list');
+  return invokeGated<GroupSummary[]>('group_list');
 }
 
 export async function createGroup(
@@ -213,7 +213,7 @@ export async function createGroup(
   settings?: Partial<GroupSettings>,
   groupId?: string,
 ): Promise<GroupDetail> {
-  return invoke<GroupDetail>('group_create', {
+  return invokeGated<GroupDetail>('group_create', {
     roster,
     domain,
     settings: settings ?? null,
@@ -222,35 +222,35 @@ export async function createGroup(
 }
 
 export async function getGroup(id: string): Promise<GroupDetail> {
-  return invoke<GroupDetail>('group_get', { id });
+  return invokeGated<GroupDetail>('group_get', { id });
 }
 
 export async function groupSend(id: string, message: string): Promise<GroupSendResponse> {
-  return invoke<GroupSendResponse>('group_send', { id, message });
+  return invokeGated<GroupSendResponse>('group_send', { id, message });
 }
 
 export async function groupHistory(id: string, before?: number): Promise<GroupDetail['recent']> {
-  return invoke<GroupDetail['recent']>('group_history', { id, before: before ?? null });
+  return invokeGated<GroupDetail['recent']>('group_history', { id, before: before ?? null });
 }
 
 export async function deleteGroup(id: string): Promise<void> {
-  await invoke('group_delete', { id });
+  await invokeGated('group_delete', { id });
 }
 
 export async function patchGroupRoster(id: string, roster: string[]): Promise<GroupDetail> {
-  return invoke<GroupDetail>('group_patch_roster', { id, roster });
+  return invokeGated<GroupDetail>('group_patch_roster', { id, roster });
 }
 
 export async function getGroupSettings(id: string): Promise<GroupSettings> {
-  return invoke<GroupSettings>('group_settings_get', { id });
+  return invokeGated<GroupSettings>('group_settings_get', { id });
 }
 
 export async function patchGroupSettings(id: string, settings: Partial<GroupSettings>): Promise<GroupSettings> {
-  return invoke<GroupSettings>('group_settings_patch', { id, settings });
+  return invokeGated<GroupSettings>('group_settings_patch', { id, settings });
 }
 
 export async function transcribeAudio(audioB64: string): Promise<{ text: string }> {
-  return invoke<{ text: string }>('transcribe_audio', { audioB64 });
+  return invokeGated<{ text: string }>('transcribe_audio', { audioB64 });
 }
 
 export async function uploadDocument(
@@ -258,7 +258,7 @@ export async function uploadDocument(
   message: string,
 ): Promise<UploadIngestResponse> {
   try {
-    return await invoke<UploadIngestResponse>('upload_document', {
+    return await invokeGated<UploadIngestResponse>('upload_document', {
       filePath,
       message,
     });
