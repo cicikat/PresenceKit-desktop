@@ -297,14 +297,52 @@ pub fn get_token_status(app: tauri::AppHandle) -> TokenStatus {
     TokenStatus { configured, prefix }
 }
 
-// 与 lib.rs 的 safe_http_error_message 同一语义子集，但独立于已保存的 ClientConfig——
-// 这里测的是输入框里尚未保存的候选 backend_base/admin_token。
-fn whoami_error_message(status: reqwest::StatusCode) -> String {
+// 与 lib.rs 的 safe_http_error/safe_http_error_message 同一语义（含 401 hint 透传、"HTTP nnn:"
+// 前缀、429 Retry-After），但独立于已保存的 ClientConfig——这里测的是输入框里尚未保存的候选
+// backend_base/admin_token（首启引导页/梦境就地引导都走这条路径，见 cc-tasks/34 §1, 35 §3）。
+// 前缀统一是为了让前端 classifyHttpError() 能正确识别状态码，不这样做的话 401/429 文案会被
+// 误判成"网络错误"（cc-tasks/35 §1/§2 的验收依赖这个分类）。拆成纯函数 + I/O 外壳两层，
+// 与 lib.rs 的 safe_http_error_message/safe_http_error 一致，方便不发真实 HTTP 请求单测。
+fn whoami_error_message(
+    status: reqwest::StatusCode,
+    unauthorized_hint: Option<&str>,
+    retry_after_secs: Option<u64>,
+) -> String {
     match status.as_u16() {
-        401 => "token 无效".to_string(),
-        429 => "认证失败次数过多，来源 IP 已被临时限制，稍后重试".to_string(),
+        401 => match unauthorized_hint {
+            Some(hint) => format!("HTTP 401: {hint}"),
+            None => "HTTP 401: token 无效".to_string(),
+        },
+        429 => {
+            let base = "HTTP 429: 认证失败次数过多，来源 IP 已被临时限制，稍后重试".to_string();
+            match retry_after_secs {
+                Some(secs) => format!("{base}|retry_after={secs}"),
+                None => base,
+            }
+        }
         other => format!("HTTP {other}"),
     }
+}
+
+async fn whoami_error_body(response: reqwest::Response) -> String {
+    let status = response.status();
+    let retry_after_secs = response
+        .headers()
+        .get(reqwest::header::RETRY_AFTER)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.parse::<u64>().ok());
+
+    let hint = if status.as_u16() == 401 {
+        response
+            .json::<serde_json::Value>()
+            .await
+            .ok()
+            .and_then(|body| body.get("detail")?.get("hint")?.as_str().map(|s| s.to_string()))
+    } else {
+        None
+    };
+
+    whoami_error_message(status, hint.as_deref(), retry_after_secs)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -333,9 +371,8 @@ pub async fn test_backend_auth(
         .await
         .map_err(|_| "连接失败，请检查后端地址".to_string())?;
 
-    let status = resp.status();
-    if !status.is_success() {
-        return Err(whoami_error_message(status));
+    if !resp.status().is_success() {
+        return Err(whoami_error_body(resp).await);
     }
     resp.json::<WhoamiResult>().await.map_err(|e| e.to_string())
 }
@@ -457,16 +494,36 @@ mod save_config_tests {
 
     #[test]
     fn whoami_error_message_never_leaks_token_or_bearer() {
-        let message = whoami_error_message(reqwest::StatusCode::UNAUTHORIZED);
-        assert_eq!(message, "token 无效");
+        let message = whoami_error_message(reqwest::StatusCode::UNAUTHORIZED, None, None);
+        assert_eq!(message, "HTTP 401: token 无效");
         assert!(!message.contains("Bearer"));
 
-        let other = whoami_error_message(reqwest::StatusCode::TOO_MANY_REQUESTS);
+        let other = whoami_error_message(reqwest::StatusCode::TOO_MANY_REQUESTS, None, None);
         assert!(!other.contains("Bearer"));
 
-        let generic = whoami_error_message(reqwest::StatusCode::INTERNAL_SERVER_ERROR);
+        let generic = whoami_error_message(reqwest::StatusCode::INTERNAL_SERVER_ERROR, None, None);
         assert_eq!(generic, "HTTP 500");
         assert!(!generic.contains("Bearer"));
+    }
+
+    #[test]
+    fn whoami_error_message_passes_through_hint_and_retry_after() {
+        let with_hint = whoami_error_message(
+            reqwest::StatusCode::UNAUTHORIZED,
+            Some("token 未配置或已失效，请到后端管理面板右下角『打开密钥本』获取对应 token"),
+            None,
+        );
+        assert_eq!(
+            with_hint,
+            "HTTP 401: token 未配置或已失效，请到后端管理面板右下角『打开密钥本』获取对应 token"
+        );
+
+        let with_retry_after = whoami_error_message(
+            reqwest::StatusCode::TOO_MANY_REQUESTS,
+            None,
+            Some(45),
+        );
+        assert!(with_retry_after.ends_with("|retry_after=45"));
     }
 
     #[test]
