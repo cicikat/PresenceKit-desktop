@@ -10,6 +10,9 @@ import { DreamControlBar } from './components/DreamControlBar';
 import { DreamChatPanel } from './components/DreamChatPanel';
 import { SubHiddenStatePanel } from './components/SubHiddenStatePanel';
 import { Icon } from '../chat/components/UIKit';
+import { TokenSetupForm } from '../../features/onboarding/TokenSetupForm';
+import { classifyHttpError } from '../../shared/api/httpError';
+import { useI18n } from '../../shared/i18n';
 import { getUIPref, setUIPref } from '../../shared/uiPreferences';
 import { avatarStore } from '../../shared/avatars/store';
 import type { DreamEntryMode } from '../../shared/api/dream-types';
@@ -38,8 +41,13 @@ interface DreamWindowProps {
 
 export function DreamWindow({ characterAvatarDataUrl = null, onClose }: DreamWindowProps) {
   const { dreamState, stateError, refresh: refreshState } = useDreamState();
+  const { t } = useI18n();
   const [phase, setPhase] = useState<WindowPhase>('loading');
   const [phaseError, setPhaseError] = useState<string | null>(null);
+  // 梦境进入的 401（token 未配置/已失效）就地引导入口（cc-tasks/35 §3）：与偏好-系统设置
+  // 写的是同一份 desktop token，没有独立的"梦境 token"字段，这里只是第二个填写入口，
+  // 验证成功后自动重试进入梦境，不用绕去设置页。
+  const [needsTokenGate, setNeedsTokenGate] = useState(false);
   const [sideOpen, setSideOpen] = useState(true);
   const [sideTab, setSideTab] = useState<DreamSideTab>('flow');
   const [openModal, setOpenModal] = useState<DreamModal>(null);
@@ -140,6 +148,7 @@ export function DreamWindow({ characterAvatarDataUrl = null, onClose }: DreamWin
     }
     setPhase('entering');
     setPhaseError(null);
+    setNeedsTokenGate(false);
     try {
       const resp = await dreamEnter({
         dream_mode: entryMode,
@@ -157,12 +166,17 @@ export function DreamWindow({ characterAvatarDataUrl = null, onClose }: DreamWin
       setPhase('active');
     } catch (e) {
       console.debug('[Dream] dreamEnter error:', e);
-      const msg = String(e);
-      const m = msg.match(/\bHTTP (\d+)/);
-      const httpStatus = m ? parseInt(m[1], 10) : null;
-      if (httpStatus === 409) setPhaseError(`当前状态无法进入梦境（${msg}）`);
-      else if (httpStatus === 503) setPhaseError(`服务暂不可用（${msg}）`);
-      else setPhaseError(`连接失败：${msg}`);
+      const classified = classifyHttpError(e);
+      if (classified.kind === 'unauthorized') {
+        setNeedsTokenGate(true);
+        setPhaseError(classified.message);
+      } else if (classified.status === 409) {
+        setPhaseError(`当前状态无法进入梦境（${classified.message}）`);
+      } else if (classified.status === 503) {
+        setPhaseError(`服务暂不可用（${classified.message}）`);
+      } else {
+        setPhaseError(`连接失败：${classified.message}`);
+      }
       setPhase('ready');
     }
   };
@@ -363,13 +377,25 @@ export function DreamWindow({ characterAvatarDataUrl = null, onClose }: DreamWin
                   {phaseError}
                 </div>
               )}
-              <button
-                type="button"
-                className="dream-theme__enter"
-                onClick={handleEnter}
-              >
-                进入梦境
-              </button>
+              {needsTokenGate ? (
+                <div style={{ width: 'min(320px, 90%)', textAlign: 'left' }}>
+                  <div className="mono" style={{ fontSize: 'calc(11px * var(--dream-theme-font-scale, 1))', color: 'var(--dt-ink-3)', letterSpacing: 0.6, marginBottom: 8 }}>
+                    {t('dream.tokenGate.title')} — {t('dream.tokenGate.description')}
+                  </div>
+                  <TokenSetupForm
+                    variant="inline"
+                    onSuccess={() => { setNeedsTokenGate(false); void handleEnter(); }}
+                  />
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="dream-theme__enter"
+                  onClick={handleEnter}
+                >
+                  进入梦境
+                </button>
+              )}
             </div>
           )}
 

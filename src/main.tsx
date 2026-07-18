@@ -12,6 +12,7 @@ import { avatarStore } from "./shared/avatars/store";
 import { initTheme } from "./shared/theme/registry";
 import { initUIPrefs } from "./shared/uiPreferences";
 import { initI18n } from "./shared/i18n";
+import { OnboardingGate } from "./features/onboarding/OnboardingGate";
 
 const windowView = new URLSearchParams(window.location.search).get("window");
 const isPetWindow = windowView === "pet";
@@ -44,7 +45,12 @@ function Root() {
   if (isPetWindow) return <PetWindow />;
   if (isPresenceNagWindow) return <PresenceNagWindow />;
   if (isDiaryDetailWindow) return <DiaryDetailWindow />;
-  return <AppRoot />;
+  // Pet/presence-nag/diary-detail 是卫星 webview，跟随主窗口的鉴权状态,不需要各自的引导门禁。
+  return (
+    <OnboardingGate>
+      <AppRoot />
+    </OnboardingGate>
+  );
 }
 
 await initUIPrefs();

@@ -80,6 +80,21 @@ export interface DreamState {
   dream_depth?: number;           // 0–100
   /** Hidden by default in UI. */
   physiological_arousal?: number; // 0–100
+  /**
+   * UI status projection (backend Brief 94 §2, core/dream/dream_state.py
+   * derive_dream_state_projection): coarse bucket over the raw `status` state
+   * machine, replacing the client's old blanket "dreaming → can't chat" guess.
+   * "idle" | "dreaming" | "cooldown". Absent on older backends.
+   */
+  dream_state?: 'idle' | 'dreaming' | 'cooldown';
+  /** Unix epoch seconds marking the start of the current dream_state bucket, or null/absent when there's nothing to time. */
+  since?: number | null;
+  /** Unix epoch estimate for when the current bucket ends; null when it can't be predicted (dream length is never estimable). */
+  expected_end?: number | null;
+  /** Heuristic-only signal: the "dreaming" bucket has run past the stuck threshold. Never affects hard_exit. */
+  stuck?: boolean;
+  /** Whether /desktop/chat currently rejects with 409 for this user (get_reality_guard_status != ALLOW). Absent on older backends. */
+  blocks_chat?: boolean;
 }
 
 export interface DreamEnterResponse {

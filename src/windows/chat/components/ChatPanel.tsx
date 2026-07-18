@@ -18,6 +18,8 @@ import { getDesktopTtsEnabled } from '../../../shared/api/runtimeSettings';
 import { VoiceMessageBar } from './VoiceMessageBar';
 import { loadChatLogDates, loadChatLogDay } from '../../../shared/api/backend';
 import { getClientConfig } from '../../../shared/api/config';
+import { classifyHttpError } from '../../../shared/api/httpError';
+import { dreamGetState } from '../../../shared/api/dream';
 import { wsClient } from '../../../shared/api/ws';
 import { notifyOnMessage } from '../../../shared/api/notify';
 import { getActiveCharacterName } from '../../../shared/activeCharacter';
@@ -151,6 +153,40 @@ function classifyHistoryError(err: unknown): { category: 'network' | 'unauthoriz
     return { category: 'malformed', statusCode, detail: msg };
   }
   return { category: 'network', statusCode, detail: msg };
+}
+
+// 发消息失败的人话化文案（cc-tasks/34 §2）：401 透传后端 hint，429 提示限流+退避重试，
+// 其余情况保留原始错误文本（已经区分"连接失败/后端异常"等场景，不再裸抛状态码）。
+function describeSendError(err: unknown): string {
+  const classified = classifyHttpError(err);
+  if (classified.kind === 'unauthorized' || classified.kind === 'rateLimited') {
+    return `（${classified.message}）`;
+  }
+  return `（连接失败：${classified.message}）`;
+}
+
+// 409（对方正在做梦、guard 拒绝聊天）时消费 GET /dream/state 的结构化字段，取代旧的一律
+// "正在做梦中，请先退出梦境再聊天"文案（cc-tasks/34 §3，接后端 Brief 94 §2 已落地字段）。
+// 旧后端没有这些字段、或二次请求也失败时，降级回原文案，不崩。
+async function describeDreamBlockedChat(): Promise<string> {
+  try {
+    const state = await dreamGetState();
+    if (state.stuck) {
+      return '（梦境状态异常，可尝试重启后端）';
+    }
+    if (state.dream_state === 'dreaming') {
+      if (typeof state.since === 'number') {
+        return `（对方正在做梦，自 ${format(new Date(state.since * 1000), 'HH:mm')} 开始，请稍后再聊）`;
+      }
+      return '（正在做梦中，请先退出梦境再聊天）';
+    }
+    if (state.dream_state === 'cooldown' && typeof state.expected_end === 'number') {
+      return `（对方刚从梦中醒来，预计 ${format(new Date(state.expected_end * 1000), 'HH:mm')} 恢复聊天）`;
+    }
+    return '（正在做梦中，请先退出梦境再聊天）';
+  } catch {
+    return '（正在做梦中，请先退出梦境再聊天）';
+  }
 }
 
 // ── 把单日 entries 转成消息列表 ──────────────────────────────────────────────
@@ -492,6 +528,10 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
   const [noMoreHistory, setNoMoreHistory] = useState(false);
   const [historyStatus, setHistoryStatus] = useState<HistoryStatus>({ kind: 'loading' });
   const [loadMoreError, setLoadMoreError] = useState<'network' | 'unauthorized' | 'malformed' | null>(null);
+  // 历史加载失败重试的退避倒计时（秒），仅在 network/malformed 重试等待期间非空；
+  // unauthorized 从不进入这里（401 不自动重试，见下方 effect）。
+  const [historyRetryCountdown, setHistoryRetryCountdown] = useState<number | null>(null);
+  const historyRetryDelayRef = useRef(5000);
   // init() 可重入：先前端后后端起来时，靠 WS connected / 轮询重拉历史，而不是永远卡在 error。
   const historyStatusRef = useRef<HistoryStatus>({ kind: 'loading' });
   useEffect(() => { historyStatusRef.current = historyStatus; }, [historyStatus]);
@@ -767,13 +807,36 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
     };
   }, [init]);
 
-  // 兜底轮询：historyStatus 落在 error 时，每 5s 重试一次 init()，直到成功或组件卸载。
-  // 覆盖「先开前端后开后端」场景下 WS state 事件因某种原因未触发的情况。
+  // 兜底重试：historyStatus 落在 error 时重试 init()，覆盖「先开前端后开后端」场景下 WS
+  // connected 事件因某种原因未触发的情况。401 从不自动重试（重试不会让失效 token 自己变好，
+  // 引导页会接管界面，见 authGate.ts）；其余错误按指数退避 + 抖动重试，上限 60s，
+  // 429 响应带 retry_after 时优先遵守（cc-tasks/35 §2）。
   useEffect(() => {
-    if (historyStatus.kind !== 'error') return;
-    const id = setInterval(() => { void init(); }, 5000);
-    return () => clearInterval(id);
-  }, [historyStatus.kind, init]);
+    if (historyStatus.kind !== 'error') {
+      historyRetryDelayRef.current = 5000;
+      setHistoryRetryCountdown(null);
+      return;
+    }
+    if (historyStatus.category === 'unauthorized') {
+      setHistoryRetryCountdown(null);
+      return;
+    }
+    const classified = classifyHttpError(historyStatus.detail);
+    const nextDelay = classified.retryAfterSeconds !== null
+      ? classified.retryAfterSeconds * 1000
+      : Math.min(historyRetryDelayRef.current * 2, 60_000);
+    historyRetryDelayRef.current = Math.min(nextDelay, 60_000);
+    const jittered = Math.round(historyRetryDelayRef.current * (0.85 + Math.random() * 0.3));
+
+    let remaining = Math.round(jittered / 1000);
+    setHistoryRetryCountdown(remaining);
+    const countdown = setInterval(() => {
+      remaining -= 1;
+      setHistoryRetryCountdown(Math.max(remaining, 0));
+    }, 1000);
+    const retryTimer = setTimeout(() => { void init(); }, jittered);
+    return () => { clearInterval(countdown); clearTimeout(retryTimer); };
+  }, [historyStatus, init]);
 
   // ── 滚顶懒加载 ───────────────────────────────────────────────────────────
 
@@ -1480,12 +1543,12 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       console.log('[chat] httpDone | loadingSource: send | waitingForWs: true | msg_id:', msgId ?? '(none)', '| contentHash:', contentHash, '| partsCount:', reply.split(/\n+/).filter(Boolean).length, '| timestamp:', Date.now());
     } catch (err) {
       console.error('[chat] send 失败:', err);
-      const msg = err instanceof Error ? err.message : String(err);
-      const is409 = /\b409\b/.test(msg);
+      const is409 = /\b409\b/.test(err instanceof Error ? err.message : String(err));
+      const text = is409 ? await describeDreamBlockedChat() : describeSendError(err);
       setMessages(prev => [...prev, {
         id: newId(),
         role: 'system',
-        text: is409 ? '（正在做梦中，请先退出梦境再聊天）' : `（连接失败：${msg}）`,
+        text,
         time: Date.now(),
       }]);
       setLoading(false);
@@ -1755,6 +1818,11 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
                   ? 'chat.history.waiting.unauthorized'
                   : 'chat.history.waiting.invalid')}
             </span>
+            {historyRetryCountdown !== null && (
+              <span className="mono" style={{ fontSize: chatThemeFontSize(9.5), color: 'var(--ink-4)', letterSpacing: 0.6 }}>
+                {t('connection.error.rateLimitedTemplate').replace('{n}', String(historyRetryCountdown))}
+              </span>
+            )}
             <button
               onClick={() => void init()}
               style={{

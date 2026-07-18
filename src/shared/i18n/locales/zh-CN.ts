@@ -34,6 +34,21 @@ export const zhCN = {
   'activity.gameSetup.style.teaching': '教学',
   'activity.gameSetup.start': '开始对局',
   'activity.gameSetup.starting': '准备中…',
+  'onboarding.title': '需要配置连接 token',
+  'onboarding.description': '还没有检测到有效的桌面客户端 token，先完成下面这一步才能进入聊天。',
+  'onboarding.stepOpenPanel': '1. 打开后端管理面板，在右下角「打开密钥本」找到 desktop 对应的 token 并复制',
+  'onboarding.backendAddressLabel': '后端地址',
+  'onboarding.tokenInputLabel': '2. 粘贴 token',
+  'onboarding.tokenInputPlaceholder': '粘贴 desktop profile token（emt_…）',
+  'onboarding.submit': '验证并进入',
+  'onboarding.submitting': '验证中…',
+  'onboarding.errorEmpty': '请先粘贴 token',
+  'onboarding.checking': '正在检查连接配置…',
+  'dream.tokenGate.title': '进入梦境前需要验证 token',
+  'dream.tokenGate.description': '当前 token 未配置或已失效，就地填写后可直接继续进入。',
+  'dream.tokenGate.submit': '验证并继续进入梦境',
+  'connection.error.rateLimitedTemplate': '连接受限，{n} 秒后重试',
+  'connection.error.reauth': '重新填写密钥',
 } as const;
 
 export type MessageKey = keyof typeof zhCN;
