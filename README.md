@@ -10,6 +10,14 @@ This client renders the chat window, the desktop pet, and a read-only garden/dia
 
 ---
 
+## Download
+
+Prebuilt Windows installers are on this repo's [GitHub Releases](https://github.com/cicikat/PresenceKit-desktop/releases) page. Check the release notes for the compatible [PresenceKit backend](https://github.com/cicikat/PresenceKit/releases) version.
+
+The installer isn't code-signed, so Windows SmartScreen will show an "unrecognized app" warning on first run — click **More info → Run anyway**. We don't currently buy a code-signing certificate for this project.
+
+---
+
 ## Connecting to a backend
 
 By default the client expects a backend at `http://127.0.0.1:8080` on the same machine. To point it elsewhere or set your device token:

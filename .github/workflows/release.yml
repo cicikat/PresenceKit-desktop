@@ -1,0 +1,50 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build and publish
+        id: tauri
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "PresenceKit-desktop ${{ github.ref_name }}"
+          releaseDraft: true
+          prerelease: false
+
+      - name: Generate SHA256 checksums
+        shell: pwsh
+        run: |
+          $paths = '${{ steps.tauri.outputs.artifactPaths }}' | ConvertFrom-Json
+          Remove-Item -ErrorAction SilentlyContinue checksums.txt
+          foreach ($p in $paths) {
+            $hash = (Get-FileHash -Algorithm SHA256 -Path $p).Hash
+            "$hash  $(Split-Path -Leaf $p)" | Out-File -Append -Encoding utf8 checksums.txt
+          }
+
+      - name: Upload checksums
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ github.ref_name }}" checksums.txt --clobber

@@ -10,6 +10,14 @@
 
 ---
 
+## 下载
+
+预编译 Windows 安装器见本仓 [GitHub Releases](https://github.com/cicikat/PresenceKit-desktop/releases)。兼容的 [PresenceKit 后端](https://github.com/cicikat/PresenceKit/releases) 版本见对应 Release notes。
+
+安装器未做代码签名，首次运行 Windows SmartScreen 会提示"未识别的应用"——点击**更多信息 → 仍要运行**即可。本项目目前不购买代码签名证书。
+
+---
+
 ## 连接后端
 
 默认情况下客户端会连接同一台机器上的 `http://127.0.0.1:8080`。如需连接其他地址或填写设备 token：
