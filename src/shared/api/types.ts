@@ -78,6 +78,13 @@ export interface ChatResponse {
   segments?: NarrativeSegment[];
 }
 
+// 引用回复：见 Emerald-presence docs/backend-integration.md「reply_to」；
+// text 为客户端截断至 200 字的原文，ts 为被引用消息的 epoch 秒时间戳。
+export interface ReplyToPayload {
+  text: string;
+  ts: number;
+}
+
 export interface DesktopWakeResponse {
   reply: string | null;
   source: string;

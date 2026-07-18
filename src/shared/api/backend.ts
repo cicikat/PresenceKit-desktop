@@ -1,8 +1,8 @@
 import { invokeGated } from './authGate';
-import type { ChatResponse, DesktopWakeResponse, GardenState, CoplayState, DiaryListResponse, DiaryEntry, ChatLogDatesResponse, ChatLogDay, MoodState, ActivityState, SensorRealtimeResponse, UploadIngestResponse, UploadError, PromptAssetsResponse, PromptAssetsPatch, PromptAssetsPatchResponse, HiddenStateDebugResponse, PromptAssetCharacter, PromptAssetOption, ActivePromptAssets, GroupSummary, GroupDetail, GroupSendResponse, GroupSettings } from './types';
+import type { ChatResponse, DesktopWakeResponse, GardenState, CoplayState, DiaryListResponse, DiaryEntry, ChatLogDatesResponse, ChatLogDay, MoodState, ActivityState, SensorRealtimeResponse, UploadIngestResponse, UploadError, PromptAssetsResponse, PromptAssetsPatch, PromptAssetsPatchResponse, HiddenStateDebugResponse, PromptAssetCharacter, PromptAssetOption, ActivePromptAssets, GroupSummary, GroupDetail, GroupSendResponse, GroupSettings, ReplyToPayload } from './types';
 
-export async function sendChat(message: string): Promise<ChatResponse> {
-  return invokeGated<ChatResponse>('send_chat', { message });
+export async function sendChat(message: string, replyTo?: ReplyToPayload): Promise<ChatResponse> {
+  return invokeGated<ChatResponse>('send_chat', replyTo ? { message, replyTo } : { message });
 }
 
 export interface HistoryEntry {

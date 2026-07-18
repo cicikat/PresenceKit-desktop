@@ -584,13 +584,30 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
+// cc-tasks/36：右键引用回复。与后端 Emerald-presence Brief 98 §2 的 reply_to 契约对齐，
+// ts 为 epoch 秒；旧后端忽略未知字段，不需要单独降级处理。
+#[derive(serde::Deserialize)]
+struct ReplyToPayload {
+    text: String,
+    ts: f64,
+}
+
 #[tauri::command]
-async fn send_chat(app: tauri::AppHandle, message: String) -> Result<serde_json::Value, String> {
+async fn send_chat(
+    app: tauri::AppHandle,
+    message: String,
+    reply_to: Option<ReplyToPayload>,
+) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
     let client = llm_http_client()?;
 
+    let mut body = serde_json::json!({ "message": message });
+    if let Some(reply_to) = reply_to {
+        body["reply_to"] = serde_json::json!({ "text": reply_to.text, "ts": reply_to.ts });
+    }
+
     let resp = authorized_request(&cfg, client.post(backend_url(&cfg, "/desktop/chat")))
-        .json(&serde_json::json!({ "message": message }))
+        .json(&body)
         .send()
         .await
         .map_err(|e| e.to_string())?;

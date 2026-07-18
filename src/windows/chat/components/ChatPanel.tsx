@@ -43,6 +43,17 @@ function splitReply(text: string): string[] {
   return text.split(/\n+/).map(s => s.trim()).filter(s => s.length > 0);
 }
 
+// 引用预览条展示用的短截断，与发送时按契约做的 200 字截断（见 truncateForReplyTo）无关。
+function truncateForPreview(text: string, max = 60): string {
+  const trimmed = text.trim();
+  return trimmed.length > max ? `${trimmed.slice(0, max)}…` : trimmed;
+}
+
+// reply_to.text 契约截断至 200 字（Emerald-presence docs/backend-integration.md）。
+function truncateForReplyTo(text: string, max = 200): string {
+  return text.trim().slice(0, max);
+}
+
 // Strip leading parenthetical action/narration blocks so that raw HTTP reply and
 // cleaned message_segments content can be matched against each other for dedup.
 function normalizeForDedup(text: string): string {
@@ -358,7 +369,7 @@ function BreathingAvatar({
   );
 }
 
-const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, youVisible, assistantFontSize, userFontSize, ttsEnabled }: any) {
+const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, youVisible, assistantFontSize, userFontSize, ttsEnabled, onBubbleContextMenu }: any) {
   const fromUser = msg.role === 'user';
   const hue = msg.moodHue ?? currentHue;
   const time = msg.time ? new Date(msg.time).toLocaleTimeString('zh', { hour: '2-digit', minute: '2-digit' }) : '';
@@ -453,18 +464,23 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
           <span className="mono" style={{ fontSize: chatThemeFontSize(9.5), letterSpacing: 1.4, color: 'var(--ink-3)' }}>HIM · {time}</span>
           {msg.moodLabel && <Tag hue={hue}>{msg.moodLabel}</Tag>}
         </div>
-        <div style={{
-          padding: '11px 15px',
-          background: 'var(--paper-2)',
-          borderLeft: `3px solid oklch(0.55 0.13 ${hue})`,
-          borderTop: '1px solid var(--paper-edge)',
-          borderRight: '1px solid var(--paper-edge)',
-          borderBottom: '1px solid var(--paper-edge)',
-          borderRadius: '2px 6px 6px 2px',
-          fontSize: assistantFontSize, lineHeight: 1.65, color: 'var(--ink)',
-          fontFamily: 'var(--font-serif)',
-          whiteSpace: 'pre-wrap',
-        }}>
+        <div
+          onContextMenu={e => {
+            e.preventDefault();
+            onBubbleContextMenu?.(msg, e.clientX, e.clientY);
+          }}
+          style={{
+            padding: '11px 15px',
+            background: 'var(--paper-2)',
+            borderLeft: `3px solid oklch(0.55 0.13 ${hue})`,
+            borderTop: '1px solid var(--paper-edge)',
+            borderRight: '1px solid var(--paper-edge)',
+            borderBottom: '1px solid var(--paper-edge)',
+            borderRadius: '2px 6px 6px 2px',
+            fontSize: assistantFontSize, lineHeight: 1.65, color: 'var(--ink)',
+            fontFamily: 'var(--font-serif)',
+            whiteSpace: 'pre-wrap',
+          }}>
           {msg.deleted && (
             <div style={{ textDecoration: 'line-through', opacity: 0.45, fontSize: assistantFontSize - 1.5, marginBottom: 4 }}>{normalizeChatDisplayText(msg.deleted)}</div>
           )}
@@ -500,6 +516,38 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
   const [wakeLoading, setWakeLoading] = useState(false);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
+
+  // cc-tasks/36：右键引用回复。ctxMenu 是当前打开的气泡右键菜单（全局单例，避免多开）；
+  // replyTarget 是待发送的引用态，text 为展示用原文、time 为该消息的整条时间戳（毫秒）。
+  const [ctxMenu, setCtxMenu] = useState<{ msg: ChatMsg; x: number; y: number } | null>(null);
+  const [replyTarget, setReplyTarget] = useState<{ text: string; time: number } | null>(null);
+
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const close = () => setCtxMenu(null);
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setCtxMenu(null); };
+    window.addEventListener('mousedown', close);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('mousedown', close);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [ctxMenu]);
+
+  const onBubbleContextMenu = useCallback((msg: ChatMsg, x: number, y: number) => {
+    setCtxMenu({ msg, x, y });
+  }, []);
+
+  const onReplyToMsg = useCallback((msg: ChatMsg) => {
+    setReplyTarget({ text: normalizeChatDisplayText(msg.segmentedContent ?? msg.text), time: msg.time });
+    setCtxMenu(null);
+  }, []);
+
+  const onCopyMsg = useCallback((msg: ChatMsg) => {
+    const text = normalizeChatDisplayText(msg.segmentedContent ?? msg.text);
+    navigator.clipboard?.writeText(text).catch(() => {});
+    setCtxMenu(null);
+  }, []);
 
   const voice = useVoiceInput();
   const [ttsEnabled, setTtsEnabled] = useState(false);
@@ -1486,12 +1534,16 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
   const send = async () => {
     const t = input.trim();
     if (!t || loading) return;
+    const replyTo = replyTarget
+      ? { text: truncateForReplyTo(replyTarget.text), ts: replyTarget.time / 1000 }
+      : undefined;
     setInput('');
+    setReplyTarget(null);
     setMessages(m => [...m, { id: newId(), role: 'user', text: t, time: Date.now() }]);
     engine.setLocalFocus('想事情');
     setLoading(true);
     try {
-      const response = await sendChat(t);
+      const response = await sendChat(t, replyTo);
       const { reply } = response;
       const msgId = responseMsgId(response);
       // Do NOT render directly — WS channel_message is the primary render path.
@@ -1862,6 +1914,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
               assistantFontSize={fontSizes.assistant}
               userFontSize={fontSizes.user}
               ttsEnabled={ttsEnabled}
+              onBubbleContextMenu={onBubbleContextMenu}
             />
           </div>
         ))}
@@ -1885,8 +1938,66 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         )}
       </div>
 
+      {/* 气泡右键菜单：cc-tasks/36，全局单例，onMouseDown stopPropagation 避免点击项时被外部关闭逻辑抢先卸载 */}
+      {ctxMenu && (
+        <div
+          onMouseDown={e => e.stopPropagation()}
+          style={{
+            position: 'fixed',
+            top: Math.min(ctxMenu.y, window.innerHeight - 90),
+            left: Math.min(ctxMenu.x, window.innerWidth - 140),
+            zIndex: 50,
+            background: 'var(--paper)', border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-md)',
+            padding: 6, minWidth: 120,
+            boxShadow: '0 12px 32px oklch(0.30 0.04 60 / 0.20)',
+          }}
+        >
+          <button onClick={() => onReplyToMsg(ctxMenu.msg)} style={{
+            display: 'block', width: '100%', textAlign: 'left',
+            padding: '8px 10px', background: 'transparent', border: 'none', cursor: 'pointer',
+            color: 'var(--ink)', borderRadius: 'var(--radius-sm)', fontFamily: 'inherit', fontSize: chatThemeFontSize(12.5),
+          }}
+            onMouseEnter={e => (e.currentTarget as any).style.background = 'var(--paper-3)'}
+            onMouseLeave={e => (e.currentTarget as any).style.background = 'transparent'}>
+            {t('chat.contextMenu.reply')}
+          </button>
+          <button onClick={() => onCopyMsg(ctxMenu.msg)} style={{
+            display: 'block', width: '100%', textAlign: 'left',
+            padding: '8px 10px', background: 'transparent', border: 'none', cursor: 'pointer',
+            color: 'var(--ink)', borderRadius: 'var(--radius-sm)', fontFamily: 'inherit', fontSize: chatThemeFontSize(12.5),
+          }}
+            onMouseEnter={e => (e.currentTarget as any).style.background = 'var(--paper-3)'}
+            onMouseLeave={e => (e.currentTarget as any).style.background = 'transparent'}>
+            {t('chat.contextMenu.copy')}
+          </button>
+        </div>
+      )}
+
       {/* INPUT */}
       <div style={{ position: 'relative', padding: 18, borderTop: '1px solid var(--paper-edge)', background: avatars.chatBackground?.dataUrl ? 'oklch(from var(--paper-2) l c h / 0.85)' : 'var(--paper-2)' }}>
+        {replyTarget && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '8px 12px', marginBottom: 10,
+            background: 'var(--paper)', border: '1px solid var(--paper-edge)',
+            borderLeft: `3px solid oklch(0.55 0.13 ${currentHue})`,
+            borderRadius: 'var(--radius-sm)',
+          }}>
+            <div style={{
+              flex: 1, minWidth: 0,
+              fontSize: chatThemeFontSize(11.5), color: 'var(--ink-3)',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
+              {truncateForPreview(replyTarget.text)}
+            </div>
+            <button onClick={() => setReplyTarget(null)} title={t('chat.replyPreview.cancel')} aria-label={t('chat.replyPreview.cancel')} style={{
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              color: 'var(--ink-3)', fontSize: 16, lineHeight: 1, padding: 4, flexShrink: 0,
+            }}>
+              ×
+            </button>
+          </div>
+        )}
         {showAttachMenu && (
           <div style={{
             position: 'absolute', bottom: '100%', left: 18, marginBottom: 8,

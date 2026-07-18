@@ -169,8 +169,8 @@ GET 响应：
 
 ```text
 ChatPanel.send()
-  → sendChat(message)
-  → invoke("send_chat", { message })
+  → sendChat(message, replyTo?)
+  → invoke("send_chat", { message, replyTo? })
   → Rust reqwest POST http://127.0.0.1:8080/desktop/chat
 ```
 
@@ -181,6 +181,20 @@ ChatPanel.send()
   "message": "今天好累"
 }
 ```
+
+右键引用回复（cc-tasks/36，对齐 Emerald-presence Brief 98 §2）时额外携带 `reply_to`：
+
+```json
+{
+  "message": "今天好累",
+  "reply_to": {
+    "text": "被引用的角色气泡原文，客户端截断至 200 字",
+    "ts": 1752900000.0
+  }
+}
+```
+
+`reply_to` 可选；`ts` 为该气泡消息的 epoch 秒时间戳（v0.1 未做逐段时间戳，取整条消息时间戳）。旧后端忽略该字段，退化为普通消息，不报错。
 
 后端实际返回：
 
@@ -726,7 +740,7 @@ Authorization: Bearer <admin_token>
 | `native_ws_connect()` | 前端 → Rust → 后端 | 使用本地 admin token 建立带 Bearer header 的原生 WebSocket |
 | `native_ws_send(connection_id, message)` | 前端 → Rust → 后端 | 发送既有 legacy WS payload，不改变消息协议 |
 | `native_ws_disconnect()` | 前端 → Rust → 后端 | 关闭当前原生 WebSocket |
-| `send_chat(message)` | 前端 → Rust → 后端 | POST `/desktop/chat` |
+| `send_chat(message, reply_to?)` | 前端 → Rust → 后端 | POST `/desktop/chat`；`reply_to` 可选，右键引用回复时携带 `{text, ts}`（cc-tasks/36） |
 | `load_history(user_id)` | 前端 → Rust → 后端 | GET `/memory/{user_id}/short-term`；Rust 侧读取 admin token |
 | `load_garden_state()` | 前端 → Rust → 后端 | GET `/garden/state`；Rust 侧读取 admin token |
 | `load_diary_list()` | 前端 → Rust → 后端 | GET `/diary/list`；Rust 侧读取 admin token |
