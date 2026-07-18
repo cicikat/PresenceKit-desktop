@@ -473,6 +473,13 @@ fn live2d_models_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Err(format!("无法定位 live2d/models 资源目录，已检查: {checked_paths}"))
 }
 
+/// moc3 files store their format version at byte offset 4 (the 5th byte); v6 (Cubism Editor 5.2+)
+/// introduced the offscreen-rendering feature that `pixi-live2d-display-lipsyncpatch` doesn't draw
+/// (cc-tasks/31). Returns `None` if the file is missing/unreadable/too short.
+fn read_moc_version(moc_path: &Path) -> Option<u8> {
+    fs::read(moc_path).ok()?.get(4).copied()
+}
+
 #[tauri::command]
 fn list_live2d_models(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     let dir = match live2d_models_dir(&app) {
@@ -517,10 +524,17 @@ fn list_live2d_models(app: tauri::AppHandle) -> Result<serde_json::Value, String
             continue;
         };
 
+        let moc_version = fs::read_to_string(path.join(&model_json))
+            .ok()
+            .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+            .and_then(|v| v["FileReferences"]["Moc"].as_str().map(str::to_string))
+            .and_then(|moc_name| read_moc_version(&path.join(moc_name)));
+
         models.push(serde_json::json!({
             "dirName": dir_name,
             "modelJson": model_json,
             "label": dir_name,
+            "mocVersion": moc_version,
         }));
     }
     models.sort_by(|a, b| {

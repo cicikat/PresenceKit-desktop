@@ -270,9 +270,12 @@ export function useLive2DStage(
       }
 
       let modelJson: string | null = null;
+      let mocVersion: number | null = null;
       try {
         const assets = await listLive2DModels();
-        modelJson = assets.find(a => a.dirName === dir)?.modelJson ?? null;
+        const asset = assets.find(a => a.dirName === dir);
+        modelJson = asset?.modelJson ?? null;
+        mocVersion = asset?.mocVersion ?? null;
       } catch {
         modelJson = null;
       }
@@ -280,6 +283,11 @@ export function useLive2DStage(
       if (!modelJson) {
         setError(`模型目录 public/live2d/models/${dir}/ 内未找到 *.model3.json`);
         return;
+      }
+      // moc3 v≥6 (Cubism Editor 5.2+) may use offscreen-rendering parts that this renderer
+      // (pixi-live2d-display-lipsyncpatch@0.5.0, Core 4/5-era) never draws — cc-tasks/31.
+      if (mocVersion !== null && mocVersion >= 6) {
+        console.warn(`[live2d] 模型「${dir}」moc3 v${mocVersion} 使用了 offscreen 特性，当前渲染栈可能缺件（鼻/嘴等下半脸部件）`);
       }
 
       try {
@@ -293,6 +301,15 @@ export function useLive2DStage(
           return;
         }
         model.anchor.set(0.5, 0.5);
+        // §0 diagnostic (cc-tasks/31): confirm whether Core actually parsed offscreen groups for
+        // this moc3 — `_model` is CubismModel's private native-handle field, only present on Core 6+.
+        try {
+          const nativeModel = (model.internalModel?.coreModel as unknown as {
+            _model?: { offscreens?: { count?: number } };
+          })?._model;
+          const offscreenCount = nativeModel?.offscreens?.count ?? 0;
+          console.info(`[live2d] 模型「${dir}」offscreens.count=${offscreenCount}`);
+        } catch { /* diagnostic only, never block model load */ }
         disableBuiltinEyeBlink(model);
         detachDriver = attachDriver(model, driveFrame);
         modelRef.current = model;

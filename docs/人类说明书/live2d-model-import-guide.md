@@ -35,6 +35,8 @@
 
 **Core 6 曾经是破坏性更新**（改名 `getDrawableRenderOrders` → `getRenderOrders`，且把该数据从 `drawables` 挪到了 `model` 本身），当前渲染库直接读旧形状会在 `doDrawModel` 崩溃。`src/shared/live2d/cubismCoreShim.ts`（Brief 11）在 Core 主版本 ≥6 时会自动把 `model.drawables.renderOrders` 补回来，**Core 5 路径不受影响（零污染）**。下载与兼容性细节见 §1.1。
 
+**moc3 v6（cc-tasks/31，新坑）：能加载 ≠ 能画全。** Cubism Editor 5.2+ 引入的「オフスクリーン描画/offscreen」部件组渲染特性，当前渲染器（Core 4/5 时代构建，只遍历 drawables）完全不认识 `Live2DCubismCore.Offscreens`，勾了该选项的部件组永远不会被画出来——常见症状是口内/鼻影/妆面这类面部下半分层缺失，其余普通 drawable（眼/发/衣）正常。**导出规范：渲染栈升级前，模型导出目标版本设为 SDK 5.0（moc3 ≤ v5），部件设置里不要勾选「オフスクリーン描画」。** 已导出成 v6 且用了 offscreen 的模型加载时，设置面板的模型下拉下方会出非阻断提示；也可以自己查 `.moc3` 第 5 字节（见上方 PowerShell 一行）判断版本。
+
 ---
 
 ## 1. 目录结构

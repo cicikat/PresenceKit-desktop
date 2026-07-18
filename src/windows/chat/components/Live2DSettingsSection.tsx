@@ -103,6 +103,9 @@ export function Live2DSettingsSection() {
     saveLive2DSettings(next);
   }
 
+  const selectedModel = models.find(m => m.dirName === settings.modelDir);
+  const selectedMocVersion = selectedModel?.mocVersion ?? null;
+
   return (
     <div style={{ display: 'grid', gap: 18 }}>
       <div>
@@ -134,6 +137,12 @@ export function Live2DSettingsSection() {
           </select>
         )}
       </Row>
+
+      {selectedMocVersion !== null && selectedMocVersion >= 6 && (
+        <div className="mono" style={{ fontSize: 9.5, color: 'var(--accent-2)', letterSpacing: 0.8 }}>
+          模型使用 offscreen 特性（moc3 v{selectedMocVersion}），当前渲染栈可能缺件（鼻/嘴等下半脸部件）
+        </div>
+      )}
 
       <Row label="缩放" hint="0.2–3">
         <SliderNum min={0.2} max={3} step={0.01} value={settings.scaleMul} onChange={v => patch({ scaleMul: v })} />
