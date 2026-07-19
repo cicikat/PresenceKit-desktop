@@ -1260,7 +1260,7 @@ async fn dream_group_chat(app: tauri::AppHandle, group_id: String, message: Stri
     let cfg = load_client_config(&app);
     let client = llm_http_client()?;
     let resp = authorized_request(&cfg, client.post(backend_url(&cfg, &group_dream_path(&group_id, "send"))))
-        .json(&serde_json::json!({ "message": message })).send().await.map_err(|_| "Group Dream chat 请求失败".to_string())?;
+        .json(&serde_json::json!({ "content": message })).send().await.map_err(|_| "Group Dream chat 请求失败".to_string())?;
     let resp = require_success(resp).await?;
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
