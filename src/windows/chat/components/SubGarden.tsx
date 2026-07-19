@@ -5,6 +5,7 @@ import { Tag, Btn, MicroLabel } from './UIKit';
 import { loadGardenState } from '../../../shared/api/backend';
 import { waterGarden } from '../../../shared/api/runtimeSettings';
 import type { GardenState, GardenSlot } from '../../../shared/api/types';
+import { normalizeGardenState } from '../../../shared/api/stateResponseNormalization';
 import { chatThemeFontSize } from '../../../shared/chatAppearance';
 
 const FLOWER_COLOR: Record<string, string> = {
@@ -32,7 +33,8 @@ export function SubGarden() {
 
   const fetchData = async () => {
     try {
-      const result = await loadGardenState();
+      const result = normalizeGardenState(await loadGardenState());
+      if (!result) throw new Error('花园状态响应格式无效');
       setData(result);
       setError(null);
     } catch (e: any) {

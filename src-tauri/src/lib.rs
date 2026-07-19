@@ -878,14 +878,23 @@ async fn load_sensor_realtime(app: tauri::AppHandle) -> Result<serde_json::Value
         .await
         .map_err(|e| e.to_string())?;
 
-    if val.is_null() {
-        return Ok(serde_json::json!({ "_no_data": true }));
-    }
-    if matches!(val.as_object(), Some(map) if map.is_empty()) {
-        return Ok(serde_json::json!({ "_no_data": true }));
-    }
+    Ok(normalize_sensor_realtime_value(val))
+}
 
-    Ok(val)
+fn normalize_sensor_realtime_value(val: serde_json::Value) -> serde_json::Value {
+    let no_data = val.is_null()
+        || matches!(val.as_object(), Some(map) if map.is_empty())
+        || val.get("_no_data").and_then(|v| v.as_bool()) == Some(true)
+        // Compatibility with older backends that returned HTTP 200 plus a
+        // snapshot-shaped object whose nested fields were null on first run.
+        || val.get("input").map_or(true, serde_json::Value::is_null)
+        || val.get("focus").map_or(true, serde_json::Value::is_null)
+        || val.get("window_seconds").map_or(true, serde_json::Value::is_null);
+    if no_data {
+        serde_json::json!({ "_no_data": true })
+    } else {
+        val
+    }
 }
 
 #[tauri::command]
@@ -2553,6 +2562,38 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod sensor_response_tests {
+    use super::*;
+
+    #[test]
+    fn null_filled_legacy_snapshot_becomes_no_data() {
+        let value = serde_json::json!({
+            "ts": null,
+            "window_seconds": null,
+            "input": null,
+            "focus": null,
+        });
+
+        assert_eq!(
+            normalize_sensor_realtime_value(value),
+            serde_json::json!({ "_no_data": true })
+        );
+    }
+
+    #[test]
+    fn complete_snapshot_passes_through() {
+        let value = serde_json::json!({
+            "ts": 123.0,
+            "window_seconds": 30,
+            "input": { "keystrokes": 1 },
+            "focus": { "switch_count": 0 },
+        });
+
+        assert_eq!(normalize_sensor_realtime_value(value.clone()), value);
+    }
 }
 
 #[cfg(test)]

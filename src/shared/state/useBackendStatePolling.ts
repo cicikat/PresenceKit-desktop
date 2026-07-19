@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { loadActivityState, loadMoodState } from '../api/backend';
-import type { ActivityState } from '../api/types';
 import { classifyHttpError } from '../api/httpError';
+import { normalizeActivityState } from '../api/stateResponseNormalization';
 import { backendMoodToFrontend } from './mood-mapping';
 import type { StateEngine } from './store';
 
@@ -67,7 +67,8 @@ export function useBackendStatePolling(
   const fetchActivity = useCallback(async () => {
     const pollingRun = pollingRunRef.current;
     try {
-      const raw: ActivityState = await loadActivityState();
+      const raw = normalizeActivityState(await loadActivityState());
+      if (!raw) throw new Error('活动状态响应格式无效');
       engine.applyBackendState('activity-poll', {
         activity: {
           id: raw.id,

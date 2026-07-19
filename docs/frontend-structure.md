@@ -357,7 +357,7 @@ Timeline：`uiPreferences` 按激活角色分桶持久化（key `subflow_timelin
 |---|---|---|
 | mood 后端持久值 | `useBackendStatePolling()` → `/mood/state` → `engine.applyBackendState('mood-poll', {mood})` | 30s |
 | activity 身体动作 | `useBackendStatePolling()` → `/activity/current` → `engine.applyBackendState('activity-poll', {activity})` | 60s |
-| sensor 实时快照 | `loadSensorRealtime()` → `/sensor/realtime` → 真实键鼠/焦点数据 | 10s |
+| sensor 实时快照 | `loadSensorRealtime()` → `/sensor/realtime` → Rust 兼容归一化 → TypeScript 完整结构校验 → 真实键鼠/焦点数据 | 10s |
 | presence | engine 现有值（默认 active）；sensor 可用时仅参与 4 个信号派生，不写入 engine | — |
 | focus | ChatPanel 输入驱动，SubStatus 不动 | — |
 
@@ -372,7 +372,7 @@ Timeline：`uiPreferences` 按激活角色分桶持久化（key `subflow_timelin
 
 Ring buffer：`useState<{mood, aura}[]>` 长度 60；2s 采样；mood 轨迹柱状图，每格高度 = aura %，颜色 = MOOD_HUE。
 
-后端连接失败：顶部显示小型警告条 + 重试按钮，UI 继续显示 engine 当前值，不 crash。
+后端连接失败：顶部显示小型警告条 + 重试按钮，UI 继续显示 engine 当前值，不 crash。sensor 的 `_no_data`、旧后端首启 `null` 字段和其他残缺 HTTP 200 响应均按“不可用”处理，回退 mood/presence 派生信号；activity 响应也先归一化，空 `arc` 不进入字符串方法调用。
 
 ## SubGarden
 
@@ -382,6 +382,7 @@ Ring buffer：`useState<{mood, aura}[]>` 长度 60；2s 采样；mood 轨迹柱�
 
 - 在 Sidebar 的 `garden` tab 中展示陪伴花园。
 - 调用 `loadGardenState()` 读取后端 `/garden/state`。
+- 在渲染前校验 `slots` 必须为数组、每个槽位的字符串/数值字段完整；异常 HTTP 200 响应进入面板内错误态，不交给 React ErrorBoundary。
 - 每 30 秒轮询一次。
 - 展示五个情绪花槽、花名、英文名、阶段、阶段进度条和 bloom 标签。
 

@@ -4,8 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import { MicroLabel } from './UIKit';
 import { MOOD_HUE, MOOD_LABEL_EN } from './UIKit';
 import { loadSensorRealtime } from '../../../shared/api/backend';
-import type { SensorRealtimeResponse, SensorRealtimeData } from '../../../shared/api/types';
-import { isSensorNoData } from '../../../shared/api/types';
+import type { SensorRealtimeData } from '../../../shared/api/types';
+import { normalizeSensorRealtimeResponse } from '../../../shared/api/stateResponseNormalization';
 import { chatThemeFontSize } from '../../../shared/chatAppearance';
 import type { BackendStatePollingControls } from '../../../shared/state/useBackendStatePolling';
 
@@ -129,18 +129,18 @@ export function SubStatus({
   // ── 每 10s 拉 sensor realtime ─────────────────────────────────────────────
   const fetchSensor = async () => {
     try {
-      const raw: SensorRealtimeResponse = await loadSensorRealtime();
-      if (isSensorNoData(raw)) {
+      const data = normalizeSensorRealtimeResponse(await loadSensorRealtime());
+      if (!data) {
         setSensorData(null);
         setSensorAvailable(false);
         return;
       }
-      if (raw.stale_seconds > 90) {
-        setSensorData(raw);
+      if (data.stale_seconds > 90) {
+        setSensorData(data);
         setSensorAvailable(false);
         return;
       }
-      setSensorData(raw);
+      setSensorData(data);
       setSensorAvailable(true);
     } catch (e) {
       setSensorData(null);

@@ -615,20 +615,13 @@ Authorization: Bearer <admin_token>
   → GET http://127.0.0.1:8080/sensor/realtime
 ```
 
-后端要求 Bearer token。客户端 Rust command 使用 `reqwest.no_proxy()`；404、JSON `null`、空对象 `{}` 统一映射为 `{ "_no_data": true }`，前端静默降级为 mood 派生信号。
+后端要求 Bearer token。无快照时当前后端直接返回 `{ "_no_data": true }`。客户端 Rust command 使用 `reqwest.no_proxy()`；为兼容旧后端，404、JSON `null`、空对象 `{}`，以及 `input` / `focus` / `window_seconds` 缺失或为 `null` 的旧式响应也统一映射为 `{ "_no_data": true }`。TypeScript 消费侧仍会校验完整结构，校验不通过时静默降级为 mood 派生信号，不能让 HTTP 200 的残缺响应进入渲染。
 
 无数据时(sensor 模块未启动或刚重启,例如 本仓 还在启动中)响应:
 
 ```json
 {
-  "ts": null,
-  "stale_seconds": null,
-  "presence": "active",
-  "continuous_at_desk_seconds": null,
-  "sensor_version": null,
-  "window_seconds": null,
-  "input": null,
-  "focus": null
+  "_no_data": true
 }
 ```
 
@@ -664,7 +657,7 @@ Authorization: Bearer <admin_token>
 | 60 ≤ idle < 300 | `idle` |
 | ≥ 300 | `away` |
 
-无数据时默认 `active`，与 StateEngine 默认值一致。
+无数据时不覆盖 StateEngine；其默认 `presence` 仍为 `active`。
 
 `continuous_at_desk_seconds` 累积规则：
 
@@ -674,7 +667,7 @@ Authorization: Bearer <admin_token>
 - 当后端发现两次 POST 间隔 > 120s 时保守重置(视为 sensor 模块中断过,例如 本仓 被关闭)
 - 本仓 重启或后端重启均清零,无持久化
 
-`stale_seconds` 是后端算的"距上次 POST 多少秒",SubStatus 用这个判断 sensor 模块是否还在采集(比如 >120 视为掉线,UI 显示降级)。
+`stale_seconds` 是后端算的"距上次 POST 多少秒",SubStatus 用这个判断 sensor 模块是否还在采集（>90 秒视为掉线，UI 静默降级）。
 
 后端文件：`Emerald-presence` 仓库（通常与本仓库同级）的 `admin\routers\sensor.py`、`core\memory\realtime_state.py`
 
