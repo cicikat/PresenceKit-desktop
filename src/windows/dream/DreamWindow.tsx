@@ -45,7 +45,7 @@ export function DreamWindow({ characterAvatarDataUrl = null, onClose }: DreamWin
   const [sideTab, setSideTab] = useState<DreamSideTab>('flow');
   const [openModal, setOpenModal] = useState<DreamModal>(null);
   const [sidebarWidth, setSidebarWidth] = useState(() => getUIPref('dream.sidebarWidth', SIDEBAR_DEFAULT));
-  const [tone, setTone] = useState<DreamTone>(() => getUIPref('dream.tone', 'day'));
+  const [tone, setTone] = useState<DreamTone>(() => getUIPref('dream.tone', 'night'));
   const [entryMode, setEntryMode] = useState<DreamEntryMode>(() => getUIPref<DreamEntryMode>('dream.entryMode', 'sandbox'));
   const [scenarioScriptId, setScenarioScriptId] = useState(() => getUIPref('dream.scenarioScriptId', 'prison_demo'));
   const [appearance, setAppearance] = useState<DreamAppearance>(() => loadDreamAppearance());
