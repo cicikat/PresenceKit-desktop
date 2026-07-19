@@ -49,9 +49,6 @@ export const enUS: Record<MessageKey, string> = {
   'onboarding.submitting': 'Verifying…',
   'onboarding.errorEmpty': 'Please paste a token first',
   'onboarding.checking': 'Checking connection settings…',
-  'dream.tokenGate.title': 'Token verification needed before entering the dream',
-  'dream.tokenGate.description': 'The token is missing or invalid. Fix it here to continue right away.',
-  'dream.tokenGate.submit': 'Verify and enter the dream',
   'connection.error.rateLimitedTemplate': 'Connection throttled, retrying in {n}s',
   'connection.error.reauth': 'Re-enter token',
 };

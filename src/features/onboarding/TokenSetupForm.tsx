@@ -18,15 +18,12 @@ const primaryBtn: CSSProperties = {
 };
 
 export interface TokenSetupFormProps {
-  /** fullpage：首启引导整页展示；inline：梦境进入页内嵌，更紧凑、不展示后端地址。 */
-  variant: 'fullpage' | 'inline';
   onSuccess: () => void;
 }
 
-// 首启引导页与梦境进入页"就地引导"共用的 token 校验/保存表单（cc-tasks/34 §1, 35 §3）。
-// 两处写的是同一份 config/client.local.json，没有独立的"梦境 token"字段——梦境入口只是
-// desktop token 的第二个填写入口，验证成功即恢复同一份鉴权状态。
-export function TokenSetupForm({ variant, onSuccess }: TokenSetupFormProps) {
+// 首启引导门禁（cc-tasks/34 §1, 35 §1）的 token 校验/保存表单；梦境等其余入口的 401
+// 都并入同一份 authGate 全局门禁,不再各自维护表单（cc-tasks/37）。
+export function TokenSetupForm({ onSuccess }: TokenSetupFormProps) {
   const { t } = useI18n();
   const [backendBase, setBackendBase] = useState('');
   const [websocketBase, setWebsocketBase] = useState('');
@@ -69,11 +66,9 @@ export function TokenSetupForm({ variant, onSuccess }: TokenSetupFormProps) {
     }
   }
 
-  const isFullpage = variant === 'fullpage';
-
   return (
     <div style={{ display: 'grid', gap: 14 }}>
-      {isFullpage && loaded && (
+      {loaded && (
         <div>
           <div style={{ fontSize: 12.5, color: 'var(--ink-2)', marginBottom: 4 }}>
             {t('onboarding.stepOpenPanel')}
@@ -112,7 +107,7 @@ export function TokenSetupForm({ variant, onSuccess }: TokenSetupFormProps) {
       )}
 
       <button style={primaryBtn} disabled={submitting} onClick={() => void handleSubmit()}>
-        {submitting ? t('onboarding.submitting') : t(isFullpage ? 'onboarding.submit' : 'dream.tokenGate.submit')}
+        {submitting ? t('onboarding.submitting') : t('onboarding.submit')}
       </button>
     </div>
   );

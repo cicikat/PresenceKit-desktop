@@ -47,9 +47,6 @@ export const zhCN = {
   'onboarding.submitting': '验证中…',
   'onboarding.errorEmpty': '请先粘贴 token',
   'onboarding.checking': '正在检查连接配置…',
-  'dream.tokenGate.title': '进入梦境前需要验证 token',
-  'dream.tokenGate.description': '当前 token 未配置或已失效，就地填写后可直接继续进入。',
-  'dream.tokenGate.submit': '验证并继续进入梦境',
   'connection.error.rateLimitedTemplate': '连接受限，{n} 秒后重试',
   'connection.error.reauth': '重新填写密钥',
 } as const;

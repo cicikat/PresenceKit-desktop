@@ -67,7 +67,7 @@ export function OnboardingGate({ children }: { children: ReactNode }) {
           <div style={{ fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.6 }}>
             {t('onboarding.description')}
           </div>
-          <TokenSetupForm variant="fullpage" onSuccess={() => void recheck()} />
+          <TokenSetupForm onSuccess={() => void recheck()} />
         </div>
       </div>
     );

@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invokeGated } from './authGate';
 import type {
   DreamState,
   DreamEnterOptions,
@@ -30,11 +30,11 @@ async function withDreamSettingsTimeout<T>(request: Promise<T>): Promise<T> {
 }
 
 export async function dreamGetState(): Promise<DreamState> {
-  return invoke<DreamState>('dream_get_state');
+  return invokeGated<DreamState>('dream_get_state');
 }
 
 export async function dreamEnter(options: DreamEnterOptions = {}): Promise<DreamEnterResponse> {
-  return invoke<DreamEnterResponse>('dream_enter', {
+  return invokeGated<DreamEnterResponse>('dream_enter', {
     entryReason: options.entry_reason ?? null,
     dreamMode: options.dream_mode ?? 'sandbox',
     scriptId: options.script_id ?? null,
@@ -42,33 +42,33 @@ export async function dreamEnter(options: DreamEnterOptions = {}): Promise<Dream
 }
 
 export async function dreamChat(message: string): Promise<DreamChatResponse> {
-  return invoke<DreamChatResponse>('dream_chat', { message });
+  return invokeGated<DreamChatResponse>('dream_chat', { message });
 }
 
 export async function dreamExit(): Promise<DreamExitResponse> {
-  return invoke<DreamExitResponse>('dream_exit');
+  return invokeGated<DreamExitResponse>('dream_exit');
 }
 
 /** Soft retention gate — call instead of dreamExit() when user taps WAKE. */
 export async function dreamWake(): Promise<DreamWakeResponse> {
-  return invoke<DreamWakeResponse>('dream_wake');
+  return invokeGated<DreamWakeResponse>('dream_wake');
 }
 
 /** Resume dream after soft retention — user chose to stay. */
 export async function dreamResume(): Promise<DreamResumeResponse> {
-  return invoke<DreamResumeResponse>('dream_resume');
+  return invokeGated<DreamResumeResponse>('dream_resume');
 }
 
 export async function dreamGetSettings(): Promise<DreamSettings> {
-  return withDreamSettingsTimeout(invoke<DreamSettings>('dream_get_settings'));
+  return withDreamSettingsTimeout(invokeGated<DreamSettings>('dream_get_settings'));
 }
 
 export async function dreamGetStats(): Promise<DreamStats> {
-  return invoke<DreamStats>('dream_get_stats');
+  return invokeGated<DreamStats>('dream_get_stats');
 }
 
 export async function dreamUpdateSettings(update: DreamSettingsUpdateRequest): Promise<DreamSettingsResponse> {
-  return withDreamSettingsTimeout(invoke<DreamSettingsResponse>('dream_update_settings', {
+  return withDreamSettingsTimeout(invokeGated<DreamSettingsResponse>('dream_update_settings', {
     enableDreamLorebook: update.enable_dream_lorebook ?? null,
     memoryAccess: update.memory_access ?? null,
     boundaryLevel: update.boundary_level ?? null,
