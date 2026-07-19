@@ -35,17 +35,32 @@ export function SpecPanel({ open, onClose }: { open: boolean; onClose: () => voi
         </div>
         <div style={{ padding: '22px 28px 32px', display: 'grid', gap: 20, overflowY: 'auto' }}>
           <HelpSection title="关于">
-            <TodoHint>项目说明即将提供。</TodoHint>
-          </HelpSection>
-          <HelpSection title="链接">
-            <TodoHint>仓库地址及联系方式即将提供。</TodoHint>
-          </HelpSection>
+          <p>
+            PresenceKit 是一个开源 AI 角色陪伴系统。
+            <br />
+            支持角色长期记忆、多世界交互、梦境场景与跨端体验。
+            <br />
+            本项目仍处于早期内测版本，功能会持续迭代。
+          </p>
+        </HelpSection>
+        <HelpSection title="链接">
+          <p>
+          https://github.com/cicikat/PresenceKit
+         </p></HelpSection>
           <HelpSection title="免责声明">
-            <TodoHint>免责声明即将提供。</TodoHint>
+            <p>
+              本项目为个人开发的 AI 交互实验与开源工具。
+              <br />
+              AI 输出内容由模型生成，可能存在不准确或不符合预期的情况。
+            </p>
           </HelpSection>
           <HelpSection title="公告">
-            <TodoHint>暂无公告</TodoHint>
-          </HelpSection>
+          <p>
+            PresenceKit v0.1 已发布。
+            <br />
+            感谢参与测试。如日后更新需要迁移记忆数据，只需备份根目录下data/即可
+          </p>
+        </HelpSection>
         </div>
       </div>
     </div>
@@ -59,13 +74,5 @@ function HelpSection({ title, children }: any) {
       <div style={{ height: 1, background: 'var(--paper-edge)', marginBottom: 10 }} />
       {children}
     </div>
-  );
-}
-
-function TodoHint({ children }: any) {
-  return (
-    <div className="serif" style={{
-      fontSize: 13, color: 'var(--ink-3)', fontStyle: 'italic', lineHeight: 1.6,
-    }}>{children}</div>
   );
 }
