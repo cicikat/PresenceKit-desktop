@@ -760,6 +760,10 @@ Authorization: Bearer <admin_token>
 | `list_themes()` | 前端 → Rust | packaged 优先扫描 `resource_dir/themes/*/theme.json`，debug/dev 回退源码 `public/themes/`；原样返回 manifest，由前端校验 token 契约 |
 | `dream_get_settings()` | 前端 → Rust → 后端 | GET `/dream/settings`；读取 Dream 上下文与 `display.physiological_arousal` |
 | `dream_update_settings(..., jailbreak_preset, display)` | 前端 → Rust → 后端 | PATCH `/dream/settings`；透传 Dream 独立 `jailbreak_preset`，`display` 可透传 `{ "physiological_arousal": boolean }` |
+| `dream_group_enter/chat/exit(group_id, ...)` | 前端 → Rust → 后端 | POST `/group/{id}/dream/enter|send|exit`；群梦 send 返回 `{round_id,status}`，角色回复走 WS |
+| `dream_group_get_state/get_settings(group_id)` | 前端 → Rust → 后端 | GET `/group/{id}/dream/state|settings`；state 含 roster、逐角色 char_tension 与 blocks_chat |
+| `dream_group_update_settings(group_id, ...)` | 前端 → Rust → 后端 | PATCH `/group/{id}/dream/settings`；透传世界、世界书、边界、群默认与 per-char 破限 |
+| `dream_list_worlds/presets()` | 前端 → Rust → 后端 | GET `/dream/worlds|presets`；为单/群 Dream 设置提供可选项，不暴露文件路径 |
 | `get_chat_settings()` | 前端 → Rust → 后端 | 顺序 GET `/chat-mode` + `/chat-style` + `/chat-multi-message`，合并为 `{ mode, style, multi_message }` 返回 |
 | `set_chat_mode(mode)` | 前端 → Rust → 后端 | PUT `/chat-mode`，`mode` 取值 `"chat"` \| `"roleplay"` |
 | `set_chat_style(style)` | 前端 → Rust → 后端 | PUT `/chat-style`，`style` 取值 `"chat"` \| `"roleplay"` |
@@ -785,6 +789,7 @@ Client Auth Sync（R9 / SEC-AUTH-1）已同步的受保护调用点：
 - `POST /upload/ingest`
 - `POST /dream/enter`、`POST /dream/chat`、`POST /dream/exit`
 - `GET /dream/state`、`GET /dream/settings`、`PATCH /dream/settings`
+- `POST /group/{id}/dream/enter|send|exit`、`GET /group/{id}/dream/state|settings`、`PATCH /group/{id}/dream/settings`、`GET /dream/worlds|presets`
 
 当前未发现客户端调用点：`POST /desktop/deactivate`、`POST /agent/think`。未为它们新增业务调用。
 

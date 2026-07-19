@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, memo } from 'react';
+import { useState, useEffect, useRef, memo, type CSSProperties } from 'react';
 import type { DreamMessage } from '../../../shared/api/dream-types';
 import type { NarrativeSegment } from '../../../shared/api/types';
 import { DreamSceneBlock } from './DreamSceneBlock';
@@ -12,6 +12,8 @@ interface DreamChatPanelProps {
   streamingActive?: boolean;
   inputDisabled: boolean;
   herDataUrl: string | null;
+  mode?: 'single' | 'group';
+  roster?: Record<string, { label: string; avatarDataUrl: string | null }>;
   onSend: (text: string) => void;
   endedMessage?: string;
 }
@@ -56,9 +58,11 @@ function normalizeDreamDialogueDisplayText(text: string): string {
 function DreamSegmentedReply({
   segments,
   herDataUrl,
+  speaker,
 }: {
   segments: NarrativeSegment[];
   herDataUrl: string | null;
+  speaker: string;
 }) {
   let hasSaySpeaker = false;
 
@@ -83,7 +87,7 @@ function DreamSegmentedReply({
                   <DreamGlowBubble
                     key={`${segmentIndex}-${lineIndex}`}
                     side="left"
-                    speaker={showSpeaker && lineIndex === 0 ? 'HIM' : undefined}
+                    speaker={showSpeaker && lineIndex === 0 ? speaker : undefined}
                     className="dream-glow-bubble--say"
                   >
                     {normalizeDreamDialogueDisplayText(line)}
@@ -117,28 +121,41 @@ function DreamHerAvatar({ herDataUrl }: { herDataUrl: string | null }) {
 const DreamMsgRow = memo(function DreamMsgRow({
   msg,
   herDataUrl,
+  mode,
+  roster,
 }: {
   msg: DreamMessage;
   herDataUrl: string | null;
+  mode: 'single' | 'group';
+  roster: Record<string, { label: string; avatarDataUrl: string | null }>;
 }) {
   if (msg.role === 'system') {
     return <DreamSceneBlock text={msg.text} />;
   }
 
   const fromUser = msg.role === 'user';
+  const rosterEntry = msg.speakerId ? roster[msg.speakerId] : undefined;
+  const speaker = mode === 'group' ? (rosterEntry?.label ?? msg.speakerId ?? 'HIM') : 'HIM';
+  const speakerAvatar = mode === 'group' ? (rosterEntry?.avatarDataUrl ?? null) : herDataUrl;
+  const speakerHue = msg.speakerId
+    ? [...msg.speakerId].reduce((sum, char) => sum + char.charCodeAt(0), 0) % 120 + 190
+    : 230;
   const displayText = msg.segmentedContent ?? msg.text;
   const bubbles = fromUser ? null : splitIntoBubbles(displayText);
 
   return (
-    <div className={`dream-msg${fromUser ? ' dream-msg--user' : ' dream-msg--her'}`}>
-      {!fromUser && !msg.segments?.length && <DreamHerAvatar herDataUrl={herDataUrl} />}
+    <div
+      className={`dream-msg${fromUser ? ' dream-msg--user' : ' dream-msg--her'}${mode === 'group' && !fromUser ? ' dream-msg--group-speaker' : ''}`}
+      style={!fromUser && mode === 'group' ? { '--dream-speaker-color': `oklch(0.68 0.12 ${speakerHue})` } as CSSProperties : undefined}
+    >
+      {!fromUser && !msg.segments?.length && <DreamHerAvatar herDataUrl={speakerAvatar} />}
       <div className={`dream-msg__content${!fromUser && msg.segments?.length ? ' dream-msg__content--segmented' : ''}`}>
         {!fromUser && msg.segments?.length ? (
-          <DreamSegmentedReply segments={msg.segments} herDataUrl={herDataUrl} />
+          <DreamSegmentedReply segments={msg.segments} herDataUrl={speakerAvatar} speaker={speaker} />
         ) : bubbles ? (
           <div className="dream-msg__bubbles">
             {bubbles.map((segment, bi) => (
-              <DreamGlowBubble key={bi} side="left" speaker={bi === 0 ? 'HIM' : undefined}>
+              <DreamGlowBubble key={bi} side="left" speaker={bi === 0 ? speaker : undefined}>
                 {renderBubbleLines(segment).map((line, i) => (
                   <p
                     key={i}
@@ -164,6 +181,8 @@ export function DreamChatPanel({
   streamingActive = false,
   inputDisabled,
   herDataUrl,
+  mode = 'single',
+  roster = {},
   onSend,
   endedMessage,
 }: DreamChatPanelProps) {
@@ -194,13 +213,13 @@ export function DreamChatPanel({
         )}
 
         {messages.map(m => (
-          <DreamMsgRow key={m.id} msg={m} herDataUrl={herDataUrl} />
+          <DreamMsgRow key={m.id} msg={m} herDataUrl={herDataUrl} mode={mode} roster={roster} />
         ))}
 
         {loading && !streamingActive && (
           <div className="dream-msg dream-msg--her">
             <div className="dream-msg__content">
-              <DreamGlowBubble side="left" speaker="HIM" className="dream-glow-bubble--typing">
+              <DreamGlowBubble side="left" speaker={mode === 'group' ? undefined : 'HIM'} className="dream-glow-bubble--typing">
                 <TypingDots color="var(--dt-ink-3)" />
               </DreamGlowBubble>
             </div>

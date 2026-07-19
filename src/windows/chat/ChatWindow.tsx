@@ -1286,6 +1286,11 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivi
   const [specOpen, setSpecOpen]                   = useState(false);
   const [prefsOpen, setPrefsOpen]                 = useState(false);
   const [dreamWindowOpen, setDreamWindowOpen]     = useState(false);
+  const [dreamContext, setDreamContext] = useState<{
+    mode: 'single' | 'group';
+    groupId: string | null;
+    roster: Record<string, { label: string; avatarDataUrl: string | null }>;
+  }>({ mode: 'single', groupId: null, roster: {} });
   const [dreamAfterglow, setDreamAfterglow]       = useState(false);
   const [characterAvatarDataUrl, setCharacterAvatarDataUrl] = useState<string | null>(null);
   const [charSwitchKey, setCharSwitchKey] = useState(0);
@@ -1451,12 +1456,14 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivi
       setDreamWindowOpen(false);
     } else {
       setDreamAfterglow(false);
+      setDreamContext({ mode: 'single', groupId: null, roster: {} });
       setDreamWindowOpen(true);
     }
   }, [dreamWindowOpen]);
 
   useEffect(() => wsClient.on('dream_invite', () => {
     setDreamAfterglow(false);
+    setDreamContext({ mode: 'single', groupId: null, roster: {} });
     setDreamWindowOpen(true);
   }), []);
 
@@ -1563,6 +1570,11 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivi
               <GroupChatPanel
                 groupId={groupView}
                 onBack={() => setGroupView('list')}
+                onDreamEnter={(group, roster) => {
+                  setDreamAfterglow(false);
+                  setDreamContext({ mode: 'group', groupId: group.group_id, roster });
+                  setDreamWindowOpen(true);
+                }}
                 fontSize={appearance.chatFontSize}
               />
             )}
@@ -1572,6 +1584,9 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivi
 
       {dreamWindowOpen && (
         <DreamWindow
+          mode={dreamContext.mode}
+          groupId={dreamContext.groupId}
+          groupRoster={dreamContext.roster}
           characterAvatarDataUrl={characterAvatarDataUrl}
           onClose={() => {
             setDreamWindowOpen(false);

@@ -14,16 +14,16 @@ import { actionType, actionParams, stringParam } from './wsActionParams';
 
 type EventMap = {
   state: ConnectionState;
-  channel_message: { content: string; msg_id: string; source?: string; char_id?: string; round_id?: string };
-  message_segments: { content: string; segments: NarrativeSegment[]; msg_id: string; source?: string; char_id?: string };
+  channel_message: { content: string; msg_id: string; source?: string; domain?: 'reality' | 'dream'; char_id?: string; round_id?: string };
+  message_segments: { content: string; segments: NarrativeSegment[]; msg_id: string; source?: string; domain?: 'reality' | 'dream'; char_id?: string; round_id?: string };
   action: DesktopActionPayload;
   dream_invite: Record<string, never>;
   toy_invite: Record<string, never>;
-  message_stream_start: { msg_id: string; char_id?: string; round_id?: string };
-  message_stream_delta: { msg_id: string; delta: string };
-  message_stream_end: { msg_id: string };
-  group_round_start: { round_id: string; group_id: string };
-  group_round_end: { round_id: string; group_id: string };
+  message_stream_start: { msg_id: string; domain?: 'reality' | 'dream'; char_id?: string; round_id?: string };
+  message_stream_delta: { msg_id: string; delta: string; domain?: 'reality' | 'dream'; char_id?: string; round_id?: string };
+  message_stream_end: { msg_id: string; domain?: 'reality' | 'dream'; char_id?: string; round_id?: string };
+  group_round_start: { round_id: string; group_id: string; domain?: 'reality' | 'dream' };
+  group_round_end: { round_id: string; group_id: string; domain?: 'reality' | 'dream' };
 };
 
 type NativeMessageEvent = { connectionId: number; data: string };
@@ -166,7 +166,7 @@ class WSClient {
         this._setState('connected');
         break;
       case 'channel_message':
-        this.emit('channel_message', { content: msg.content, msg_id: msg.msg_id, source: msg.source, char_id: msg.char_id, round_id: msg.round_id });
+        this.emit('channel_message', { content: msg.content, msg_id: msg.msg_id, source: msg.source, domain: msg.domain, char_id: msg.char_id, round_id: msg.round_id });
         this._send({ type: 'ack', msg_id: msg.msg_id, ok: true });
         break;
       case 'message_segments':
@@ -175,7 +175,9 @@ class WSClient {
           segments: msg.segments,
           msg_id: msg.msg_id,
           source: msg.source,
+          domain: msg.domain,
           char_id: msg.char_id,
+          round_id: msg.round_id,
         });
         break;
       case 'action':
@@ -186,19 +188,19 @@ class WSClient {
         this._send({ type: 'pong' });
         break;
       case 'message_stream_start':
-        this.emit('message_stream_start', { msg_id: msg.msg_id, char_id: msg.char_id, round_id: msg.round_id });
+        this.emit('message_stream_start', { msg_id: msg.msg_id, domain: msg.domain, char_id: msg.char_id, round_id: msg.round_id });
         break;
       case 'message_stream_delta':
-        this.emit('message_stream_delta', { msg_id: msg.msg_id, delta: msg.delta });
+        this.emit('message_stream_delta', { msg_id: msg.msg_id, delta: msg.delta, domain: msg.domain, char_id: msg.char_id, round_id: msg.round_id });
         break;
       case 'message_stream_end':
-        this.emit('message_stream_end', { msg_id: msg.msg_id });
+        this.emit('message_stream_end', { msg_id: msg.msg_id, domain: msg.domain, char_id: msg.char_id, round_id: msg.round_id });
         break;
       case 'group_round_start':
-        this.emit('group_round_start', { round_id: msg.round_id, group_id: msg.group_id });
+        this.emit('group_round_start', { round_id: msg.round_id, group_id: msg.group_id, domain: msg.domain });
         break;
       case 'group_round_end':
-        this.emit('group_round_end', { round_id: msg.round_id, group_id: msg.group_id });
+        this.emit('group_round_end', { round_id: msg.round_id, group_id: msg.group_id, domain: msg.domain });
         break;
     }
   }

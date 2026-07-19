@@ -79,7 +79,8 @@ function getBackendFlowEntries(dreamState: DreamState | null): FlowEntryDisplay[
 
 function buildFallbackFlowEntries(dreamState: DreamState | null): FlowEntryDisplay[] {
   const world = dreamState?.frozen_world ? (WORLD_LABEL[dreamState.frozen_world] ?? '当前') : '当前';
-  const tension = dreamState?.char_tension ?? dreamState?.yexuan_tension ?? 0;
+  const rawTension = dreamState?.char_tension ?? dreamState?.yexuan_tension;
+  const tension = typeof rawTension === 'number' ? rawTension : 0;
   const boundaryIsClosing = dreamState?.status === 'DREAM_EXIT_REQUESTED'
     || dreamState?.status === 'DREAM_CLOSING'
     || dreamState?.status === 'REALITY_AFTERGLOW';
@@ -159,7 +160,8 @@ function HerBodyPanel({ body }: { body: { heat: number; sensitivity: number; ten
 
 export function DreamSidebar({ dreamState, herDataUrl, onClose }: DreamSidebarProps) {
   const status = dreamState?.status;
-  const tension = dreamState?.char_tension ?? dreamState?.yexuan_tension;
+  const rawTension = dreamState?.char_tension ?? dreamState?.yexuan_tension;
+  const tension = typeof rawTension === 'number' ? rawTension : undefined;
   const scene = dreamState?.scene_state;
   const anchors = dreamState?.symbolic_anchors ?? [];
   const body = dreamState?.body;

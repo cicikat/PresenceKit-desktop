@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef, type CSSProperties } from 'react';
-import { dreamEnter, dreamExit, dreamWake, dreamResume } from '../../shared/api/dream';
+import { dreamEnter, dreamExit, dreamWake, dreamResume, dreamGroupEnter, dreamGroupExit } from '../../shared/api/dream';
 import { useDreamState } from './hooks/useDreamState';
 import { useDreamChat } from './hooks/useDreamChat';
+import { useGroupDreamChat } from './hooks/useGroupDreamChat';
 import { DreamSidebar } from './components/DreamSidebar';
 import { DreamStatusSidebar } from './components/DreamStatusSidebar';
 import { DreamPrefsPane } from './components/DreamPrefsPane';
@@ -22,6 +23,7 @@ import {
   type DreamAppearance,
 } from '../../shared/dreamAppearance';
 import '../../features/dream/DreamTokens.css';
+import { useI18n } from '../../shared/i18n';
 
 type WindowPhase = 'loading' | 'ready' | 'entering' | 'active' | 'ended';
 type DreamSideTab = 'flow' | 'status' | 'subconscious';
@@ -33,12 +35,17 @@ const SIDEBAR_MAX = 480;
 const SIDEBAR_DEFAULT = 380;
 
 interface DreamWindowProps {
+  mode?: 'single' | 'group';
+  groupId?: string | null;
+  groupRoster?: Record<string, { label: string; avatarDataUrl: string | null }>;
   characterAvatarDataUrl?: string | null;
   onClose: () => void;
 }
 
-export function DreamWindow({ characterAvatarDataUrl = null, onClose }: DreamWindowProps) {
-  const { dreamState, stateError, refresh: refreshState } = useDreamState();
+export function DreamWindow({ mode = 'single', groupId = null, groupRoster = {}, characterAvatarDataUrl = null, onClose }: DreamWindowProps) {
+  const { t } = useI18n();
+  const groupMode = mode === 'group' && !!groupId;
+  const { dreamState, stateError, refresh: refreshState } = useDreamState(mode, groupId);
   const [phase, setPhase] = useState<WindowPhase>('loading');
   const [phaseError, setPhaseError] = useState<string | null>(null);
   const [sideOpen, setSideOpen] = useState(true);
@@ -95,7 +102,9 @@ export function DreamWindow({ characterAvatarDataUrl = null, onClose }: DreamWin
     setPhase('ended');
   }, [refreshState]);
 
-  const { messages, loading: chatLoading, streamingActive, send, addSystemMsg } = useDreamChat(handleExited);
+  const singleChat = useDreamChat(handleExited);
+  const groupChat = useGroupDreamChat(groupMode ? groupId : null);
+  const { messages, loading: chatLoading, streamingActive, send, addSystemMsg } = groupMode ? groupChat : singleChat;
 
   // Keep phase in sync with backend state on every poll.
   // Exception: never interrupt an in-progress enter attempt.
@@ -134,18 +143,21 @@ export function DreamWindow({ characterAvatarDataUrl = null, onClose }: DreamWin
   }, [dreamState]);
 
   const handleEnter = async () => {
+    if (groupMode && !groupId) return;
     const scriptId = scenarioScriptId.trim();
-    if (entryMode === 'scenario' && !scriptId) {
+    if (!groupMode && entryMode === 'scenario' && !scriptId) {
       setPhaseError('剧本模式需要填写剧本 ID。');
       return;
     }
     setPhase('entering');
     setPhaseError(null);
     try {
-      const resp = await dreamEnter({
-        dream_mode: entryMode,
-        script_id: entryMode === 'scenario' ? scriptId : undefined,
-      });
+      const resp = groupMode
+        ? await dreamGroupEnter(groupId!)
+        : await dreamEnter({
+            dream_mode: entryMode,
+            script_id: entryMode === 'scenario' ? scriptId : undefined,
+          });
       console.debug('[Dream] dreamEnter response:', resp);
       if (!resp.ok) {
         console.debug('[Dream] dreamEnter rejected:', resp.error);
@@ -154,7 +166,7 @@ export function DreamWindow({ characterAvatarDataUrl = null, onClose }: DreamWin
         return;
       }
       await refreshState();
-      addSystemMsg('— 坠入梦中 —');
+      addSystemMsg(groupMode ? t('groupDream.system.entered') : '— 坠入梦中 —');
       setPhase('active');
     } catch (e) {
       console.debug('[Dream] dreamEnter error:', e);
@@ -173,14 +185,21 @@ export function DreamWindow({ characterAvatarDataUrl = null, onClose }: DreamWin
   // Hard exit helper — always succeeds, closes window (Invariant D).
   const handleForceExit = useCallback(async () => {
     setRetentionText(null);
-    try { await dreamExit(); } catch { /* hard exit always succeeds per spec */ }
+    try {
+      if (groupMode && groupId) await dreamGroupExit(groupId);
+      else await dreamExit();
+    } catch { /* hard exit always succeeds per spec */ }
     onClose();
-  }, [onClose]);
+  }, [groupId, groupMode, onClose]);
 
   // WAKE button handler — routes through soft retention gate first.
   // If backend retains: show retention text + stay/leave choice.
   // If backend exits (gate not met / LLM fail / second tap): close window.
   const handleWake = useCallback(async () => {
+    if (groupMode && groupId) {
+      await handleForceExit();
+      return;
+    }
     // If retention choice is already showing, second WAKE tap → hard exit
     if (retentionText !== null) {
       await handleForceExit();
@@ -200,7 +219,7 @@ export function DreamWindow({ characterAvatarDataUrl = null, onClose }: DreamWin
       // Network / unexpected error → fall back to hard exit
       await handleForceExit();
     }
-  }, [retentionText, handleForceExit, addSystemMsg, onClose]);
+  }, [groupId, groupMode, retentionText, handleForceExit, addSystemMsg, onClose]);
 
   const handleRetentionStay = useCallback(async () => {
     setRetentionText(null);
@@ -313,6 +332,9 @@ export function DreamWindow({ characterAvatarDataUrl = null, onClose }: DreamWin
             <DreamSidePane
               tab={sideTab}
               dreamState={dreamState}
+              mode={mode}
+              groupId={groupId}
+              roster={groupRoster}
               herDataUrl={herAvatarDataUrl}
               onClose={() => setSideOpen(false)}
             />
@@ -392,6 +414,8 @@ export function DreamWindow({ characterAvatarDataUrl = null, onClose }: DreamWin
                 streamingActive={streamingActive}
                 inputDisabled={inputDisabled || retentionText !== null}
                 herDataUrl={herAvatarDataUrl}
+                mode={mode}
+                roster={groupRoster}
                 onSend={send}
                 endedMessage={phase === 'ended' ? '梦境已关闭。按 WAKE 醒来。' : undefined}
               />
@@ -421,6 +445,9 @@ export function DreamWindow({ characterAvatarDataUrl = null, onClose }: DreamWin
       <DreamPrefsPane
         open={openModal === 'prefs'}
         dreamState={dreamState}
+        mode={mode}
+        groupId={groupId}
+        groupRoster={groupRoster}
         entryMode={entryMode}
         scenarioScriptId={scenarioScriptId}
         appearance={appearance}
@@ -505,11 +532,17 @@ function RibbonButton({ label, icon, iconSize = 18, active, decorative = false, 
 function DreamSidePane({
   tab,
   dreamState,
+  mode,
+  groupId,
+  roster,
   herDataUrl,
   onClose,
 }: {
   tab: DreamSideTab;
   dreamState: any;
+  mode: 'single' | 'group';
+  groupId: string | null;
+  roster: Record<string, { label: string; avatarDataUrl: string | null }>;
   herDataUrl: string | null;
   onClose: () => void;
 }) {
@@ -527,6 +560,9 @@ function DreamSidePane({
     return (
       <DreamStatusSidebar
         dreamState={dreamState}
+        mode={mode}
+        groupId={groupId}
+        roster={roster}
         onClose={onClose}
       />
     );

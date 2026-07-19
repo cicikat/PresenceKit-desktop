@@ -49,6 +49,21 @@ export const zhCN = {
   'onboarding.checking': '正在检查连接配置…',
   'connection.error.rateLimitedTemplate': '连接受限，{n} 秒后重试',
   'connection.error.reauth': '重新填写密钥',
+  'groupDream.enter': '入梦',
+  'groupDream.system.entered': '— 群梦展开 —',
+  'groupDream.realityLocked.dreaming': '群梦进行中，现实群聊暂时锁定',
+  'groupDream.realityLocked.cooldown': '群梦余波尚未散去，现实群聊将在冷却后恢复',
+  'groupDream.error.conflict': '当前群状态无法继续梦境对话',
+  'groupDream.error.sendFailed': '群梦消息发送失败，请稍后重试',
+  'groupDream.prefs.shared.title': '群梦边界与世界书',
+  'groupDream.prefs.shared.hint': '全群共享；修改在下一次入梦时生效',
+  'groupDream.prefs.boundary': '感知边界',
+  'groupDream.prefs.lorebook': '梦境 Lorebook',
+  'groupDream.prefs.enabled': '已启用',
+  'groupDream.prefs.disabled': '已禁用',
+  'groupDream.prefs.perChar.title': '逐角色破限',
+  'groupDream.prefs.perChar.hint': '留空时跟随群默认预设',
+  'groupDream.status.tension': '角色张力',
 } as const;
 
 export type MessageKey = keyof typeof zhCN;

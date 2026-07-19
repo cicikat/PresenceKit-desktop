@@ -219,6 +219,11 @@ GET /dream/state（梦境结束后）
 | `/dream/state` | GET | 只读；返回完整 HUD + 基础字段；梦境激活时更新 dream_hud_state.json |
 | `/dream/settings` | GET | 返回全字段设置（含 display） |
 | `/dream/settings` | PATCH | 部分更新；验证枚举；仅影响下次梦境 |
+
+群梦模式沿用同一 HUD 组件。`GET /group/{id}/dream/state` 将 `char_tension` 投影为
+`Record<char_id, number>` 并附带 `roster`，客户端逐角色渲染张力；`body`、场景与其余 HUD
+字段仍按全群共享状态展示。群梦 settings 读取 `/group/{id}/dream/settings`，不会读取单人
+`display.physiological_arousal` 作为群梦业务设置。
 | `/dream/enter` | POST | 进入梦境；冻结 world/lucid；清除旧 HUD state |
 | `/dream/chat` | POST | 独立 pipeline；更新 body_state；不触碰 HUD state |
 | `/dream/exit` | POST | 硬退出；删除 HUD state；转为 REALITY_AFTERGLOW |

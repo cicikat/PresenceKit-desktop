@@ -12,7 +12,10 @@ import {
   type LucidMode,
   type DreamJailbreakPreset,
 } from '../../../shared/api/dream-types';
-import { dreamGetSettings, dreamUpdateSettings, dreamGetStats } from '../../../shared/api/dream';
+import {
+  dreamGetSettings, dreamUpdateSettings, dreamGetStats,
+  dreamGroupGetSettings, dreamGroupUpdateSettings, dreamListPresets, dreamListWorlds,
+} from '../../../shared/api/dream';
 import { getPromptAssets } from '../../../shared/api/backend';
 import type { PromptAssetOption } from '../../../shared/api/types';
 import {
@@ -29,6 +32,7 @@ import {
 } from '../../../shared/dreamAppearance';
 import { Icon } from '../../chat/components/UIKit';
 import { DreamBackgroundCropper } from './DreamBackgroundCropper';
+import { useI18n } from '../../../shared/i18n';
 
 const MEMORY_ACCESS_LABELS: Record<MemoryAccess, string> = {
   card_only: '仅角色卡',
@@ -195,6 +199,9 @@ function normalizeDreamSettings(raw: DreamSettings): DreamSettings {
 interface DreamPrefsPaneProps {
   open: boolean;
   dreamState: DreamState | null;
+  mode?: 'single' | 'group';
+  groupId?: string | null;
+  groupRoster?: Record<string, { label: string; avatarDataUrl: string | null }>;
   entryMode: DreamEntryMode;
   scenarioScriptId: string;
   appearance: DreamAppearance;
@@ -652,6 +659,9 @@ function DreamColorTab({
 export function DreamPrefsPane({
   open,
   dreamState,
+  mode = 'single',
+  groupId = null,
+  groupRoster = {},
   entryMode,
   scenarioScriptId,
   appearance,
@@ -660,6 +670,7 @@ export function DreamPrefsPane({
   onAppearanceChange,
   onClose,
 }: DreamPrefsPaneProps) {
+  const { t } = useI18n();
   const [settings, setSettings] = useState<DreamSettings | null>(null);
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -684,14 +695,17 @@ export function DreamPrefsPane({
     setSettingsLoading(true);
     setLoadError(null);
     try {
-      setSettings(normalizeDreamSettings(await dreamGetSettings()));
+      const loaded = mode === 'group' && groupId
+        ? await dreamGroupGetSettings(groupId)
+        : await dreamGetSettings();
+      setSettings(normalizeDreamSettings(loaded));
     } catch (error) {
       setSettings(current => current ?? normalizeDreamSettings(DEFAULT_DREAM_SETTINGS));
       setLoadError(String(error));
     } finally {
       setSettingsLoading(false);
     }
-  }, []);
+  }, [groupId, mode]);
 
   useEffect(() => {
     if (!open || settings || settingsLoading) return;
@@ -717,20 +731,27 @@ export function DreamPrefsPane({
 
   useEffect(() => {
     if (!open || tab !== 'world') return;
-    getPromptAssets()
-      .then(data => {
-        setAvailablePresets(data.dream_presets ?? []);
-        setAvailableWorldCards(data.world_cards ?? []);
-      })
-      .catch(() => {});
-  }, [open, tab]);
+    if (mode === 'group') {
+      Promise.all([dreamListPresets(), dreamListWorlds()])
+        .then(([presets, worlds]) => {
+          setAvailablePresets(presets);
+          setAvailableWorldCards(worlds);
+        })
+        .catch(() => {});
+      return;
+    }
+    getPromptAssets().then(data => {
+      setAvailablePresets(data.dream_presets ?? []);
+      setAvailableWorldCards(data.world_cards ?? []);
+    }).catch(() => {});
+  }, [mode, open, tab]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || mode === 'group') return;
     getPromptAssets()
       .then(data => setAvailableWorldCards(data.world_cards ?? []))
       .catch(() => {});
-  }, [open]);
+  }, [mode, open]);
 
   const patch = useCallback(async (update: Partial<DreamSettings>) => {
     if (!settings) return;
@@ -738,7 +759,9 @@ export function DreamPrefsPane({
     setSettings(next);
     setSaveState('saving');
     try {
-      const resp = await dreamUpdateSettings(update);
+      const resp = mode === 'group' && groupId
+        ? await dreamGroupUpdateSettings(groupId, update)
+        : await dreamUpdateSettings(update);
       const savedSettings = normalizeDreamSettings(resp.settings);
       setSettings(savedSettings);
       window.dispatchEvent(new CustomEvent<DreamSettings>('dream-settings-updated', { detail: savedSettings }));
@@ -749,7 +772,7 @@ export function DreamPrefsPane({
       setSaveState('error');
       setTimeout(() => setSaveState('idle'), 2000);
     }
-  }, [settings]);
+  }, [groupId, mode, settings]);
 
   const chooseBackgroundFile = (tone: DreamBackgroundTone) => {
     backgroundFileToneRef.current = tone;
@@ -845,7 +868,7 @@ export function DreamPrefsPane({
         </header>
 
         <nav className="dream-prefs__tabs" aria-label="梦境偏好分类">
-          {DREAM_PREF_TABS.map(([key, label]) => (
+          {DREAM_PREF_TABS.filter(([key]) => mode === 'single' || key !== 'context').map(([key, label]) => (
             <button
               key={key}
               type="button"
@@ -914,7 +937,7 @@ export function DreamPrefsPane({
             </div>
           )}
 
-          {tab === 'context' && settings && (
+          {mode === 'single' && tab === 'context' && settings && (
             <div className="dream-prefs__groups">
               <div className="dream-prefs__group">
                 <div className="dream-prefs__group-head">
@@ -971,7 +994,7 @@ export function DreamPrefsPane({
             </div>
           )}
 
-          {tab === 'context' && settingsLoading && !settings && (
+          {mode === 'single' && tab === 'context' && settingsLoading && !settings && (
             <div className="dream-prefs__placeholder">正在读取梦境上下文…</div>
           )}
 
@@ -1091,7 +1114,7 @@ export function DreamPrefsPane({
                     <span>{appearance.backgroundBlur}px</span>
                   </div>
                 </SettingRow>
-                {settings && (
+                {mode === 'single' && settings && (
                   <div className="dream-prefs__developer-row">
                     <span>开发者模式</span>
                     <button
@@ -1109,12 +1132,40 @@ export function DreamPrefsPane({
                   </div>
                 )}
               </div>
+
+              {mode === 'group' && settings && (
+                <div className="dream-prefs__group">
+                  <div className="dream-prefs__group-head">
+                    <div className="dream-prefs__group-title">{t('groupDream.prefs.shared.title')}</div>
+                    <div className="dream-prefs__group-hint">{t('groupDream.prefs.shared.hint')}</div>
+                  </div>
+                  <div className="dream-prefs__grid">
+                    <SettingRow label={t('groupDream.prefs.boundary')} deferred={isDreamActive}>
+                      <SelectPref<BoundaryLevel>
+                        value={settings.boundary_level}
+                        options={['vague', 'body_perceptible', 'numbers_visible', 'threshold_break']}
+                        labels={BOUNDARY_LEVEL_LABELS}
+                        onChange={boundary_level => patch({ boundary_level })}
+                      />
+                    </SettingRow>
+                    <SettingRow label={t('groupDream.prefs.lorebook')} deferred={isDreamActive}>
+                      <button
+                        type="button"
+                        onClick={() => patch({ enable_dream_lorebook: !settings.enable_dream_lorebook })}
+                        className={`dream-prefs__toggle${settings.enable_dream_lorebook ? ' is-active' : ''}`}
+                      >
+                        {settings.enable_dream_lorebook ? t('groupDream.prefs.enabled') : t('groupDream.prefs.disabled')}
+                      </button>
+                    </SettingRow>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
           {tab === 'world' && settings && (
             <div className="dream-prefs__groups">
-              <div className="dream-prefs__group">
+              {mode === 'single' && <div className="dream-prefs__group">
                 <div className="dream-prefs__group-head">
                   <div className="dream-prefs__group-title">入梦模式</div>
                   <div className="dream-prefs__group-hint">选择下一次进入梦境时使用的模式 · 梦境进行中不可切换</div>
@@ -1146,7 +1197,33 @@ export function DreamPrefsPane({
                     镜像梦：根据现实状态与内在状态生成隐喻梦境。当前为 v0.1，只读，不写回长期状态。
                   </div>
                 )}
-              </div>
+              </div>}
+
+              {mode === 'group' && (dreamState?.roster?.length ?? 0) > 0 && (
+                <div className="dream-prefs__group">
+                  <div className="dream-prefs__group-head">
+                    <div className="dream-prefs__group-title">{t('groupDream.prefs.perChar.title')}</div>
+                    <div className="dream-prefs__group-hint">{t('groupDream.prefs.perChar.hint')}</div>
+                  </div>
+                  <div className="dream-prefs__grid">
+                    {dreamState!.roster!.map(charId => (
+                      <SettingRow key={charId} label={groupRoster[charId]?.label ?? charId} deferred={isDreamActive}>
+                        <JailbreakMultiPicker
+                          selected={settings.per_char?.[charId]?.jailbreak_presets ?? []}
+                          available={availablePresets}
+                          disabled={isDreamActive}
+                          onChange={jailbreak_presets => patch({
+                            per_char: {
+                              ...(settings.per_char ?? {}),
+                              [charId]: { jailbreak_presets },
+                            },
+                          })}
+                        />
+                      </SettingRow>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="dream-prefs__group">
                 <div className="dream-prefs__group-head">

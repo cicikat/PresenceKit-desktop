@@ -13,6 +13,8 @@ import { TypingDots } from '../../../shared/ui/TypingDots';
 import { normalizeChatDisplayText } from '../chatDisplay';
 import { chatThemeFontSize } from '../../../shared/chatAppearance';
 import type { GroupDetail, PromptAssetCharacter } from '../../../shared/api/types';
+import { dreamGroupGetState } from '../../../shared/api/dream';
+import { useI18n } from '../../../shared/i18n';
 
 // ── Helpers (mirrors ChatPanel) ───────────────────────────────────────────────
 
@@ -346,12 +348,14 @@ const GroupBubble = memo(function GroupBubble({
 // ── GroupChatPanel ────────────────────────────────────────────────────────────
 
 export function GroupChatPanel({
-  groupId, onBack, fontSize = 14,
+  groupId, onBack, onDreamEnter, fontSize = 14,
 }: {
   groupId: string;
   onBack: () => void;
+  onDreamEnter: (group: GroupDetail, roster: Record<string, RosterEntry>) => void;
   fontSize?: number;
 }) {
+  const { t } = useI18n();
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState('');
   const [roundLocked, setRoundLocked] = useState(false);
@@ -360,6 +364,7 @@ export function GroupChatPanel({
   const [detail, setDetail] = useState<GroupDetail | null>(null);
   const [rosterMap, setRosterMap] = useState<Record<string, RosterEntry>>({});
   const [showSettings, setShowSettings] = useState(false);
+  const [dreamBlock, setDreamBlock] = useState<'dreaming' | 'cooldown' | null>(null);
 
   // Streaming refs — same pattern as ChatPanel
   const streamingLocalIdRef = useRef<Map<string, string[]>>(new Map());
@@ -372,6 +377,21 @@ export function GroupChatPanel({
   const wsMsgIdMapRef       = useRef<Map<string, string[]>>(new Map());
   const scrollRef           = useRef<HTMLDivElement>(null);
   const roundTimerRef       = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    let disposed = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    setDreamBlock(null);
+    const poll = async () => {
+      try {
+        const state = await dreamGroupGetState(groupId);
+        if (!disposed) setDreamBlock(state.blocks_chat ? (state.dream_state === 'cooldown' ? 'cooldown' : 'dreaming') : null);
+      } catch { /* older/not-yet-ready backend: keep reality chat available */ }
+      if (!disposed) timer = setTimeout(poll, 8_000);
+    };
+    void poll();
+    return () => { disposed = true; if (timer) clearTimeout(timer); };
+  }, [groupId]);
 
   // Inject streaming keyframes (same guard as ChatPanel)
   useEffect(() => {
@@ -491,8 +511,8 @@ export function GroupChatPanel({
     };
 
     // channel_message: only group messages have char_id; skip dream and 1v1
-    const unsubMsg = wsClient.on('channel_message', ({ content, msg_id, source, char_id }) => {
-      if (source === 'dream') return;
+    const unsubMsg = wsClient.on('channel_message', ({ content, msg_id, source, domain, char_id }) => {
+      if (source === 'dream' || domain === 'dream') return;
       if (!char_id) return; // 1v1 has no char_id → skip
       if (wsMsgIdMapRef.current.has(msg_id)) return; // dedup
 
@@ -515,7 +535,8 @@ export function GroupChatPanel({
     });
 
     // stream_start{char_id} → create streaming bubble with speakerId
-    const unsubStreamStart = wsClient.on('message_stream_start', ({ msg_id, char_id }) => {
+    const unsubStreamStart = wsClient.on('message_stream_start', ({ msg_id, domain, char_id }) => {
+      if (domain === 'dream') return;
       if (!char_id) return;
       const firstId = newId();
       streamingLocalIdRef.current.set(msg_id, [firstId]);
@@ -574,8 +595,8 @@ export function GroupChatPanel({
     });
 
     // group_round_start → lock input; timeout fallback 30s
-    const unsubRoundStart = wsClient.on('group_round_start', ({ group_id }) => {
-      if (group_id !== groupId) return;
+    const unsubRoundStart = wsClient.on('group_round_start', ({ group_id, domain }) => {
+      if (group_id !== groupId || domain === 'dream') return;
       clearRoundTimer();
       setRoundLocked(true);
       setRoundStatus('成员陆续回应中…');
@@ -586,8 +607,8 @@ export function GroupChatPanel({
     });
 
     // group_round_end → unlock input
-    const unsubRoundEnd = wsClient.on('group_round_end', ({ group_id }) => {
-      if (group_id !== groupId) return;
+    const unsubRoundEnd = wsClient.on('group_round_end', ({ group_id, domain }) => {
+      if (group_id !== groupId || domain === 'dream') return;
       clearRoundTimer();
       setRoundLocked(false);
       setRoundStatus('');
@@ -603,7 +624,7 @@ export function GroupChatPanel({
   // Send message
   const send = async () => {
     const t = input.trim();
-    if (!t || sending || roundLocked) return;
+    if (!t || sending || roundLocked || dreamBlock) return;
     setInput('');
     setMessages(prev => [...prev, { id: newId(), role: 'user', text: t, time: Date.now() }]);
     setSending(true);
@@ -693,6 +714,19 @@ export function GroupChatPanel({
             ))}
           </div>
         )}
+        {detail && (
+          <button
+            type="button"
+            onClick={() => onDreamEnter(detail, rosterMap)}
+            title={t('groupDream.enter')}
+            aria-label={t('groupDream.enter')}
+            style={{
+              border: '1px solid var(--paper-edge)', borderRadius: 999, cursor: 'pointer',
+              background: 'var(--paper)', color: 'var(--ink-2)', padding: '5px 10px',
+              fontFamily: 'var(--font-serif)', fontSize: 12,
+            }}
+          >{t('groupDream.enter')}</button>
+        )}
         {/* Settings gear */}
         {detail && (
           <button
@@ -750,6 +784,13 @@ export function GroupChatPanel({
           </span>
         </div>
       )}
+      {dreamBlock && (
+        <div style={{ padding: '6px 16px', background: 'var(--paper-3)', borderTop: '1px solid var(--paper-edge)', textAlign: 'center' }}>
+          <span className="mono" style={{ fontSize: chatThemeFontSize(10), color: 'var(--ink-3)', letterSpacing: 1 }}>
+            {dreamBlock === 'cooldown' ? t('groupDream.realityLocked.cooldown') : t('groupDream.realityLocked.dreaming')}
+          </span>
+        </div>
+      )}
 
       {/* Input */}
       <div style={{
@@ -763,25 +804,25 @@ export function GroupChatPanel({
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }}
-          disabled={roundLocked || sending}
-          placeholder={roundLocked ? roundStatus || '回应中…' : '发送消息…'}
+          disabled={roundLocked || sending || dreamBlock !== null}
+          placeholder={dreamBlock ? (dreamBlock === 'cooldown' ? t('groupDream.realityLocked.cooldown') : t('groupDream.realityLocked.dreaming')) : roundLocked ? roundStatus || '回应中…' : '发送消息…'}
           style={{
             flex: 1, padding: '8px 12px',
             background: 'var(--paper)', border: '1px solid var(--paper-edge)',
             borderRadius: 'var(--radius-md)', color: 'var(--ink)', fontFamily: 'inherit',
             fontSize, outline: 'none', transition: 'opacity 0.15s',
-            opacity: roundLocked ? 0.55 : 1,
+            opacity: (roundLocked || dreamBlock) ? 0.55 : 1,
           }}
         />
         <button
           onClick={() => void send()}
-          disabled={roundLocked || sending || !input.trim()}
+          disabled={roundLocked || sending || dreamBlock !== null || !input.trim()}
           style={{
             padding: '8px 18px', borderRadius: 'var(--radius-md)',
             background: 'var(--ink)', color: 'var(--paper)',
             border: 'none', cursor: 'pointer', fontFamily: 'inherit',
             fontSize: 13, fontWeight: 500,
-            opacity: (roundLocked || sending || !input.trim()) ? 0.45 : 1,
+            opacity: (roundLocked || sending || dreamBlock || !input.trim()) ? 0.45 : 1,
             transition: 'opacity 0.15s',
           }}
         >

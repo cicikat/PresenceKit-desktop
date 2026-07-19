@@ -1,13 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
-import { dreamGetSettings } from '../../../shared/api/dream';
+import { dreamGetSettings, dreamGroupGetSettings } from '../../../shared/api/dream';
 import type { DreamSettings, DreamState } from '../../../shared/api/dream-types';
 import { getActiveCharacterName } from '../../../shared/activeCharacter';
 import { HudMeter } from './hud/HudMeter';
 import { HudPill, type HudPillTone } from './hud/HudPill';
 import { HudGroup } from './hud/HudGroup';
+import { useI18n } from '../../../shared/i18n';
 
 interface DreamStatusSidebarProps {
   dreamState: DreamState | null;
+  mode?: 'single' | 'group';
+  groupId?: string | null;
+  roster?: Record<string, { label: string; avatarDataUrl: string | null }>;
   onClose: () => void;
 }
 
@@ -122,7 +126,8 @@ function DreamSummaryBar({ current, prev }: { current: DreamState; prev: DreamSt
   );
 }
 
-export function DreamStatusSidebar({ dreamState, onClose }: DreamStatusSidebarProps) {
+export function DreamStatusSidebar({ dreamState, mode = 'single', groupId = null, roster = {}, onClose }: DreamStatusSidebarProps) {
+  const { t } = useI18n();
   const [settings, setSettings] = useState<DreamSettings | null>(null);
 
   // Track previous poll snapshot for trend arrows in DreamSummaryBar.
@@ -133,7 +138,7 @@ export function DreamStatusSidebar({ dreamState, onClose }: DreamStatusSidebarPr
 
   useEffect(() => {
     let disposed = false;
-    dreamGetSettings()
+    (mode === 'group' && groupId ? dreamGroupGetSettings(groupId) : dreamGetSettings())
       .then(next => {
         if (!disposed) setSettings(next);
       })
@@ -141,7 +146,7 @@ export function DreamStatusSidebar({ dreamState, onClose }: DreamStatusSidebarPr
         if (!disposed) setSettings(null);
       });
     return () => { disposed = true; };
-  }, []);
+  }, [groupId, mode]);
 
   useEffect(() => {
     const syncSettings = (event: Event) => {
@@ -153,6 +158,10 @@ export function DreamStatusSidebar({ dreamState, onClose }: DreamStatusSidebarPr
 
   const active = isDreamActive(dreamState);
   const showPhysiologicalArousal = settings?.display?.physiological_arousal === true;
+  const groupTension = dreamState?.char_tension && typeof dreamState.char_tension === 'object'
+    ? dreamState.char_tension
+    : {};
+  const groupRoster = dreamState?.roster ?? Object.keys(groupTension);
 
   return (
     <aside className="dream-theme__sidebar dream-hud" aria-label="梦境状态">
@@ -174,6 +183,20 @@ export function DreamStatusSidebar({ dreamState, onClose }: DreamStatusSidebarPr
             <DreamSummaryBar current={dreamState} prev={prevStateRef.current} />
           )}
           <div className="dream-hud__groups">
+            {mode === 'group' && (
+              <HudGroup title={t('groupDream.status.tension')}>
+                <div className="dream-hud__metrics">
+                  {groupRoster.map(charId => (
+                    <HudMeter
+                      key={charId}
+                      label={roster[charId]?.label ?? charId}
+                      value={typeof groupTension[charId] === 'number' ? Math.round(groupTension[charId] * 100) : null}
+                      background="linear-gradient(90deg, var(--dt-flower-bluebell), var(--dt-flower-dandelion))"
+                    />
+                  ))}
+                </div>
+              </HudGroup>
+            )}
             <HudGroup title={`${getActiveCharacterName()} · CHARACTER`}>
               <HudLabel label="情绪" value={dreamState?.emotion_label} tone={getEmotionTone(dreamState?.emotion_label)} />
               <div className="dream-hud__metrics">

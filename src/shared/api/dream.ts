@@ -11,6 +11,9 @@ import type {
   DreamSettingsResponse,
   DreamSettingsUpdateRequest,
   DreamStats,
+  DreamGroupState,
+  DreamGroupChatResponse,
+  DreamPresetOption,
 } from './dream-types';
 
 const DREAM_SETTINGS_TIMEOUT_MS = 5000;
@@ -77,4 +80,68 @@ export async function dreamUpdateSettings(update: DreamSettingsUpdateRequest): P
     jailbreakPresets: update.jailbreak_presets ?? null,
     display: update.display ?? null,
   }));
+}
+
+export async function dreamGroupGetState(groupId: string): Promise<DreamGroupState> {
+  return invokeGated<DreamGroupState>('dream_group_get_state', { groupId });
+}
+
+export async function dreamGroupEnter(groupId: string): Promise<DreamEnterResponse> {
+  return invokeGated<DreamEnterResponse>('dream_group_enter', { groupId });
+}
+
+export async function dreamGroupChat(groupId: string, message: string): Promise<DreamGroupChatResponse> {
+  return invokeGated<DreamGroupChatResponse>('dream_group_chat', { groupId, message });
+}
+
+export async function dreamGroupExit(groupId: string): Promise<DreamExitResponse> {
+  return invokeGated<DreamExitResponse>('dream_group_exit', { groupId });
+}
+
+export async function dreamGroupGetSettings(groupId: string): Promise<DreamSettings> {
+  return withDreamSettingsTimeout(invokeGated<DreamSettings>('dream_group_get_settings', { groupId }));
+}
+
+export async function dreamGroupUpdateSettings(groupId: string, update: DreamSettingsUpdateRequest): Promise<DreamSettingsResponse> {
+  return withDreamSettingsTimeout(invokeGated<DreamSettingsResponse>('dream_group_update_settings', {
+    groupId,
+    enableDreamLorebook: update.enable_dream_lorebook ?? null,
+    boundaryLevel: update.boundary_level ?? null,
+    worldLayer: update.world_layer ?? null,
+    jailbreakPresets: update.jailbreak_presets ?? null,
+    perChar: update.per_char ?? null,
+  }));
+}
+
+export async function dreamListPresets(): Promise<DreamPresetOption[]> {
+  const raw = await invokeGated<unknown>('dream_list_presets');
+  const list = Array.isArray(raw)
+    ? raw
+    : (raw && typeof raw === 'object' && Array.isArray((raw as { presets?: unknown[] }).presets)
+      ? (raw as { presets: unknown[] }).presets
+      : []);
+  return list.flatMap(item => {
+    if (typeof item === 'string') return [{ id: item, label: item }];
+    if (!item || typeof item !== 'object') return [];
+    const value = item as { id?: unknown; name?: unknown; label?: unknown };
+    const id = typeof value.id === 'string' ? value.id : typeof value.name === 'string' ? value.name : null;
+    if (!id) return [];
+    return [{ id, label: typeof value.label === 'string' ? value.label : id }];
+  });
+}
+
+export async function dreamListWorlds(): Promise<DreamPresetOption[]> {
+  const raw = await invokeGated<unknown>('dream_list_worlds');
+  const list = Array.isArray(raw)
+    ? raw
+    : (raw && typeof raw === 'object' && Array.isArray((raw as { worlds?: unknown[] }).worlds)
+      ? (raw as { worlds: unknown[] }).worlds
+      : []);
+  return list.flatMap(item => {
+    if (typeof item === 'string') return [{ id: item, label: item }];
+    if (!item || typeof item !== 'object') return [];
+    const value = item as { id?: unknown; name?: unknown; label?: unknown };
+    const id = typeof value.id === 'string' ? value.id : typeof value.name === 'string' ? value.name : null;
+    return id ? [{ id, label: typeof value.label === 'string' ? value.label : id }] : [];
+  });
 }

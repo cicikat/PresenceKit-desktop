@@ -62,7 +62,9 @@ export interface DreamState {
     tension: number;
   };
   /** Character's dream-local emotional tension, 0.0–1.0. */
-  char_tension?: number;
+  char_tension?: number | Record<string, number>;
+  /** Group Dream roster. Absent in single-user Dream state. */
+  roster?: string[];
   /** @deprecated backend double-send alias for char_tension during the Brief 25 §3 P2 migration window — drop once the backend stops sending it. */
   yexuan_tension?: number;
   scene_state?: string;
@@ -121,6 +123,11 @@ export interface DreamChatResponse {
   segmented_content?: string;
 }
 
+export interface DreamGroupChatResponse {
+  round_id: string;
+  status: string;
+}
+
 export interface DreamExitResponse {
   ok: true;
   exited: true;
@@ -160,6 +167,8 @@ export interface DreamSettings {
   world_layer: WorldLayer;
   lucid_mode: LucidMode;
   jailbreak_presets: DreamJailbreakPreset[];
+  /** Group mode overrides. An empty list follows the group default. */
+  per_char?: Record<string, { jailbreak_presets: DreamJailbreakPreset[] }>;
   display?: { physiological_arousal?: boolean };
 }
 
@@ -170,6 +179,7 @@ export interface DreamSettingsUpdateRequest {
   world_layer?: WorldLayer;
   lucid_mode?: LucidMode;
   jailbreak_presets?: DreamJailbreakPreset[];
+  per_char?: Record<string, { jailbreak_presets: DreamJailbreakPreset[] }>;
   display?: { physiological_arousal?: boolean };
 }
 
@@ -195,4 +205,18 @@ export interface DreamMessage {
   segments?: NarrativeSegment[];
   /** Stripped content from message_segments; overrides text in rendering */
   segmentedContent?: string;
+  /** Group Dream speaker identity. Absent for the owner and single-user Dream. */
+  speakerId?: string;
+  roundId?: string;
+}
+
+
+export interface DreamGroupState extends Omit<DreamState, 'char_tension' | 'roster'> {
+  char_tension: Record<string, number>;
+  roster: string[];
+}
+
+export interface DreamPresetOption {
+  id: string;
+  label: string;
 }

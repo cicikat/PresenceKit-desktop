@@ -70,6 +70,7 @@ Token 由后端 `POST /auth/tokens` 签发；scope 表、profile 表、管理操
 - 把 engine 传给 `ChatPanel`。
 - Activity 打开时保持 ChatWindow / ChatPanel 挂载，ActivityWindow 只作为覆盖层显示。ToyWindow（玩耍模式）与 ActivityWindow 同级，由 `main.tsx` 的 `activeWindow` 切换挂载，ChatWindow 传入 `onToyOpen`。
 - 管理正式 Dream overlay 的本地开关；Ribbon 月亮按钮和 WS `dream_invite` UI 事件共用该入口，DreamWindow 自己接入 Dream API 和窗口状态机。
+- `GroupChatPanel` 的「入梦」入口将 `mode=group`、`group_id` 与 roster 交给同一个 DreamWindow；群梦不另建窗口组件族。现实群聊常驻并每 8 秒读取群梦 state，在 `blocks_chat` 的 dreaming / cooldown 阶段锁定输入。
 - 玩耍模式：偏好「其他」页开关（`shared/playMode.ts`，localStorage `playMode.enabled`，默认关闭）；开启后 WS `toy_invite` 自动开窗、Ribbon 显示手动入口。ToyWindow 侧栏经 `hardware_get_devices` 轮询设备/连接状态，聊天经 `sendChat` 走 `/desktop/chat`。
 - 将当前 Reality 激活角色卡头像传给 DreamWindow；Dream 内控制栏、动向侧栏和消息区优先显示该头像，无角色头像时回退到本地 HER 头像。
 - Ribbon 桌宠开关通过 `src/shared/pet/bridge.ts` 显隐独立透明置顶 `PetWindow`，并将
@@ -120,6 +121,7 @@ Dream 窗口是 `src/windows/dream/DreamWindow.tsx`：
 - 状态 Sidebar 展示 `/dream/state` 的 Dream HUD v1.1 字段；文本以状态 pill 展示，数值缺失时显示空值，Dream 未激活时显示空态。`physiological_arousal` 仅在 `/dream/settings` 的 `display.physiological_arousal === true` 时展示。
 - 偏好窗口通过 `src/shared/api/dream.ts` 读写 `/dream/settings`，顶部横栏分为当前状态、梦境上下文、系统设置、世界和其他。世界页保存 `world_layer` 世界卡和 Dream 独立 `jailbreak_preset`；系统设置额外使用 `src/shared/dreamAppearance.ts` 持久化本地字体、配色和模糊度，并通过 `avatarStore` 分别保存日间 / 夜间聊天背景；底部开发者模式开关写入 `display.physiological_arousal`。帮助窗口只展示本地说明。
 - `DreamGlowPanel` / `DreamGlowBubble` 复用 `features/dream/DreamTokens.css` 的玻璃发光 token，分别承载 Sidebar 状态卡和 Dream 对话气泡；Dream 潜意识页挂载只读 hidden state 面板。
+- `mode=group` 时状态、发送、退出与设置分别切到 `/group/{id}/dream/*`；群梦回复由 dream-domain WS round / stream / channel 帧驱动，气泡按 `char_id` 署名、头像和稳定角色色渲染。WAKE 与 Esc 直接硬退出，不经过单人软挽留。
 
 聊天区是 `src/windows/chat/components/ChatPanel.tsx`：
 

@@ -113,16 +113,17 @@ src/windows/dream/
 
 职责：
 
-- `DreamWindow` 是唯一接入后端 Dream API 的正式入口，由 `ChatWindow` 在 Ribbon 月亮按钮触发后以 fixed overlay 形式渲染。
+- `DreamWindow` 是唯一接入后端 Dream API 的正式入口，由 `ChatWindow` 在 Ribbon 月亮按钮或 `GroupChatPanel`「入梦」触发后以 fixed overlay 形式渲染。`mode=single|group` 只切换数据源与退出策略，不复制 Dream UI 组件族。
 - Dream 头像由 `ChatWindow` 将当前 Reality 激活角色卡头像传入 `DreamWindow`，再统一下发给控制栏、动向侧栏和消息区；角色卡没有头像时回退到外观设置中的 HER 头像，最后才显示 Dream 默认占位头像。
 - 状态机：初始获取 `/dream/state` → 若已在 DREAM_ACTIVE 直接进入 active；否则展示「进入梦境」按钮 → POST `/dream/enter` → active 模式。
-- 消息 buffer 为 append-only，不读历史 log，不接 WebSocket。
+- 单人消息 buffer 为 append-only，不读历史 log；群梦模式额外消费 `domain=dream` 的 `group_round_*`、`message_stream_*`、`channel_message` / `message_segments`，按 `round_id` 与 `char_id` 关联伪流式回复。
 - `/dream/chat` 返回 `exit_accepted` 或 `force_exited` 时，禁用输入框，刷新状态，进入 ended 阶段。
 - 409 / 503 做可见错误提示，不 crash。
 - WAKE 按钮 / ESC：调用 `/dream/exit`，然后关闭窗口并触发 `DreamAfterglowBanner`（位于 `components/DreamAfterglowBanner.tsx`）。
 - Dream Ribbon 顶部聊天图标是固定选中的装饰入口，以短分隔线与功能区隔开；动向 / 状态 / 潜意识打开左侧副栏，其中潜意识挂载只读 hidden state 面板；偏好 / 帮助打开居中 modal，交互层级与 Chat 的偏好 / 帮助窗口一致。
 - Dream 动向 Sidebar 的「梦境流动」区域读取 `/dream/state` 的 `flow_entries: {ts, kind, summary}[]`（后端规则驱动生成，零额外 LLM 调用，见 backend Brief 25 §2）；最多展示 5 条、最新在上，带 `formatAgo` 风格相对时间。旧后端未提供或本轮梦境刚开始（`flow_entries` 为空）时从当前 dream state 派生 3 条短文案兜底，不读取或展示 chat transcript。
 - Dream 状态 Sidebar 读取 `/dream/state` 的 Dream HUD v1.1 字段，以状态 pill 和 0-100 进度条展示；情绪 pill 按边界 / 亲密 / 执念方向做轻量视觉区分，未知标签保持原样显示。缺失数字显示 `—` 且条宽为 0。Dream 未激活时显示空态。`physiological_arousal` 默认隐藏，仅当 `/dream/settings` 返回 `display.physiological_arousal === true` 时展示。
+- 群梦状态 Sidebar 读取 `roster` 与 `char_tension: Record<char_id, number>`，逐角色展示张力；`body` 仍是全群共享的一份状态。群梦偏好读写群 settings，世界列表来自 `/dream/worlds`、破限选项来自 `/dream/presets`，`per_char` 空数组表示跟随群默认；本地字号、主题与背景继续复用单人外观存储。
 - Dream 偏好窗口使用顶部横栏分类：当前状态、梦境上下文、系统设置、世界、其他。当前状态只读汇总可信快照；梦境上下文承接记忆读取、感知边界、清明模式和独立 lorebook 开关；系统设置提供聊天字号、主题字号、动态字体包、RGB 自定义配色、日间 / 夜间 Dream 聊天背景分别导入裁切、背景模糊度，以及控制 `display.physiological_arousal` 的开发者模式开关；世界页提供六个 `world_layer` 世界卡和 Dream 独立 `jailbreak_preset` 选择；其他暂留导入占位。Dream 后端偏好通过 `/dream/settings` 读取和保存，请求 5 秒超时；读取失败时显示默认值和重试入口，避免设置页永久停在载入态。梦境进行中修改时明确提示下次入梦生效；外观设置本地即时生效。
 - Sidebar 状态卡与消息气泡分别通过 `DreamGlowPanel` / `DreamGlowBubble` 统一玻璃底、冷色亮边、内外辉光和可选顶部扫光；视觉参数集中在 `features/dream/DreamTokens.css`。
 - 仅复用 `features/dream/DreamTokens.css` 的视觉 token。

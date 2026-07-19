@@ -21,15 +21,15 @@ export interface NarrativeSegment {
 
 export type ServerMessage =
   | { type: 'hello_ack'; server_version: string }
-  | { type: 'channel_message'; content: string; msg_id: string; source?: string; char_id?: string; round_id?: string }
-  | { type: 'message_segments'; content: string; segments: NarrativeSegment[]; msg_id: string; source?: string; char_id?: string }
+  | { type: 'channel_message'; content: string; msg_id: string; source?: string; domain?: GroupDomain; char_id?: string; round_id?: string }
+  | { type: 'message_segments'; content: string; segments: NarrativeSegment[]; msg_id: string; source?: string; domain?: GroupDomain; char_id?: string; round_id?: string }
   | { type: 'action'; action: DesktopActionPayload; msg_id: string }
   | { type: 'ping' }
-  | { type: 'message_stream_start'; msg_id: string; source?: string; char_id?: string; round_id?: string }
-  | { type: 'message_stream_delta'; msg_id: string; delta: string }
-  | { type: 'message_stream_end'; msg_id: string }
-  | { type: 'group_round_start'; round_id: string; group_id: string }
-  | { type: 'group_round_end'; round_id: string; group_id: string };
+  | { type: 'message_stream_start'; msg_id: string; source?: string; domain?: GroupDomain; char_id?: string; round_id?: string }
+  | { type: 'message_stream_delta'; msg_id: string; delta: string; domain?: GroupDomain; char_id?: string; round_id?: string }
+  | { type: 'message_stream_end'; msg_id: string; domain?: GroupDomain; char_id?: string; round_id?: string }
+  | { type: 'group_round_start'; round_id: string; group_id: string; domain?: GroupDomain }
+  | { type: 'group_round_end'; round_id: string; group_id: string; domain?: GroupDomain };
 
 export type ClientMessage =
   | { type: 'hello'; client: string; version: string }

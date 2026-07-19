@@ -1231,6 +1231,104 @@ async fn dream_update_settings(
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
 
+fn group_dream_path(group_id: &str, suffix: &str) -> String {
+    format!("/group/{}/dream/{}", group_id, suffix)
+}
+
+#[tauri::command]
+async fn dream_group_get_state(app: tauri::AppHandle, group_id: String) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let resp = authorized_request(&cfg, client.get(backend_url(&cfg, &group_dream_path(&group_id, "state"))))
+        .send().await.map_err(|_| "Group Dream state 请求失败".to_string())?;
+    let resp = require_success(resp).await?;
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn dream_group_enter(app: tauri::AppHandle, group_id: String) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = llm_http_client()?;
+    let resp = authorized_request(&cfg, client.post(backend_url(&cfg, &group_dream_path(&group_id, "enter"))))
+        .json(&serde_json::json!({})).send().await.map_err(|_| "Group Dream enter 请求失败".to_string())?;
+    let resp = require_success(resp).await?;
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn dream_group_chat(app: tauri::AppHandle, group_id: String, message: String) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = llm_http_client()?;
+    let resp = authorized_request(&cfg, client.post(backend_url(&cfg, &group_dream_path(&group_id, "send"))))
+        .json(&serde_json::json!({ "message": message })).send().await.map_err(|_| "Group Dream chat 请求失败".to_string())?;
+    let resp = require_success(resp).await?;
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn dream_group_exit(app: tauri::AppHandle, group_id: String) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = llm_http_client()?;
+    let resp = authorized_request(&cfg, client.post(backend_url(&cfg, &group_dream_path(&group_id, "exit"))))
+        .json(&serde_json::json!({})).send().await.map_err(|_| "Group Dream exit 请求失败".to_string())?;
+    let resp = require_success(resp).await?;
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn dream_group_get_settings(app: tauri::AppHandle, group_id: String) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let resp = authorized_request(&cfg, client.get(backend_url(&cfg, &group_dream_path(&group_id, "settings"))))
+        .send().await.map_err(|_| "Group Dream settings 请求失败".to_string())?;
+    let resp = require_success(resp).await?;
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn dream_group_update_settings(
+    app: tauri::AppHandle,
+    group_id: String,
+    enable_dream_lorebook: Option<bool>,
+    boundary_level: Option<String>,
+    world_layer: Option<String>,
+    jailbreak_presets: Option<Vec<String>>,
+    per_char: Option<serde_json::Value>,
+) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let mut body = serde_json::Map::new();
+    if let Some(v) = enable_dream_lorebook { body.insert("enable_dream_lorebook".into(), v.into()); }
+    if let Some(v) = boundary_level { body.insert("boundary_level".into(), v.into()); }
+    if let Some(v) = world_layer { body.insert("world_layer".into(), v.into()); }
+    if let Some(v) = jailbreak_presets { body.insert("jailbreak_presets".into(), serde_json::json!(v)); }
+    if let Some(v) = per_char { body.insert("per_char".into(), v); }
+    let resp = authorized_request(&cfg, client.patch(backend_url(&cfg, &group_dream_path(&group_id, "settings"))))
+        .json(&serde_json::Value::Object(body)).send().await.map_err(|_| "Group Dream settings 更新失败".to_string())?;
+    let resp = require_success(resp).await?;
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn dream_list_presets(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let resp = authorized_request(&cfg, client.get(backend_url(&cfg, "/dream/presets")))
+        .send().await.map_err(|_| "Dream presets 请求失败".to_string())?;
+    let resp = require_success(resp).await?;
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn dream_list_worlds(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let resp = authorized_request(&cfg, client.get(backend_url(&cfg, "/dream/worlds")))
+        .send().await.map_err(|_| "Dream worlds 请求失败".to_string())?;
+    let resp = require_success(resp).await?;
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 async fn get_prompt_assets(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
@@ -2481,6 +2579,14 @@ pub fn run() {
             dream_resume,
             dream_get_settings,
             dream_update_settings,
+            dream_group_get_state,
+            dream_group_enter,
+            dream_group_chat,
+            dream_group_exit,
+            dream_group_get_settings,
+            dream_group_update_settings,
+            dream_list_presets,
+            dream_list_worlds,
             get_prompt_assets,
             patch_prompt_assets,
             load_hidden_state_debug,

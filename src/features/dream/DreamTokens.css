@@ -1172,6 +1172,14 @@
   animation: none;
 }
 
+.dream-msg--group-speaker .dream-glow-bubble__meta {
+  color: var(--dream-speaker-color, var(--dt-ink-3));
+}
+
+.dream-msg--group-speaker .dream-glow-bubble__body {
+  border-left: 2px solid var(--dream-speaker-color, var(--dt-flower-bluebell));
+}
+
 .dream-msg__bubbles {
   display: flex;
   flex-direction: column;

@@ -9,7 +9,8 @@ interface DreamControlBarProps {
 
 export function DreamControlBar({ dreamState, phase, herDataUrl, onWake }: DreamControlBarProps) {
   const scene = dreamState?.scene_state;
-  const tension = dreamState?.char_tension ?? dreamState?.yexuan_tension;
+  const rawTension = dreamState?.char_tension ?? dreamState?.yexuan_tension;
+  const tension = typeof rawTension === 'number' ? rawTension : undefined;
 
   const statusText = (() => {
     if (scene) return scene;
