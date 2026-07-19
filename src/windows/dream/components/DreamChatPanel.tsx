@@ -4,6 +4,8 @@ import type { NarrativeSegment } from '../../../shared/api/types';
 import { DreamSceneBlock } from './DreamSceneBlock';
 import { DreamGlowBubble } from './DreamGlowBubble';
 import { TypingDots } from '../../../shared/ui/TypingDots';
+import { normalizeChatDisplayText } from '../../chat/chatDisplay';
+import { renderInlineStyled } from '../../chat/inlineStyle';
 
 interface DreamChatPanelProps {
   messages: DreamMessage[];
@@ -50,9 +52,11 @@ function splitSegmentLines(text: string): string[] {
 }
 
 function normalizeDreamDialogueDisplayText(text: string): string {
-  return text
-    .replace(/^“([\s\S]*)”$/, '$1')
-    .replace(/^"([\s\S]*)"$/, '$1');
+  return normalizeChatDisplayText(
+    text
+      .replace(/^“([\s\S]*)”$/, '$1')
+      .replace(/^"([\s\S]*)"$/, '$1'),
+  );
 }
 
 function DreamSegmentedReply({
@@ -90,7 +94,7 @@ function DreamSegmentedReply({
                     speaker={showSpeaker && lineIndex === 0 ? speaker : undefined}
                     className="dream-glow-bubble--say"
                   >
-                    {normalizeDreamDialogueDisplayText(line)}
+                    {renderInlineStyled(normalizeDreamDialogueDisplayText(line))}
                   </DreamGlowBubble>
                 ))}
               </div>
@@ -103,7 +107,7 @@ function DreamSegmentedReply({
             key={segmentIndex}
             className={`dream-segment dream-segment--${segment.type}`}
           >
-            {segment.text}
+            {renderInlineStyled(normalizeChatDisplayText(segment.text))}
           </p>
         );
       })}
@@ -161,7 +165,7 @@ const DreamMsgRow = memo(function DreamMsgRow({
                     key={i}
                     className={line.kind === 'action' ? 'dream-bubble__action' : undefined}
                   >
-                    {line.content}
+                    {renderInlineStyled(normalizeChatDisplayText(line.content))}
                   </p>
                 ))}
               </DreamGlowBubble>

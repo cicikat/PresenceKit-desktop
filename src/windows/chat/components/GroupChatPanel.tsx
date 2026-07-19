@@ -11,6 +11,7 @@ import { notifyOnMessage } from '../../../shared/api/notify';
 import { getGroup, groupSend, getCharacterAvatar, getPromptAssets, patchGroupRoster, patchGroupSettings } from '../../../shared/api/backend';
 import { TypingDots } from '../../../shared/ui/TypingDots';
 import { normalizeChatDisplayText } from '../chatDisplay';
+import { renderInlineStyled } from '../inlineStyle';
 import { chatThemeFontSize } from '../../../shared/chatAppearance';
 import type { GroupDetail, PromptAssetCharacter } from '../../../shared/api/types';
 import { dreamGroupGetState } from '../../../shared/api/dream';
@@ -59,7 +60,7 @@ function renderStreamingContent(text: string, isDone: boolean) {
   if (!text) return isDone ? null : <TypingDots color="var(--ink-3)" />;
   return (
     <>
-      {text}
+      {renderInlineStyled(normalizeChatDisplayText(text))}
       {!isDone && (
         <span style={{ opacity: 0.6, animation: 'streaming-cursor-blink 0.8s step-end infinite' }}>▌</span>
       )}
@@ -305,7 +306,7 @@ const GroupBubble = memo(function GroupBubble({
           fontSize, lineHeight: 1.55, whiteSpace: 'pre-wrap',
           boxShadow: '0 2px 8px oklch(0.25 0.04 60 / 0.14)',
         }}>
-          {normalizeChatDisplayText(msg.text)}
+          {renderInlineStyled(normalizeChatDisplayText(msg.text))}
         </div>
       </div>
     );
@@ -337,7 +338,7 @@ const GroupBubble = memo(function GroupBubble({
         }}>
           {msg.isStreaming
             ? renderStreamingContent(msg.text, msg.streamingDone ?? false)
-            : normalizeChatDisplayText(msg.text)
+            : renderInlineStyled(normalizeChatDisplayText(msg.text))
           }
         </div>
       </div>
