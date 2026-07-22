@@ -10,7 +10,17 @@ permissions:
 
 jobs:
   release:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+            tauri_args: ""
+          - os: macos-latest
+            platform: macos
+            tauri_args: --target universal-apple-darwin
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -19,6 +29,10 @@ jobs:
           node-version: 20
 
       - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install universal macOS targets
+        if: matrix.platform == 'macos'
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
 
       - name: Install frontend dependencies
         run: npm ci
@@ -33,18 +47,24 @@ jobs:
           releaseName: "PresenceKit-desktop ${{ github.ref_name }}"
           releaseDraft: true
           prerelease: false
+          args: ${{ matrix.tauri_args }}
 
       - name: Generate SHA256 checksums
         shell: pwsh
         run: |
           $paths = '${{ steps.tauri.outputs.artifactPaths }}' | ConvertFrom-Json
-          Remove-Item -ErrorAction SilentlyContinue checksums.txt
-          foreach ($p in $paths) {
+          $checksums = "checksums-${{ matrix.platform }}.txt"
+          Remove-Item -LiteralPath $checksums -ErrorAction SilentlyContinue
+          $files = @($paths | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
+          if ($files.Count -eq 0) {
+            throw "tauri-action did not return any package files to checksum"
+          }
+          foreach ($p in $files) {
             $hash = (Get-FileHash -Algorithm SHA256 -Path $p).Hash
-            "$hash  $(Split-Path -Leaf $p)" | Out-File -Append -Encoding utf8 checksums.txt
+            "$hash  $(Split-Path -Leaf $p)" | Out-File -Append -Encoding utf8 $checksums
           }
 
       - name: Upload checksums
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "${{ github.ref_name }}" checksums.txt --clobber
+        run: gh release upload "${{ github.ref_name }}" "checksums-${{ matrix.platform }}.txt" --clobber

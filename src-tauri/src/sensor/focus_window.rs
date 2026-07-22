@@ -36,8 +36,14 @@ pub fn create_default_sampler() -> Box<dyn FocusSampler> {
     Box::new(crate::sensor::platform::windows::WindowsFocusSampler::new())
 }
 
-/// 非 Windows 平台暂时返回 stub
-#[cfg(not(target_os = "windows"))]
+/// macOS 暂不读取焦点窗口；与 input sampler 一起由启动错误优雅关闭 sensor。
+#[cfg(target_os = "macos")]
+pub fn create_default_sampler() -> Box<dyn FocusSampler> {
+    Box::new(crate::sensor::platform::macos::MacosFocusSampler::new())
+}
+
+/// 其他非 Windows 平台暂时返回 stub。
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
 pub fn create_default_sampler() -> Box<dyn FocusSampler> {
     eprintln!("[sensor] 非 Windows 平台：focus sampler 为 stub，窗口标题/进程名恒为空");
     Box::new(StubFocusSampler)
