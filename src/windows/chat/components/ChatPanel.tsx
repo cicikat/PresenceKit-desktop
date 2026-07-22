@@ -27,7 +27,7 @@ import { chatThemeFontSize } from '../../../shared/chatAppearance';
 import { useI18n } from '../../../shared/i18n';
 import { publishPetSnapshot } from '../../../shared/pet/bridge';
 import { TypingDots } from '../../../shared/ui/TypingDots';
-import type { ChatLogEntry, UploadError, NarrativeSegment } from '../../../shared/api/types';
+import type { ChatLogEntry, UploadError, NarrativeSegment, StickerPayload } from '../../../shared/api/types';
 import { normalizeChatDisplayText } from '../chatDisplay';
 import { renderInlineStyled } from '../inlineStyle';
 import {
@@ -94,6 +94,8 @@ interface ChatMsg {
   turnId?: string;
   segments?: NarrativeSegment[];
   segmentedContent?: string;
+  // 仅 live channel_message 携带；历史接口尚未持久化 sticker。
+  sticker?: StickerPayload;
   // 流式气泡：token 逐字到达时为 true，canonical channel_message 到达后清除
   isStreaming?: boolean;
   // 流结束（stream_end 到达）但 canonical 尚未替换：光标关闭，内容仍为原始 token
@@ -112,6 +114,7 @@ interface RealityChannelMessage {
   content: string;
   msg_id: string;
   source?: string;
+  sticker?: StickerPayload;
 }
 
 interface PendingRealitySegments {
@@ -373,6 +376,8 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
   const fromUser = msg.role === 'user';
   const hue = msg.moodHue ?? currentHue;
   const time = msg.time ? new Date(msg.time).toLocaleTimeString('zh', { hour: '2-digit', minute: '2-digit' }) : '';
+  const displayText = normalizeChatDisplayText(msg.segmentedContent ?? msg.text);
+  const stickerOnly = Boolean(msg.sticker && !msg.text.trim());
 
   if (msg.role === 'divider') {
     return (
@@ -470,7 +475,7 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
             onBubbleContextMenu?.(msg, e.clientX, e.clientY);
           }}
           style={{
-            padding: '11px 15px',
+            padding: stickerOnly ? 5 : '11px 15px',
             background: 'var(--paper-2)',
             borderLeft: `3px solid oklch(0.55 0.13 ${hue})`,
             borderTop: '1px solid var(--paper-edge)',
@@ -484,12 +489,20 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
           {msg.deleted && (
             <div style={{ textDecoration: 'line-through', opacity: 0.45, fontSize: assistantFontSize - 1.5, marginBottom: 4 }}>{normalizeChatDisplayText(msg.deleted)}</div>
           )}
-          {ttsEnabled && !msg.isStreaming ? (
-            <VoiceMessageBar text={normalizeChatDisplayText(msg.segmentedContent ?? msg.text)} />
+          {msg.sticker && (
+            <img
+              src={msg.sticker.data_url}
+              alt={msg.sticker.emotion}
+              title={msg.sticker.emotion}
+              style={{ display: 'block', maxWidth: 'min(360px, 100%)', maxHeight: 360, borderRadius: 4, objectFit: 'contain' }}
+            />
+          )}
+          {!stickerOnly && (ttsEnabled && !msg.isStreaming ? (
+            <VoiceMessageBar text={displayText} />
           ) : msg.isStreaming
             ? renderStreamingContent(msg.text, msg.streamingDone ?? false)
-            : renderInlineStyled(normalizeChatDisplayText(msg.segmentedContent ?? msg.text))
-          }
+            : renderInlineStyled(displayText)
+          )}
           {msg.meta && (
             <div className="mono" style={{ fontSize: chatThemeFontSize(10), color: 'var(--ink-3)', marginTop: 6, letterSpacing: 0.8 }}>{msg.meta}</div>
           )}
@@ -1029,11 +1042,13 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
     };
   }, []);
 
-  const scheduleAssistantSegments = useCallback((fullText: string, wsMsgId?: string, preGeneratedIds?: string[]) => {
+  const scheduleAssistantSegments = useCallback((fullText: string, wsMsgId?: string, preGeneratedIds?: string[], sticker?: StickerPayload) => {
     const textParts = splitReply(fullText);
-    if (textParts.length === 0) return;
-    const contentHashRaw = fullText.slice(0, 32).replace(/\s+/g, ' ');
-    const contentHashNormalized = normalizeForDedup(fullText);
+    if (textParts.length === 0 && !sticker) return;
+    const parts = textParts.length > 0 ? textParts : [''];
+    const dedupContent = fullText || sticker?.data_url || '';
+    const contentHashRaw = dedupContent.slice(0, 32).replace(/\s+/g, ' ');
+    const contentHashNormalized = normalizeForDedup(dedupContent);
     const appendSource = wsMsgId ? 'ws' : 'fallback';
 
     // Guard: if this wsMsgId was already processed (e.g. double channel_message), drop it.
@@ -1058,7 +1073,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
     // Pre-generate ids so we can register them in the ref before setMessages resolves.
     // Caller may supply pre-generated IDs so they can record them in recentFallbacksRef
     // before the first setMessages call fires.
-    const localIds = preGeneratedIds ?? textParts.map(() => newId());
+    const localIds = preGeneratedIds ?? parts.map(() => newId());
 
     if (wsMsgId) {
       setBoundedMapEntry(wsMsgIdToLocalIdsRef.current, wsMsgId, localIds, MAX_WS_MSG_ID_MAPPINGS);
@@ -1068,7 +1083,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
     }
 
     const pushSeg = (idx: number) => {
-      const text = textParts[idx];
+      const text = parts[idx];
       // Per-index mapping is only valid when both sides split into the same number
       // of paragraphs. On mismatch, fall back to the raw bubble text — the old
       // `?? strippedParts[0]` fallback rendered the FULL message into one bubble,
@@ -1087,13 +1102,14 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         wsMsgId: wsMsgId && idx === 0 ? wsMsgId : undefined,
         segments: pending?.segments,
         segmentedContent,
+        sticker: idx === 0 ? sticker : undefined,
       }]);
     };
 
     pushSeg(0);
 
     let cumDelay = 0;
-    for (let i = 1; i < textParts.length; i++) {
+    for (let i = 1; i < parts.length; i++) {
       cumDelay += 100 + Math.random() * 900;
       const segIdx = i;
       const timer = setTimeout(() => {
@@ -1224,13 +1240,13 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       }
     });
 
-    const processRealityChannelMessage = ({ content, msg_id, source }: RealityChannelMessage) => {
+    const processRealityChannelMessage = ({ content, msg_id, source, sticker }: RealityChannelMessage) => {
       // Defense: only consume reality messages (source field added P0; old server = no source = reality).
       if (source && source !== 'reality') return;
       pruneStalePendingSegments(pendingSegmentsByMsgIdRef.current);
 
       let duplicateDropped = false;
-      const normalizedHash = normalizeForDedup(content);
+      const normalizedHash = normalizeForDedup(content || sticker?.data_url || '');
 
       // Cancel desktopWake HTTP fallback — WS is the primary render path.
       // Important: we do NOT return here; we fall through to scheduleAssistantSegments
@@ -1329,7 +1345,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         return;
       }
 
-      scheduleAssistantSegments(content, msg_id);
+      scheduleAssistantSegments(content, msg_id, undefined, sticker);
     };
 
     processRealityChannelMessageRef.current = processRealityChannelMessage;

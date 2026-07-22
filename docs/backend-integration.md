@@ -222,6 +222,8 @@ interface ChatResponse {
 
 assistant correlation ID 已对齐：`HTTP turn_id = HTTP msg_id = WS channel_message.msg_id = WS message_segments.msg_id`。ChatPanel 优先按 `msg_id` 对账 HTTP/WS 回复；content hash 仅作为旧后端未返回 `msg_id` 或异常路径的 fallback。
 
+`channel_message` 可额外带 `sticker?: { kind: 'sticker'; emotion: string; data_url: string }`。这是后端表情包副作用的 live payload：`content` 可以为空，客户端以 `data_url` 渲染图片气泡，`emotion` 用作无障碍文本；短期历史暂不持久化该字段。
+
 `POST /desktop/wake` 有 assistant reply 时同样返回 `turn_id` / `msg_id`，并遵循相同 correlation ID 约束。
 
 旧 v1 方案的 WS `user_message` 设想已降级为 post-v0.1 roadmap，见 [protocol-v0.md](protocol-v0.md)；当前 HTTP 路径为正式契约。

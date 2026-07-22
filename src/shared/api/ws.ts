@@ -7,6 +7,7 @@ import type {
   DesktopActionPayload,
   DesktopActionType,
   NarrativeSegment,
+  StickerPayload,
 } from './types';
 import { isPresenceNagEnabled } from '../presenceNag';
 import { getActiveCharacterInfo } from '../activeCharacter';
@@ -14,7 +15,7 @@ import { actionType, actionParams, stringParam } from './wsActionParams';
 
 type EventMap = {
   state: ConnectionState;
-  channel_message: { content: string; msg_id: string; source?: string; domain?: 'reality' | 'dream'; char_id?: string; round_id?: string };
+  channel_message: { content: string; msg_id: string; source?: string; domain?: 'reality' | 'dream'; char_id?: string; round_id?: string; sticker?: StickerPayload };
   message_segments: { content: string; segments: NarrativeSegment[]; msg_id: string; source?: string; domain?: 'reality' | 'dream'; char_id?: string; round_id?: string };
   action: DesktopActionPayload;
   dream_invite: Record<string, never>;
@@ -166,7 +167,7 @@ class WSClient {
         this._setState('connected');
         break;
       case 'channel_message':
-        this.emit('channel_message', { content: msg.content, msg_id: msg.msg_id, source: msg.source, domain: msg.domain, char_id: msg.char_id, round_id: msg.round_id });
+        this.emit('channel_message', { content: msg.content, msg_id: msg.msg_id, source: msg.source, domain: msg.domain, char_id: msg.char_id, round_id: msg.round_id, sticker: msg.sticker });
         this._send({ type: 'ack', msg_id: msg.msg_id, ok: true });
         break;
       case 'message_segments':
