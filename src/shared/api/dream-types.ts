@@ -214,6 +214,9 @@ export interface DreamMessage {
 export interface DreamGroupState extends Omit<DreamState, 'char_tension' | 'roster'> {
   char_tension: Record<string, number>;
   roster: string[];
+  /** Server-owned group Dream round lifecycle for reconnect/timeout recovery. */
+  round_status?: 'idle' | 'running' | 'failed' | 'timed_out' | string;
+  last_round_error?: string | null;
 }
 
 export interface DreamPresetOption {

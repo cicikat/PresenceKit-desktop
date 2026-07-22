@@ -70,7 +70,7 @@ Token 由后端 `POST /auth/tokens` 签发；scope 表、profile 表、管理操
 - 把 engine 传给 `ChatPanel`。
 - Activity 打开时保持 ChatWindow / ChatPanel 挂载，ActivityWindow 只作为覆盖层显示。ToyWindow（玩耍模式）与 ActivityWindow 同级，由 `main.tsx` 的 `activeWindow` 切换挂载，ChatWindow 传入 `onToyOpen`。
 - 管理正式 Dream overlay 的本地开关；Ribbon 月亮按钮和 WS `dream_invite` UI 事件共用该入口，DreamWindow 自己接入 Dream API 和窗口状态机。
-- `GroupChatPanel` 的「入梦」入口将 `mode=group`、`group_id` 与 roster 交给同一个 DreamWindow；群梦不另建窗口组件族。现实群聊常驻并每 8 秒读取群梦 state，在 `blocks_chat` 的 dreaming / cooldown 阶段锁定输入。
+- `GroupChatPanel` 的「入梦」入口将 `mode=group`、`group_id` 与 roster 交给同一个 DreamWindow；群梦不另建窗口组件族。现实群聊常驻并每 8 秒读取群梦 state，在 `blocks_chat` 的 dreaming / cooldown 阶段锁定输入。群梦轮次在 WS `group_round_end` 漏失或连接恢复时由 state 的 `round_status` 校准；现实轮次采用同一 120 秒可见超时兜底。
 - 玩耍模式：偏好「其他」页开关（`shared/playMode.ts`，localStorage `playMode.enabled`，默认关闭）；开启后 WS `toy_invite` 自动开窗、Ribbon 显示手动入口。ToyWindow 侧栏经 `hardware_get_devices` 轮询设备/连接状态，聊天经 `sendChat` 走 `/desktop/chat`。
 - 将当前 Reality 激活角色卡头像传给 DreamWindow；Dream 内控制栏、动向侧栏和消息区优先显示该头像，无角色头像时回退到本地 HER 头像。
 - Ribbon 桌宠开关通过 `src/shared/pet/bridge.ts` 显隐独立透明置顶 `PetWindow`，并将

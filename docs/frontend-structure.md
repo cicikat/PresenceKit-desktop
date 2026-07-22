@@ -117,6 +117,7 @@ src/windows/dream/
 - Dream 头像由 `ChatWindow` 将当前 Reality 激活角色卡头像传入 `DreamWindow`，再统一下发给控制栏、动向侧栏和消息区；角色卡没有头像时回退到外观设置中的 HER 头像，最后才显示 Dream 默认占位头像。
 - 状态机：初始获取 `/dream/state` → 若已在 DREAM_ACTIVE 直接进入 active；否则展示「进入梦境」按钮 → POST `/dream/enter` → active 模式。
 - 单人消息 buffer 为 append-only，不读历史 log；群梦模式额外消费 `domain=dream` 的 `group_round_*`、`message_stream_*`、`channel_message` / `message_segments`，按 `round_id` 与 `char_id` 关联伪流式回复。
+- 群梦的轮次输入锁以 `group_round_end` 为主；若 WS 重连或漏帧，连接恢复时立即 GET `/group/{id}/dream/state` 校准，且在后端整轮 90 秒上限加 30 秒缓冲后再次校准。仅 `round_status=idle|failed|timed_out` 才释放输入；显式空轮显示「（无人接话）」。现实群聊没有轮状态接口，使用相同 120 秒阈值做可见的超时恢复。
 - `/dream/chat` 返回 `exit_accepted` 或 `force_exited` 时，禁用输入框，刷新状态，进入 ended 阶段。
 - 409 / 503 做可见错误提示，不 crash。
 - WAKE 按钮 / ESC：调用 `/dream/exit`，然后关闭窗口并触发 `DreamAfterglowBanner`（位于 `components/DreamAfterglowBanner.tsx`）。

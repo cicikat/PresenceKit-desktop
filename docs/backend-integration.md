@@ -783,7 +783,7 @@ Authorization: Bearer <admin_token>
 | `dream_get_settings()` | 前端 → Rust → 后端 | GET `/dream/settings`；读取 Dream 上下文与 `display.physiological_arousal` |
 | `dream_update_settings(..., jailbreak_preset, display)` | 前端 → Rust → 后端 | PATCH `/dream/settings`；透传 Dream 独立 `jailbreak_preset`，`display` 可透传 `{ "physiological_arousal": boolean }` |
 | `dream_group_enter/chat/exit(group_id, ...)` | 前端 → Rust → 后端 | POST `/group/{id}/dream/enter|send|exit`；群梦 send 返回 `{round_id,status}`，角色回复走 WS |
-| `dream_group_get_state/get_settings(group_id)` | 前端 → Rust → 后端 | GET `/group/{id}/dream/state|settings`；state 含 roster、逐角色 char_tension 与 blocks_chat |
+| `dream_group_get_state/get_settings(group_id)` | 前端 → Rust → 后端 | GET `/group/{id}/dream/state|settings`；state 含 roster、逐角色 char_tension、blocks_chat，以及用于 WS 漏帧/重连恢复的 `round_status`（`idle|running|failed|timed_out`）和 `last_round_error` |
 | `dream_group_update_settings(group_id, ...)` | 前端 → Rust → 后端 | PATCH `/group/{id}/dream/settings`；透传世界、世界书、边界、群默认与 per-char 破限 |
 | `dream_list_worlds/presets()` | 前端 → Rust → 后端 | GET `/dream/worlds|presets`；为单/群 Dream 设置提供可选项，不暴露文件路径 |
 | `get_chat_settings()` | 前端 → Rust → 后端 | 顺序 GET `/chat-mode` + `/chat-style` + `/chat-multi-message`，合并为 `{ mode, style, multi_message }` 返回 |

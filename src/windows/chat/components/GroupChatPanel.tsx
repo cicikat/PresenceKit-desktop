@@ -16,6 +16,7 @@ import { chatThemeFontSize } from '../../../shared/chatAppearance';
 import type { GroupDetail, PromptAssetCharacter } from '../../../shared/api/types';
 import { dreamGroupGetState } from '../../../shared/api/dream';
 import { useI18n } from '../../../shared/i18n';
+import { GROUP_DREAM_ROUND_RECOVERY_DELAY_MS } from '../../dream/groupRoundRecovery';
 
 // ── Helpers (mirrors ChatPanel) ───────────────────────────────────────────────
 
@@ -595,16 +596,20 @@ export function GroupChatPanel({
       void notifyOnMessage(msg_id, title, streamingTextRef.current.get(msg_id) ?? '');
     });
 
-    // group_round_start → lock input; timeout fallback 30s
+    // Reality rounds do not expose a state endpoint. Keep the same whole-round
+    // timeout contract as group Dream, then unlock visibly if its WS end was lost.
     const unsubRoundStart = wsClient.on('group_round_start', ({ group_id, domain }) => {
       if (group_id !== groupId || domain === 'dream') return;
       clearRoundTimer();
       setRoundLocked(true);
-      setRoundStatus('成员陆续回应中…');
+      setRoundStatus(t('groupDream.status.membersResponding'));
       roundTimerRef.current = setTimeout(() => {
         setRoundLocked(false);
         setRoundStatus('');
-      }, 30_000);
+        setMessages(prev => [...prev, {
+          id: newId(), role: 'system', text: t('groupDream.error.realityTimedOut'), time: Date.now(),
+        }]);
+      }, GROUP_DREAM_ROUND_RECOVERY_DELAY_MS);
     });
 
     // group_round_end → unlock input
@@ -620,21 +625,21 @@ export function GroupChatPanel({
       unsubRoundStart(); unsubRoundEnd();
       clearRoundTimer();
     };
-  }, [groupId, replaceStreamingBubbleWithParts]);
+  }, [groupId, replaceStreamingBubbleWithParts, t]);
 
   // Send message
   const send = async () => {
-    const t = input.trim();
-    if (!t || sending || roundLocked || dreamBlock) return;
+    const message = input.trim();
+    if (!message || sending || roundLocked || dreamBlock) return;
     setInput('');
-    setMessages(prev => [...prev, { id: newId(), role: 'user', text: t, time: Date.now() }]);
+    setMessages(prev => [...prev, { id: newId(), role: 'user', text: message, time: Date.now() }]);
     setSending(true);
     try {
-      await groupSend(groupId, t);
-    } catch (err) {
+      await groupSend(groupId, message);
+    } catch {
       setMessages(prev => [...prev, {
         id: newId(), role: 'system',
-        text: `发送失败：${String(err)}`, time: Date.now(),
+        text: t('groupDream.error.realitySendFailed'), time: Date.now(),
       }]);
     } finally {
       setSending(false);
