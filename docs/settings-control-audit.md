@@ -20,7 +20,7 @@
 
 - 模型路由支持从 legacy `llm` 一键初始化 `model_presets`，之后可维护 preset、密钥、URL、模型与 routing profile。
 - 代理、上下文轮数、legacy LLM 参数和视觉模型不再是假只读镜像，保存后热重载。
-- TTS 管理配置含服务端总开关、桌面语音条开关、情绪分档、服务 URL、参考音频/文本与语速。
+- TTS 管理配置含服务端总开关、桌面语音条开关、情绪分档、服务 URL、参考音频/文本与语速；provider 的选择、参数和试听只在后端管理面处理。桌面端继续只调用 `/settings/tts-desktop` 和 `/tts/synthesize`，不读取 provider 配置或密钥；兼容层仍返回 `{audio_b64, mime}`。
 - 系统状态页的 Feature switches 使用后端白名单，仅开放已有运行时消费者的布尔开关：视觉感知、支出、练习、行为痕迹、意图反射、MCP、文件只读访问、防坍缩、陪玩部署、玩具自主生长、自主联网搜索、表演映射。
 
 ## 有意保留的边界（不要误导后续 Agent）
