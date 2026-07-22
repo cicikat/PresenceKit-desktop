@@ -678,6 +678,25 @@ Authorization: Bearer <admin_token>
 
 ---
 
+## HTTP：视觉观察生产者（Windows）
+
+调用方：`src-tauri/src/sensor/visual.rs`。本地默认关闭；Chat 偏好「系统设置」的
+`VisualPerceptionSettingsPage` 通过 Tauri command 保存本机开关与 1–60 分钟采样间隔。
+
+```text
+采样 tick
+  → GET /perception/visual/config（Bearer desktop token + sensor.write）
+  → 本地 opt-in 检查 → 锁屏/无桌面会话检查
+  → 主屏截取（仅内存）→ dHash 比对
+  → 仅显著变化：内存 JPEG（长边 <= 1280）
+  → POST /perception/visual multipart { image, source=screen }
+```
+
+- 预检失败或 `enabled=false` 按关闭处理，**不截图**；服务端不会向客户端返回视觉模型地址或密钥。
+- 截屏、缩放、哈希和 JPEG 编码都不落盘；稳定画面只被内存比对，不会周期性上传。
+- 上传响应为 `{ accepted, processing }`；`processing=false`、锁屏跳过和失败均只更新本地设置页状态/计数，避免把图片或错误细节写入日志。
+- 后端同一 `screen` source 有 5 分钟冷却，客户端不将此冷却当作上传定时器。
+
 ## /sensor/realtime（GET）
 
 读取最新一份 sensor 快照。后端 `Emerald-presence` 仓库（通常与本仓库同级）的 `admin\routers\sensor.py:213`。

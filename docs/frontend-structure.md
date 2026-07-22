@@ -72,7 +72,7 @@ activity / toy / presence-nag）是独立 webview，没有共享的 JS 单例，
 - ActivityWindow 由 `src/main.tsx` 作为 overlay 覆盖；Activity 打开期间 ChatWindow / ChatPanel 保持挂载，WS 订阅不中断。
 - 负责偏好面板内的头像上传/裁剪入口。
 - 世界页角色卡头像同样复用 `AvatarCropper`，选择 PNG / JPEG / WebP 后先裁剪为 256 × 256 PNG，再通过角色头像后端接口上传。
-- Chat 偏好浮层使用顶部横栏分类：系统设置、外观、世界、其他等。系统设置中的 `OutputSegmentEnforceSettingsPage` 通过 Tauri IPC 热切换生成后段落兜底，只展示开关和有效阈值，不展示 Prompt 检视数据；外观提供主题、信息栏、聊天字号、主题字号、动态字体包和头像设置。世界页通过 `PromptAssetsSettings` 读取和保存 Reality Prompt Assets，提供角色卡单选、Reality 世界书多选和 Reality 破限多选；其他暂留导入占位。
+- Chat 偏好浮层使用顶部横栏分类：系统设置、外观、世界、其他等。系统设置中的 `OutputSegmentEnforceSettingsPage` 通过 Tauri IPC 热切换生成后段落兜底，只展示开关和有效阈值，不展示 Prompt 检视数据；`VisualPerceptionSettingsPage` 是本地 opt-in 与采样间隔控制面，展示最近结果、推送时间和失败计数。外观提供主题、信息栏、聊天字号、主题字号、动态字体包和头像设置。世界页通过 `PromptAssetsSettings` 读取和保存 Reality Prompt Assets，提供角色卡单选、Reality 世界书多选和 Reality 破限多选；其他暂留导入占位。
 
 关键状态：
 
@@ -663,4 +663,4 @@ Tauri 命令：
 
 ## 设置页运行时控制（2026-07-13）
 
-系统设置沿用现有 PreferencesPanel，挂载 ModelRoutingSettingsPage、DesktopTtsSettingsPage、ToolLoopSettingsPage、ThinkingSettingsPage 与 OutputSegmentEnforceSettingsPage。段落兜底页只负责 `output.segment_enforce.enabled` 热开关及有效阈值只读展示。助手非流式消息在桌面 TTS 开启时使用 VoiceMessageBar；语音按点击懒生成，可播放/暂停并展开文字。
+系统设置沿用现有 PreferencesPanel，挂载 ModelRoutingSettingsPage、DesktopTtsSettingsPage、ToolLoopSettingsPage、ThinkingSettingsPage、OutputSegmentEnforceSettingsPage 与 VisualPerceptionSettingsPage。视觉观察设置通过 Tauri command 控制本地开关与采样间隔；Rust sampler 在每次截图前都调用后端预检，稳定画面只做内存哈希比对，不上传。段落兜底页只负责 `output.segment_enforce.enabled` 热开关及有效阈值只读展示。助手非流式消息在桌面 TTS 开启时使用 VoiceMessageBar；语音按点击懒生成，可播放/暂停并展开文字。

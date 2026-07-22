@@ -95,6 +95,7 @@ import { OutputSegmentEnforceSettingsPage } from './components/OutputSegmentEnfo
 import { ModelRoutingSettingsPage } from './components/ModelRoutingSettingsPage';
 import { CharacterModelRoutingSettingsPage } from './components/CharacterModelRoutingSettingsPage';
 import { DesktopTtsSettingsPage } from './components/DesktopTtsSettingsPage';
+import { VisualPerceptionSettingsPage } from './components/VisualPerceptionSettingsPage';
 import { useI18n, type Language } from '../../shared/i18n';
 
 const SIDEBAR_MIN     = 250;
@@ -251,6 +252,8 @@ function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHea
                 <ThinkingSettingsPage />
                 <div style={{ height: 1, background: 'var(--paper-edge)' }} />
                 <OutputSegmentEnforceSettingsPage />
+                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
+                <VisualPerceptionSettingsPage />
               </>
             ) : tab === 'appearance' ? (
               <>

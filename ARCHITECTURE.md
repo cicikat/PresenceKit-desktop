@@ -175,6 +175,7 @@ Tauri Rust 在 `src-tauri/src/lib.rs`：
 - `load_history`：GET `/memory/{user_id}/short-term`，使用 Bearer token。
 - `load_garden_state`：GET `/garden/state`，使用 Bearer token。
 - `load_sensor_realtime`：GET `/sensor/realtime`，使用 Bearer token；无数据响应归一为 `_no_data`。
+- `sensor/visual.rs`：仅 Windows 启动的视觉观察采样器。每次内存截屏前先 GET `/perception/visual/config`，再检查本地 opt-in 与锁屏；主屏 dHash 显著变化时才将内存 JPEG（长边 ≤1280）POST `/perception/visual`，图片不落盘。
 - `get_prompt_assets` / `patch_prompt_assets`：GET / PATCH `/settings/prompt-assets`，使用 Bearer token 和 `reqwest.no_proxy()`；仅服务 Chat 的 Reality Prompt Assets 设置。
 - `load_hidden_state_debug`：GET `/debug/user-hidden-state`，并只读参考 `/dream/settings.display.physiological_arousal` 作为潜意识面板开发者字段显隐；不写 hidden state。
 - `src-tauri/src/actions.rs`：执行基础 desktop action，并负责单实例 `presence_nag` 窗口显示与 `presence_nag_close_all` 强制全关。
@@ -182,6 +183,7 @@ Tauri Rust 在 `src-tauri/src/lib.rs`：
 - `list_dream_fonts`：打包后优先扫描 `resource_dir/fonts`，debug/dev 模式回退源码 `public/fonts/`；目录不可用时返回明确错误。
 - `list_themes`：扫描 `resource_dir/themes/*/theme.json`，debug/dev 模式回退源码 `public/themes/`；前端注册中心负责契约校验和内置主题合并。
 - sensor `title_sanitizer` 采用保守默认：Browser 仅返回域名，Editor 仅返回安全 basename，Chat / Other / 未知及文件查看类应用不返回 `title_hint`。
+- 视觉观察的默认 5 分钟是本地采样/比对周期，不是上传周期；预检失败、后端关闭、锁屏/无桌面会话或画面不变时均不上传。
 
 ---
 
@@ -324,7 +326,7 @@ Dream 背景按 `day` / `night` 分开记录。旧版单字段 `dream_background
 | `src/shared/theme/globals.css` | 全局主题变量 |
 | `src/shared/theme/contract.ts` / `registry.ts` | 主题 Mod token 契约、内置与磁盘主题注册、运行期注入；磁盘 CSS 经 Tauri `read_theme_css` 读取并在前端安检 |
 | `src-tauri/src/lib.rs` | Tauri command 和 Rust HTTP 桥 |
-| `src-tauri/src/sensor/` | sensor 感知模块,嵌入 Tauri Rust 进程 |
+| `src-tauri/src/sensor/` | sensor 感知模块，嵌入 Tauri Rust 进程；Windows 视觉观察仅内存采样、比对与变化上传 |
 
 ---
 

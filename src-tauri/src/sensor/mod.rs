@@ -12,3 +12,4 @@ pub mod platform;
 pub mod publisher;
 pub mod runner;
 pub mod title_sanitizer;
+pub mod visual;

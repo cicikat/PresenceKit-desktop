@@ -45,6 +45,7 @@ pub struct ClientConfig {
     // 字段名不变（配置兼容层）：填 desktop profile token（`emt_…`）或 legacy admin secret。
     pub admin_token: String,
     pub sensor_config: SensorConfig,
+    pub visual_perception_config: crate::sensor::visual::VisualPerceptionConfig,
     pub bot_user_id: String,
 }
 
@@ -58,6 +59,7 @@ impl Default for ClientConfig {
             admin_token: std::env::var("EMERALD_ADMIN_TOKEN")
                 .unwrap_or_else(|_| DEFAULT_ADMIN_TOKEN_PLACEHOLDER.to_string()),
             sensor_config: SensorConfig::default(),
+            visual_perception_config: crate::sensor::visual::VisualPerceptionConfig::default(),
             bot_user_id: DEFAULT_BOT_USER_ID.into(),
         }
     }
@@ -74,6 +76,8 @@ struct PartialClientConfig {
     admin_token: Option<String>,
     #[serde(default, alias = "sensor_config")]
     sensor_config: Option<PartialSensorConfig>,
+    #[serde(default, alias = "visual_perception_config")]
+    visual_perception_config: Option<PartialVisualPerceptionConfig>,
     #[serde(default, alias = "bot_user_id")]
     bot_user_id: Option<String>,
 }
@@ -89,6 +93,15 @@ struct PartialSensorConfig {
     tick_seconds: Option<u32>,
     #[serde(default, alias = "sensor_version")]
     sensor_version: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PartialVisualPerceptionConfig {
+    #[serde(default)]
+    enabled: Option<bool>,
+    #[serde(default, alias = "sample_interval_seconds")]
+    sample_interval_seconds: Option<u64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -151,6 +164,22 @@ fn apply_partial(cfg: &mut ClientConfig, partial: PartialClientConfig) {
         }
         if let Some(v) = sensor.sensor_version {
             cfg.sensor_config.sensor_version = v;
+        }
+    }
+    if let Some(visual) = partial.visual_perception_config {
+        let mut next = cfg.visual_perception_config.clone();
+        if let Some(v) = visual.enabled {
+            next.enabled = v;
+        }
+        if let Some(v) = visual.sample_interval_seconds {
+            next.sample_interval_seconds = v;
+        }
+        match crate::sensor::visual::VisualPerceptionConfig::validated(
+            next.enabled,
+            next.sample_interval_seconds,
+        ) {
+            Ok(validated) => cfg.visual_perception_config = validated,
+            Err(error) => eprintln!("[client_config] 忽略无效 visualPerceptionConfig: {error}"),
         }
     }
 }
@@ -446,6 +475,35 @@ pub fn save_client_config(
     Ok(())
 }
 
+pub fn save_visual_perception_config(
+    app: &tauri::AppHandle,
+    visual: &crate::sensor::visual::VisualPerceptionConfig,
+) -> Result<(), String> {
+    let path = target_config_path(app)?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("无法创建配置目录: {e}"))?;
+    }
+    let existing = read_json(&path)
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+        .unwrap_or_else(|| serde_json::Value::Object(serde_json::Map::new()));
+    let mut root = existing.as_object().cloned().unwrap_or_default();
+    root.insert(
+        "visualPerceptionConfig".into(),
+        serde_json::json!({
+            "enabled": visual.enabled,
+            "sampleIntervalSeconds": visual.sample_interval_seconds,
+        }),
+    );
+    let serialized = serde_json::to_string_pretty(&serde_json::Value::Object(root))
+        .map_err(|e| e.to_string())?;
+    let mut tmp_os = path.clone().into_os_string();
+    tmp_os.push(".tmp");
+    let tmp_path = PathBuf::from(tmp_os);
+    std::fs::write(&tmp_path, &serialized).map_err(|e| format!("写入失败: {e}"))?;
+    std::fs::rename(&tmp_path, &path).map_err(|e| format!("写入失败: {e}"))?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod save_config_tests {
     use super::*;
@@ -490,6 +548,24 @@ mod save_config_tests {
         assert_eq!(merged["backendBase"], "http://a");
         assert_eq!(merged["websocketBase"], "ws://b");
         assert!(merged.get("adminToken").is_none());
+    }
+
+    #[test]
+    fn visual_config_rejects_an_unbounded_sampling_interval() {
+        let mut cfg = ClientConfig::default();
+        apply_partial(&mut cfg, PartialClientConfig {
+            backend_base: None,
+            websocket_base: None,
+            admin_token: None,
+            sensor_config: None,
+            visual_perception_config: Some(PartialVisualPerceptionConfig {
+                enabled: Some(true),
+                sample_interval_seconds: Some(0),
+            }),
+            bot_user_id: None,
+        });
+        assert!(!cfg.visual_perception_config.enabled);
+        assert_eq!(cfg.visual_perception_config.sample_interval_seconds, 300);
     }
 
     #[test]

@@ -17,14 +17,49 @@ pub mod sensor;
 
 use std::fs;
 use std::path::{Component, Path, PathBuf};
-use std::sync::{atomic::AtomicBool, Mutex};
+use std::sync::{atomic::AtomicBool, Arc, Mutex};
 use base64::Engine;
 use crate::client_config::{backend_url, load_client_config};
 use crate::sensor::runner::{spawn_sensor_runner, SensorRunnerConfig, SensorRunnerHandle};
+use crate::sensor::visual::{spawn_visual_runner, VisualPerceptionConfig, VisualRunnerConfig, VisualRunnerHandle, VisualRuntime};
 use tauri::{Emitter, Manager};
 
 struct VoiceHotkeyState {
     running: AtomicBool,
+}
+
+struct VisualRunnerState {
+    runtime: Arc<VisualRuntime>,
+    handle: Mutex<Option<VisualRunnerHandle>>,
+}
+
+impl Default for VisualRunnerState {
+    fn default() -> Self {
+        Self {
+            runtime: Arc::new(VisualRuntime::new(&VisualPerceptionConfig::default())),
+            handle: Mutex::new(None),
+        }
+    }
+}
+
+#[tauri::command]
+fn get_visual_perception_settings(
+    state: tauri::State<'_, VisualRunnerState>,
+) -> crate::sensor::visual::VisualPerceptionSettings {
+    state.runtime.settings()
+}
+
+#[tauri::command]
+fn update_visual_perception_settings(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, VisualRunnerState>,
+    enabled: bool,
+    sample_interval_seconds: u64,
+) -> Result<crate::sensor::visual::VisualPerceptionSettings, String> {
+    let next = VisualPerceptionConfig::validated(enabled, sample_interval_seconds)?;
+    crate::client_config::save_visual_perception_config(&app, &next)?;
+    state.runtime.apply(&next);
+    Ok(state.runtime.settings())
 }
 
 fn http_client() -> Result<reqwest::Client, String> {
@@ -2513,6 +2548,7 @@ async fn delete_jailbreak_entry(app: tauri::AppHandle, eid: String) -> Result<se
 pub fn run() {
     tauri::Builder::default()
         .manage(VoiceHotkeyState { running: AtomicBool::new(false) })
+        .manage(VisualRunnerState::default())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
@@ -2520,6 +2556,21 @@ pub fn run() {
         .setup(|app| {
             ws_bridge::register(app);
             let cfg = load_client_config(app.handle());
+            let visual_state = app.state::<VisualRunnerState>();
+            visual_state.runtime.apply(&cfg.visual_perception_config);
+            match spawn_visual_runner(VisualRunnerConfig {
+                backend_base_url: cfg.backend_base.clone(),
+                admin_token: cfg.admin_token.clone(),
+                runtime: Arc::clone(&visual_state.runtime),
+            }) {
+                Ok(handle) => {
+                    if let Ok(mut slot) = visual_state.handle.lock() {
+                        *slot = Some(handle);
+                    }
+                    eprintln!("[lib] visual observation sampler 已启动（默认关闭）");
+                }
+                Err(error) => eprintln!("[lib] visual observation sampler 启动失败: {error}"),
+            }
 
             // Phase 3: 启动后激活 desktop 通道（fire-and-forget，失败只 warning）
             let activate_url = backend_url(&cfg, "/desktop/activate");
@@ -2570,6 +2621,8 @@ pub fn run() {
             client_config::get_token_status,
             client_config::test_backend_auth,
             client_config::save_client_config,
+            get_visual_perception_settings,
+            update_visual_perception_settings,
             ui_prefs::load_ui_prefs,
             ui_prefs::save_ui_prefs,
             ws_bridge::native_ws_connect,
@@ -2749,6 +2802,7 @@ mod auth_tests {
             websocket_base: "ws://127.0.0.1:8080/ws/desktop".to_string(),
             admin_token: "secret-value".to_string(),
             sensor_config: SensorConfig::default(),
+            visual_perception_config: VisualPerceptionConfig::default(),
             bot_user_id: String::new(),
         }
     }
