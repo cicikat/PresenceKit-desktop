@@ -179,6 +179,8 @@ cd src-tauri
 cargo check
 ```
 
+GitHub Actions `ci.yml` 会在 main 的 push / PR 覆盖同套前端检查，以及 Windows 上的 `cargo check`。
+
 Vite 固定端口是 `1420`，见 `vite.config.ts`。
 
 ---
