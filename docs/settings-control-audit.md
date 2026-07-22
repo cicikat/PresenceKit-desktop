@@ -28,7 +28,7 @@
 - 桌面端不创建/编辑模型 preset，也不接触 API key；一次录入密钥和 URL 后，通过 routing profile 切换模型，无需重复编辑本机 config。
 - 角色 · 模型绑定不做 profile 的编辑/新建（那是 config 层），界面只做绑定；绑定对象是整套 routing profile（category→preset 映射），不是裸 preset。
 - `embedding` 没有可靠的单一 `enabled` 消费字段，是否启用仍由完整 provider 配置决定，因此未伪造无效开关。
-- MCP server 列表、`fs_access.allow_roots`、支出额度/白名单等复杂或高风险字段仍应走专用管理界面或配置文件；通用功能开关 API 不接受这些字段。
+- MCP server 列表现由后端管理面专用 MCP 页管理：可先测试 Streamable HTTP URL，再导入、启停和勾选工具白名单；HTTP headers 支持环境变量占位符且不回显字面 token。桌面端不代理这类 admin 配置或密钥。`fs_access.allow_roots`、支出额度/白名单等其他复杂或高风险字段仍应走专用管理界面或配置文件；通用功能开关 API 不接受这些字段。
 - sensor 的本机采集参数需要 Rust 进程生命周期协调；本轮未把它伪装成热更新开关，改动仍需编辑本机配置并重启客户端。
 - scheduler 的管理页同时提供运行状态、手动触发和配置表单；可调总开关、主要触发器、owner、提醒间隔、主动消息间隔与签名。
 - relay 已有专用管理卡片；token 只打码回显，留空保存时保留原值。
