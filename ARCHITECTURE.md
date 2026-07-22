@@ -75,8 +75,8 @@ Token 由后端 `POST /auth/tokens` 签发；scope 表、profile 表、管理操
 - 将当前 Reality 激活角色卡头像传给 DreamWindow；Dream 内控制栏、动向侧栏和消息区优先显示该头像，无角色头像时回退到本地 HER 头像。
 - Ribbon 桌宠开关通过 `src/shared/pet/bridge.ts` 显隐独立透明置顶 `PetWindow`，并将
   StateEngine 的 mood / presence / activity 快照广播给桌宠。
-- Ribbon「观测」入口在 Chat Sidebar 挂载 `ObservabilityPanel`，按角色或群聊读取成长、视觉、支出、
-  群聊仲裁和记忆五类只读轨迹；面板打开时每 30 秒轮询，不使用 WebSocket，也不把观测数据写入 StateEngine。
+- 成长、视觉、支出、群聊仲裁和记忆五类运维观测已迁入 PresenceKit 后端管理面；桌面客户端不再
+  代理这些请求、不在 Chat Ribbon 暴露运维入口，也不把观测数据写入 StateEngine。
 
 桌宠窗口是 `src/windows/pet/PetWindow.tsx`：
 
@@ -146,15 +146,9 @@ Dream 窗口是 `src/windows/dream/DreamWindow.tsx`：
 - Rust 侧分别 GET `http://127.0.0.1:8080/diary/list` 和 `/diary/{date}`，Bearer token + `reqwest.no_proxy()`。
 - 只读展示，不轮询，不写文件。
 
-观测面板是 `src/windows/chat/components/ObservabilityPanel.tsx`：
-
-- 由 `Sidebar.tsx` 在 `observability` tab 下挂载，用户可在角色桶和群聊桶之间切换。
-- `src/shared/api/observability-api.ts` 聚合五类读取，并通过单一 allowlist Tauri command
-  `observability_get` 转发到后端；Rust 侧统一使用 Bearer token、`reqwest.no_proxy()` 和既有
-  401 / 403 / 429 安全错误分支。
-- 成长作品正文按点击懒加载；视觉热力、丢弃原因、预算用量和仲裁分数均由前端纯函数派生。
-- 空文件或未运行对应工单时显示友好空态。支出意向单确认 / 拒绝依赖后端 Brief 63 的安全门，
-  当前明确保持只读，不构造不存在的写接口。
+成长、视觉、支出、群聊仲裁和记忆摘要的观测面已迁入 PresenceKit 后端管理面。桌面端原
+`ObservabilityPanel`、`observability-api` 与 Tauri `observability_get` command 已移除；接口、
+鉴权和当前入口以 `docs/backend-integration.md` 的「五类观测面板」为准。
 
 潜意识面板是 `src/windows/dream/components/SubHiddenStatePanel.tsx`：
 
