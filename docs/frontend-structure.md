@@ -618,8 +618,8 @@ Tauri 命令：
 - `contract.ts` 是核心、游戏、字体和 Dream token 的单一契约来源。
 - `builtinThemes.ts` 保存内置 `paper` / `dark` 数据。
 - `loader.ts` 通过 `document.documentElement.style.setProperty()` 运行期注入主题。
-- `registry.ts` 合并内置主题与 Tauri `list_themes` 扫描到的 `public/themes/*/theme.json`，校验必需 token、持久化 `chat.theme` 并通知订阅者。
-- `ThemePicker.tsx` 由 Chat 和 Activity 偏好页共用。
+- `registry.ts` 合并内置主题与 Tauri `list_themes` 扫描到的 `public/themes/*/theme.json`，校验必需 token、持久化 `chat.theme` 并通知订阅者；磁盘主题的可选 CSS 经 Tauri `read_theme_css` 读取，前端继续用 `inspectThemeCss()` 安检。
+- `ThemePicker.tsx` 由 Chat 和 Activity 偏好页共用，提供「刷新主题」入口，清空 registry cache 后重新扫描用户刚放入的磁盘 mod。
 - `globals.css` 只保留 paper FOUC 兜底和结构性样式。
 
 所有窗口启动时由 `main.tsx` 调用 `initTheme()`；独立 Pet WebView 通过同一初始化和 localStorage `storage` 事件跟随切换。Dream token 可由主题选择性覆盖，`features/dream/DreamTokens.css` 继续提供默认值与 sRGB/OKLCH 渐进增强。

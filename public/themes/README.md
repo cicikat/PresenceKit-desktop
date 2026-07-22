@@ -45,7 +45,7 @@ Manifest 字段：
 ```
 
 默认值：`xs=3px / sm=5px / md=8px / lg=12px / pill=999px / thin=1px / regular=2px`。
-`_example-mod` 演示了一套更圆润的取值（xs=6px / md=14px）。
+`plum-mist` 演示了一套更圆润的取值（xs=6px / md=14px）。
 
 ## 自定义 CSS
 
@@ -80,4 +80,4 @@ Manifest 可选字段 `"css": "theme.css"` 指向同目录下的 CSS 文件（�
 - `.dream-theme` — Dream 窗口根节点
 - `.dream-theme__chat-background` — Dream 背景图层
 
-示例见 `_example-mod/theme.css`。
+示例见 `plum-mist/theme.css`。新放入主题目录的 mod 可在 ThemePicker 点击「刷新主题」后立即识别。

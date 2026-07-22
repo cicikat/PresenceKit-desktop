@@ -24,6 +24,8 @@ export const zhCN = {
   'common.loading': '加载中',
   'common.loadFailed': '加载失败',
   'common.notEnabled': '暂无数据或功能未启用',
+  'themePicker.refresh': '刷新主题',
+  'themePicker.refreshing': '刷新中…',
   'chat.history.waiting.network': '正在等待后端连接…（网络错误）',
   'chat.history.waiting.unauthorized': '正在等待后端连接…（未授权）',
   'chat.history.waiting.invalid': '正在等待后端连接…（格式异常）',

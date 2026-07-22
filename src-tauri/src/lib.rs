@@ -16,7 +16,7 @@ mod ws_bridge;
 pub mod sensor;
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::{atomic::AtomicBool, Mutex};
 use base64::Engine;
 use crate::client_config::{backend_url, load_client_config};
@@ -342,6 +342,40 @@ fn list_themes_in_dir(theme_dir: &Path) -> Result<serde_json::Value, String> {
 fn list_themes(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     let theme_dir = themes_dir(&app)?;
     list_themes_in_dir(&theme_dir)
+}
+
+fn is_safe_theme_path_part(value: &str) -> bool {
+    if value.is_empty() || value.contains('/') || value.contains('\\') || Path::new(value).is_absolute() {
+        return false;
+    }
+    let mut components = Path::new(value).components();
+    matches!(components.next(), Some(Component::Normal(_))) && components.next().is_none()
+}
+
+fn read_theme_css_in_dir(theme_dir: &Path, id: &str, file: &str) -> Result<String, String> {
+    if !is_safe_theme_path_part(id) {
+        return Err("主题 id 必须是单一目录名".to_string());
+    }
+    if !is_safe_theme_path_part(file)
+        || Path::new(file).extension().and_then(|ext| ext.to_str()) != Some("css")
+    {
+        return Err("主题 CSS 文件必须是同目录下的 .css 文件".to_string());
+    }
+
+    let canonical_root =
+        fs::canonicalize(theme_dir).map_err(|e| format!("无法定位主题目录: {e}"))?;
+    let canonical_file = fs::canonicalize(theme_dir.join(id).join(file))
+        .map_err(|_| "主题 CSS 文件不存在或无法读取".to_string())?;
+    if !canonical_file.starts_with(&canonical_root) || !canonical_file.is_file() {
+        return Err("主题 CSS 文件不在允许的主题目录内".to_string());
+    }
+
+    fs::read_to_string(canonical_file).map_err(|_| "主题 CSS 文件无法按 UTF-8 读取".to_string())
+}
+
+#[tauri::command]
+fn read_theme_css(app: tauri::AppHandle, id: String, file: String) -> Result<String, String> {
+    read_theme_css_in_dir(&themes_dir(&app)?, &id, &file)
 }
 
 fn room_assets_dir(app: &tauri::AppHandle, kind: &str) -> Result<PathBuf, String> {
@@ -2544,6 +2578,7 @@ pub fn run() {
             greet,
             list_dream_fonts,
             list_themes,
+            read_theme_css,
             list_room_assets,
             list_room_props,
             list_live2d_models,
@@ -2856,6 +2891,68 @@ mod dream_font_tests {
                 },
             ])
         );
+    }
+}
+
+#[cfg(test)]
+mod theme_css_reader_tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_theme_dir() -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "emerald-theme-css-test-{}-{unique}",
+            std::process::id()
+        ))
+    }
+
+    #[test]
+    fn reads_css_only_from_the_requested_theme_directory() {
+        let theme_dir = temp_theme_dir();
+        fs::create_dir_all(theme_dir.join("plum-mist")).unwrap();
+        fs::write(
+            theme_dir.join("plum-mist").join("theme.css"),
+            ".chat-ui { opacity: .9; }",
+        )
+        .unwrap();
+
+        assert_eq!(
+            read_theme_css_in_dir(&theme_dir, "plum-mist", "theme.css").unwrap(),
+            ".chat-ui { opacity: .9; }"
+        );
+
+        fs::remove_dir_all(&theme_dir).unwrap();
+    }
+
+    #[test]
+    fn rejects_traversal_absolute_paths_and_non_css_files() {
+        let theme_dir = temp_theme_dir();
+        fs::create_dir_all(theme_dir.join("plum-mist")).unwrap();
+        fs::write(theme_dir.join("plum-mist").join("theme.css"), "body {}").unwrap();
+
+        for id in [".", "..", "../escape", "..\\escape", "/escape", "C:\\escape"] {
+            assert!(
+                read_theme_css_in_dir(&theme_dir, id, "theme.css").is_err(),
+                "id={id}"
+            );
+        }
+        for file in [
+            "../theme.css",
+            "nested/theme.css",
+            "theme.json",
+            "theme.css.txt",
+        ] {
+            assert!(
+                read_theme_css_in_dir(&theme_dir, "plum-mist", file).is_err(),
+                "file={file}"
+            );
+        }
+
+        fs::remove_dir_all(&theme_dir).unwrap();
     }
 }
 

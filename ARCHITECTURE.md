@@ -322,7 +322,7 @@ Dream 背景按 `day` / `night` 分开记录。旧版单字段 `dream_background
 | `src/shared/ui/TypingDots.tsx` / `TypingDots.css` | Chat / Dream 共用输入中视觉组件 |
 | `src/shared/i18n/` | `zh-CN` / `en-US` 语言包、持久化语言选择与 React 订阅 API |
 | `src/shared/theme/globals.css` | 全局主题变量 |
-| `src/shared/theme/contract.ts` / `registry.ts` | 主题 Mod token 契约、内置与磁盘主题注册、运行期注入 |
+| `src/shared/theme/contract.ts` / `registry.ts` | 主题 Mod token 契约、内置与磁盘主题注册、运行期注入；磁盘 CSS 经 Tauri `read_theme_css` 读取并在前端安检 |
 | `src-tauri/src/lib.rs` | Tauri command 和 Rust HTTP 桥 |
 | `src-tauri/src/sensor/` | sensor 感知模块,嵌入 Tauri Rust 进程 |
 

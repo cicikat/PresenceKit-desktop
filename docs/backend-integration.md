@@ -760,6 +760,7 @@ Authorization: Bearer <admin_token>
 | `write_avatars_json(json)` | 前端 → Rust | 写头像和 Dream 日间 / 夜间背景配置 |
 | `list_dream_fonts()` | 前端 → Rust | packaged 优先扫描 `resource_dir/fonts`，debug/dev 回退源码 `public/fonts/`；目录不可用时报明确错误 |
 | `list_themes()` | 前端 → Rust | packaged 优先扫描 `resource_dir/themes/*/theme.json`，debug/dev 回退源码 `public/themes/`；原样返回 manifest，由前端校验 token 契约 |
+| `read_theme_css(id, file)` | 前端 → Rust | 读取 `themes/<id>/<file>` 的磁盘 mod CSS；仅允许单级 id、同目录 `.css` 文件，并经 canonical 路径校验拒绝绝对路径、穿越和 symlink 逃逸；CSS 文本仍由前端 `inspectThemeCss()` 安检 |
 | `dream_get_settings()` | 前端 → Rust → 后端 | GET `/dream/settings`；读取 Dream 上下文与 `display.physiological_arousal` |
 | `dream_update_settings(..., jailbreak_preset, display)` | 前端 → Rust → 后端 | PATCH `/dream/settings`；透传 Dream 独立 `jailbreak_preset`，`display` 可透传 `{ "physiological_arousal": boolean }` |
 | `dream_group_enter/chat/exit(group_id, ...)` | 前端 → Rust → 后端 | POST `/group/{id}/dream/enter|send|exit`；群梦 send 返回 `{round_id,status}`，角色回复走 WS |

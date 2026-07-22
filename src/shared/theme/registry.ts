@@ -33,6 +33,23 @@ function validRecord(manifest: ThemeManifest, source: ThemeRecord['source']): Th
   return { manifest, source };
 }
 
+async function loadThemeCss(record: ThemeRecord): Promise<string> {
+  const { id, css } = record.manifest;
+  if (!css) throw new Error('CSS 文件名缺失');
+  if (record.source === 'disk') {
+    try {
+      return await invoke<string>('read_theme_css', { id, file: css });
+    } catch (error) {
+      if (!import.meta.env.DEV) throw error;
+      console.warn(`[theme] 磁盘 CSS IPC 读取失败，使用开发服务器 fallback: ${id}`, error);
+    }
+  }
+
+  const response = await fetch(`/themes/${id}/${css}`);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.text();
+}
+
 export async function listThemes(refresh = false): Promise<ThemeRecord[]> {
   if (records && !refresh) return records;
   const merged = new Map<string, ThemeRecord>();
@@ -69,7 +86,7 @@ export async function listThemes(refresh = false): Promise<ThemeRecord[]> {
   for (const record of merged.values()) {
     if (record.manifest.css) {
       try {
-        const cssText = await fetch(`/themes/${record.manifest.id}/${record.manifest.css}`).then(r => r.text());
+        const cssText = await loadThemeCss(record);
         const guard = inspectThemeCss(cssText);
         if (guard.ok) {
           valid.push({ ...record, cssText });
