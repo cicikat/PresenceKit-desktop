@@ -1,0 +1,47 @@
+/*
+ Presence Glass · 雾窗
+ UI theme override
+*/
+
+body {
+  background:
+    radial-gradient(circle at 20% 10%, rgba(255,220,240,.35), transparent 35%),
+    radial-gradient(circle at 80% 90%, rgba(180,220,255,.25), transparent 40%),
+    var(--paper);
+}
+
+/* 通用玻璃容器 */
+[class*="card"],
+[class*="panel"],
+[class*="bubble"] {
+  background: rgba(255,255,255,.42);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255,255,255,.55);
+  box-shadow: 0 10px 40px rgba(40,40,80,.08);
+}
+
+/* 消息气泡 */
+[class*="message"] {
+  border-radius: 24px;
+}
+
+/* 按钮 */
+button {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: transform .2s ease, background .2s ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+}
+
+/* 输入区域 */
+textarea,
+input {
+  background: rgba(255,255,255,.35);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255,255,255,.5);
+}
