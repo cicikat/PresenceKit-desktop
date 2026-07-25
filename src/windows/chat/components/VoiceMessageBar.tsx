@@ -36,7 +36,7 @@ export function VoiceMessageBar({ text, emotion = 'neutral' }: { text: string; e
         }
         const ctx = audioContextRef.current;
         if (!sourceRef.current) {
-          sourceRef.current = ctx.createMediaElementAudioSource(audio);
+          sourceRef.current = ctx.createMediaElementSource(audio);
         }
         if (!analyserRef.current) {
           analyserRef.current = ctx.createAnalyser();
