@@ -474,42 +474,44 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
             <VoiceMessageBar text={displayText} emotion={msg.moodLabel?.toLowerCase() ?? 'neutral'} />
           </div>
         )}
-        <div
-          onContextMenu={e => {
-            e.preventDefault();
-            onBubbleContextMenu?.(msg, e.clientX, e.clientY);
-          }}
-          style={{
-            padding: stickerOnly ? 5 : '11px 15px',
-            background: 'var(--paper-2)',
-            borderLeft: `3px solid oklch(0.55 0.13 ${hue})`,
-            borderTop: '1px solid var(--paper-edge)',
-            borderRight: '1px solid var(--paper-edge)',
-            borderBottom: '1px solid var(--paper-edge)',
-            borderRadius: '2px 6px 6px 2px',
-            fontSize: assistantFontSize, lineHeight: 1.65, color: 'var(--ink)',
-            fontFamily: 'var(--font-serif)',
-            whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', wordBreak: 'break-word',
-          }}>
-          {msg.deleted && (
-            <div style={{ textDecoration: 'line-through', opacity: 0.45, fontSize: assistantFontSize - 1.5, marginBottom: 4 }}>{normalizeChatDisplayText(msg.deleted)}</div>
-          )}
-          {msg.sticker && (
-            <img
-              src={msg.sticker.data_url}
-              alt={msg.sticker.emotion}
-              title={msg.sticker.emotion}
-              style={{ display: 'block', maxWidth: 'min(360px, 100%)', maxHeight: 360, borderRadius: 4, objectFit: 'contain' }}
-            />
-          )}
-          {!stickerOnly && (msg.isStreaming
-            ? renderStreamingContent(msg.text, msg.streamingDone ?? false)
-            : renderInlineStyled(displayText)
-          )}
-          {msg.meta && (
-            <div className="mono" style={{ fontSize: chatThemeFontSize(10), color: 'var(--ink-3)', marginTop: 6, letterSpacing: 0.8 }}>{msg.meta}</div>
-          )}
-        </div>
+        {!(ttsEnabled && !msg.isStreaming && !stickerOnly) && (
+          <div
+            onContextMenu={e => {
+              e.preventDefault();
+              onBubbleContextMenu?.(msg, e.clientX, e.clientY);
+            }}
+            style={{
+              padding: stickerOnly ? 5 : '11px 15px',
+              background: 'var(--paper-2)',
+              borderLeft: `3px solid oklch(0.55 0.13 ${hue})`,
+              borderTop: '1px solid var(--paper-edge)',
+              borderRight: '1px solid var(--paper-edge)',
+              borderBottom: '1px solid var(--paper-edge)',
+              borderRadius: '2px 6px 6px 2px',
+              fontSize: assistantFontSize, lineHeight: 1.65, color: 'var(--ink)',
+              fontFamily: 'var(--font-serif)',
+              whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', wordBreak: 'break-word',
+            }}>
+            {msg.deleted && (
+              <div style={{ textDecoration: 'line-through', opacity: 0.45, fontSize: assistantFontSize - 1.5, marginBottom: 4 }}>{normalizeChatDisplayText(msg.deleted)}</div>
+            )}
+            {msg.sticker && (
+              <img
+                src={msg.sticker.data_url}
+                alt={msg.sticker.emotion}
+                title={msg.sticker.emotion}
+                style={{ display: 'block', maxWidth: 'min(360px, 100%)', maxHeight: 360, borderRadius: 4, objectFit: 'contain' }}
+              />
+            )}
+            {!stickerOnly && (msg.isStreaming
+              ? renderStreamingContent(msg.text, msg.streamingDone ?? false)
+              : renderInlineStyled(displayText)
+            )}
+            {msg.meta && (
+              <div className="mono" style={{ fontSize: chatThemeFontSize(10), color: 'var(--ink-3)', marginTop: 6, letterSpacing: 0.8 }}>{msg.meta}</div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
