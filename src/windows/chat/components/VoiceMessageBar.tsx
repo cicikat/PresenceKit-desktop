@@ -10,6 +10,12 @@ function audioUrl(audioB64: string, mime: string): string {
 
 export function VoiceMessageBar({ text, emotion = 'neutral' }: { text: string; emotion?: string }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const dataArrayRef = useRef<Uint8Array | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const rafRef = useRef<number | null>(null);
+
   const [url, setUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [playing, setPlaying] = useState(false);
@@ -18,6 +24,65 @@ export function VoiceMessageBar({ text, emotion = 'neutral' }: { text: string; e
   const durationHint = useMemo(() => Math.max(2, Math.min(60, Math.round(text.length / 4.5))), [text]);
 
   useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const initAudioAnalysis = () => {
+      try {
+        if (!audioContextRef.current) {
+          audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        }
+        const ctx = audioContextRef.current;
+        if (!sourceRef.current) {
+          sourceRef.current = ctx.createMediaElementAudioSource(audio);
+        }
+        if (!analyserRef.current) {
+          analyserRef.current = ctx.createAnalyser();
+          analyserRef.current.fftSize = 256;
+          dataArrayRef.current = new Uint8Array(analyserRef.current.frequencyBinCount);
+          sourceRef.current.connect(analyserRef.current);
+          analyserRef.current.connect(ctx.destination);
+        }
+      } catch (e) {
+        console.warn('[voice] audio analysis init failed:', e);
+      }
+    };
+
+    const updateVolume = () => {
+      if (!analyserRef.current || !dataArrayRef.current) return;
+      analyserRef.current.getByteFrequencyData(dataArrayRef.current);
+      const data = dataArrayRef.current;
+      const avg = data.reduce((a, b) => a + b, 0) / data.length;
+      const normalized = Math.min(1, avg / 255);
+      window.dispatchEvent(new CustomEvent('voice-volume', { detail: { volume: normalized } }));
+      rafRef.current = requestAnimationFrame(updateVolume);
+    };
+
+    audio.addEventListener('play', initAudioAnalysis);
+
+    const onPlayStart = () => {
+      rafRef.current = requestAnimationFrame(updateVolume);
+    };
+
+    const onPlayEnd = () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      window.dispatchEvent(new CustomEvent('voice-volume', { detail: { volume: 0 } }));
+    };
+
+    audio.addEventListener('play', onPlayStart);
+    audio.addEventListener('pause', onPlayEnd);
+    audio.addEventListener('ended', onPlayEnd);
+
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      audio.removeEventListener('play', initAudioAnalysis);
+      audio.removeEventListener('play', onPlayStart);
+      audio.removeEventListener('pause', onPlayEnd);
+      audio.removeEventListener('ended', onPlayEnd);
+    };
+  }, []);
 
   const play = async () => {
     setError(null);
