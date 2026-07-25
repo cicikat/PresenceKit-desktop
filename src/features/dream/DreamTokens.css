@@ -370,7 +370,11 @@
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, rgb(255 255 255 / 0.20), rgb(248 243 250 / 0.36));
+  /* known-issues.md「日间聊天区偏灰」§D 只修了默认无背景图的情况（.dream-theme__chat
+     顶层渐变 0.58/0.38 → 0.80/0.62）；用户自设日间背景图时，图片仍叠在那层修复之上，
+     只靠这里 0.20/0.36 的淡白蒙版压不住，同一个"发灰"观感换了个触发条件重新出现。
+     按同样幅度提亮，保持图片可辨识度的同时不再吃掉文字对比度。 */
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.55), rgb(248 243 250 / 0.72));
 }
 
 .dream-theme__chat > :not(.dream-theme__chat-background) {
@@ -1051,7 +1055,9 @@
 }
 
 .dream-msg--user .dream-msg__content {
-  max-width: 66%;
+  /* 与现实聊天模式用户气泡对齐（ChatPanel.tsx Bubble 组件 maxWidth: '78%'）——
+     此前 66% 明显更窄，同样字数在梦境里比现实多换一行，观感不一致。 */
+  max-width: 78%;
 }
 
 .dream-glow-bubble {
@@ -1101,6 +1107,8 @@
   box-shadow: var(--dt-glow-bubble-shadow);
   color: var(--dt-ink);
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -1241,6 +1249,8 @@
   font-family: var(--font-serif);
   line-height: 1.75;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .dream-segment--do {

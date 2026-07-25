@@ -304,7 +304,7 @@ const GroupBubble = memo(function GroupBubble({
           maxWidth: '76%', padding: '9px 13px',
           background: 'var(--ink)', color: 'var(--paper)',
           borderRadius: '6px 6px 1px 6px',
-          fontSize, lineHeight: 1.55, whiteSpace: 'pre-wrap',
+          fontSize, lineHeight: 1.55, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', wordBreak: 'break-word',
           boxShadow: '0 2px 8px oklch(0.25 0.04 60 / 0.14)',
         }}>
           {renderInlineStyled(normalizeChatDisplayText(msg.text))}
@@ -335,7 +335,7 @@ const GroupBubble = memo(function GroupBubble({
           border: '1px solid var(--paper-edge)',
           borderRadius: '2px 6px 6px 2px',
           fontSize, lineHeight: 1.60, color: 'var(--ink)',
-          fontFamily: 'var(--font-serif)', whiteSpace: 'pre-wrap',
+          fontFamily: 'var(--font-serif)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', wordBreak: 'break-word',
         }}>
           {msg.isStreaming
             ? renderStreamingContent(msg.text, msg.streamingDone ?? false)

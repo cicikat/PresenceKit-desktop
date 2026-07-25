@@ -23,6 +23,7 @@ const bubbleBase: CSSProperties = {
   lineHeight: 1.6,
   whiteSpace: 'pre-wrap',
   wordBreak: 'break-word',
+  overflowWrap: 'anywhere',
 };
 
 export function ToyChatPanel({ chatFontSize = 14 }: { chatFontSize?: number }) {

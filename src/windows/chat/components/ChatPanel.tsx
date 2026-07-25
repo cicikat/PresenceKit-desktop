@@ -423,7 +423,7 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
             borderRadius: '6px 6px 1px 6px',
             fontSize: userFontSize, lineHeight: 1.55,
             boxShadow: '0 4px 12px oklch(0.30 0.04 60 / 0.18)',
-            whiteSpace: 'pre-wrap',
+            whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', wordBreak: 'break-word',
           }}>
             {isAttachment ? (
               <div>
@@ -469,6 +469,11 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
           <span className="mono" style={{ fontSize: chatThemeFontSize(9.5), letterSpacing: 1.4, color: 'var(--ink-3)' }}>HIM · {time}</span>
           {msg.moodLabel && <Tag hue={hue}>{msg.moodLabel}</Tag>}
         </div>
+        {!stickerOnly && ttsEnabled && !msg.isStreaming && (
+          <div style={{ marginBottom: 8 }}>
+            <VoiceMessageBar text={displayText} emotion={msg.moodLabel?.toLowerCase() ?? 'neutral'} />
+          </div>
+        )}
         <div
           onContextMenu={e => {
             e.preventDefault();
@@ -484,7 +489,7 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
             borderRadius: '2px 6px 6px 2px',
             fontSize: assistantFontSize, lineHeight: 1.65, color: 'var(--ink)',
             fontFamily: 'var(--font-serif)',
-            whiteSpace: 'pre-wrap',
+            whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', wordBreak: 'break-word',
           }}>
           {msg.deleted && (
             <div style={{ textDecoration: 'line-through', opacity: 0.45, fontSize: assistantFontSize - 1.5, marginBottom: 4 }}>{normalizeChatDisplayText(msg.deleted)}</div>
@@ -497,9 +502,7 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
               style={{ display: 'block', maxWidth: 'min(360px, 100%)', maxHeight: 360, borderRadius: 4, objectFit: 'contain' }}
             />
           )}
-          {!stickerOnly && (ttsEnabled && !msg.isStreaming ? (
-            <VoiceMessageBar text={displayText} />
-          ) : msg.isStreaming
+          {!stickerOnly && (msg.isStreaming
             ? renderStreamingContent(msg.text, msg.streamingDone ?? false)
             : renderInlineStyled(displayText)
           )}
