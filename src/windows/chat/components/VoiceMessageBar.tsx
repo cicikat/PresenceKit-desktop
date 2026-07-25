@@ -11,7 +11,7 @@ function audioUrl(audioB64: string, mime: string): string {
 export function VoiceMessageBar({ text, emotion = 'neutral' }: { text: string; emotion?: string }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
-  const dataArrayRef = useRef<Uint8Array | null>(null);
+  const dataArrayRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const rafRef = useRef<number | null>(null);
