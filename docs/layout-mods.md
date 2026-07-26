@@ -32,13 +32,14 @@ builtinLayouts.ts ─┐
 ## 3. 包格式与可抄样例
 
 ```text
-sidebar-right/
+public/layouts/sidebar-right/
 ├── layout.json
 └── layout.css
 ```
 
-`public/layouts/sidebar-right/` 是可直接运行的开发样例；`Mods/sidebar-right/` 是同一内容的
-分发副本，方便复制到安装版资源目录。
+`public/layouts/sidebar-right/` 是可直接运行的开发样例，也是开发版唯一会扫描的位置。仓库根的
+`Mods/` 不是运行时目录，不保留重复副本；给安装版分发时，直接复制 `layouts/<id>/` 到安装目录的
+`resources/layouts/<id>/`。
 
 ```json
 {
@@ -58,9 +59,9 @@ sidebar-right/
 
 ## 4. 安装方式
 
-目前没有布局可视化编辑器。开发环境把目录放到 `public/layouts/`；安装版放到
-`resources/layouts/`，然后重新启动客户端。布局选择入口尚未提供，因此当前可通过
-`chat.layout` 偏好设置选中的 id；缺失或非法 id 会回退 `obsidian-default`。
+开发环境把目录放到 `public/layouts/`；安装版放到 `resources/layouts/`，然后重新启动客户端。
+在「偏好 → 外观 → 布局预览（实验）」可立即选择已发现的布局；选择会保存到 `chat.layout`，缺失或
+非法 id 会回退 `obsidian-default`。这个入口是预览器，不是可视化编辑器。
 
 ## 5. CSS 安全
 
@@ -77,5 +78,6 @@ sidebar-right/
 
 ## 7. 当前边界
 
-目前只有 `sidebar-right` 一个布局样例；没有可视化编辑器；桌宠窗口，以及 Dream、偏好、帮助、
-Pane、Yandere 等 overlay 均不在布局 slot 范围内。
+当前有三个可运行样例：`sidebar-right`（右侧工具栏）、`mirror-stage`（左侧语境栏、右侧 Ribbon）
+和 `focus-stage`（默认收起侧栏）。它们分别展示 slot 顺序、方向、宽度和默认可见性。桌宠窗口，
+以及 Dream、偏好、帮助、Pane、Yandere 等 overlay 均不在布局 slot 范围内。

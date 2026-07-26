@@ -24,7 +24,7 @@ import { Icon } from '../UIKit';
 import { PromptAssetsSettings } from './PromptAssetsSettings';
 import { ChatSettingsSection } from './ChatSettingsSection';
 import { MinuteSelect, PrefRange, PrefRow, PrefSwitch, prefActionButtonStyle, prefSelectStyle } from './PrefAtoms';
-export function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHeaderVisible, onChatHeaderToggle, appearance, onAppearanceChange, onCharacterAvatarChange, onCharacterSwitched, petMouseSettings, onPetMouseSettingsChange, petVisualStyle, onPetVisualStyleChange, model3dZoom, onModel3dZoomChange, live2dZoom, onLive2dZoomChange, presenceNagEnabled, onPresenceNagToggle, proactiveGapHours, onProactiveGapChange, playModeEnabled, onPlayModeToggle, petRoamEnabled, onPetRoamToggle, petRippleEnabled, onPetRippleToggle, onYandereOpen }: any) {
+export function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHeaderVisible, onChatHeaderToggle, appearance, onAppearanceChange, activeLayout, layoutOptions, onLayoutChange, onCharacterAvatarChange, onCharacterSwitched, petMouseSettings, onPetMouseSettingsChange, petVisualStyle, onPetVisualStyleChange, model3dZoom, onModel3dZoomChange, live2dZoom, onLive2dZoomChange, presenceNagEnabled, onPresenceNagToggle, proactiveGapHours, onProactiveGapChange, playModeEnabled, onPlayModeToggle, petRoamEnabled, onPetRoamToggle, petRippleEnabled, onPetRippleToggle, onYandereOpen }: any) {
   const { language, setLanguage, t } = useI18n();
   const [avatars, setAvatars] = useState(avatarStore.get());
   const [tab, setTab] = useState<'system' | 'appearance' | 'color' | 'world' | 'pet' | 'chat' | 'call' | 'other'>('appearance');
@@ -190,7 +190,20 @@ export function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, 
                 <PrefRow label="对话信息栏" hint="顶部状态条 (mood / activity / 时段)">
                   <PrefSwitch active={chatHeaderVisible} onClick={onChatHeaderToggle} />
                 </PrefRow>
-                <PrefRow label="聊天字体大小" hint="控制聊天气泡与输入框文字">
+                <PrefRow label={t('settings.layout.label')} hint={t('settings.layout.hint')}>
+                  <select
+                    value={activeLayout}
+                    onChange={event => onLayoutChange(event.target.value)}
+                    style={{ ...prefSelectStyle, width: 210 }}
+                  >
+                    {layoutOptions.map((layout: any) => (
+                      <option key={layout.manifest.id} value={layout.manifest.id}>
+                        {layout.manifest.name} · {layout.source === 'disk' ? t('settings.layout.sourceDisk') : t('settings.layout.sourceBuiltin')}
+                      </option>
+                    ))}
+                  </select>
+                </PrefRow>
+                <PrefRow label="聊天字体大小" hint="控制聊天气泡、语音转文字与输入框文字">
                   <PrefRange
                     min={11}
                     max={24}

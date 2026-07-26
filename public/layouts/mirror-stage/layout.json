@@ -1,13 +1,13 @@
 {
-  "id": "sidebar-right",
-  "name": "侧栏在右",
+  "id": "mirror-stage",
+  "name": "镜像舞台",
   "author": "PresenceKit 示例",
   "version": "1.0.0",
-  "direction": "row",
+  "direction": "row-reverse",
   "slots": {
     "ribbon": { "order": 0, "size": 52 },
     "main": { "order": 1 },
-    "sidebar": { "order": 2, "size": 280, "hidden": false }
+    "sidebar": { "order": 2, "size": 300, "hidden": false }
   },
   "css": "layout.css"
 }

@@ -33,10 +33,22 @@ import { PreferencesPanel } from './components/preferences/PreferencesPanel';
 import { Divider, VideoBg } from './components/ChatShellAtoms';
 import { LayoutHost } from './components/LayoutHost';
 import { getLayout, listLayouts, setLayout, subscribe as subscribeLayout } from '../../shared/layout/registry';
+import type { LayoutRecord } from '../../shared/layout/types';
 
 const SIDEBAR_MIN = 250;
 const SIDEBAR_MAX = 540;
 const SIDEBAR_DEFAULT = 340;
+
+function getLayoutSidebarWidth(layout: LayoutRecord): number {
+  const layoutDefault = layout.manifest.slots.sidebar.size ?? SIDEBAR_DEFAULT;
+  // Preserve the pre-layout-registry width for the original layout, while
+  // allowing every mod to demonstrate its own declared default width.
+  const fallback = layout.manifest.id === 'obsidian-default'
+    ? getUIPref('chat.sidebarWidth', layoutDefault)
+    : layoutDefault;
+  return getUIPref(`chat.sidebarWidth.${layout.manifest.id}`, fallback);
+}
+
 export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivityOpen?: () => void; onToyOpen?: () => void; onRoomOpen?: () => void } = {}) {
   const engineRef = useRef<StateEngine | null>(null);
   if (!engineRef.current) engineRef.current = new StateEngine();
@@ -48,9 +60,10 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivi
   const [chatBackground, setChatBackground]        = useState(() => avatarStore.get().chatBackground);
   const [petVisible, setPetVisible]               = useState(false);
   const [activeLayout, setActiveLayout]           = useState(() => getLayout());
+  const [layoutOptions, setLayoutOptions]         = useState<LayoutRecord[]>(() => [getLayout()]);
   const [sidebarOpen, setSidebarOpen]             = useState(() => !getLayout().manifest.slots.sidebar.hidden);
   const [sidebarTab, setSidebarTab]               = useState('flow');
-  const [sidebarWidth, setSidebarWidth]           = useState(() => getUIPref('chat.sidebarWidth', SIDEBAR_DEFAULT));
+  const [sidebarWidth, setSidebarWidth]           = useState(() => getLayoutSidebarWidth(getLayout()));
   const [chatHeaderVisible, setChatHeaderVisible] = useState(() => getUIPref('chat.headerVisible', true));
   const [appearance, setAppearance]               = useState<ChatAppearance>(() => loadChatAppearance());
   const [petMouseSettings, setPetMouseSettings]   = useState<PetMouseSettings>(() => loadPetMouseSettings());
@@ -77,7 +90,6 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivi
   const [charSwitchKey, setCharSwitchKey] = useState(0);
   // null = 1v1 chat | 'list' = group list | string = group_id
   const [groupView, setGroupView]                 = useState<null | 'list' | string>(null);
-  const layoutDefaultsApplied = useRef(false);
 
   useEffect(() => {
     applyRegisteredTheme(theme).catch(error => console.warn('[theme] 切换失败:', error));
@@ -89,17 +101,23 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivi
   }), []);
   useEffect(() => {
     let mounted = true;
-    const syncLayout = () => { if (mounted) setActiveLayout(getLayout()); };
+    const syncLayout = () => {
+      if (!mounted) return;
+      const layout = getLayout();
+      setActiveLayout(layout);
+      setSidebarWidth(getLayoutSidebarWidth(layout));
+    };
     const offLayout = subscribeLayout(syncLayout);
     void listLayouts()
-      .then(() => setLayout(getLayout().manifest.id))
+      .then(layouts => {
+        if (mounted) setLayoutOptions(layouts);
+        return setLayout(getLayout().manifest.id);
+      })
       .then(layout => {
         if (!mounted) return;
         setActiveLayout(layout);
-        if (!layoutDefaultsApplied.current) {
-          setSidebarOpen(!layout.manifest.slots.sidebar.hidden);
-          layoutDefaultsApplied.current = true;
-        }
+        setSidebarWidth(getLayoutSidebarWidth(layout));
+        setSidebarOpen(!layout.manifest.slots.sidebar.hidden);
       })
       .catch(error => console.warn('[layout] 初始化失败:', error));
     return () => { mounted = false; offLayout(); };
@@ -289,14 +307,29 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivi
   const onSidebarTab = (tab: string) => { setSidebarTab(tab); setSidebarOpen(true); };
   const onCloseSidebar = () => setSidebarOpen(false);
 
+  const selectLayout = (id: string) => {
+    void setLayout(id)
+      .then(layout => {
+        setActiveLayout(layout);
+        setSidebarWidth(getLayoutSidebarWidth(layout));
+        setSidebarOpen(!layout.manifest.slots.sidebar.hidden);
+      })
+      .catch(error => console.warn('[layout] 切换失败:', error));
+  };
+
+  const sidebarOnRight = activeLayout.manifest.direction === 'row'
+    ? activeLayout.manifest.slots.sidebar.order > activeLayout.manifest.slots.main.order
+    : activeLayout.manifest.slots.sidebar.order < activeLayout.manifest.slots.main.order;
+
   const onDividerDrag = (clientX: number) => {
     if (!bodyRef.current) return;
-    const left = bodyRef.current.getBoundingClientRect().left + 52;
-    const w    = clientX - left;
-    const max  = Math.min(SIDEBAR_MAX, bodyRef.current.clientWidth - 360 - 52);
+    const mainRect = bodyRef.current.getBoundingClientRect();
+    const delta = sidebarOnRight ? mainRect.right - clientX : clientX - mainRect.left;
+    const w = sidebarWidth + delta;
+    const max = Math.min(SIDEBAR_MAX, mainRect.width + sidebarWidth - 360);
     const next = Math.max(SIDEBAR_MIN, Math.min(max, w));
     setSidebarWidth(next);
-    setUIPref('chat.sidebarWidth', next);
+    setUIPref(`chat.sidebarWidth.${activeLayout.manifest.id}`, next);
   };
 
   return (
@@ -335,13 +368,15 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivi
               playModeEnabled={playModeEnabled}
               onGroupOpen={() => setGroupView('list')}
             />,
-            sidebar: sidebarOpen ? <><div style={{ flex: 1, minWidth: 0 }}><SidebarPanel
-              engine={engine}
-              sidebarRectRef={sidebarRectRef}
-              tab={sidebarTab}
-              onClose={() => setSidebarOpen(false)} /></div>
-              <Divider onDrag={onDividerDrag} />
-            </> : null,
+            sidebar: sidebarOpen ? <div style={{ display: 'flex', height: '100%', minWidth: 0, flex: 1 }}>
+              {sidebarOnRight && <Divider onDrag={onDividerDrag} />}
+              <div style={{ flex: 1, minWidth: 0 }}><SidebarPanel
+                engine={engine}
+                sidebarRectRef={sidebarRectRef}
+                tab={sidebarTab}
+                onClose={() => setSidebarOpen(false)} /></div>
+              {!sidebarOnRight && <Divider onDrag={onDividerDrag} />}
+            </div> : null,
             main: <div ref={bodyRef} className="chat-ui__body" style={{ height: '100%', minHeight: 0, minWidth: 0, position: 'relative', '--chat-background-blur': `${appearance.backgroundBlur}px` } as CSSProperties}>
           {/* image: explicit or backward-compat (had a dataUrl before backgroundKind existed) */}
           {(appearance.backgroundKind === 'image' || (appearance.backgroundKind === 'none' && chatBackground.dataUrl)) && chatBackground.dataUrl && (
@@ -412,6 +447,9 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivi
         onChatHeaderToggle={() => setChatHeaderVisible(v => { const next = !v; setUIPref('chat.headerVisible', next); return next; })}
         appearance={appearance}
         onAppearanceChange={updateAppearance}
+        activeLayout={activeLayout.manifest.id}
+        layoutOptions={layoutOptions}
+        onLayoutChange={selectLayout}
         petMouseSettings={petMouseSettings}
         onPetMouseSettingsChange={updatePetMouseSettings}
         petVisualStyle={petVisualStyle}

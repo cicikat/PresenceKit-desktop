@@ -1,8 +1,0 @@
-/* Copy this directory to <install>/resources/layouts/sidebar-right/. */
-[data-layout-slot="sidebar"] {
-  border-left: 1px solid color-mix(in srgb, var(--accent) 42%, transparent);
-}
-
-[data-layout-slot="sidebar"] > div:last-child {
-  opacity: 0.72;
-}

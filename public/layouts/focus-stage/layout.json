@@ -1,13 +1,13 @@
 {
-  "id": "sidebar-right",
-  "name": "浏览器式右侧工具栏",
+  "id": "focus-stage",
+  "name": "专注画布",
   "author": "PresenceKit 示例",
   "version": "1.0.0",
   "direction": "row",
   "slots": {
     "ribbon": { "order": 0, "size": 52 },
     "main": { "order": 1 },
-    "sidebar": { "order": 2, "size": 300, "hidden": false }
+    "sidebar": { "order": 2, "size": 280, "hidden": true }
   },
   "css": "layout.css"
 }

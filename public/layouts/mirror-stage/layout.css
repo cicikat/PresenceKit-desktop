@@ -1,0 +1,9 @@
+/* mirror-stage — put the tool ribbon on the right and the context rail left. */
+[data-layout-slot="ribbon"] {
+  border-left: 1px solid color-mix(in srgb, var(--accent) 42%, transparent);
+}
+
+[data-layout-slot="sidebar"] {
+  border-right: 2px solid color-mix(in srgb, var(--accent) 52%, transparent);
+  background: color-mix(in srgb, var(--paper-2) 82%, var(--accent) 18%);
+}
