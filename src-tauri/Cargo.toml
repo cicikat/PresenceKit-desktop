@@ -15,11 +15,6 @@ default-run = "tauri-app"
 name = "tauri_app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
-[[bin]]
-name = "sensor_probe"
-path = "src/bin/sensor_probe.rs"
-required-features = ["sensor"]
-
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

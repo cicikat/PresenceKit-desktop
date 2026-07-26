@@ -16,7 +16,7 @@ jobs:
         include:
           - os: windows-latest
             platform: windows
-            tauri_args: ""
+            tauri_args: --bundles nsis
           - os: macos-latest
             platform: macos
             tauri_args: --target universal-apple-darwin
@@ -45,6 +45,8 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "PresenceKit-desktop ${{ github.ref_name }}"
+          releaseBody: |
+            已打包 macOS Universal 版（experimental）。
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.tauri_args }}

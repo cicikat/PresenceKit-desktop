@@ -1,7 +1,7 @@
 //! sensor 人工验证 binary
 //!
 //! 运行:
-//!     cargo run --bin sensor_probe
+//!     cargo run --example sensor_probe
 //!
 //! 行为:启动键鼠 + 焦点窗口采样器,每 5 秒打印一次累计数据,
 //! 持续 30 秒后退出。用于本地 smoke 测试,不用于 production。
