@@ -62,6 +62,20 @@ activity / toy / presence-nag）是独立 webview，没有共享的 JS 单例，
 
 文件：`src/windows/chat/ChatWindow.tsx`
 
+相关组件：
+
+```text
+src/windows/chat/
+├── ChatWindow.tsx                     # 应用级编排状态与聊天布局壳
+└── components/
+    ├── ChatShellAtoms.tsx             # Sidebar 分隔条与视频背景壳组件
+    └── preferences/                   # 偏好浮层及其内嵌设置组件
+        ├── PreferencesPanel.tsx       # 八个偏好 tab 的浮层本体
+        ├── PromptAssetsSettings.tsx   # 世界页 Reality Prompt Assets 与条目管理
+        ├── ChatSettingsSection.tsx    # 对话模式、风格和分条设置
+        └── PrefAtoms.tsx              # 偏好页共用行、开关、滑杆和样式常量
+```
+
 职责：
 
 - 创建并持有单个 `StateEngine`。
