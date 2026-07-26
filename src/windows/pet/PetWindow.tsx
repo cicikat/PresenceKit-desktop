@@ -8,10 +8,11 @@ import { useVoiceInput } from '../../shared/voice/useVoiceInput';
 import { PetStage } from './components/PetStage';
 import { usePetMouse } from './usePetMouse';
 import { usePetRoam } from './usePetRoam';
+import type { StickerPayload } from '../../shared/api/types';
 
 export function PetWindow() {
   const [snapshot, setSnapshot] = useState<PetSnapshot>(DEFAULT_PET_SNAPSHOT);
-  const [turnBubble, setTurnBubble] = useState<{ id: string; text: string } | null>(null);
+  const [turnBubble, setTurnBubble] = useState<{ id: string; text: string; sticker?: StickerPayload } | null>(null);
   const [chatInput, setChatInput] = useState('');
   const [sending, setSending] = useState(false);
   const [inputFocused, setInputFocused] = useState(false);
@@ -61,7 +62,7 @@ export function PetWindow() {
     let unlisten: (() => void) | undefined;
     listenPetTurn(turn => {
       if (disposed || turn.kind !== 'channel_message') return;
-      setTurnBubble({ id: turn.msg_id, text: turn.content });
+      setTurnBubble({ id: turn.msg_id, text: turn.content, sticker: turn.sticker });
     }).then(fn => {
       if (disposed) fn();
       else unlisten = fn;
@@ -74,7 +75,7 @@ export function PetWindow() {
 
   useEffect(() => {
     if (!turnBubble) return;
-    const ms = Math.max(6000, turnBubble.text.length * 80);
+    const ms = Math.max(6000, turnBubble.text.length * 80, turnBubble.sticker ? 8000 : 0);
     const timer = window.setTimeout(() => setTurnBubble(null), ms);
     return () => window.clearTimeout(timer);
   }, [turnBubble]);
@@ -161,6 +162,14 @@ export function PetWindow() {
               cursor: 'default',
             }}
           >
+            {turnBubble.sticker && (
+              <img
+                src={turnBubble.sticker.data_url}
+                alt={turnBubble.sticker.emotion}
+                title={turnBubble.sticker.emotion}
+                style={{ display: 'block', maxWidth: '100%', maxHeight: 220, margin: turnBubble.text ? '0 0 8px' : '0 auto', borderRadius: 8, objectFit: 'contain' }}
+              />
+            )}
             {turnBubble.text}
           </section>
         )}

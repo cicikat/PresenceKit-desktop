@@ -1,7 +1,7 @@
 import { emit, emitTo, listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { DEFAULT_PET_SNAPSHOT, type PetSnapshot } from './types';
-import type { NarrativeSegment } from '../api/types';
+import type { NarrativeSegment, StickerPayload } from '../api/types';
 
 export const PET_WINDOW_LABEL = 'pet';
 const PET_SNAPSHOT_EVENT = 'pet://snapshot';
@@ -18,7 +18,7 @@ export interface PetPrefsPatch {
 // The main window is the only WS connection (desktop_ws.py is single-connection); the pet
 // window can't connect itself, so ChatWindow forwards these verbatim after receiving them.
 export type PetTurnEvent =
-  | { kind: 'channel_message'; content: string; msg_id: string; source?: string; char_id?: string; round_id?: string }
+  | { kind: 'channel_message'; content: string; msg_id: string; source?: string; char_id?: string; round_id?: string; sticker?: StickerPayload }
   | { kind: 'message_segments'; content: string; segments: NarrativeSegment[]; msg_id: string; source?: string; char_id?: string }
   | { kind: 'message_stream_start'; msg_id: string; char_id?: string; round_id?: string }
   | { kind: 'message_stream_delta'; msg_id: string; delta: string }
