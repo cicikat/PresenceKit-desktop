@@ -1206,8 +1206,12 @@
 }
 
 .dream-msg__content--segmented {
+  /* Segmented replies have no row-level avatar. Let narration use the full
+     chat column instead of inheriting the ordinary assistant bubble cap. */
+  flex: 1 1 auto;
+  min-width: 0;
   width: 100%;
-  max-width: 100%;
+  max-width: none;
 }
 
 .dream-segment-say {
@@ -1286,7 +1290,9 @@
 }
 
 .dream-segment--narration {
-  padding: 2px 14px;
+  align-self: stretch;
+  max-width: min(900px, 100%);
+  padding: 5px 18px;
   color: var(--dt-ink-2);
   font-size: calc(var(--dream-chat-font-size, 15.5px) * 0.98);
   line-height: 1.85;

@@ -8,7 +8,7 @@ function audioUrl(audioB64: string, mime: string): string {
   return URL.createObjectURL(new Blob([bytes], { type: mime || 'audio/wav' }));
 }
 
-export function VoiceMessageBar({ text, emotion = 'neutral' }: { text: string; emotion?: string }) {
+export function VoiceMessageBar({ text, emotion = 'neutral', fontSize }: { text: string; emotion?: string; fontSize?: number }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const dataArrayRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
@@ -127,7 +127,7 @@ export function VoiceMessageBar({ text, emotion = 'neutral' }: { text: string; e
           {showText ? '收起文字' : '转文字'}
         </button>
       </div>
-      {showText && <div style={{ padding: '8px 10px', borderRadius: 'var(--radius-sm)', background: 'var(--paper)', border: '1px solid var(--paper-edge)', fontSize: 12.5, lineHeight: 1.6 }}>{text}</div>}
+      {showText && <div style={{ padding: '8px 10px', borderRadius: 'var(--radius-sm)', background: 'var(--paper)', border: '1px solid var(--paper-edge)', fontSize: fontSize ?? 12.5, lineHeight: 1.65 }}>{text}</div>}
       {error && <div className="mono" style={{ fontSize: 9.5, color: 'var(--danger)' }}>语音生成失败：{error}</div>}
     </div>
   );

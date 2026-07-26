@@ -471,7 +471,7 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
         </div>
         {!stickerOnly && ttsEnabled && !msg.isStreaming && (
           <div style={{ marginBottom: 8 }}>
-            <VoiceMessageBar text={displayText} emotion={msg.moodLabel?.toLowerCase() ?? 'neutral'} />
+            <VoiceMessageBar text={displayText} emotion={msg.moodLabel?.toLowerCase() ?? 'neutral'} fontSize={assistantFontSize} />
           </div>
         )}
         {!(ttsEnabled && !msg.isStreaming && !stickerOnly) && (
