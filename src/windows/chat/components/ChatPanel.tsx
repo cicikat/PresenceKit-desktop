@@ -474,7 +474,44 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
             <VoiceMessageBar text={displayText} emotion={msg.moodLabel?.toLowerCase() ?? 'neutral'} fontSize={assistantFontSize} autoPlay={ttsAutoPlay.chat} scene="chat" />
           </div>
         )}
-        {!(ttsEnabled && !msg.isStreaming && !stickerOnly) && (
+        {msg.sticker && (
+          <div
+            onContextMenu={e => {
+              e.preventDefault();
+              onBubbleContextMenu?.(msg, e.clientX, e.clientY);
+            }}
+            style={{
+              display: 'inline-flex',
+              width: 'fit-content',
+              maxWidth: '100%',
+              marginBottom: stickerOnly ? 0 : 8,
+              padding: 6,
+              background: 'oklch(0.96 0.025 78 / 0.48)',
+              borderLeft: `3px solid oklch(0.55 0.13 ${hue} / 0.78)`,
+              borderTop: '1px solid oklch(0.68 0.045 75 / 0.5)',
+              borderRight: '1px solid oklch(0.68 0.045 75 / 0.5)',
+              borderBottom: '1px solid oklch(0.68 0.045 75 / 0.5)',
+              borderRadius: '3px 14px 14px 3px',
+              boxShadow: '0 3px 10px oklch(0.30 0.04 60 / 0.06)',
+            }}
+          >
+            <img
+              src={msg.sticker.data_url}
+              alt={msg.sticker.emotion}
+              title={msg.sticker.emotion}
+              style={{
+                display: 'block',
+                maxWidth: 'min(132px, 100%)',
+                maxHeight: 132,
+                width: 'auto',
+                height: 'auto',
+                borderRadius: 9,
+                objectFit: 'contain',
+              }}
+            />
+          </div>
+        )}
+        {!stickerOnly && !(ttsEnabled && !msg.isStreaming) && (
           <div
             onContextMenu={e => {
               e.preventDefault();
@@ -495,18 +532,10 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
             {msg.deleted && (
               <div style={{ textDecoration: 'line-through', opacity: 0.45, fontSize: assistantFontSize - 1.5, marginBottom: 4 }}>{normalizeChatDisplayText(msg.deleted)}</div>
             )}
-            {msg.sticker && (
-              <img
-                src={msg.sticker.data_url}
-                alt={msg.sticker.emotion}
-                title={msg.sticker.emotion}
-                style={{ display: 'block', maxWidth: 'min(360px, 100%)', maxHeight: 360, borderRadius: 4, objectFit: 'contain' }}
-              />
-            )}
-            {!stickerOnly && (msg.isStreaming
+            {msg.isStreaming
               ? renderStreamingContent(msg.text, msg.streamingDone ?? false)
               : renderInlineStyled(displayText)
-            )}
+            }
             {msg.meta && (
               <div className="mono" style={{ fontSize: chatThemeFontSize(10), color: 'var(--ink-3)', marginTop: 6, letterSpacing: 0.8 }}>{msg.meta}</div>
             )}
