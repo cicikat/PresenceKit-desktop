@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { synthesizeDesktopVoice } from '../../../shared/api/runtimeSettings';
 
 function audioUrl(audioB64: string, mime: string): string {
@@ -8,13 +8,14 @@ function audioUrl(audioB64: string, mime: string): string {
   return URL.createObjectURL(new Blob([bytes], { type: mime || 'audio/wav' }));
 }
 
-export function VoiceMessageBar({ text, emotion = 'neutral', fontSize }: { text: string; emotion?: string; fontSize?: number }) {
+export function VoiceMessageBar({ text, emotion = 'neutral', fontSize, autoPlay = false, scene = 'desktop_pet' }: { text: string; emotion?: string; fontSize?: number; autoPlay?: boolean; scene?: 'chat' | 'dream' | 'video_call' | 'desktop_pet' }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const dataArrayRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const rafRef = useRef<number | null>(null);
+  const autoPlayAttemptedRef = useRef(false);
 
   const [url, setUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -24,6 +25,7 @@ export function VoiceMessageBar({ text, emotion = 'neutral', fontSize }: { text:
   const durationHint = useMemo(() => Math.max(2, Math.min(60, Math.round(text.length / 4.5))), [text]);
 
   useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
+  useEffect(() => { autoPlayAttemptedRef.current = false; }, [text]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -84,13 +86,13 @@ export function VoiceMessageBar({ text, emotion = 'neutral', fontSize }: { text:
     };
   }, []);
 
-  const play = async () => {
+  const play = useCallback(async () => {
     setError(null);
     let nextUrl = url;
     if (!nextUrl) {
       setLoading(true);
       try {
-        const result = await synthesizeDesktopVoice(text, emotion);
+        const result = await synthesizeDesktopVoice(text, emotion, scene);
         nextUrl = audioUrl(result.audio_b64, result.mime);
         setUrl(nextUrl);
       } catch (e) {
@@ -107,7 +109,13 @@ export function VoiceMessageBar({ text, emotion = 'neutral', fontSize }: { text:
     audio.onended = () => setPlaying(false);
     try { await audio.play(); setPlaying(true); }
     catch (e) { setError(String(e)); setPlaying(false); }
-  };
+  }, [emotion, playing, scene, text, url]);
+
+  useEffect(() => {
+    if (!autoPlay || autoPlayAttemptedRef.current) return;
+    autoPlayAttemptedRef.current = true;
+    void play();
+  }, [autoPlay, play]);
 
   return (
     <div style={{ display: 'grid', gap: 7 }}>

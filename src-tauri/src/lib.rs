@@ -2393,10 +2393,39 @@ async fn set_desktop_tts(app: tauri::AppHandle, enabled: bool) -> Result<serde_j
 }
 
 #[tauri::command]
-async fn synthesize_desktop_voice(app: tauri::AppHandle, text: String, emotion: String) -> Result<serde_json::Value, String> {
+async fn get_tts_auto_play(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let resp = authorized_request(&cfg, http_client()?.get(backend_url(&cfg, "/settings/tts-auto-play")))
+        .send().await.map_err(|e| e.to_string())?;
+    require_success(resp).await?.json().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn set_tts_auto_play(
+    app: tauri::AppHandle,
+    chat: Option<bool>,
+    dream: Option<bool>,
+    video_call: Option<bool>,
+    desktop_pet: Option<bool>,
+    mobile: Option<bool>,
+) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let mut payload = serde_json::Map::new();
+    if let Some(value) = chat { payload.insert("chat".into(), value.into()); }
+    if let Some(value) = dream { payload.insert("dream".into(), value.into()); }
+    if let Some(value) = video_call { payload.insert("video_call".into(), value.into()); }
+    if let Some(value) = desktop_pet { payload.insert("desktop_pet".into(), value.into()); }
+    if let Some(value) = mobile { payload.insert("mobile".into(), value.into()); }
+    let resp = authorized_request(&cfg, http_client()?.post(backend_url(&cfg, "/settings/tts-auto-play")))
+        .json(&serde_json::Value::Object(payload)).send().await.map_err(|e| e.to_string())?;
+    require_success(resp).await?.json().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn synthesize_desktop_voice(app: tauri::AppHandle, text: String, emotion: String, scene: Option<String>) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
     let resp = authorized_request(&cfg, llm_http_client()?.post(backend_url(&cfg, "/tts/synthesize")))
-        .json(&serde_json::json!({ "text": text, "emotion": emotion })).send().await.map_err(|e| e.to_string())?;
+        .json(&serde_json::json!({ "text": text, "emotion": emotion, "scene": scene.unwrap_or_else(|| "desktop_pet".into()) })).send().await.map_err(|e| e.to_string())?;
     require_success(resp).await?.json().await.map_err(|e| e.to_string())
 }
 
@@ -2828,6 +2857,8 @@ pub fn run() {
             set_character_model_routing,
             get_desktop_tts,
             set_desktop_tts,
+            get_tts_auto_play,
+            set_tts_auto_play,
             synthesize_desktop_voice,
             water_garden,
             get_tool_loop_settings,

@@ -4,7 +4,9 @@ import { invoke } from '@tauri-apps/api/core';
 import { listenPetSnapshots, listenPetTurn } from '../../shared/pet/bridge';
 import { DEFAULT_PET_SNAPSHOT, type PetSnapshot } from '../../shared/pet/types';
 import { sendChat } from '../../shared/api/backend';
+import { getDesktopTtsEnabled, getTtsAutoPlay, type TtsAutoPlaySettings } from '../../shared/api/runtimeSettings';
 import { useVoiceInput } from '../../shared/voice/useVoiceInput';
+import { VoiceMessageBar } from '../chat/components/VoiceMessageBar';
 import { PetStage } from './components/PetStage';
 import { usePetMouse } from './usePetMouse';
 import { usePetRoam } from './usePetRoam';
@@ -16,12 +18,36 @@ export function PetWindow() {
   const [chatInput, setChatInput] = useState('');
   const [sending, setSending] = useState(false);
   const [inputFocused, setInputFocused] = useState(false);
+  const [ttsEnabled, setTtsEnabled] = useState(false);
+  const [ttsAutoPlay, setTtsAutoPlay] = useState<TtsAutoPlaySettings>({ chat: false, dream: false, video_call: false, desktop_pet: false, mobile: false });
   const { pinned, reaction, startDrag, draggingRef, movingRef } = usePetMouse({ shy: snapshot.mood === '惊讶' });
   usePetRoam({ draggingRef, movingRef });
 
   const voice = useVoiceInput();
   const voiceRef = useRef(voice);
   voiceRef.current = voice;
+
+  useEffect(() => {
+    let mounted = true;
+    let unlistenAutoPlay: (() => void) | undefined;
+    let unlistenEnabled: (() => void) | undefined;
+    Promise.all([getDesktopTtsEnabled(), getTtsAutoPlay()]).then(([enabled, settings]) => {
+      if (!mounted) return;
+      setTtsEnabled(enabled);
+      setTtsAutoPlay(settings);
+    }).catch(error => console.warn('[pet] 读取语音设置失败:', error));
+    listen<TtsAutoPlaySettings>('tts-auto-play-settings', event => {
+      if (mounted) setTtsAutoPlay(event.payload);
+    }).then(fn => { unlistenAutoPlay = fn; }).catch(console.warn);
+    listen<{ enabled: boolean }>('desktop-tts-settings', event => {
+      if (mounted) setTtsEnabled(event.payload.enabled);
+    }).then(fn => { unlistenEnabled = fn; }).catch(console.warn);
+    return () => {
+      mounted = false;
+      unlistenAutoPlay?.();
+      unlistenEnabled?.();
+    };
+  }, []);
 
   // Alt+1 global hotkey → toggle voice recording; on stop, auto-send transcribed text
   useEffect(() => {
@@ -171,6 +197,11 @@ export function PetWindow() {
               />
             )}
             {turnBubble.text}
+            {ttsEnabled && turnBubble.text && (
+              <div style={{ marginTop: 9 }}>
+                <VoiceMessageBar key={turnBubble.id} text={turnBubble.text} autoPlay={ttsAutoPlay.desktop_pet} />
+              </div>
+            )}
           </section>
         )}
 
