@@ -1,0 +1,14 @@
+{
+  "id": "presence-glass-atlas",
+  "name": "雾窗 · Atlas 工作台",
+  "author": "PresenceKit 示例",
+  "version": "2.0.0",
+  "direction": "row-reverse",
+  "mainLayout": "hud",
+  "slots": {
+    "ribbon": { "order": 0, "size": 62 },
+    "main": { "order": 1 },
+    "sidebar": { "order": 2, "size": 340, "hidden": false }
+  },
+  "css": "layout.css"
+}

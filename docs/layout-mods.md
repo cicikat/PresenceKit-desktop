@@ -88,8 +88,10 @@ Grid；布局由 `mainLayout` 的受控模板负责，CSS 只做装饰。
 
 ## 7. 当前边界
 
-当前有三个可运行样例：`sidebar-right`（右侧工具栏 + 工作台输入区）、`mirror-stage`（左侧语境栏、
-右侧 Ribbon + HUD 主区）和 `focus-stage`（默认收起侧栏 + 原始纵向聊天）。它们分别展示 slot
-顺序、方向、宽度、默认可见性和 V2 主区模板。窗口变窄到 760px 以下时，`workbench` / `hud`
-自动回退为 `stack`，避免输入区或消息流被挤没。桌宠窗口，以及 Dream、偏好、帮助、Pane、Yandere
-等 overlay 均不在布局 slot 范围内。
+当前有四个可运行样例：`sidebar-right`（右侧工具栏 + 工作台输入区）、`mirror-stage`（左侧语境栏、
+右侧 Ribbon + HUD 主区）、`focus-stage`（默认收起侧栏 + 原始纵向聊天）和
+`presence-glass-atlas`（雾窗主题的全量布局搭档）。它们分别展示 slot 顺序、方向、宽度、默认可见性
+和 V2 主区模板。后者与主题 `presence-glass` 独立选择：在布局预览选 Atlas、在主题选择雾窗，才能
+同时得到三栏重排与玻璃视觉。窗口变窄到 760px 以下时，`workbench` / `hud` 自动回退为 `stack`，
+避免输入区或消息流被挤没。桌宠窗口，以及 Dream、偏好、帮助、Pane、Yandere 等 overlay 均不在布局
+slot 范围内。

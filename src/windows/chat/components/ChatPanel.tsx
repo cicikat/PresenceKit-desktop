@@ -1909,7 +1909,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
   const isHud = resolvedMainLayout === 'hud';
 
   return (
-    <div ref={rootRef} style={{
+    <div ref={rootRef} className="chat-panel" data-main-layout={resolvedMainLayout} style={{
       position: 'relative', height: '100%', minHeight: 0,
       minWidth: 0,
       background: avatars.chatBackground?.dataUrl ? 'transparent' : 'var(--paper)',
@@ -1918,7 +1918,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
     }}>
       {/* HEADER */}
       {headerVisible && (
-        <div style={{
+        <div data-chat-region="header" style={{
           gridArea: 'header', minWidth: 0,
           padding: '20px 28px 14px', borderBottom: '1px solid var(--paper-edge)',
           ...(isHud ? { borderRight: '1px solid var(--paper-edge)', borderBottom: 'none', overflowY: 'auto' } : {}),
@@ -1965,6 +1965,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       {/* MESSAGES */}
       <div
         ref={scrollRef}
+        data-chat-region="transcript"
         onScroll={onScroll}
         style={{ gridArea: 'transcript', minHeight: 0, overflowY: 'auto', padding: `8px ${youVisible ? 56 : 28}px 12px 28px`, background: avatars.chatBackground?.dataUrl ? 'transparent' : 'var(--paper)', ...(isHud ? { borderLeft: '1px solid var(--paper-edge)' } : {}) }}
       >
@@ -2089,7 +2090,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       )}
 
       {/* INPUT */}
-      <div style={{ gridArea: 'composer', position: 'relative', minWidth: 0, padding: 18, borderTop: isSideComposer ? 'none' : '1px solid var(--paper-edge)', borderLeft: isSideComposer ? '1px solid var(--paper-edge)' : 'none', background: avatars.chatBackground?.dataUrl ? 'oklch(from var(--paper-2) l c h / 0.85)' : 'var(--paper-2)', ...(isSideComposer ? { overflowY: 'auto' } : {}), ...(isHud ? { borderRight: '1px solid var(--paper-edge)' } : {}) }}>
+      <div data-chat-region="composer" style={{ gridArea: 'composer', position: 'relative', minWidth: 0, padding: 18, borderTop: isSideComposer ? 'none' : '1px solid var(--paper-edge)', borderLeft: isSideComposer ? '1px solid var(--paper-edge)' : 'none', background: avatars.chatBackground?.dataUrl ? 'oklch(from var(--paper-2) l c h / 0.85)' : 'var(--paper-2)', ...(isSideComposer ? { overflowY: 'auto' } : {}), ...(isHud ? { borderRight: '1px solid var(--paper-edge)' } : {}) }}>
         {replyTarget && (
           <div style={{
             display: 'flex', alignItems: 'center', gap: 8,

@@ -2,7 +2,7 @@
   "id": "presence-glass",
   "name": "Presence Glass · 雾窗",
   "author": "PresenceKit 示例（基于原始 GPT 视觉稿整理）",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "base": "light",
   "css": "theme.css",
   "tokens": {
@@ -15,6 +15,19 @@
     "--board-light": "#d7c9de", "--board-dark": "#82728e", "--board-select": "#e6be72", "--board-target-light": "#a99ab4", "--board-target-dark": "#756580", "--board-coord-light": "#82728e", "--board-coord-dark": "#eee8f2",
     "--goban-bg": "#c9ad8b", "--goban-line": "#795c3e", "--stone-black-core": "#4b4451", "--stone-black-edge": "#1d1820", "--stone-white-core": "#fffaff", "--stone-white-edge": "#d5c9d9", "--stone-black-border": "#110d13", "--stone-white-border": "#9a8d9e",
     "--status-connecting": "#d69e4f", "--status-error": "#d95d72", "--flower-calm": "#d4a95f", "--flower-bright": "#e7846d", "--flower-low": "#79a9d8", "--flower-yandere": "#d96a88", "--flower-adrift": "#ad8dd2", "--flower-default": "#998e9f",
-    "--radius-xs": "5px", "--radius-sm": "12px", "--radius-md": "18px", "--radius-lg": "28px", "--radius-pill": "999px", "--border-thin": "1px", "--border-regular": "2px"
+    "--radius-xs": "5px", "--radius-sm": "12px", "--radius-md": "18px", "--radius-lg": "28px", "--radius-pill": "999px", "--border-thin": "1px", "--border-regular": "2px",
+    "--font-serif": "\"Noto Serif SC\", \"Songti SC\", Georgia, serif", "--font-sans": "\"Noto Sans SC\", \"Microsoft YaHei\", sans-serif", "--font-mono": "\"Departure Mono\", \"Cascadia Mono\", monospace",
+    "--motion-fast": "120ms", "--motion-base": "240ms", "--motion-slow": "520ms", "--ease-standard": "cubic-bezier(0.2, 0, 0, 1)", "--ease-emphasized": "cubic-bezier(0.2, 0.8, 0.2, 1)", "--motion-scale": "1",
+    "--dt-bg-1": "oklch(0.972 0.018 320)", "--dt-bg-2": "oklch(0.946 0.026 240)", "--dt-bg-3": "oklch(0.958 0.022 180)",
+    "--dt-surface": "rgb(255 255 255 / 0.52)", "--dt-surface-2": "rgb(252 246 255 / 0.36)", "--dt-surface-deep": "rgb(238 231 249 / 0.64)",
+    "--dt-ink": "oklch(0.29 0.030 280)", "--dt-ink-2": "oklch(0.43 0.032 280)", "--dt-ink-3": "oklch(0.60 0.030 280)", "--dt-ink-4": "oklch(0.76 0.024 280)",
+    "--dt-flower-daisy": "oklch(0.88 0.10 78)", "--dt-flower-rose": "oklch(0.82 0.12 15)", "--dt-flower-dandelion": "oklch(0.80 0.12 320)", "--dt-flower-bluebell": "oklch(0.80 0.10 245)", "--dt-flower-sun": "oklch(0.90 0.11 60)",
+    "--dt-border": "rgb(255 255 255 / 0.70)", "--dt-border-soft": "rgb(164 183 230 / 0.30)", "--dt-blur-sm": "8px", "--dt-blur-md": "20px", "--dt-blur-lg": "40px",
+    "--dt-shadow-rest": "0 8px 24px rgb(91 77 132 / 0.10), inset 0 1px 0 rgb(255 255 255 / 0.82)", "--dt-shadow-glow": "0 18px 52px rgb(174 142 230 / 0.22)", "--dt-shadow-bloom": "0 0 36px rgb(130 190 255 / 0.32)",
+    "--dt-glow-warm": "0 0 30px rgb(255 196 159 / 0.34)", "--dt-glow-cool": "0 0 30px rgb(151 205 255 / 0.34)", "--dt-glow-soft": "0 0 30px rgb(216 161 255 / 0.30)",
+    "--dt-glow-glass-bg": "rgb(255 255 255 / 0.48)", "--dt-glow-glass-border": "rgb(218 226 255 / 0.76)", "--dt-glow-glass-shadow": "0 0 22px rgb(155 184 255 / 0.24), inset 0 0 18px rgb(255 255 255 / 0.36)", "--dt-glow-glass-sheen": "rgb(255 255 255 / 0.72)", "--dt-glow-glass-blur": "16px",
+    "--dt-glow-bubble-bg": "rgb(246 243 255 / 0.48)", "--dt-glow-bubble-border": "rgb(211 222 255 / 0.82)", "--dt-glow-bubble-shadow": "0 0 12px rgb(157 180 244 / 0.18), inset 0 0 16px rgb(255 255 255 / 0.26)",
+    "--dt-anim-breath": "6.5s ease-in-out infinite", "--dt-anim-drift": "22s linear infinite", "--dt-anim-bloom": "1.6s cubic-bezier(0.2, 0.7, 0.2, 1)", "--dt-anim-slow": "0.9s cubic-bezier(0.4, 0, 0.2, 1)",
+    "--dt-accent-rose": "#ee7e9c", "--dt-accent-violet": "#b58aed", "--dt-accent-azure": "#78bdea"
   }
 }
