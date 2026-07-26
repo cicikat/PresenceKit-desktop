@@ -61,6 +61,7 @@ PresenceKit-desktop 是 `PresenceKit` AI 陪伴系统的新桌面客户端，技
 | 改记忆 / 潜意识 / hidden state UI | `docs/memory.md` |
 | 改 Dream HUD / 梦境状态展示 | `docs/dream-hud.md` |
 | 改桌宠窗口、模型舞台或鼠标互动 | `docs/pet-window-reference.md` |
+| 改 mod / Layout Registry / 布局排布 | `docs/layout-mods.md`（主题 mod 同读 `docs/ui-mods.md`） |
 | 改系统边界或跨 pipeline 行为 | `docs/design-constraints.md` |
 | 导入 Live2D / Room 模型 | `docs/人类说明书/` 下对应导入指南 |
 | 查 bug、技术债、迁移缺口 | `docs/known-issues.md` |

@@ -1,0 +1,20 @@
+{
+  "id": "presence-glass",
+  "name": "Presence Glass · 雾窗",
+  "author": "PresenceKit 示例（基于原始 GPT 视觉稿整理）",
+  "version": "1.1.0",
+  "base": "light",
+  "css": "theme.css",
+  "tokens": {
+    "--paper": "oklch(0.965 0.015 285)", "--paper-2": "oklch(0.945 0.020 285)", "--paper-3": "oklch(0.915 0.025 285)", "--paper-edge": "oklch(0.78 0.035 275)",
+    "--ink": "oklch(0.27 0.025 270)", "--ink-2": "oklch(0.40 0.028 270)", "--ink-3": "oklch(0.56 0.030 270)", "--ink-4": "oklch(0.70 0.028 270)",
+    "--forest": "oklch(0.42 0.075 185)", "--forest-1": "oklch(0.34 0.065 190)", "--forest-2": "oklch(0.51 0.085 185)", "--forest-3": "oklch(0.60 0.090 180)", "--forest-line": "oklch(0.56 0.060 190)",
+    "--on-forest": "oklch(0.97 0.012 210)", "--on-forest-2": "oklch(0.82 0.030 210)",
+    "--accent": "oklch(0.69 0.105 325)", "--accent-2": "oklch(0.80 0.090 75)", "--accent-3": "oklch(0.62 0.090 165)", "--danger": "oklch(0.62 0.18 25)",
+    "--paper-grain-1": "oklch(0.98 0.020 320 / 0.65)", "--paper-grain-2": "oklch(0.86 0.035 220 / 0.38)", "--shadow-rgb-mix": "oklch(0.35 0.04 270 / 0.18)",
+    "--board-light": "#d7c9de", "--board-dark": "#82728e", "--board-select": "#e6be72", "--board-target-light": "#a99ab4", "--board-target-dark": "#756580", "--board-coord-light": "#82728e", "--board-coord-dark": "#eee8f2",
+    "--goban-bg": "#c9ad8b", "--goban-line": "#795c3e", "--stone-black-core": "#4b4451", "--stone-black-edge": "#1d1820", "--stone-white-core": "#fffaff", "--stone-white-edge": "#d5c9d9", "--stone-black-border": "#110d13", "--stone-white-border": "#9a8d9e",
+    "--status-connecting": "#d69e4f", "--status-error": "#d95d72", "--flower-calm": "#d4a95f", "--flower-bright": "#e7846d", "--flower-low": "#79a9d8", "--flower-yandere": "#d96a88", "--flower-adrift": "#ad8dd2", "--flower-default": "#998e9f",
+    "--radius-xs": "5px", "--radius-sm": "12px", "--radius-md": "18px", "--radius-lg": "28px", "--radius-pill": "999px", "--border-thin": "1px", "--border-regular": "2px"
+  }
+}

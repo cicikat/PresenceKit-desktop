@@ -1,7 +1,7 @@
 # UI Mods 说明书（主题 mod 制作与系统地图）
 
 > 双读者文档：人类作者照着做即可出 mod；agent 看完 §2 架构图与 §5 配方可直接动手。
-> mod 分两类：**UI mod**（本文档，现在可做）与**功能 mod**（外接功能，§8 预留，方案待讨论）。
+> 本文档只覆盖**主题 UI mod**；布局排布 mod 见 `docs/layout-mods.md`，功能 mod（外接功能）仍在 §8 预留、方案待讨论。
 
 ---
 
@@ -83,7 +83,8 @@ moodReactive 覆盖层 → Dream 窗口内 dreamAppearance 覆盖。
 └── theme.css             ← 可选，manifest 里 "css": "theme.css" 声明
 ```
 
-`theme.json` 骨架（完整可抄样例见 `public/themes/plum-mist/`，token 全集见 §3）：
+`theme.json` 骨架（完整可抄样例见 `public/themes/plum-mist/`；带 CSS 的完整样例见
+`public/themes/presence-glass/`，token 全集见 §3）：
 
 ```json
 {
@@ -142,7 +143,8 @@ ThemePicker 的「刷新主题」即可重新扫描，无需重启。
 
 ## 8. 功能 mod（预留）
 
-外接功能（自定义面板/小组件/接外部服务）与 UI mod 是不同的信任级别：UI mod 是纯
+布局排布 mod 已有独立的 [布局 Mod 说明书](layout-mods.md)：它只重排 Chat 的既有三个区域，
+不能执行或替换组件。外接功能（自定义面板/小组件/接外部服务）与 UI mod 是不同的信任级别：UI mod 是纯
 声明式 token+受限 CSS，功能 mod 需要可执行代码或 IPC 面，涉及沙箱、权限、与后端
 `presence_ext` 的关系。**方案未定，待专门讨论后另立文档与工单**；在那之前不要把
 可执行内容塞进主题包（安检也会拒）。

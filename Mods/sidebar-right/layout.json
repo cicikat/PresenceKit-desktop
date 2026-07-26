@@ -1,0 +1,13 @@
+{
+  "id": "sidebar-right",
+  "name": "侧栏在右",
+  "author": "PresenceKit 示例",
+  "version": "1.0.0",
+  "direction": "row",
+  "slots": {
+    "ribbon": { "order": 0, "size": 52 },
+    "main": { "order": 1 },
+    "sidebar": { "order": 2, "size": 280, "hidden": false }
+  },
+  "css": "layout.css"
+}

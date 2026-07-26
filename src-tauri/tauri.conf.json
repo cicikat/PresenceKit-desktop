@@ -57,6 +57,7 @@
     "resources": {
       "../public/fonts/": "fonts/",
       "../public/themes/": "themes/",
+      "../public/layouts/": "layouts/",
       "../public/room/": "room/"
     },
     "icon": [

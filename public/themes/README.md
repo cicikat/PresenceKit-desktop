@@ -80,4 +80,5 @@ Manifest 可选字段 `"css": "theme.css"` 指向同目录下的 CSS 文件（�
 - `.dream-theme` — Dream 窗口根节点
 - `.dream-theme__chat-background` — Dream 背景图层
 
-示例见 `plum-mist/theme.css`。新放入主题目录的 mod 可在 ThemePicker 点击「刷新主题」后立即识别。
+示例见 `plum-mist/theme.css`；`presence-glass/` 是包含完整必填 token 与 CSS 装饰的可运行样例。
+新放入主题目录的 mod 可在 ThemePicker 点击「刷新主题」后立即识别。

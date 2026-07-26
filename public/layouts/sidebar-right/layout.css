@@ -1,0 +1,8 @@
+/* sidebar-right — optional decorative CSS for the layout example. */
+[data-layout-slot="sidebar"] {
+  border-left: 1px solid color-mix(in srgb, var(--accent) 42%, transparent);
+}
+
+[data-layout-slot="sidebar"] > div:last-child {
+  opacity: 0.72;
+}

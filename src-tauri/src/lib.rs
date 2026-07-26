@@ -3124,6 +3124,22 @@ mod layout_css_reader_tests {
     }
 
     #[test]
+    fn lists_layout_manifests_from_layout_directories() {
+        let layout_dir = temp_layout_dir();
+        fs::create_dir_all(layout_dir.join("sidebar-right")).unwrap();
+        fs::write(
+            layout_dir.join("sidebar-right").join("layout.json"),
+            r#"{"id":"sidebar-right","name":"侧栏在右"}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            list_layouts_in_dir(&layout_dir).unwrap(),
+            serde_json::json!([{"id":"sidebar-right","name":"侧栏在右"}]),
+        );
+        fs::remove_dir_all(&layout_dir).unwrap();
+    }
+
+    #[test]
     fn rejects_traversal_absolute_paths_and_non_css_files() {
         let layout_dir = temp_layout_dir();
         fs::create_dir_all(layout_dir.join("right-sidebar")).unwrap();
