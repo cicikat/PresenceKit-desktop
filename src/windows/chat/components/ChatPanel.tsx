@@ -123,6 +123,9 @@ interface ChatMsg {
   segmentedContent?: string;
   // 仅 live channel_message 携带；历史接口尚未持久化 sticker。
   sticker?: StickerPayload;
+  // Snapshot at live-message arrival. History and previously rendered turns
+  // deliberately keep this false, even if the user later enables auto-play.
+  autoPlayTts?: boolean;
   // 流式气泡：token 逐字到达时为 true，canonical channel_message 到达后清除
   isStreaming?: boolean;
   // 流结束（stream_end 到达）但 canonical 尚未替换：光标关闭，内容仍为原始 token
@@ -399,7 +402,7 @@ function BreathingAvatar({
   );
 }
 
-const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, youVisible, assistantFontSize, userFontSize, ttsEnabled, ttsAutoPlay, onBubbleContextMenu }: any) {
+const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, youVisible, assistantFontSize, userFontSize, ttsEnabled, onBubbleContextMenu }: any) {
   const fromUser = msg.role === 'user';
   const hue = msg.moodHue ?? currentHue;
   const time = msg.time ? new Date(msg.time).toLocaleTimeString('zh', { hour: '2-digit', minute: '2-digit' }) : '';
@@ -498,7 +501,7 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
         </div>
         {!stickerOnly && ttsEnabled && !msg.isStreaming && (
           <div style={{ marginBottom: 8 }}>
-            <VoiceMessageBar text={displayText} emotion={msg.moodLabel?.toLowerCase() ?? 'neutral'} fontSize={assistantFontSize} autoPlay={ttsAutoPlay.chat} scene="chat" />
+            <VoiceMessageBar text={displayText} emotion={msg.moodLabel?.toLowerCase() ?? 'neutral'} fontSize={assistantFontSize} autoPlay={Boolean(msg.autoPlayTts)} scene="chat" />
           </div>
         )}
         {msg.sticker && (
@@ -626,12 +629,30 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
   const voice = useVoiceInput();
   const [ttsEnabled, setTtsEnabled] = useState(false);
   const [ttsAutoPlay, setTtsAutoPlay] = useState<TtsAutoPlaySettings>({ chat: false, dream: false, video_call: false, desktop_pet: false, mobile: false });
+  const ttsEnabledRef = useRef(ttsEnabled);
+  const ttsAutoPlayRef = useRef(ttsAutoPlay);
   useEffect(() => {
     let mounted = true;
-    getDesktopTtsEnabled().then(value => { if (mounted) setTtsEnabled(value); }).catch(() => {});
-    getTtsAutoPlay().then(value => { if (mounted) setTtsAutoPlay(value); }).catch(() => {});
-    const sync = (event: Event) => setTtsEnabled(Boolean((event as CustomEvent<{ enabled: boolean }>).detail?.enabled));
-    const syncAutoPlay = (event: Event) => setTtsAutoPlay((event as CustomEvent<TtsAutoPlaySettings>).detail);
+    getDesktopTtsEnabled().then(value => {
+      if (!mounted) return;
+      ttsEnabledRef.current = value;
+      setTtsEnabled(value);
+    }).catch(() => {});
+    getTtsAutoPlay().then(value => {
+      if (!mounted) return;
+      ttsAutoPlayRef.current = value;
+      setTtsAutoPlay(value);
+    }).catch(() => {});
+    const sync = (event: Event) => {
+      const value = Boolean((event as CustomEvent<{ enabled: boolean }>).detail?.enabled);
+      ttsEnabledRef.current = value;
+      setTtsEnabled(value);
+    };
+    const syncAutoPlay = (event: Event) => {
+      const value = (event as CustomEvent<TtsAutoPlaySettings>).detail;
+      ttsAutoPlayRef.current = value;
+      setTtsAutoPlay(value);
+    };
     window.addEventListener('desktop-tts-settings', sync);
     window.addEventListener('tts-auto-play-settings', syncAutoPlay);
     return () => {
@@ -1183,6 +1204,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         segments: pending?.segments,
         segmentedContent,
         sticker: idx === 0 ? sticker : undefined,
+        autoPlayTts: ttsEnabledRef.current && ttsAutoPlayRef.current.chat,
       }]);
     };
 
@@ -1261,6 +1283,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
           wsMsgId: msgId && i === 0 ? msgId : undefined,
           segments: segMatch ? pending!.segments : liveById.get(localIds[i])?.segments,
           segmentedContent: segMatch ? strippedParts![i] : undefined,
+          autoPlayTts: ttsEnabledRef.current && ttsAutoPlayRef.current.chat,
         };
       });
       // Remove all old live bubbles, then splice the rebuilt run back in at the
@@ -2015,7 +2038,6 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
               assistantFontSize={fontSizes.assistant}
               userFontSize={fontSizes.user}
               ttsEnabled={ttsEnabled}
-              ttsAutoPlay={ttsAutoPlay}
               onBubbleContextMenu={onBubbleContextMenu}
             />
           </div>

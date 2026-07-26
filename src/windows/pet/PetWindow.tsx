@@ -14,12 +14,14 @@ import type { StickerPayload } from '../../shared/api/types';
 
 export function PetWindow() {
   const [snapshot, setSnapshot] = useState<PetSnapshot>(DEFAULT_PET_SNAPSHOT);
-  const [turnBubble, setTurnBubble] = useState<{ id: string; text: string; sticker?: StickerPayload } | null>(null);
+  const [turnBubble, setTurnBubble] = useState<{ id: string; text: string; sticker?: StickerPayload; autoPlayTts?: boolean } | null>(null);
   const [chatInput, setChatInput] = useState('');
   const [sending, setSending] = useState(false);
   const [inputFocused, setInputFocused] = useState(false);
   const [ttsEnabled, setTtsEnabled] = useState(false);
   const [ttsAutoPlay, setTtsAutoPlay] = useState<TtsAutoPlaySettings>({ chat: false, dream: false, video_call: false, desktop_pet: false, mobile: false });
+  const ttsEnabledRef = useRef(ttsEnabled);
+  const ttsAutoPlayRef = useRef(ttsAutoPlay);
   const { pinned, reaction, startDrag, draggingRef, movingRef } = usePetMouse({ shy: snapshot.mood === '惊讶' });
   usePetRoam({ draggingRef, movingRef });
 
@@ -33,14 +35,20 @@ export function PetWindow() {
     let unlistenEnabled: (() => void) | undefined;
     Promise.all([getDesktopTtsEnabled(), getTtsAutoPlay()]).then(([enabled, settings]) => {
       if (!mounted) return;
+      ttsEnabledRef.current = enabled;
+      ttsAutoPlayRef.current = settings;
       setTtsEnabled(enabled);
       setTtsAutoPlay(settings);
     }).catch(error => console.warn('[pet] 读取语音设置失败:', error));
     listen<TtsAutoPlaySettings>('tts-auto-play-settings', event => {
-      if (mounted) setTtsAutoPlay(event.payload);
+      if (!mounted) return;
+      ttsAutoPlayRef.current = event.payload;
+      setTtsAutoPlay(event.payload);
     }).then(fn => { unlistenAutoPlay = fn; }).catch(console.warn);
     listen<{ enabled: boolean }>('desktop-tts-settings', event => {
-      if (mounted) setTtsEnabled(event.payload.enabled);
+      if (!mounted) return;
+      ttsEnabledRef.current = event.payload.enabled;
+      setTtsEnabled(event.payload.enabled);
     }).then(fn => { unlistenEnabled = fn; }).catch(console.warn);
     return () => {
       mounted = false;
@@ -88,7 +96,12 @@ export function PetWindow() {
     let unlisten: (() => void) | undefined;
     listenPetTurn(turn => {
       if (disposed || turn.kind !== 'channel_message') return;
-      setTurnBubble({ id: turn.msg_id, text: turn.content, sticker: turn.sticker });
+      setTurnBubble({
+        id: turn.msg_id,
+        text: turn.content,
+        sticker: turn.sticker,
+        autoPlayTts: ttsEnabledRef.current && ttsAutoPlayRef.current.desktop_pet,
+      });
     }).then(fn => {
       if (disposed) fn();
       else unlisten = fn;
@@ -199,7 +212,7 @@ export function PetWindow() {
             {turnBubble.text}
             {ttsEnabled && turnBubble.text && (
               <div style={{ marginTop: 9 }}>
-                <VoiceMessageBar key={turnBubble.id} text={turnBubble.text} autoPlay={ttsAutoPlay.desktop_pet} />
+                <VoiceMessageBar key={turnBubble.id} text={turnBubble.text} autoPlay={Boolean(turnBubble.autoPlayTts)} />
               </div>
             )}
           </section>
