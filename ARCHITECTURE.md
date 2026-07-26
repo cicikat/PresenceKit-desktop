@@ -65,6 +65,7 @@ Token 由后端 `POST /auth/tokens` 签发；scope 表、profile 表、管理操
 
 - 创建单个 `StateEngine` 实例。
 - 管理主题、Sidebar、偏好面板、帮助面板、桌宠开关等 UI 状态。
+- 通过 `src/shared/layout/registry.ts` 的声明式 LayoutHost 排布 Ribbon、Sidebar 和主内容区；布局 mod 只能调整三个既有区域的方向、顺序、尺寸与 Sidebar 默认显隐，不能替换或执行区域组件。
 - 使用 `src/shared/chatAppearance.ts` 保存 Chat 聊天字号、主题字号和字体包；Sidebar 宽度仅通过界面分隔条拖拽调整。
 - 偏好面板的「世界」页通过 `getPromptAssets()` / `patchPromptAssets()` 管理 Reality Prompt Assets：角色卡单选、世界书多选和破限多选。可用选项来自后端，客户端不展示文件路径。
 - 把 engine 传给 `ChatPanel`。

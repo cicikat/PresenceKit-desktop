@@ -31,6 +31,8 @@ import { getDayNight, setTheme as applyRegisteredTheme, setThemeMode, subscribe 
 import { applyMoodOverlay, clearMoodOverlay } from '../../shared/theme/moodReactive';
 import { PreferencesPanel } from './components/preferences/PreferencesPanel';
 import { Divider, VideoBg } from './components/ChatShellAtoms';
+import { LayoutHost } from './components/LayoutHost';
+import { getLayout, listLayouts, setLayout, subscribe as subscribeLayout } from '../../shared/layout/registry';
 
 const SIDEBAR_MIN = 250;
 const SIDEBAR_MAX = 540;
@@ -45,7 +47,8 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivi
   const [themeMode, setThemeMode_]               = useState<'manual' | 'auto'>(() => getDayNight().mode);
   const [chatBackground, setChatBackground]        = useState(() => avatarStore.get().chatBackground);
   const [petVisible, setPetVisible]               = useState(false);
-  const [sidebarOpen, setSidebarOpen]             = useState(true);
+  const [activeLayout, setActiveLayout]           = useState(() => getLayout());
+  const [sidebarOpen, setSidebarOpen]             = useState(() => !getLayout().manifest.slots.sidebar.hidden);
   const [sidebarTab, setSidebarTab]               = useState('flow');
   const [sidebarWidth, setSidebarWidth]           = useState(() => getUIPref('chat.sidebarWidth', SIDEBAR_DEFAULT));
   const [chatHeaderVisible, setChatHeaderVisible] = useState(() => getUIPref('chat.headerVisible', true));
@@ -74,6 +77,7 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivi
   const [charSwitchKey, setCharSwitchKey] = useState(0);
   // null = 1v1 chat | 'list' = group list | string = group_id
   const [groupView, setGroupView]                 = useState<null | 'list' | string>(null);
+  const layoutDefaultsApplied = useRef(false);
 
   useEffect(() => {
     applyRegisteredTheme(theme).catch(error => console.warn('[theme] 切换失败:', error));
@@ -83,6 +87,23 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivi
     setTheme(getUIPref('chat.theme', 'paper'));
     setThemeMode_(getDayNight().mode);
   }), []);
+  useEffect(() => {
+    let mounted = true;
+    const syncLayout = () => { if (mounted) setActiveLayout(getLayout()); };
+    const offLayout = subscribeLayout(syncLayout);
+    void listLayouts()
+      .then(() => setLayout(getLayout().manifest.id))
+      .then(layout => {
+        if (!mounted) return;
+        setActiveLayout(layout);
+        if (!layoutDefaultsApplied.current) {
+          setSidebarOpen(!layout.manifest.slots.sidebar.hidden);
+          layoutDefaultsApplied.current = true;
+        }
+      })
+      .catch(error => console.warn('[layout] 初始化失败:', error));
+    return () => { mounted = false; offLayout(); };
+  }, []);
   useEffect(() => avatarStore.subscribe(c => setChatBackground(c.chatBackground)), []);
   useEffect(() => subscribePetMouseSettings(setPetMouseSettings), []);
   useEffect(() => subscribePetVisualStyle(setPetVisualStyle), []);
@@ -284,7 +305,6 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivi
         className="chat-ui"
         style={{
           height: '100%',
-          display: 'flex',
           '--chat-theme-font-scale': appearance.themeFontSize / 14,
           '--motion-scale': appearance.motionScale,
           ...(loadedFontFamily ? {
@@ -295,23 +315,34 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivi
           } : {}),
         } as CSSProperties}
       >
-        <Ribbon
-          sidebarOpen={sidebarOpen}
-          sidebarTab={sidebarTab}
-          onSidebarTab={onSidebarTab}
-          onCloseSidebar={onCloseSidebar}
-          petVisible={petVisible}
-          onPetToggle={onPetToggle}
-          onOpenSpec={() => setSpecOpen(true)}
-          onOpenPrefs={() => setPrefsOpen(true)}
-          dreamWindowOpen={dreamWindowOpen}
-          onDreamToggle={toggleDreamWindow}
-          onActivityOpen={onActivityOpen}
-          onToyOpen={onToyOpen}
-          playModeEnabled={playModeEnabled}
-          onGroupOpen={() => setGroupView('list')}
-        />
-        <div ref={bodyRef} className="chat-ui__body" style={{ flex: 1, display: 'flex', minHeight: 0, minWidth: 0, position: 'relative', '--chat-background-blur': `${appearance.backgroundBlur}px` } as CSSProperties}>
+        <LayoutHost
+          manifest={activeLayout.manifest}
+          sidebarSize={sidebarWidth}
+          slots={{
+            ribbon: <Ribbon
+              sidebarOpen={sidebarOpen}
+              sidebarTab={sidebarTab}
+              onSidebarTab={onSidebarTab}
+              onCloseSidebar={onCloseSidebar}
+              petVisible={petVisible}
+              onPetToggle={onPetToggle}
+              onOpenSpec={() => setSpecOpen(true)}
+              onOpenPrefs={() => setPrefsOpen(true)}
+              dreamWindowOpen={dreamWindowOpen}
+              onDreamToggle={toggleDreamWindow}
+              onActivityOpen={onActivityOpen}
+              onToyOpen={onToyOpen}
+              playModeEnabled={playModeEnabled}
+              onGroupOpen={() => setGroupView('list')}
+            />,
+            sidebar: sidebarOpen ? <><div style={{ flex: 1, minWidth: 0 }}><SidebarPanel
+              engine={engine}
+              sidebarRectRef={sidebarRectRef}
+              tab={sidebarTab}
+              onClose={() => setSidebarOpen(false)} /></div>
+              <Divider onDrag={onDividerDrag} />
+            </> : null,
+            main: <div ref={bodyRef} className="chat-ui__body" style={{ height: '100%', minHeight: 0, minWidth: 0, position: 'relative', '--chat-background-blur': `${appearance.backgroundBlur}px` } as CSSProperties}>
           {/* image: explicit or backward-compat (had a dataUrl before backgroundKind existed) */}
           {(appearance.backgroundKind === 'image' || (appearance.backgroundKind === 'none' && chatBackground.dataUrl)) && chatBackground.dataUrl && (
             <div className="chat-ui__background"
@@ -324,19 +355,7 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivi
           {appearance.backgroundKind === 'video' && appearance.backgroundVideoPath && (
             <VideoBg src={appearance.backgroundVideoPath} blur={appearance.backgroundBlur} />
           )}
-          {sidebarOpen && (
-            <>
-              <div style={{ width: sidebarWidth, flexShrink: 0 }}>
-                <SidebarPanel
-                  engine={engine}
-                  sidebarRectRef={sidebarRectRef}
-                  tab={sidebarTab}
-                  onClose={() => setSidebarOpen(false)} />
-              </div>
-              <Divider onDrag={onDividerDrag} />
-            </>
-          )}
-          <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ height: '100%', minWidth: 0 }}>
             {groupView === null ? (
               <ChatPanel key={charSwitchKey} engine={engine} chatRectRef={chatRectRef} headerVisible={chatHeaderVisible} chatFontSize={appearance.chatFontSize} dreamActive={dreamWindowOpen} characterAvatarDataUrl={characterAvatarDataUrl} onOpenRoom={onRoomOpen} onOpenPrefs={() => setPrefsOpen(true)} />
             ) : groupView === 'list' ? (
@@ -357,7 +376,9 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivi
               />
             )}
           </div>
-        </div>
+            </div>,
+          }}
+        />
       </div>
 
       {dreamWindowOpen && (
