@@ -58,6 +58,7 @@ Token 由后端 `POST /auth/tokens` 签发；scope 表、profile 表、管理操
 - 挂载全局样式：`src/shared/theme/globals.css`。
 - 默认渲染 `<ChatWindow />`；`?window=pet`、`?window=presence-nag` 和 `?window=diary-detail`
   分别进入独立 Webview view。
+- 聊天与桌宠的 TTS 音频可并行合成；主 Webview 通过 Tauri window event 持有播放租约队列，保证任一窗口播放结束后才授权下一条音频输出。
 - 在默认主 view 中由 `activeWindow` 在保持 `<ChatWindow />` 挂载的前提下覆盖
   `<ActivityWindow />`、`<ToyWindow />` 或 `<RoomWindow />`，避免卸载 ChatPanel 和 WS 订阅。
 

@@ -20,6 +20,7 @@ export function VoiceMessageBar({ text, emotion = 'neutral', fontSize, autoPlay 
   const mountedRef = useRef(true);
   const preparingRef = useRef<Promise<string> | null>(null);
   const queuedPlaybackRef = useRef<PlaybackQueueHandle | null>(null);
+  const mountGenerationRef = useRef(0);
 
   const [url, setUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -33,10 +34,16 @@ export function VoiceMessageBar({ text, emotion = 'neutral', fontSize, autoPlay 
   useEffect(() => { autoPlayAttemptedRef.current = false; }, [text]);
   useEffect(() => {
     mountedRef.current = true;
+    const mountGeneration = ++mountGenerationRef.current;
     return () => {
       mountedRef.current = false;
-      queuedPlaybackRef.current?.cancel();
-      audioRef.current?.pause();
+      // StrictMode deliberately runs one setup/cleanup cycle before the real
+      // mount. Defer cancellation so that probe does not discard auto-play.
+      queueMicrotask(() => {
+        if (mountGenerationRef.current !== mountGeneration || mountedRef.current) return;
+        queuedPlaybackRef.current?.cancel();
+        audioRef.current?.pause();
+      });
     };
   }, []);
 

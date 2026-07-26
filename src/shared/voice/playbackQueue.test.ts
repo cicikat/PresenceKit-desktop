@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { AudioPlaybackQueue } from './playbackQueue';
+import { afterEach, describe, expect, it } from 'vitest';
+import { AudioPlaybackQueue, setAudioPlaybackGate } from './playbackQueue';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -13,6 +13,8 @@ async function flush(): Promise<void> {
 }
 
 describe('AudioPlaybackQueue', () => {
+  afterEach(() => setAudioPlaybackGate(null));
+
   it('allows audio preparation to finish out of order while preserving playback order', async () => {
     const queue = new AudioPlaybackQueue();
     const firstAudio = deferred<string>();
@@ -50,5 +52,20 @@ describe('AudioPlaybackQueue', () => {
     await handle.done;
 
     expect(played).toEqual([]);
+  });
+
+  it('waits for the cross-window playback permit without delaying preparation', async () => {
+    const queue = new AudioPlaybackQueue();
+    const permit = deferred<{ release(): Promise<void> }>();
+    const played: string[] = [];
+    setAudioPlaybackGate({ acquire: () => permit.promise });
+
+    const handle = queue.enqueue(Promise.resolve('ready-now'), async url => { played.push(url); });
+    await flush();
+    expect(played).toEqual([]);
+
+    permit.resolve({ release: async () => {} });
+    await handle.done;
+    expect(played).toEqual(['ready-now']);
   });
 });

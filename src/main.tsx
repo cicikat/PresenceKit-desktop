@@ -13,6 +13,7 @@ import { initTheme } from "./shared/theme/registry";
 import { initUIPrefs } from "./shared/uiPreferences";
 import { initI18n } from "./shared/i18n";
 import { OnboardingGate } from "./features/onboarding/OnboardingGate";
+import { initCrossWindowAudioPlayback } from "./shared/voice/crossWindowPlayback";
 
 const windowView = new URLSearchParams(window.location.search).get("window");
 const isPetWindow = windowView === "pet";
@@ -54,6 +55,7 @@ function Root() {
 }
 
 await initUIPrefs();
+await initCrossWindowAudioPlayback();
 initTheme().catch(error => console.warn("[theme] 初始化失败:", error));
 initI18n();
 

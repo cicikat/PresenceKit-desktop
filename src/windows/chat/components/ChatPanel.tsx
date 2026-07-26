@@ -511,18 +511,10 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
               onBubbleContextMenu?.(msg, e.clientX, e.clientY);
             }}
             style={{
-              display: 'inline-flex',
+              display: 'inline-block',
               width: 'fit-content',
               maxWidth: '100%',
               marginBottom: stickerOnly ? 0 : 8,
-              padding: 6,
-              background: 'oklch(0.96 0.025 78 / 0.48)',
-              borderLeft: `3px solid oklch(0.55 0.13 ${hue} / 0.78)`,
-              borderTop: '1px solid oklch(0.68 0.045 75 / 0.5)',
-              borderRight: '1px solid oklch(0.68 0.045 75 / 0.5)',
-              borderBottom: '1px solid oklch(0.68 0.045 75 / 0.5)',
-              borderRadius: '3px 14px 14px 3px',
-              boxShadow: '0 3px 10px oklch(0.30 0.04 60 / 0.06)',
             }}
           >
             <img
@@ -535,7 +527,6 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
                 maxHeight: 132,
                 width: 'auto',
                 height: 'auto',
-                borderRadius: 9,
                 objectFit: 'contain',
               }}
             />

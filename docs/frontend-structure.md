@@ -679,4 +679,4 @@ Tauri 命令：
 
 ## 设置页运行时控制（2026-07-13）
 
-系统设置沿用现有 PreferencesPanel，挂载 ModelRoutingSettingsPage、DesktopTtsSettingsPage、ToolLoopSettingsPage、ThinkingSettingsPage、OutputSegmentEnforceSettingsPage 与 VisualPerceptionSettingsPage。视觉观察设置通过 Tauri command 控制本地开关与采样间隔；Rust sampler 在每次截图前都调用后端预检，稳定画面只做内存哈希比对，不上传。段落兜底页只负责 `output.segment_enforce.enabled` 热开关及有效阈值只读展示。助手非流式消息在桌面 TTS 开启时使用 VoiceMessageBar；语音按点击懒生成，可播放/暂停并展开文字。自动播放会立即并行请求各条音频，但同一 Webview 的播放端按消息入队顺序逐条输出，避免重叠。
+系统设置沿用现有 PreferencesPanel，挂载 ModelRoutingSettingsPage、DesktopTtsSettingsPage、ToolLoopSettingsPage、ThinkingSettingsPage、OutputSegmentEnforceSettingsPage 与 VisualPerceptionSettingsPage。视觉观察设置通过 Tauri command 控制本地开关与采样间隔；Rust sampler 在每次截图前都调用后端预检，稳定画面只做内存哈希比对，不上传。段落兜底页只负责 `output.segment_enforce.enabled` 热开关及有效阈值只读展示。助手非流式消息在桌面 TTS 开启时使用 VoiceMessageBar；语音按点击懒生成，可播放/暂停并展开文字。自动播放会立即并行请求各条音频，但主 Webview 持有跨窗口播放租约，聊天和桌宠均按消息入队顺序逐条输出，避免重叠。
