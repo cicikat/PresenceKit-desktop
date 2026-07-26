@@ -1,4 +1,4 @@
-import type { SlotId } from './contract';
+import type { MainLayoutId, SlotId } from './contract';
 
 export interface SlotSpec {
   order: number;
@@ -13,6 +13,8 @@ export interface LayoutManifest {
   version: string;
   direction: 'row' | 'row-reverse';
   slots: Record<SlotId, SlotSpec>;
+  /** Optional V2 template for the stable regions inside the main chat area. */
+  mainLayout?: MainLayoutId;
   css?: string;
 }
 

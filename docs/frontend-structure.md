@@ -87,7 +87,7 @@ src/windows/chat/
 - 负责偏好面板内的头像上传/裁剪入口。
 - 世界页角色卡头像同样复用 `AvatarCropper`，选择 PNG / JPEG / WebP 后先裁剪为 256 × 256 PNG，再通过角色头像后端接口上传。
 - Chat 偏好浮层使用顶部横栏分类：系统设置、外观、世界、其他等。系统设置中的 `OutputSegmentEnforceSettingsPage` 通过 Tauri IPC 热切换生成后段落兜底，只展示开关和有效阈值，不展示 Prompt 检视数据；`VisualPerceptionSettingsPage` 是本地 opt-in 与采样间隔控制面，展示最近结果、推送时间和失败计数。外观提供主题、信息栏、布局预览器、聊天字号、主题字号、动态字体包和头像设置。世界页通过 `PromptAssetsSettings` 读取和保存 Reality Prompt Assets，提供角色卡单选、Reality 世界书多选和 Reality 破限多选；其他暂留导入占位。
-- `LayoutHost` 读取 `src/shared/layout/registry.ts` 的当前 manifest，仅排布 `ribbon`、`sidebar`、`main` 三个既有 slot：方向、顺序、Ribbon/Sidebar 宽度与 Sidebar 默认显隐均由声明式布局决定；slot 内组件仍由 ChatWindow 创建。背景层及 Dream、Pane、帮助、偏好、Yandere 等应用级 overlay 不属于 slot，继续由 ChatWindow 顶层管理。
+- `LayoutHost` 读取 `src/shared/layout/registry.ts` 的当前 manifest，排布 `ribbon`、`sidebar`、`main` 三个既有 slot：方向、顺序、Ribbon/Sidebar 宽度与 Sidebar 默认显隐均由声明式布局决定；slot 内组件仍由 ChatWindow 创建。V2 `mainLayout` 只重排 ChatPanel 内稳定的标题、消息流、输入框区域（`stack` / `workbench` / `hud`），窄于 760px 自动回退纵向 `stack`，不会重挂载 ChatPanel。背景层及 Dream、Pane、帮助、偏好、Yandere 等应用级 overlay 不属于 slot，继续由 ChatWindow 顶层管理。
 
 关键状态：
 

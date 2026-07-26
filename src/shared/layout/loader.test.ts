@@ -11,6 +11,11 @@ describe('validateLayout', () => {
     expect(validateLayout(validLayout)).toEqual([]);
   });
 
+  it('accepts controlled main templates and rejects arbitrary names', () => {
+    expect(validateLayout({ ...validLayout, mainLayout: 'workbench' })).toEqual([]);
+    expect(validateLayout({ ...validLayout, mainLayout: 'anything-goes' })).toContain('mainLayout 必须是 stack、workbench、hud 之一');
+  });
+
   it('rejects missing slots, invalid direction, and hidden non-sidebar slots', () => {
     expect(validateLayout({ ...validLayout, slots: { ribbon: { order: 0 }, sidebar: { order: 1 } } })).not.toEqual([]);
     expect(validateLayout({ ...validLayout, direction: 'column' })).not.toEqual([]);

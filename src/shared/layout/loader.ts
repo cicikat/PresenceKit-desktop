@@ -1,4 +1,4 @@
-import { SLOT_IDS, type SlotId } from './contract';
+import { MAIN_LAYOUT_IDS, SLOT_IDS, type SlotId } from './contract';
 import type { LayoutManifest, SlotSpec } from './types';
 
 function isSlotSpec(value: unknown): value is SlotSpec {
@@ -16,6 +16,9 @@ export function validateLayout(manifest: unknown): string[] {
   if (typeof candidate.name !== 'string' || !candidate.name) errors.push('name 必须是非空字符串');
   if (candidate.direction !== 'row' && candidate.direction !== 'row-reverse') {
     errors.push('direction 必须是 row 或 row-reverse');
+  }
+  if (candidate.mainLayout !== undefined && !MAIN_LAYOUT_IDS.includes(candidate.mainLayout)) {
+    errors.push(`mainLayout 必须是 ${MAIN_LAYOUT_IDS.join('、')} 之一`);
   }
   if (!candidate.slots || typeof candidate.slots !== 'object') {
     errors.push('slots 必须包含全部 slot');

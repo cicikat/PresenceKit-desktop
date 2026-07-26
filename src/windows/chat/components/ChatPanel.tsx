@@ -3,7 +3,7 @@
  * Phase 2c+: 按日文件懒加载历史，滚顶继续往前拉
  * ============================================================ */
 
-import { useState, useEffect, useRef, useCallback, memo, type ReactNode } from 'react';
+import { useState, useEffect, useRef, useCallback, memo, type CSSProperties, type ReactNode } from 'react';
 import { format, subDays, parseISO } from 'date-fns';
 import { Tag, Icon, Btn } from './UIKit';
 import { MOOD_HUE, MOOD_LABEL_EN, FOCUS_LABEL_EN } from './UIKit';
@@ -30,6 +30,7 @@ import { TypingDots } from '../../../shared/ui/TypingDots';
 import type { ChatLogEntry, UploadError, NarrativeSegment, StickerPayload } from '../../../shared/api/types';
 import { normalizeChatDisplayText } from '../chatDisplay';
 import { renderInlineStyled } from '../inlineStyle';
+import type { MainLayoutId } from '../../../shared/layout/contract';
 import {
   findRenderedFallback,
   hasRegisteredMessage,
@@ -41,6 +42,32 @@ import {
 
 function splitReply(text: string): string[] {
   return text.split(/\n+/).map(s => s.trim()).filter(s => s.length > 0);
+}
+
+function mainLayoutGrid(layout: MainLayoutId): CSSProperties {
+  switch (layout) {
+    case 'workbench':
+      return {
+        display: 'grid',
+        gridTemplateAreas: '"header composer" "transcript composer"',
+        gridTemplateColumns: 'minmax(0, 1fr) minmax(230px, 0.42fr)',
+        gridTemplateRows: 'auto minmax(0, 1fr)',
+      };
+    case 'hud':
+      return {
+        display: 'grid',
+        gridTemplateAreas: '"header transcript" "composer transcript"',
+        gridTemplateColumns: 'minmax(210px, 0.55fr) minmax(0, 1.45fr)',
+        gridTemplateRows: 'minmax(0, 1fr) auto',
+      };
+    default:
+      return {
+        display: 'grid',
+        gridTemplateAreas: '"header" "transcript" "composer"',
+        gridTemplateColumns: 'minmax(0, 1fr)',
+        gridTemplateRows: 'auto minmax(0, 1fr) auto',
+      };
+  }
 }
 
 // 引用预览条展示用的短截断，与发送时按契约做的 200 字截断（见 truncateForReplyTo）无关。
@@ -548,7 +575,7 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
 
 // ── 主组件 ──────────────────────────────────────────────────────────────────
 
-export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontSize = 14, dreamActive = false, characterAvatarDataUrl = null, onOpenRoom, onOpenPrefs }: any) {
+export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontSize = 14, dreamActive = false, characterAvatarDataUrl = null, mainLayout = 'stack', onOpenRoom, onOpenPrefs }: any) {
   const { language, t } = useI18n();
   const [state, setState] = useState(engine.get());
   useEffect(() => engine.subscribe(setState), [engine]);
@@ -648,6 +675,17 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
 
   const rootRef  = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [compactLayout, setCompactLayout] = useState(false);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const update = () => setCompactLayout(root.clientWidth < 760);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(root);
+    return () => observer.disconnect();
+  }, []);
 
   // message_segments 关联：ws msg_id → 本地 ChatMsg id 列表
   const wsMsgIdToLocalIdsRef = useRef<Map<string, string[]>>(new Map());
@@ -1852,19 +1890,24 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
   const youDataUrl = avatars.you.dataUrl;
   const youVisible = avatars.you.visible;
   const fontSizes = { assistant: chatFontSize, user: chatFontSize };
+  const resolvedMainLayout: MainLayoutId = compactLayout ? 'stack' : mainLayout;
+  const isSideComposer = resolvedMainLayout === 'workbench';
+  const isHud = resolvedMainLayout === 'hud';
 
   return (
     <div ref={rootRef} style={{
-      position: 'relative', height: '100%',
-      display: 'flex', flexDirection: 'column',
+      position: 'relative', height: '100%', minHeight: 0,
       minWidth: 0,
       background: avatars.chatBackground?.dataUrl ? 'transparent' : 'var(--paper)',
       overflow: 'hidden',
+      ...mainLayoutGrid(resolvedMainLayout),
     }}>
       {/* HEADER */}
       {headerVisible && (
         <div style={{
+          gridArea: 'header', minWidth: 0,
           padding: '20px 28px 14px', borderBottom: '1px solid var(--paper-edge)',
+          ...(isHud ? { borderRight: '1px solid var(--paper-edge)', borderBottom: 'none', overflowY: 'auto' } : {}),
           background: avatars.chatBackground?.dataUrl ? 'oklch(from var(--paper) l c h / 0.75)' : 'var(--paper)',
           display: 'flex', alignItems: 'flex-start', gap: 16,
         }}>
@@ -1909,7 +1952,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       <div
         ref={scrollRef}
         onScroll={onScroll}
-        style={{ flex: 1, overflowY: 'auto', padding: `8px ${youVisible ? 56 : 28}px 12px 28px`, background: avatars.chatBackground?.dataUrl ? 'transparent' : 'var(--paper)' }}
+        style={{ gridArea: 'transcript', minHeight: 0, overflowY: 'auto', padding: `8px ${youVisible ? 56 : 28}px 12px 28px`, background: avatars.chatBackground?.dataUrl ? 'transparent' : 'var(--paper)', ...(isHud ? { borderLeft: '1px solid var(--paper-edge)' } : {}) }}
       >
         {/* 初始加载中占位 */}
         {historyStatus.kind === 'loading' && messages.length === 0 && (
@@ -2033,7 +2076,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       )}
 
       {/* INPUT */}
-      <div style={{ position: 'relative', padding: 18, borderTop: '1px solid var(--paper-edge)', background: avatars.chatBackground?.dataUrl ? 'oklch(from var(--paper-2) l c h / 0.85)' : 'var(--paper-2)' }}>
+      <div style={{ gridArea: 'composer', position: 'relative', minWidth: 0, padding: 18, borderTop: isSideComposer ? 'none' : '1px solid var(--paper-edge)', borderLeft: isSideComposer ? '1px solid var(--paper-edge)' : 'none', background: avatars.chatBackground?.dataUrl ? 'oklch(from var(--paper-2) l c h / 0.85)' : 'var(--paper-2)', ...(isSideComposer ? { overflowY: 'auto' } : {}), ...(isHud ? { borderRight: '1px solid var(--paper-edge)' } : {}) }}>
         {replyTarget && (
           <div style={{
             display: 'flex', alignItems: 'center', gap: 8,
