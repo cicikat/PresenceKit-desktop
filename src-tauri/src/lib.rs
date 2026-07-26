@@ -413,6 +413,95 @@ fn read_theme_css(app: tauri::AppHandle, id: String, file: String) -> Result<Str
     read_theme_css_in_dir(&themes_dir(&app)?, &id, &file)
 }
 
+fn layouts_dev_dir() -> Result<PathBuf, String> {
+    Ok(PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .ok_or_else(|| "无法定位项目根目录".to_string())?
+        .join("public")
+        .join("layouts"))
+}
+
+fn layouts_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let mut checked = Vec::new();
+    match app.path().resource_dir() {
+        Ok(resource_dir) => {
+            let layout_dir = resource_dir.join("layouts");
+            if layout_dir.is_dir() {
+                return Ok(layout_dir);
+            }
+            checked.push(layout_dir);
+        }
+        Err(error) => eprintln!("[layouts] 无法定位运行期资源目录: {error}"),
+    }
+    if cfg!(debug_assertions) {
+        let dev_dir = layouts_dev_dir()?;
+        if dev_dir.is_dir() {
+            eprintln!("[layouts] 运行期布局资源不可用，使用开发环境 fallback: {}", dev_dir.display());
+            return Ok(dev_dir);
+        }
+        checked.push(dev_dir);
+    }
+    let checked_paths = checked.iter().map(|path| path.display().to_string()).collect::<Vec<_>>().join(", ");
+    let message = format!("无法定位布局目录，已检查: {checked_paths}");
+    eprintln!("[layouts] {message}");
+    Err(message)
+}
+
+fn list_layouts_in_dir(layout_dir: &Path) -> Result<serde_json::Value, String> {
+    let mut layouts = Vec::new();
+    for entry in fs::read_dir(layout_dir)
+        .map_err(|e| format!("无法读取布局目录 {}: {e}", layout_dir.display()))?
+    {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let manifest_path = path.join("layout.json");
+        if !manifest_path.is_file() {
+            continue;
+        }
+        match fs::read_to_string(&manifest_path)
+            .map_err(|e| e.to_string())
+            .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).map_err(|e| e.to_string()))
+        {
+            Ok(value) if value.is_object() => layouts.push(value),
+            Ok(_) => eprintln!("[layouts] 忽略非对象 manifest: {}", manifest_path.display()),
+            Err(error) => eprintln!("[layouts] 忽略无法解析的 manifest {}: {error}", manifest_path.display()),
+        }
+    }
+    layouts.sort_by(|a, b| a["id"].as_str().unwrap_or_default().cmp(b["id"].as_str().unwrap_or_default()));
+    Ok(serde_json::Value::Array(layouts))
+}
+
+#[tauri::command]
+fn list_layouts(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    list_layouts_in_dir(&layouts_dir(&app)?)
+}
+
+fn read_layout_css_in_dir(layout_dir: &Path, id: &str, file: &str) -> Result<String, String> {
+    if !is_safe_theme_path_part(id) {
+        return Err("布局 id 必须是单一目录名".to_string());
+    }
+    if !is_safe_theme_path_part(file)
+        || Path::new(file).extension().and_then(|ext| ext.to_str()) != Some("css")
+    {
+        return Err("布局 CSS 文件必须是同目录下的 .css 文件".to_string());
+    }
+    let canonical_root = fs::canonicalize(layout_dir).map_err(|e| format!("无法定位布局目录: {e}"))?;
+    let canonical_file = fs::canonicalize(layout_dir.join(id).join(file))
+        .map_err(|_| "布局 CSS 文件不存在或无法读取".to_string())?;
+    if !canonical_file.starts_with(&canonical_root) || !canonical_file.is_file() {
+        return Err("布局 CSS 文件不在允许的布局目录内".to_string());
+    }
+    fs::read_to_string(canonical_file).map_err(|_| "布局 CSS 文件无法按 UTF-8 读取".to_string())
+}
+
+#[tauri::command]
+fn read_layout_css(app: tauri::AppHandle, id: String, file: String) -> Result<String, String> {
+    read_layout_css_in_dir(&layouts_dir(&app)?, &id, &file)
+}
+
 fn room_assets_dir(app: &tauri::AppHandle, kind: &str) -> Result<PathBuf, String> {
     let mut checked = Vec::new();
 
@@ -2632,6 +2721,8 @@ pub fn run() {
             list_dream_fonts,
             list_themes,
             read_theme_css,
+            list_layouts,
+            read_layout_css,
             list_room_assets,
             list_room_props,
             list_live2d_models,
@@ -3007,6 +3098,43 @@ mod theme_css_reader_tests {
         }
 
         fs::remove_dir_all(&theme_dir).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod layout_css_reader_tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_layout_dir() -> PathBuf {
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        std::env::temp_dir().join(format!("emerald-layout-css-test-{}-{unique}", std::process::id()))
+    }
+
+    #[test]
+    fn reads_css_only_from_the_requested_layout_directory() {
+        let layout_dir = temp_layout_dir();
+        fs::create_dir_all(layout_dir.join("right-sidebar")).unwrap();
+        fs::write(layout_dir.join("right-sidebar").join("layout.css"), ".chat-ui { opacity: .9; }").unwrap();
+        assert_eq!(
+            read_layout_css_in_dir(&layout_dir, "right-sidebar", "layout.css").unwrap(),
+            ".chat-ui { opacity: .9; }"
+        );
+        fs::remove_dir_all(&layout_dir).unwrap();
+    }
+
+    #[test]
+    fn rejects_traversal_absolute_paths_and_non_css_files() {
+        let layout_dir = temp_layout_dir();
+        fs::create_dir_all(layout_dir.join("right-sidebar")).unwrap();
+        fs::write(layout_dir.join("right-sidebar").join("layout.css"), "body {}").unwrap();
+        for id in [".", "..", "../escape", "..\\escape", "/escape", "C:\\escape"] {
+            assert!(read_layout_css_in_dir(&layout_dir, id, "layout.css").is_err(), "id={id}");
+        }
+        for file in ["../layout.css", "nested/layout.css", "layout.json", "layout.css.txt"] {
+            assert!(read_layout_css_in_dir(&layout_dir, "right-sidebar", file).is_err(), "file={file}");
+        }
+        fs::remove_dir_all(&layout_dir).unwrap();
     }
 }
 
