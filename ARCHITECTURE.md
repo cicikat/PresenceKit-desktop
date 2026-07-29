@@ -220,7 +220,8 @@ ChatPanel.send()
   → ChatPanel 优先按 msg_id 与 WS channel_message / message_segments 对账
 ```
 
-这条路径是当前真实路径，但不是 v1 目标协议的最终路径。v1 目标是用户输入走 WS `user_message`，回复走 WS `assistant_message`。
+这条路径是当前正式路径。曾记录的 WS `user_message` / `assistant_message` 只是未排期的后续设计，
+不是产品 v1 的协议承诺；产品 v1 继续使用 `docs/protocol-v0.md` 的冻结 v0.1 契约。
 后端当前 assistant correlation ID 对齐为 `HTTP turn_id = HTTP msg_id = WS channel_message.msg_id = WS message_segments.msg_id`。
 
 ### 后端主动消息
@@ -263,7 +264,8 @@ ChatPanel mount
   → ChatPanel prepend / append 消息列表
 ```
 
-数据源：`Emerald-presence/data/event_log/{owner_qq}/*.md`（owner_qq 由后端从 config 读，接口路径不暴露）。
+数据源由后端 `DataPaths` 管理：当前规范位置为 `data/runtime/memory/{char_id}/{uid}/event_log/{date}.md`，
+迁移窗口内可只读兼容旧日文件；客户端只通过后端 API 读取，不能假定或访问文件布局。
 
 ### 日记列表和详情
 
@@ -283,7 +285,8 @@ Sidebar diary tab → SubDiary mount
   → panesApi.openPane() 打开浮动详情窗
 ```
 
-数据源：`Emerald-presence/data/yexuan_inner/diary/*.md`（只读，严格匹配 `YYYY-MM-DD.md`）。
+数据源由后端 `DataPaths` 管理的角色 inner diary（当前规范根为
+`data/runtime/characters/{char_id}/inner/diary/`）；客户端只读 API，不依赖固定角色名或旧路径。
 
 ### 头像和 Dream 背景存储
 
@@ -354,7 +357,7 @@ Dream 背景按 `day` / `night` 分开记录。旧版单字段 `dream_background
 未迁或未完成：
 
 - `pet.jsx` 的具象角色渲染与更完整行为；当前已落地抽象粒子桌宠、窗口桥和鼠标交互。
-- v1 WebSocket 协议。
+- 未排期的后续 WebSocket 协议设计（不属于产品 v1）。
 - Sidebar flow/status tab 的真实数据接入。
 - 花园交互能力和 harvest/vase 详情展示。
 - 日记 emotion 字段（后端未产出，当前全为 null）。
@@ -369,7 +372,7 @@ Dream 背景按 `day` / `night` 分开记录。旧版单字段 `dream_background
 - Rust HTTP client 必须 `no_proxy()`。
 - WS 使用 Tauri Rust 原生 bridge，以 Bearer header 连接本机 `127.0.0.1`，前端不持有 token。
 - 业务数据以 `Emerald-presence` 为准；客户端状态只是 UI 镜像。
-- legacy 协议和 v1 目标协议要在文档里明确区分，不能混写。
+- 冻结 v0.1 协议和未排期的后续协议设计要在文档里明确区分，不能混写。
 
 ---
 
@@ -377,8 +380,8 @@ Dream 背景按 `day` / `night` 分开记录。旧版单字段 `dream_background
 
 最高优先级风险集中在后端协议对齐：
 
-- 客户端和后端实际仍在 legacy WS 协议。
-- v1 文档目标要求 `assistant_message` / `state_update` / `user_message` / `client_event`，当前未实现。
+- 客户端和后端当前正式使用冻结的 v0.1 WS 协议。
+- `assistant_message` / `state_update` / `user_message` / `client_event` 是未排期的后续设计，当前未实现且不阻塞产品 v1。
 - action executor 只覆盖四类基础动作，尚未接入桌宠行为或 v1 capabilities。
 - P-02 已将 backend base、WebSocket base、admin token 和 sensor config 外化到 client config；`config/client.local.json` 不提交。`bot_user_id` 默认为空，`load_history` 在空 id 时返回空历史；token 默认值仅为不可用占位符 `CHANGE_ME`。
 
