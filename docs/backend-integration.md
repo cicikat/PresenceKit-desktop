@@ -159,7 +159,7 @@ GET 响应：
 
 客户端兼容旧版字符串数组与新版 `{ id, label, kind }` 数组；UI 展示 `label`，保存时仅提交 GET 返回列表中存在的角色卡 `id`、世界书 `id` 和破限 `id`，不展示后端文件路径。GET / PATCH 均由 Rust 读取 admin token，并使用 `reqwest.no_proxy()`。
 
-角色卡头像上传在 Chat 世界页先复用客户端 `AvatarCropper` 裁剪为 256 × 256 PNG，再由 Tauri `upload_character_avatar` POST `/settings/characters/{char_id}/avatar`。裁剪只改变上传图片内容，不改变后端接口或最终 `data/runtime/characters/{char_id}/avatar.png` 存储位置。
+角色卡头像上传在 Chat 世界页先复用客户端 `AvatarCropper` 裁剪为 256 × 256 PNG，再由 Tauri `upload_character_avatar` POST `/settings/characters/{char_id}/avatar`。客户端只依赖该 endpoint 的请求/响应语义；后端物理落盘位置以 backend 的 data-taxonomy 与 DataPaths 为准，客户端不得依赖。
 
 ---
 
@@ -351,7 +351,7 @@ Sidebar diary tab
   → Rust reqwest GET http://127.0.0.1:8080/diary/list
 ```
 
-后端要求 Bearer token。数据源目录：`Emerald-presence` 仓库（通常与本仓库同级）的 `data\yexuan_inner\diary\`，文件名严格匹配 `^\d{4}-\d{2}-\d{2}\.md$`。
+后端要求 Bearer token。后端 endpoint 是客户端的数据来源 authority；日记的物理路径以 backend 的 data-taxonomy 与 DataPaths 为准，客户端不得依赖。
 
 返回结构：
 
@@ -410,7 +410,7 @@ ChatPanel mount
   ← { dates: ["2026-05-16", "2026-05-15", ...], count: N }
 ```
 
-后端要求 Bearer token。数据源目录：`Emerald-presence/data/event_log/{owner_qq}/`，文件名严格匹配 `^\d{4}-\d{2}-\d{2}\.md$`，`full_log.md` 忽略。
+后端要求 Bearer token。后端 endpoint 是客户端的数据来源 authority；聊天日志的物理路径、兼容读取和归档策略以 backend 的 data-taxonomy 与 DataPaths 为准，客户端不得依赖。接口路径不含 QQ 号；客户端不持有或推导该内部标识。
 
 **重要**：接口路径不含 QQ 号。`owner_qq` 由后端从 `config.yaml` 的 `scheduler.owner_id` 字段读取，客户端零 QQ 知识。
 
@@ -838,13 +838,9 @@ Client Auth Sync（R9 / SEC-AUTH-1）已同步的受保护调用点：
 
 ## 后端 fallback
 
-`Emerald-presence/channels/desktop.py` 在 WS 不可用时会写文件队列：
-
-```text
-data/channel_queue.json
-```
-
-当前 本仓 不读取这个文件队列。这个 fallback 主要服务旧桌宠。
+WS 不可用时，后端可能启用自己的兼容投递 fallback；客户端不读取后端内部队列或落盘文件。
+客户端只依赖已记录的 HTTP/WS endpoint、correlation 字段、错误码和降级语义。fallback 的物理实现
+以 backend channels 实现、data-taxonomy 与 DataPaths 为准，客户端不得依赖。
 
 ---
 
