@@ -54,6 +54,10 @@ export interface ReadingPageResult {
   text: string;
 }
 
+export interface ReadingSessionOptions {
+  uid?: string;
+}
+
 export interface ReadingGroundingFacts {
   current_page?: number;
   total_pages?: number;
@@ -87,14 +91,14 @@ export const readingApi = {
     invokeActivity('activity_reading_start', { filePath: file_path }),
   state: (): Promise<ReadingState> =>
     invokeActivity('activity_reading_state'),
-  page: (session_id: string, page: number): Promise<ReadingPageResult> =>
-    invokeActivity('activity_reading_page', { payload: { session_id, page } }),
-  turnPage: (session_id: string, direction: 'next' | 'prev'): Promise<ReadingPageResult> =>
-    invokeActivity('activity_reading_turn_page', { payload: { session_id, direction } }),
-  close: (session_id: string): Promise<{ status: string }> =>
-    invokeActivity('activity_reading_close', { payload: { session_id } }),
-  chat: (params: { session_id: string; message: string }): Promise<ReadingChatResult> =>
-    invokeActivity('activity_reading_chat', { payload: { session_id: params.session_id, message: params.message } }),
+  page: (session_id: string, page: number, options?: ReadingSessionOptions): Promise<ReadingPageResult> =>
+    invokeActivity('activity_reading_page', { payload: { session_id, page, uid: options?.uid } }),
+  turnPage: (session_id: string, direction: 'next' | 'prev', options?: ReadingSessionOptions): Promise<ReadingPageResult> =>
+    invokeActivity('activity_reading_turn_page', { payload: { session_id, direction, uid: options?.uid } }),
+  close: (session_id: string, options?: ReadingSessionOptions): Promise<{ status: string }> =>
+    invokeActivity('activity_reading_close', { payload: { session_id, uid: options?.uid } }),
+  chat: (params: { session_id: string; message: string; uid?: string }): Promise<ReadingChatResult> =>
+    invokeActivity('activity_reading_chat', { payload: { session_id: params.session_id, message: params.message, uid: params.uid } }),
   library: (): Promise<ReadingLibraryResult> =>
     invokeActivity('activity_reading_library'),
   addBook: (filePath: string): Promise<ReadingLibraryBook> =>

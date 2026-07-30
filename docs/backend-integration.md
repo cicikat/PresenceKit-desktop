@@ -935,6 +935,17 @@ Mirror 入梦只提交模式，不提交 `script_id`：
 识别旧字符串，只需统一用 `AI_OPPONENT = 'character_ai'` 常量发送/比较（`GomokuPage.tsx`、
 `ChessPage.tsx`）。
 
+### Activity 长请求与 Reading UID 归属（Activity P0 hardening）
+
+Activity 的普通 state/page/turn-page/move/legal-moves 和书库请求继续使用默认 HTTP
+超时。可能同步触发后端 LLM 或摘要 reflow 的 Reading/Gomoku/Chess `chat`、`comment`
+和 `close` 则通过 Rust 的独立长请求 helper（120 秒）发送，并保留相同 Bearer 鉴权、
+HTTP 错误处理与 JSON 返回形状。
+
+Reading 的 `page`、`turnPage`、`close` 和 `chat` 参数支持可选 `uid`。未传时后端仍按
+默认 owner 处理，现有页面无需增加 UID 控件；传入时该值会随 Tauri 请求转发，使后端按
+`uid + char_id + session_id` 精确加载，不跨用户目录扫描。
+
 ### 角色名去硬编码（backend Brief 25 §1/§3 P0，client cc-tasks/15 §G）
 
 客户端不再有任何硬编码的「叶瑄」字面量（`npm run check:naming` 守门）。展示名统一走

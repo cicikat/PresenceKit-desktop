@@ -1741,6 +1741,26 @@ async fn activity_post(app: &tauri::AppHandle, path: &str, body: serde_json::Val
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
 
+/// Activity chat, comments, and close summaries can invoke the backend LLM.
+/// Keep their longer timeout separate from ordinary state and move requests.
+async fn activity_llm_post(
+    app: &tauri::AppHandle,
+    path: &str,
+    body: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(app);
+    let client = llm_http_client()?;
+    let resp = authorized_request(&cfg, client.post(backend_url(&cfg, path)))
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(safe_http_error(resp).await);
+    }
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
 // ── Activity payload structs ──────────────────────────────────────────────────
 // Use structs (not bare params) so serde deserializes field names as-is
 // (snake_case), avoiding Tauri's automatic camelCase conversion for bare params.
@@ -1748,6 +1768,7 @@ async fn activity_post(app: &tauri::AppHandle, path: &str, body: serde_json::Val
 #[derive(serde::Deserialize)]
 struct ActivitySessionPayload {
     session_id: String,
+    uid: Option<String>,
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -1761,6 +1782,7 @@ struct GomokuMovePayload {
 struct GomokuChatPayload {
     session_id: String,
     message: String,
+    uid: Option<String>,
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -1779,12 +1801,14 @@ struct ChessMovePayload {
 struct ReadingPagePayload {
     session_id: String,
     page: i64,
+    uid: Option<String>,
 }
 
 #[derive(serde::Deserialize)]
 struct ReadingTurnPagePayload {
     session_id: String,
     direction: String,
+    uid: Option<String>,
 }
 
 // ── Reading ───────────────────────────────────────────────────────────────────
@@ -1831,18 +1855,37 @@ async fn activity_reading_state(app: tauri::AppHandle) -> Result<serde_json::Val
 
 #[tauri::command]
 async fn activity_reading_page(app: tauri::AppHandle, payload: ReadingPagePayload) -> Result<serde_json::Value, String> {
-    let path = format!("/activity/reading/page?session_id={}&page={}", payload.session_id, payload.page);
+    let path = format!(
+        "/activity/reading/page?session_id={}&page={}&uid={}",
+        payload.session_id,
+        payload.page,
+        payload.uid.unwrap_or_default()
+    );
     activity_get(&app, &path).await
 }
 
 #[tauri::command]
 async fn activity_reading_turn_page(app: tauri::AppHandle, payload: ReadingTurnPagePayload) -> Result<serde_json::Value, String> {
-    activity_post(&app, "/activity/reading/turn_page", serde_json::json!({ "session_id": payload.session_id, "direction": payload.direction })).await
+    activity_post(
+        &app,
+        "/activity/reading/turn_page",
+        serde_json::json!({
+            "session_id": payload.session_id,
+            "direction": payload.direction,
+            "uid": payload.uid.unwrap_or_default(),
+        }),
+    )
+    .await
 }
 
 #[tauri::command]
 async fn activity_reading_close(app: tauri::AppHandle, payload: ActivitySessionPayload) -> Result<serde_json::Value, String> {
-    activity_post(&app, "/activity/reading/close", serde_json::json!({ "session_id": payload.session_id })).await
+    activity_llm_post(
+        &app,
+        "/activity/reading/close",
+        serde_json::json!({ "session_id": payload.session_id, "uid": payload.uid.unwrap_or_default() }),
+    )
+    .await
 }
 
 // ── Gomoku ────────────────────────────────────────────────────────────────────
@@ -1875,12 +1918,22 @@ async fn activity_gomoku_move(app: tauri::AppHandle, payload: GomokuMovePayload)
 
 #[tauri::command]
 async fn activity_gomoku_close(app: tauri::AppHandle, payload: ActivitySessionPayload) -> Result<serde_json::Value, String> {
-    activity_post(&app, "/activity/gomoku/close", serde_json::json!({ "session_id": payload.session_id })).await
+    activity_llm_post(
+        &app,
+        "/activity/gomoku/close",
+        serde_json::json!({ "session_id": payload.session_id, "uid": payload.uid.unwrap_or_default() }),
+    )
+    .await
 }
 
 #[tauri::command]
 async fn activity_gomoku_chat(app: tauri::AppHandle, payload: GomokuChatPayload) -> Result<serde_json::Value, String> {
-    activity_post(&app, "/activity/gomoku/chat", serde_json::json!({ "session_id": payload.session_id, "message": payload.message })).await
+    activity_llm_post(
+        &app,
+        "/activity/gomoku/chat",
+        serde_json::json!({ "session_id": payload.session_id, "message": payload.message, "uid": payload.uid.unwrap_or_default() }),
+    )
+    .await
 }
 
 #[tauri::command]
@@ -1890,7 +1943,12 @@ async fn activity_gomoku_ai_move(app: tauri::AppHandle, payload: ActivitySession
 
 #[tauri::command]
 async fn activity_gomoku_comment(app: tauri::AppHandle, payload: ActivitySessionPayload) -> Result<serde_json::Value, String> {
-    activity_post(&app, "/activity/gomoku/comment", serde_json::json!({ "session_id": payload.session_id })).await
+    activity_llm_post(
+        &app,
+        "/activity/gomoku/comment",
+        serde_json::json!({ "session_id": payload.session_id, "uid": payload.uid.unwrap_or_default() }),
+    )
+    .await
 }
 
 // ── Chess ─────────────────────────────────────────────────────────────────────
@@ -1929,12 +1987,22 @@ async fn activity_chess_legal_moves(app: tauri::AppHandle, payload: ActivitySess
 
 #[tauri::command]
 async fn activity_chess_close(app: tauri::AppHandle, payload: ActivitySessionPayload) -> Result<serde_json::Value, String> {
-    activity_post(&app, "/activity/chess/close", serde_json::json!({ "session_id": payload.session_id })).await
+    activity_llm_post(
+        &app,
+        "/activity/chess/close",
+        serde_json::json!({ "session_id": payload.session_id, "uid": payload.uid.unwrap_or_default() }),
+    )
+    .await
 }
 
 #[tauri::command]
 async fn activity_chess_chat(app: tauri::AppHandle, payload: GomokuChatPayload) -> Result<serde_json::Value, String> {
-    activity_post(&app, "/activity/chess/chat", serde_json::json!({ "session_id": payload.session_id, "message": payload.message })).await
+    activity_llm_post(
+        &app,
+        "/activity/chess/chat",
+        serde_json::json!({ "session_id": payload.session_id, "message": payload.message, "uid": payload.uid.unwrap_or_default() }),
+    )
+    .await
 }
 
 #[tauri::command]
@@ -1944,12 +2012,22 @@ async fn activity_chess_ai_move(app: tauri::AppHandle, payload: ActivitySessionP
 
 #[tauri::command]
 async fn activity_chess_comment(app: tauri::AppHandle, payload: ActivitySessionPayload) -> Result<serde_json::Value, String> {
-    activity_post(&app, "/activity/chess/comment", serde_json::json!({ "session_id": payload.session_id })).await
+    activity_llm_post(
+        &app,
+        "/activity/chess/comment",
+        serde_json::json!({ "session_id": payload.session_id, "uid": payload.uid.unwrap_or_default() }),
+    )
+    .await
 }
 
 #[tauri::command]
 async fn activity_reading_chat(app: tauri::AppHandle, payload: GomokuChatPayload) -> Result<serde_json::Value, String> {
-    activity_post(&app, "/activity/reading/chat", serde_json::json!({ "session_id": payload.session_id, "message": payload.message })).await
+    activity_llm_post(
+        &app,
+        "/activity/reading/chat",
+        serde_json::json!({ "session_id": payload.session_id, "message": payload.message, "uid": payload.uid.unwrap_or_default() }),
+    )
+    .await
 }
 
 #[tauri::command]
