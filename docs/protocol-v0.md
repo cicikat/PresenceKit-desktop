@@ -1,6 +1,7 @@
 # PresenceKit-desktop 协议 v0.1
 
 本文件是本仓与 `Emerald-presence` 当前桌面通信协议的单一权威。v0.1 将现有 legacy 协议冻结为正式协议：不实现 v1，不协商 capabilities，不允许任一端单边新增 action。
+MCP is backend-only and is not part of the desktop/mobile client transport contract.
 
 ## 连接
 

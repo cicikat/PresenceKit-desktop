@@ -49,6 +49,13 @@ function getLayoutSidebarWidth(layout: LayoutRecord): number {
   return getUIPref(`chat.sidebarWidth.${layout.manifest.id}`, fallback);
 }
 
+function getLayoutSidebarOpen(layout: LayoutRecord): boolean {
+  // A layout's manifest remains the default only until the user explicitly
+  // opens or closes its sidebar. This keeps new layouts declarative without
+  // discarding an existing layout's UI preference on restart.
+  return getUIPref(`chat.sidebarOpen.${layout.manifest.id}`, !layout.manifest.slots.sidebar.hidden);
+}
+
 export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivityOpen?: () => void; onToyOpen?: () => void; onRoomOpen?: () => void } = {}) {
   const engineRef = useRef<StateEngine | null>(null);
   if (!engineRef.current) engineRef.current = new StateEngine();
@@ -61,8 +68,8 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivi
   const [petVisible, setPetVisible]               = useState(false);
   const [activeLayout, setActiveLayout]           = useState(() => getLayout());
   const [layoutOptions, setLayoutOptions]         = useState<LayoutRecord[]>(() => [getLayout()]);
-  const [sidebarOpen, setSidebarOpen]             = useState(() => !getLayout().manifest.slots.sidebar.hidden);
-  const [sidebarTab, setSidebarTab]               = useState('flow');
+  const [sidebarOpen, setSidebarOpen]             = useState(() => getLayoutSidebarOpen(getLayout()));
+  const [sidebarTab, setSidebarTab]               = useState(() => getUIPref('chat.sidebarTab', 'flow'));
   const [sidebarWidth, setSidebarWidth]           = useState(() => getLayoutSidebarWidth(getLayout()));
   const [chatHeaderVisible, setChatHeaderVisible] = useState(() => getUIPref('chat.headerVisible', true));
   const [appearance, setAppearance]               = useState<ChatAppearance>(() => loadChatAppearance());
@@ -106,6 +113,7 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivi
       const layout = getLayout();
       setActiveLayout(layout);
       setSidebarWidth(getLayoutSidebarWidth(layout));
+      setSidebarOpen(getLayoutSidebarOpen(layout));
     };
     const offLayout = subscribeLayout(syncLayout);
     void listLayouts()
@@ -117,7 +125,7 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivi
         if (!mounted) return;
         setActiveLayout(layout);
         setSidebarWidth(getLayoutSidebarWidth(layout));
-        setSidebarOpen(!layout.manifest.slots.sidebar.hidden);
+        setSidebarOpen(getLayoutSidebarOpen(layout));
       })
       .catch(error => console.warn('[layout] 初始化失败:', error));
     return () => { mounted = false; offLayout(); };
@@ -304,15 +312,23 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivi
     if (isPlayModeEnabled()) onToyOpen?.();
   }), [onToyOpen]);
 
-  const onSidebarTab = (tab: string) => { setSidebarTab(tab); setSidebarOpen(true); };
-  const onCloseSidebar = () => setSidebarOpen(false);
+  const onSidebarTab = (tab: string) => {
+    setSidebarTab(tab);
+    setSidebarOpen(true);
+    setUIPref('chat.sidebarTab', tab);
+    setUIPref(`chat.sidebarOpen.${activeLayout.manifest.id}`, true);
+  };
+  const onCloseSidebar = () => {
+    setSidebarOpen(false);
+    setUIPref(`chat.sidebarOpen.${activeLayout.manifest.id}`, false);
+  };
 
   const selectLayout = (id: string) => {
     void setLayout(id)
       .then(layout => {
         setActiveLayout(layout);
         setSidebarWidth(getLayoutSidebarWidth(layout));
-        setSidebarOpen(!layout.manifest.slots.sidebar.hidden);
+        setSidebarOpen(getLayoutSidebarOpen(layout));
       })
       .catch(error => console.warn('[layout] 切换失败:', error));
   };
@@ -374,7 +390,7 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivi
                 engine={engine}
                 sidebarRectRef={sidebarRectRef}
                 tab={sidebarTab}
-                onClose={() => setSidebarOpen(false)} /></div>
+                onClose={onCloseSidebar} /></div>
               {!sidebarOnRight && <Divider onDrag={onDividerDrag} />}
             </div> : null,
             main: <div ref={bodyRef} className="chat-ui__body" style={{ height: '100%', minHeight: 0, minWidth: 0, position: 'relative', '--chat-background-blur': `${appearance.backgroundBlur}px` } as CSSProperties}>

@@ -79,7 +79,7 @@ src/windows/chat/
 职责：
 
 - 创建并持有单个 `StateEngine`。
-- 管理 UI 状态：主题、侧栏开关、侧栏 tab、侧栏宽度、帮助面板、偏好面板、桌宠开关。
+- 管理 UI 状态：主题、侧栏开关、侧栏 tab、侧栏宽度、帮助面板、偏好面板、桌宠开关。侧栏 tab 使用 `chat.sidebarTab` 全局持久化；开关使用 `chat.sidebarOpen.<layoutId>` 按布局持久化，尚无用户偏好时才回退布局 manifest 的默认显隐。
 - 管理 Dream UI v2 preview 的本地状态：Ribbon 入口打开 overlay，Esc / WAKE 关闭并显示 afterglow。
 - 订阅 WS `dream_invite` UI 事件；收到角色邀请时清除 afterglow 并打开 Dream overlay。
 - 布局三列：Ribbon、Sidebar、ChatPanel。
@@ -95,7 +95,7 @@ src/windows/chat/
 |---|---|
 | `theme` | 当前主题 id；通过主题注册中心注入 token 并持久化到 `chat.theme` |
 | `petVisible` | 控制独立 Tauri pet 窗口显隐，并同步 engine mode |
-| `sidebarOpen` / `sidebarTab` | 控制左侧副栏 |
+| `sidebarOpen` / `sidebarTab` | 控制左侧副栏；tab 以 `chat.sidebarTab` 持久化，开关以 `chat.sidebarOpen.<layoutId>` 按布局持久化 |
 | `sidebarWidth` | 可拖拽调整，范围 250-540 |
 | `chatHeaderVisible` | 控制 ChatPanel 顶部状态栏 |
 | `appearance` | Chat 本地外观设置：聊天字号、主题字号、字体包 |
