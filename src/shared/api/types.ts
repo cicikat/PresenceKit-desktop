@@ -192,8 +192,6 @@ export interface ActivityState {
 
 export interface UploadIngestResponse {
   reply: string;
-  affection: number;
-  level: string;
   emotion: string;
   turn_id: string;
   msg_id?: string;

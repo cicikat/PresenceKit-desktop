@@ -216,7 +216,7 @@ ChatPanel.send()
   → Tauri invoke("send_chat")
   → src-tauri/src/lib.rs reqwest POST /desktop/chat
   → Emerald-presence pipeline
-  ← HTTP JSON { reply, emotion, affection, level, turn_id, msg_id }
+  ← HTTP JSON { reply, emotion, turn_id, msg_id }
   → ChatPanel 优先按 msg_id 与 WS channel_message / message_segments 对账
 ```
 

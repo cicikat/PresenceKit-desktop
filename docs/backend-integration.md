@@ -201,8 +201,6 @@ ChatPanel.send()
 ```json
 {
   "reply": "……",
-  "affection": 0,
-  "level": "",
   "emotion": "gentle",
   "turn_id": "assistant-correlation-id",
   "msg_id": "assistant-correlation-id"
