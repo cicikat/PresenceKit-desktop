@@ -1039,6 +1039,55 @@ async fn load_sensor_realtime(app: tauri::AppHandle) -> Result<serde_json::Value
     Ok(normalize_sensor_realtime_value(val))
 }
 
+#[tauri::command]
+async fn load_period_date(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let resp = client
+        .get(backend_url(&cfg, "/period"))
+        .bearer_auth(cfg.admin_token)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(format!("HTTP {}", resp.status().as_u16()));
+    }
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn set_period_date(app: tauri::AppHandle, last_period_date: String) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let resp = client
+        .put(backend_url(&cfg, "/period"))
+        .bearer_auth(cfg.admin_token)
+        .json(&serde_json::json!({ "last_period_date": last_period_date }))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(format!("HTTP {}", resp.status().as_u16()));
+    }
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn clear_period_date(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let resp = client
+        .delete(backend_url(&cfg, "/period"))
+        .bearer_auth(cfg.admin_token)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(format!("HTTP {}", resp.status().as_u16()));
+    }
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
 fn normalize_sensor_realtime_value(val: serde_json::Value) -> serde_json::Value {
     let no_data = val.is_null()
         || matches!(val.as_object(), Some(map) if map.is_empty())
@@ -2846,6 +2895,9 @@ pub fn run() {
             load_mood_state,
             load_activity_state,
             load_sensor_realtime,
+            load_period_date,
+            set_period_date,
+            clear_period_date,
             upload_document,
             transcribe_audio,
             start_voice_hotkey_listener,

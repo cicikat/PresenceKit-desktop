@@ -801,6 +801,11 @@ reqwest::Client::builder()
     .no_proxy()
 ```
 
+### 经期日期
+
+桌面端通过 Tauri command `load_period_date`、`set_period_date(lastPeriodDate)`、`clear_period_date`
+调用后端 `GET`、`PUT`、`DELETE /period`。接口不接收 uid；后端从可信 scheduler owner 配置解析。
+
 普通 HTTP client 设置 15 秒超时；chat / wake / Dream 等 LLM 请求使用 120 秒超时。
 
 当前 `send_chat`、`load_history`、`load_garden_state`、`load_diary_list`、`load_diary_entry`、`load_chat_log_dates`、`load_chat_log_day`、`get_prompt_assets`、`patch_prompt_assets` 和 `load_hidden_state_debug` 已符合这条规则。

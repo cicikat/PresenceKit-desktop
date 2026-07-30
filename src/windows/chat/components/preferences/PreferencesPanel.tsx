@@ -24,6 +24,7 @@ import { Icon } from '../UIKit';
 import { PromptAssetsSettings } from './PromptAssetsSettings';
 import { ChatSettingsSection } from './ChatSettingsSection';
 import { MinuteSelect, PrefRange, PrefRow, PrefSwitch, prefActionButtonStyle, prefSelectStyle } from './PrefAtoms';
+import { PeriodDateSettings } from './PeriodDateSettings';
 export function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHeaderVisible, onChatHeaderToggle, appearance, onAppearanceChange, activeLayout, layoutOptions, onLayoutChange, onCharacterAvatarChange, onCharacterSwitched, petMouseSettings, onPetMouseSettingsChange, petVisualStyle, onPetVisualStyleChange, model3dZoom, onModel3dZoomChange, live2dZoom, onLive2dZoomChange, presenceNagEnabled, onPresenceNagToggle, proactiveGapHours, onProactiveGapChange, playModeEnabled, onPlayModeToggle, petRoamEnabled, onPetRoamToggle, petRippleEnabled, onPetRippleToggle, onYandereOpen }: any) {
   const { language, setLanguage, t } = useI18n();
   const [avatars, setAvatars] = useState(avatarStore.get());
@@ -127,7 +128,7 @@ export function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, 
               ['system', '0', '系统设置'],
               ['appearance', '1', '外观'],
               ['color', '2', '色彩自定义'],
-              ['world', '3', '世界'],
+              ['world', '3', t('settings.category.characterChat')],
               ['pet', '4', '桌宠'],
               ['chat', '5', '对话'],
               ['call', '6', '视频通话'],
@@ -417,7 +418,11 @@ export function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, 
             ) : tab === 'color' ? (
               <ChatColorPage />
             ) : tab === 'world' ? (
-              <PromptAssetsSettings onCharacterAvatarChange={onCharacterAvatarChange} onCharacterSwitched={onCharacterSwitched} />
+              <>
+                <PeriodDateSettings />
+                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
+                <PromptAssetsSettings onCharacterAvatarChange={onCharacterAvatarChange} onCharacterSwitched={onCharacterSwitched} />
+              </>
             ) : tab === 'pet' ? (
               <>
                 <div>

@@ -63,6 +63,23 @@ export async function loadSensorRealtime(): Promise<SensorRealtimeResponse> {
   return invokeGated<SensorRealtimeResponse>('load_sensor_realtime');
 }
 
+export interface PeriodDateResponse {
+  last_period_date: string | null;
+  period_reminder_input_ready: boolean;
+}
+
+export async function loadPeriodDate(): Promise<PeriodDateResponse> {
+  return invokeGated<PeriodDateResponse>('load_period_date');
+}
+
+export async function setPeriodDate(lastPeriodDate: string): Promise<PeriodDateResponse> {
+  return invokeGated<PeriodDateResponse>('set_period_date', { lastPeriodDate });
+}
+
+export async function clearPeriodDate(): Promise<PeriodDateResponse> {
+  return invokeGated<PeriodDateResponse>('clear_period_date');
+}
+
 export const UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
 export const UPLOAD_ALLOWED_EXTS = ['.txt', '.md', '.docx'] as const;
 
