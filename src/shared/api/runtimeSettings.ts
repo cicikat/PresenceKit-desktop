@@ -66,7 +66,3 @@ export async function setTtsAutoPlay(patch: Partial<TtsAutoPlaySettings>): Promi
 export function synthesizeDesktopVoice(text: string, emotion = 'neutral', scene = 'desktop_pet'): Promise<SynthesizedVoice> {
   return invoke<SynthesizedVoice>('synthesize_desktop_voice', { text, emotion, scene });
 }
-
-export function waterGarden(): Promise<unknown> {
-  return invoke('water_garden');
-}

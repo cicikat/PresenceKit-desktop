@@ -2556,13 +2556,6 @@ async fn synthesize_desktop_voice(app: tauri::AppHandle, text: String, emotion: 
     require_success(resp).await?.json().await.map_err(|e| e.to_string())
 }
 
-#[tauri::command]
-async fn water_garden(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
-    let cfg = load_client_config(&app);
-    let resp = authorized_request(&cfg, http_client()?.post(backend_url(&cfg, "/garden/water")))
-        .send().await.map_err(|e| e.to_string())?;
-    require_success(resp).await?.json().await.map_err(|e| e.to_string())
-}
 // ── Tool Loop (cc-tasks/16) ────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -2990,7 +2983,6 @@ pub fn run() {
             get_tts_auto_play,
             set_tts_auto_play,
             synthesize_desktop_voice,
-            water_garden,
             get_tool_loop_settings,
             update_tool_loop_settings,
             get_thinking_settings,

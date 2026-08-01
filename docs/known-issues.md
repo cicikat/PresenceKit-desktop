@@ -137,15 +137,15 @@ Phase 2d.5e 完成时数据层在 REPL 单测全通过：
 
 ---
 
-## P2：花园客户端目前是只读状态页，缺 harvest/vase 详情和操作入口
+## P2：花园客户端目前是只读状态页，缺 harvest/vase 详情
 
 **位置**：`src/windows/chat/components/SubGarden.tsx`、`src/shared/api/types.ts`
 
-当前 `SubGarden` 已能读 `/garden/state` 并展示五个花槽，但 UI 只消费 `slots`。`harvest_count` / `vase_count` 只在类型里存在，没有展示收获区、花瓶详情，也没有手动浇水、采收、送花等操作入口。
+当前 `SubGarden` 已能读 `/garden/state` 并展示五个花槽，但 UI 只消费 `slots`。`harvest_count` / `vase_count` 只在类型里存在，没有展示收获区或花瓶详情；这符合客户端只读边界，浇水及其他写操作不属于玩家入口。
 
 **影响**：后端花园生命周期已经往 harvest/vase 方向推进，但客户端用户只能看到生长槽位，无法理解“开花后去了哪里”。
 
-**建议**：后端若继续只暴露 count，就在 UI 上至少展示计数；如果要完整闭环，需要扩展 `/garden/state` 返回 harvest/vase 列表，或新增只读详情接口和操作接口。
+**建议**：后端若继续只暴露 count，就在 UI 上至少展示计数；如果要完整闭环，可扩展 `/garden/state` 返回 harvest/vase 只读详情，避免为客户端引入玩家写操作。
 
 ---
 
