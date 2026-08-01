@@ -8,11 +8,15 @@ import {
   type RoutingProfileOption,
 } from '../../../shared/api/characterModelRouting';
 import { useI18n } from '../../../shared/i18n';
+import {
+  isFollowingGlobal,
+  resolveGlobalRoutingDisplay,
+} from './characterModelRoutingDisplay';
 
 const DEFAULT_VALUE = '';
 
 const selectStyle = {
-  width: 200, padding: '6px 9px', border: '1px solid var(--paper-edge)',
+  width: 330, maxWidth: '100%', padding: '6px 9px', border: '1px solid var(--paper-edge)',
   borderRadius: 'var(--radius-sm)', background: 'var(--paper-2)', color: 'var(--ink-2)',
   fontFamily: 'inherit', fontSize: 11,
 } as const;
@@ -23,6 +27,10 @@ function isNotFound(error: unknown): boolean {
 
 function isUnprocessable(error: unknown): boolean {
   return String(error).includes('422');
+}
+
+function formatMessage(template: string, values: Record<string, string>): string {
+  return template.replace(/\{(\w+)\}/g, (_match, key: string) => values[key] ?? `{${key}}`);
 }
 
 function routingOf(character: PromptAssetCharacter): CharacterModelRoutingInfo | null {
@@ -40,6 +48,7 @@ export function CharacterModelRoutingSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [profiles, setProfiles] = useState<RoutingProfileOption[]>([]);
+  const [activeRouting, setActiveRouting] = useState('');
   const [characters, setCharacters] = useState<PromptAssetCharacter[]>([]);
   const [routing, setRouting] = useState<Record<string, CharacterModelRoutingInfo | null>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -52,6 +61,7 @@ export function CharacterModelRoutingSettingsPage() {
         const [profilesResp, assets] = await Promise.all([listRoutingProfiles(), getPromptAssets()]);
         if (!mounted) return;
         setProfiles(profilesResp.profiles);
+        setActiveRouting(profilesResp.active_routing);
         setCharacters(assets.characters);
         setRouting(Object.fromEntries(assets.characters.map(character => [character.id, routingOf(character)])));
       } catch (error) {
@@ -87,6 +97,14 @@ export function CharacterModelRoutingSettingsPage() {
 
   if (unsupported) return null;
 
+  const globalRoute = resolveGlobalRoutingDisplay(profiles, activeRouting);
+  const globalProfile = globalRoute.profile || t('settings.characterModelRouting.unresolved');
+  const globalChatPreset = globalRoute.chatPreset || t('settings.characterModelRouting.unresolved');
+  const inheritOptionLabel = formatMessage(t('settings.characterModelRouting.defaultOption'), {
+    profile: globalProfile,
+    chatPreset: globalChatPreset,
+  });
+
   return (
     <div style={{ display: 'grid', gap: 12 }}>
       <div>
@@ -107,9 +125,10 @@ export function CharacterModelRoutingSettingsPage() {
         <div style={{ display: 'grid', gap: 10 }}>
           {characters.map(character => {
             const info = routing[character.id];
+            const followsGlobal = isFollowingGlobal(info?.model_routing);
             return (
               <div key={character.id} style={{ display: 'grid', gap: 3 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
                   <div style={{ width: 90, fontSize: 12.5, color: 'var(--ink-2)' }}>{character.label}</div>
                   <select
                     value={info?.model_routing ?? DEFAULT_VALUE}
@@ -117,14 +136,24 @@ export function CharacterModelRoutingSettingsPage() {
                     onChange={event => void handleChange(character.id, event.target.value)}
                     style={selectStyle}
                   >
-                    <option value={DEFAULT_VALUE}>{t('settings.characterModelRouting.defaultOption')}</option>
-                    {profiles.map(profile => (
-                      <option key={profile.name} value={profile.name}>{profile.name}</option>
-                    ))}
+                    <option value={DEFAULT_VALUE}>{inheritOptionLabel}</option>
+                    <optgroup label={t('settings.characterModelRouting.fixedGroupLabel')}>
+                      {profiles.map(profile => (
+                        <option key={profile.name} value={profile.name}>
+                          {formatMessage(t('settings.characterModelRouting.fixedOption'), {
+                            profile: profile.name,
+                            chatPreset: profile.categories.chat || t('settings.characterModelRouting.unresolved'),
+                          })}
+                        </option>
+                      ))}
+                    </optgroup>
                   </select>
                   {info && (
                     <span className="mono" style={{ fontSize: 9.5, color: 'var(--ink-3)' }}>
-                      {t('settings.characterModelRouting.resolvedLabel')} · {info.resolved_chat_preset}
+                      {followsGlobal
+                        ? t('settings.characterModelRouting.inheritedStatus')
+                        : t('settings.characterModelRouting.pinnedStatus')}
+                      {' · '}{t('settings.characterModelRouting.resolvedLabel')} · {info.resolved_chat_preset}
                     </span>
                   )}
                 </div>
