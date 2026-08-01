@@ -1,4 +1,5 @@
 import type { ActivityTab } from './ActivityRibbon';
+import { useI18n } from '../../../shared/i18n';
 
 interface ActivityCard {
   tab: ActivityTab;
@@ -14,6 +15,16 @@ const CARDS: ActivityCard[] = [
 ];
 
 export function ActivityHomePage({ onSelect }: { onSelect: (tab: ActivityTab) => void }) {
+  const { t } = useI18n();
+  const cards: ActivityCard[] = [
+    ...CARDS,
+    {
+      tab: 'dream-seed',
+      title: t('activity.dreamSeed.title'),
+      subtitle: t('activity.dreamSeed.subtitle'),
+      icon: '✦',
+    },
+  ];
   return (
     <div style={{
       flex: 1, display: 'flex', flexDirection: 'column',
@@ -31,7 +42,7 @@ export function ActivityHomePage({ onSelect }: { onSelect: (tab: ActivityTab) =>
       </div>
 
       <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
-        {CARDS.map(card => (
+        {cards.map(card => (
           <button
             key={card.tab}
             onClick={() => onSelect(card.tab)}

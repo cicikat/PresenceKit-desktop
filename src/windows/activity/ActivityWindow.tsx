@@ -15,14 +15,17 @@ import { ActivityHomePage } from './components/ActivityHomePage';
 import { ReadingPage } from './components/ReadingPage';
 import { GomokuPage } from './components/GomokuPage';
 import { ChessPage } from './components/ChessPage';
+import { DreamSeedPanel } from './components/DreamSeedPanel';
 import { ActivityPreferencesPanel } from './components/ActivitySettingsPage';
 import { toggleDayNight, getDayNight, subscribe as subscribeTheme } from '../../shared/theme/registry';
+import { useI18n } from '../../shared/i18n';
 
 interface ActivityWindowProps {
   onClose: () => void;
 }
 
 export function ActivityWindow({ onClose }: ActivityWindowProps) {
+  const { t } = useI18n();
   const [activeTab, setActiveTab] = useState<ActivityTab>('home');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [theme, setTheme] = useState(() => getDayNight().active);
@@ -38,7 +41,7 @@ export function ActivityWindow({ onClose }: ActivityWindowProps) {
       className="activity-window"
       role="dialog"
       aria-modal="true"
-      aria-label="活动空间"
+      aria-label={t('activity.window.label')}
       style={{
         position: 'fixed', inset: 0, zIndex: 110,
         background: 'var(--paper)',
@@ -62,6 +65,7 @@ export function ActivityWindow({ onClose }: ActivityWindowProps) {
           {activeTab === 'reading' && <ReadingPage />}
           {activeTab === 'gomoku'  && <GomokuPage />}
           {activeTab === 'chess'   && <ChessPage />}
+          {activeTab === 'dream-seed' && <DreamSeedPanel />}
         </div>
       </div>
 

@@ -950,6 +950,23 @@ Reading 的 `page`、`turnPage`、`close` 和 `chat` 参数支持可选 `uid`。
 默认 owner 处理，现有页面无需增加 UID 控件；传入时该值会随 Tauri 请求转发，使后端按
 `uid + char_id + session_id` 精确加载，不跨用户目录扫描。
 
+### Dream Seed 活动
+
+活动空间的“梦境预构”页通过 `shared/api/activity-api.ts::dreamSeedApi` 调用四个 Tauri
+command，Rust 侧统一携带 desktop token 转发到后端：
+
+| 前端调用 | Tauri command | 后端接口 |
+|---|---|---|
+| `start()` | `activity_dream_seed_start` | `POST /activity/dream_seed/start` |
+| `state()` | `activity_dream_seed_state` | `GET /activity/dream_seed/state` |
+| `chat({session_id,message})` | `activity_dream_seed_chat` | `POST /activity/dream_seed/chat` |
+| `close(session_id)` | `activity_dream_seed_close` | `POST /activity/dream_seed/close` |
+
+`state()` 用于进入页面时恢复未关闭会话，并只返回 seed 的短预览，不返回活动 transcript。
+`close()` 可能同步执行 LLM 提炼，因此 Rust 使用 120 秒长请求 client。`success=false` 表示
+当前对话不足以提炼，客户端保留 session 并允许继续商量；成功时 `seed_text` 会在下一次
+Dream entry 被后端一次性消费。
+
 ### 角色名去硬编码（backend Brief 25 §1/§3 P0，client cc-tasks/15 §G）
 
 客户端不再有任何硬编码的「叶瑄」字面量（`npm run check:naming` 守门）。展示名统一走

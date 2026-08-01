@@ -2,8 +2,9 @@ import { useState } from 'react';
 // Icon is a pure SVG utility; UIKit.tsx lives under chat/ for historical reasons
 // but contains no chat-specific state or behavior. TODO: move to shared/ui/UIKit.
 import { Icon } from '../../chat/components/UIKit';
+import { useI18n } from '../../../shared/i18n';
 
-export type ActivityTab = 'home' | 'reading' | 'gomoku' | 'chess';
+export type ActivityTab = 'home' | 'reading' | 'gomoku' | 'chess' | 'dream-seed';
 
 function Sep() {
   return <div style={{ width: 24, height: 1, background: 'var(--forest-line, oklch(0.45 0.06 160))', margin: '6px 0' }} />;
@@ -96,6 +97,7 @@ interface ActivityRibbonProps {
 }
 
 export function ActivityRibbon({ activeTab, onTab, onClose, onOpenSettings, theme, onThemeToggle }: ActivityRibbonProps) {
+  const { t } = useI18n();
   return (
     <div className="activity-ribbon" style={{
       width: 52, flexShrink: 0, height: '100%',
@@ -114,6 +116,8 @@ export function ActivityRibbon({ activeTab, onTab, onClose, onOpenSettings, them
         customIcon={<GomokuIcon />} />
       <ABtn label="国际象棋" active={activeTab === 'chess'} onClick={() => onTab('chess')}
         customIcon={<ChessIcon />} />
+      <ABtn icon="sparkle" label={t('activity.dreamSeed.title')} active={activeTab === 'dream-seed'}
+        onClick={() => onTab('dream-seed')} />
       <div style={{ flex: 1 }} />
       <ABtn icon="settings" label="活动偏好" active={false} onClick={onOpenSettings} />
       <Sep />

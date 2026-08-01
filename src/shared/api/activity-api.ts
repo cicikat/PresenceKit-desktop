@@ -293,3 +293,40 @@ export const chessApi = {
     invokeActivity('activity_chess_comment', { payload: { session_id } }),
 };
 
+// ── Dream Seed ───────────────────────────────────────────────────────────────
+
+export interface DreamSeedStartResult {
+  session_id: string;
+  status: string;
+}
+
+export interface DreamSeedState {
+  active: boolean;
+  session_id: string | null;
+  has_seed: boolean;
+  seed_preview: string;
+}
+
+export interface DreamSeedChatResult {
+  session_id: string;
+  reply: string;
+}
+
+export interface DreamSeedCloseResult {
+  success: boolean;
+  seed_text: string;
+}
+
+export const dreamSeedApi = {
+  start: (): Promise<DreamSeedStartResult> =>
+    invokeActivity('activity_dream_seed_start'),
+  state: (): Promise<DreamSeedState> =>
+    invokeActivity('activity_dream_seed_state'),
+  chat: (params: { session_id: string; message: string }): Promise<DreamSeedChatResult> =>
+    invokeActivity('activity_dream_seed_chat', {
+      payload: { session_id: params.session_id, message: params.message },
+    }),
+  close: (session_id: string): Promise<DreamSeedCloseResult> =>
+    invokeActivity('activity_dream_seed_close', { payload: { session_id } }),
+};
+
