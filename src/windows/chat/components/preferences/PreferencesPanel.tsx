@@ -24,11 +24,13 @@ import { Icon } from '../UIKit';
 import { PromptAssetsSettings } from './PromptAssetsSettings';
 import { ChatSettingsSection } from './ChatSettingsSection';
 import { MinuteSelect, PrefRange, PrefRow, PrefSwitch, prefActionButtonStyle, prefSelectStyle } from './PrefAtoms';
+import { ComputerOperationSafetySettings } from './ComputerOperationSafetySettings';
 import { PeriodDateSettings } from './PeriodDateSettings';
+import { CHAT_PREFERENCE_TABS, type ChatPreferenceTab } from './preferencesInfoArchitecture';
 export function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHeaderVisible, onChatHeaderToggle, appearance, onAppearanceChange, activeLayout, layoutOptions, onLayoutChange, onCharacterAvatarChange, onCharacterSwitched, petMouseSettings, onPetMouseSettingsChange, petVisualStyle, onPetVisualStyleChange, model3dZoom, onModel3dZoomChange, live2dZoom, onLive2dZoomChange, presenceNagEnabled, onPresenceNagToggle, proactiveGapHours, onProactiveGapChange, playModeEnabled, onPlayModeToggle, petRoamEnabled, onPetRoamToggle, petRippleEnabled, onPetRippleToggle, onYandereOpen }: any) {
   const { language, setLanguage, t } = useI18n();
   const [avatars, setAvatars] = useState(avatarStore.get());
-  const [tab, setTab] = useState<'system' | 'appearance' | 'color' | 'world' | 'pet' | 'chat' | 'call' | 'other'>('appearance');
+  const [tab, setTab] = useState<ChatPreferenceTab>('interface');
   const [cropSrc, setCropSrc] = useState<string | null>(null);
   const [cropRole, setCropRole] = useState<'her' | 'you' | null>(null);
   const [bgCropSrc, setBgCropSrc] = useState<string | null>(null);
@@ -123,17 +125,8 @@ export function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, 
             <div style={{ flex: 1 }} />
             <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--ink-3)', cursor: 'pointer', fontSize: 18, padding: 0, lineHeight: 1 }}>×</button>
           </div>
-          <div style={{ padding: '10px 20px 0', display: 'flex', gap: 2, borderBottom: '1px solid var(--paper-edge)' }}>
-            {([
-              ['system', '0', '系统设置'],
-              ['appearance', '1', '外观'],
-              ['color', '2', '色彩自定义'],
-              ['world', '3', t('settings.category.characterChat')],
-              ['pet', '4', '桌宠'],
-              ['chat', '5', '对话'],
-              ['call', '6', '视频通话'],
-              ['other', '7', '其他'],
-            ] as const).map(([key, num, label]) => (
+          <div style={{ padding: '10px 20px 0', display: 'flex', flexWrap: 'wrap', gap: 2, borderBottom: '1px solid var(--paper-edge)' }}>
+            {CHAT_PREFERENCE_TABS.map(({ key, labelKey }, index) => (
               <button key={key} onClick={() => setTab(key)} style={{
                 padding: '5px 10px', border: 'none', borderRadius: '6px 6px 0 0',
                 background: tab === key ? 'var(--paper)' : 'transparent',
@@ -142,13 +135,13 @@ export function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, 
                 borderBottom: tab === key ? '2px solid var(--accent)' : '2px solid transparent',
                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1,
               }}>
-                <span style={{ fontSize: 10, fontWeight: 600, lineHeight: 1, letterSpacing: 0.5 }}>{num}</span>
-                <span style={{ fontSize: 11, fontWeight: tab === key ? 600 : 500, lineHeight: 1.2 }}>{label}</span>
+                <span style={{ fontSize: 10, fontWeight: 600, lineHeight: 1, letterSpacing: 0.5 }}>{index}</span>
+                <span style={{ fontSize: 11, fontWeight: tab === key ? 600 : 500, lineHeight: 1.2 }}>{t(labelKey)}</span>
               </button>
             ))}
           </div>
           <div style={{ padding: '18px 22px', display: 'grid', gap: 18, flex: 1, minHeight: 0, overflowY: 'auto' }}>
-            {tab === 'system' ? (
+            {tab === 'general' ? (
               <>
                 <PrefRow label={t('common.language')} hint={t('settings.language.hint')}>
                   <select
@@ -162,22 +155,29 @@ export function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, 
                 </PrefRow>
                 <div style={{ height: 1, background: 'var(--paper-edge)' }} />
                 <ConnectionSettingsPage />
+              </>
+            ) : tab === 'models' ? (
+              <>
                 <div style={{ height: 1, background: 'var(--paper-edge)' }} />
                 <ModelRoutingSettingsPage />
                 <div style={{ height: 1, background: 'var(--paper-edge)' }} />
                 <CharacterModelRoutingSettingsPage />
                 <div style={{ height: 1, background: 'var(--paper-edge)' }} />
+                <ThinkingSettingsPage />
+                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
+                <OutputSegmentEnforceSettingsPage />
+              </>
+            ) : tab === 'capabilities' ? (
+              <>
                 <DesktopTtsSettingsPage />
                 <div style={{ height: 1, background: 'var(--paper-edge)' }} />
                 <ToolLoopSettingsPage />
                 <div style={{ height: 1, background: 'var(--paper-edge)' }} />
-                <ThinkingSettingsPage />
-                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
-                <OutputSegmentEnforceSettingsPage />
-                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
                 <VisualPerceptionSettingsPage />
+                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
+                <ComputerOperationSafetySettings />
               </>
-            ) : tab === 'appearance' ? (
+            ) : tab === 'interface' ? (
               <>
                 <PrefRow label="日间主题" hint="手动切换至日间或自动模式日间时段使用的主题">
                   <ThemePicker slot="day" />
@@ -414,16 +414,37 @@ export function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, 
                     </div>
                   </div>
                 </div>
+                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
+                <ChatColorPage />
               </>
-            ) : tab === 'color' ? (
-              <ChatColorPage />
-            ) : tab === 'world' ? (
+            ) : tab === 'characterChat' ? (
               <>
                 <PeriodDateSettings />
                 <div style={{ height: 1, background: 'var(--paper-edge)' }} />
                 <PromptAssetsSettings onCharacterAvatarChange={onCharacterAvatarChange} onCharacterSwitched={onCharacterSwitched} />
+                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
+                <ChatSettingsSection />
+                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
+                <PrefRow label="允许存在感弹窗" hint={`开启后，${activeCharName}被冷落久了会用带头像的弹窗找你；默认关闭`}>
+                  <PrefSwitch active={presenceNagEnabled} onClick={onPresenceNagToggle} />
+                </PrefRow>
+                <PrefRow label="主动消息最小间隔" hint={`${activeCharName}每隔至少 ${proactiveGapHours} h 才会主动发消息 · 范围 0.5–12`}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <button
+                      onClick={() => onProactiveGapChange(Math.max(0.5, proactiveGapHours - 0.5))}
+                      style={prefActionButtonStyle}
+                    >−</button>
+                    <span className="mono" style={{ width: 38, textAlign: 'center', color: 'var(--ink-2)', fontSize: 11 }}>
+                      {proactiveGapHours}h
+                    </span>
+                    <button
+                      onClick={() => onProactiveGapChange(Math.min(12, proactiveGapHours + 0.5))}
+                      style={prefActionButtonStyle}
+                    >+</button>
+                  </div>
+                </PrefRow>
               </>
-            ) : tab === 'pet' ? (
+            ) : tab === 'petInteraction' ? (
               <>
                 <div>
                   <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink)', marginBottom: 2 }}>桌宠粒子风格</div>
@@ -527,38 +548,17 @@ export function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, 
                 }}>
                   当前由「惊讶」情绪触发害羞躲避。按住 Ctrl 可临时钉住桌宠并稳定拖动。
                 </div>
+                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
+                <CallSettingsPage />
+                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
+                <CoplaySettingsPage />
               </>
-            ) : tab === 'call' ? (
-              <CallSettingsPage />
-            ) : tab === 'chat' ? (
+            ) : tab === 'advanced' ? (
               <>
-                <ChatSettingsSection />
-                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
-                <PrefRow label="允许存在感弹窗" hint={`开启后，${activeCharName}被冷落久了会用带头像的弹窗找你；默认关闭`}>
-                  <PrefSwitch active={presenceNagEnabled} onClick={onPresenceNagToggle} />
-                </PrefRow>
-                <PrefRow label="主动消息最小间隔" hint={`${activeCharName}每隔至少 ${proactiveGapHours} h 才会主动发消息 · 范围 0.5–12`}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <button
-                      onClick={() => onProactiveGapChange(Math.max(0.5, proactiveGapHours - 0.5))}
-                      style={prefActionButtonStyle}
-                    >−</button>
-                    <span className="mono" style={{ width: 38, textAlign: 'center', color: 'var(--ink-2)', fontSize: 11 }}>
-                      {proactiveGapHours}h
-                    </span>
-                    <button
-                      onClick={() => onProactiveGapChange(Math.min(12, proactiveGapHours + 0.5))}
-                      style={prefActionButtonStyle}
-                    >+</button>
-                  </div>
-                </PrefRow>
-                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
                 <PrefRow label="沉浸式挽留模式（废弃版仅保留视觉效果）" hint="5 秒倒计时后触发暗红遮罩与关一弹十小窗；ESC 退出">
                   <button onClick={onYandereOpen} style={prefActionButtonStyle}>启动</button>
                 </PrefRow>
               </>
-            ) : tab === 'other' ? (
-              <CoplaySettingsPage />
             ) : (
               <div className="serif" style={{ color: 'var(--ink-3)', fontSize: 13.5, textAlign: 'center', padding: '48px 0', fontStyle: 'italic' }}>
                 未完待续

@@ -1,5 +1,11 @@
 # ARCHITECTURE.md — PresenceKit-desktop 架构总览
 
+## Chat 偏好与 controller（2026-07-30）
+
+`PreferencesPanel` 保持 modal 形式，按作用域分为「常规、模型、能力与权限、界面、角色与对话、桌宠与互动、高级」。Chat 和 Activity 的日间 / 夜间入口继续复用 `ThemePicker` 与同一 theme registry，分别读写 `chat.theme.day` / `chat.theme.night`。电脑操作安全 / 危险模式是全局能力，只在 Chat「能力与权限」中展示；Activity 仅保留外观与活动调试偏好。
+
+`ChatWindow` 仍是编排根节点：`useChatAppearanceController` 负责主题、布局、聊天外观和字体生命周期；`usePetController` 负责桌宠窗口、桌宠偏好和消息转发；`useChatWindowNavigation` 负责偏好 / Spec / Dream / 群聊视图状态。`ChatPanel` 的消息发送、去重和 fallback 仍留在原组件。
+
 PresenceKit-desktop（仓库目录名可为 Emerald-client 等）是 `Emerald-presence` 的新桌面客户端。它不拥有角色记忆、调度、工具、情绪判断等核心数据；这些都属于 `Emerald-presence` 仓库（通常与本仓库同级）。客户端负责把后端的陪伴系统可视化：聊天窗口、桌宠形象、用户交互、桌面动作执行和未来的感知 UI。
 
 ---
@@ -65,15 +71,15 @@ Token 由后端 `POST /auth/tokens` 签发；scope 表、profile 表、管理操
 主窗口是 `src/windows/chat/ChatWindow.tsx`：
 
 - 创建单个 `StateEngine` 实例。
-- 管理主题、Sidebar、偏好面板、帮助面板、桌宠开关等 UI 状态；Sidebar 的当前 tab 全局持久化，展开/收起状态按布局持久化，首次使用仍服从 layout manifest 的默认显隐。
-- 通过 `src/shared/layout/registry.ts` 的声明式 LayoutHost 排布 Ribbon、Sidebar 和主内容区；偏好「外观」中的布局预览器可立即切换已发现的布局。布局 mod 还能用受控 `mainLayout` 模板重排 ChatPanel 内的标题、消息流、输入框；它不能替换或执行区域组件。
+- 通过三个 controller hook 管理外观/布局、桌宠和导航 UI 状态；Sidebar 的当前 tab 全局持久化，展开/收起状态按布局持久化，首次使用仍服从 layout manifest 的默认显隐。
+- 通过 `src/shared/layout/registry.ts` 的声明式 LayoutHost 排布 Ribbon、Sidebar 和主内容区；偏好「界面」中的布局预览器可立即切换已发现的布局。布局 mod 还能用受控 `mainLayout` 模板重排 ChatPanel 内的标题、消息流、输入框；它不能替换或执行区域组件。
 - 使用 `src/shared/chatAppearance.ts` 保存 Chat 聊天字号、主题字号和字体包；Sidebar 宽度仅通过界面分隔条拖拽调整。
-- 偏好面板的「世界」页通过 `getPromptAssets()` / `patchPromptAssets()` 管理 Reality Prompt Assets：角色卡单选、世界书多选和破限多选。可用选项来自后端，客户端不展示文件路径。
+- 偏好面板的「角色与对话」页通过 `getPromptAssets()` / `patchPromptAssets()` 管理 Reality Prompt Assets：角色卡单选、世界书多选和破限多选。可用选项来自后端，客户端不展示文件路径。
 - 把 engine 传给 `ChatPanel`。
 - Activity 打开时保持 ChatWindow / ChatPanel 挂载，ActivityWindow 只作为覆盖层显示。ToyWindow（玩耍模式）与 ActivityWindow 同级，由 `main.tsx` 的 `activeWindow` 切换挂载，ChatWindow 传入 `onToyOpen`。
 - 管理正式 Dream overlay 的本地开关；Ribbon 月亮按钮和 WS `dream_invite` UI 事件共用该入口，DreamWindow 自己接入 Dream API 和窗口状态机。
 - `GroupChatPanel` 的「入梦」入口将 `mode=group`、`group_id` 与 roster 交给同一个 DreamWindow；群梦不另建窗口组件族。现实群聊常驻并每 8 秒读取群梦 state，在 `blocks_chat` 的 dreaming / cooldown 阶段锁定输入。群梦轮次在 WS `group_round_end` 漏失或连接恢复时由 state 的 `round_status` 校准；现实轮次采用同一 120 秒可见超时兜底。
-- 玩耍模式：偏好「其他」页开关（`shared/playMode.ts`，localStorage `playMode.enabled`，默认关闭）；开启后 WS `toy_invite` 自动开窗、Ribbon 显示手动入口。ToyWindow 侧栏经 `hardware_get_devices` 轮询设备/连接状态，聊天经 `sendChat` 走 `/desktop/chat`。
+- 玩耍模式：偏好「桌宠与互动」页开关（`shared/playMode.ts`，localStorage `playMode.enabled`，默认关闭）；开启后 WS `toy_invite` 自动开窗、Ribbon 显示手动入口。ToyWindow 侧栏经 `hardware_get_devices` 轮询设备/连接状态，聊天经 `sendChat` 走 `/desktop/chat`。
 - 将当前 Reality 激活角色卡头像传给 DreamWindow；Dream 内控制栏、动向侧栏和消息区优先显示该头像，无角色头像时回退到本地 HER 头像。
 - Ribbon 桌宠开关通过 `src/shared/pet/bridge.ts` 显隐独立透明置顶 `PetWindow`，并将
   StateEngine 的 mood / presence / activity 快照广播给桌宠。
@@ -111,7 +117,7 @@ Token 由后端 `POST /auth/tokens` 签发；scope 表、profile 表、管理操
 存在感弹窗是 `src/windows/presence-nag/PresenceNagWindow.tsx`：
 
 - 独立透明置顶 `presence-nag` Tauri 窗口，默认隐藏且单实例；重复 action 只更新内容，不叠加刷屏。
-- Chat 偏好「其他」中的「允许存在感弹窗」默认关闭；关闭时 WS action 静默跳过，并立即隐藏已显示窗口。
+- Chat 偏好「角色与对话」中的「允许存在感弹窗」默认关闭；关闭时 WS action 静默跳过，并立即隐藏已显示窗口。
 - `Esc`、标题栏关闭、「别理我了」、「确定」和「全部关闭」均调用 `presence_nag_close_all`，保证可彻底关闭。
 - 内容只消费后端 `presence_nag` action 的 LLM 台词；头像使用本地 HER 头像，角色标识用于显示角色名。
 

@@ -1,5 +1,11 @@
 # docs/frontend-structure.md — 前端结构指南
 
+## 偏好 IA 与 ChatWindow controller（2026-07-30）
+
+Chat 偏好仍是 modal；顶层分类为「常规、模型、能力与权限、界面、角色与对话、桌宠与互动、高级」。`preferencesInfoArchitecture.ts` 是供 tab bar 与纯逻辑测试使用的小型归类契约，不是动态设置 schema。
+
+Activity 偏好只保留「外观」和「调试」。其日间 / 夜间主题继续以 `ThemePicker slot="day"` / `slot="night"` 复用 Chat 的全局 theme registry。`ComputerOperationSafetySettings` 位于 Chat「能力与权限」，保留 `get_meta_mode` / `patch_meta_mode`。`ChatWindow` 将外观、桌宠和导航状态分别委托给 `src/windows/chat/hooks/` 下的三个 controller hook。
+
 本文档描述 `src/` 内当前 React/Tauri 前端实现。它记录的是实际代码状态，不是目标方案。
 
 ---
@@ -86,7 +92,7 @@ src/windows/chat/
 - ActivityWindow 由 `src/main.tsx` 作为 overlay 覆盖；Activity 打开期间 ChatWindow / ChatPanel 保持挂载，WS 订阅不中断。
 - 负责偏好面板内的头像上传/裁剪入口。
 - 世界页角色卡头像同样复用 `AvatarCropper`，选择 PNG / JPEG / WebP 后先裁剪为 256 × 256 PNG，再通过角色头像后端接口上传。
-- Chat 偏好浮层使用顶部横栏分类：系统设置、外观、世界、其他等。系统设置中的 `OutputSegmentEnforceSettingsPage` 通过 Tauri IPC 热切换生成后段落兜底，只展示开关和有效阈值，不展示 Prompt 检视数据；`VisualPerceptionSettingsPage` 是本地 opt-in 与采样间隔控制面，展示最近结果、推送时间和失败计数。外观提供主题、信息栏、布局预览器、聊天字号、主题字号、动态字体包和头像设置。世界页通过 `PromptAssetsSettings` 读取和保存 Reality Prompt Assets，提供角色卡单选、Reality 世界书多选和 Reality 破限多选；其他暂留导入占位。
+- Chat 偏好浮层使用顶部横栏分类：常规、模型、能力与权限、界面、角色与对话、桌宠与互动、高级。`OutputSegmentEnforceSettingsPage` 位于模型分类，通过 Tauri IPC 热切换生成后段落兜底，只展示开关和有效阈值，不展示 Prompt 检视数据；`VisualPerceptionSettingsPage` 位于能力与权限，是本地 opt-in 与采样间隔控制面，展示最近结果、推送时间和失败计数。界面提供主题、信息栏、布局预览器、聊天字号、主题字号、动态字体包、背景、颜色和头像设置。角色与对话通过 `PromptAssetsSettings` 读取和保存 Reality Prompt Assets，提供角色卡单选、Reality 世界书多选和 Reality 破限多选；桌宠与互动承载视频通话和 Coplay。
 - `LayoutHost` 读取 `src/shared/layout/registry.ts` 的当前 manifest，排布 `ribbon`、`sidebar`、`main` 三个既有 slot：方向、顺序、Ribbon/Sidebar 宽度与 Sidebar 默认显隐均由声明式布局决定；slot 内组件仍由 ChatWindow 创建。V2 `mainLayout` 只重排 ChatPanel 内稳定的标题、消息流、输入框区域（`stack` / `workbench` / `hud`），窄于 760px 自动回退纵向 `stack`，不会重挂载 ChatPanel。ChatPanel 为主题 CSS 暴露只读装饰锚点 `data-chat-region="header|transcript|composer"` 和 `data-main-layout`；它们不能改变区域组件或 Grid 结构。背景层及 Dream、Pane、帮助、偏好、Yandere 等应用级 overlay 不属于 slot，继续由 ChatWindow 顶层管理。
 
 关键状态：
@@ -645,7 +651,7 @@ Tauri 命令：
 - `src/shared/fontAppearance.ts`：Chat / Dream 共用字体扫描、family 和 URL helper；两套 appearance 配置结构保持独立。
 - `src/shared/images/cropImageToBlob.ts`：AvatarCropper / DreamBackgroundCropper 共用 canvas 裁剪 helper；输出尺寸由调用方传入。
 - `src/shared/ui/TypingDots.tsx` / `TypingDots.css`：Chat / Dream 共用输入中视觉组件；颜色由各自主题变量传入。
-- `src/shared/i18n/`：桌面客户端本地化入口。`locales/zh-CN.ts` / `en-US.ts` 保存语义 key 资源，`useI18n()` 驱动 React 文案和语言切换；Chat 偏好「系统设置」第一行持久化语言选择，选择后当前窗口立即重渲染，并通过 `storage` 事件同步其他 Webview。`legacy.ts` 与 DOM bridge 只兼容迁移前的既有硬编码文案；bridge 分开保存原文与上次翻译结果，双向切换不需要刷新页面。新增用户可见文案禁止写入兼容表，必须使用语义 key。
+- `src/shared/i18n/`：桌面客户端本地化入口。`locales/zh-CN.ts` / `en-US.ts` 保存语义 key 资源，`useI18n()` 驱动 React 文案和语言切换；Chat 偏好「常规」第一行持久化语言选择，选择后当前窗口立即重渲染，并通过 `storage` 事件同步其他 Webview。`legacy.ts` 与 DOM bridge 只兼容迁移前的既有硬编码文案；bridge 分开保存原文与上次翻译结果，双向切换不需要刷新页面。新增用户可见文案禁止写入兼容表，必须使用语义 key。
 
 切换统一调用 `src/shared/theme/registry.ts` 的 `setTheme()`。
 
@@ -679,4 +685,4 @@ Tauri 命令：
 
 ## 设置页运行时控制（2026-07-13）
 
-系统设置沿用现有 PreferencesPanel，挂载 ModelRoutingSettingsPage、DesktopTtsSettingsPage、ToolLoopSettingsPage、ThinkingSettingsPage、OutputSegmentEnforceSettingsPage 与 VisualPerceptionSettingsPage。视觉观察设置通过 Tauri command 控制本地开关与采样间隔；Rust sampler 在每次截图前都调用后端预检，稳定画面只做内存哈希比对，不上传。段落兜底页只负责 `output.segment_enforce.enabled` 热开关及有效阈值只读展示。助手非流式消息在桌面 TTS 开启时使用 VoiceMessageBar；语音按点击懒生成，可播放/暂停并展开文字。自动播放会立即并行请求各条音频，但主 Webview 持有跨窗口播放租约，聊天和桌宠均按消息入队顺序逐条输出，避免重叠。
+设置页沿用现有 PreferencesPanel：模型分类挂载 ModelRoutingSettingsPage、CharacterModelRoutingSettingsPage、ThinkingSettingsPage 与 OutputSegmentEnforceSettingsPage；能力与权限分类挂载 DesktopTtsSettingsPage、ToolLoopSettingsPage、VisualPerceptionSettingsPage 与电脑操作安全设置。视觉观察设置通过 Tauri command 控制本地开关与采样间隔；Rust sampler 在每次截图前都调用后端预检，稳定画面只做内存哈希比对，不上传。段落兜底页只负责 `output.segment_enforce.enabled` 热开关及有效阈值只读展示。助手非流式消息在桌面 TTS 开启时使用 VoiceMessageBar；语音按点击懒生成，可播放/暂停并展开文字。自动播放会立即并行请求各条音频，但主 Webview 持有跨窗口播放租约，聊天和桌宠均按消息入队顺序逐条输出，避免重叠。
