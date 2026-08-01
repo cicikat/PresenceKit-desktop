@@ -41,7 +41,7 @@ const exact: Record<string, string> = {
   '当前状态': 'Current state', '梦境上下文': 'Dream context', '梦境设置': 'Dream settings',
   '沙盒': 'Sandbox', '剧本': 'Scenario', '镜像': 'Mirror', '入梦模式': 'Dream mode', '梦境流动': 'Dream flow',
   '身体放松度': 'Embodied ease', '身体记忆线索': 'Body memory cues', '暂无身体记忆线索': 'No body memory cues yet',
-  '开始阅读': 'Start reading', '五子棋': 'Gomoku', '国际象棋': 'Chess', '阅读': 'Reading', '梦种': 'Dream Seed',
+  '开始阅读': 'Start reading', '五子棋': 'Gomoku', '国际象棋': 'Chess', '阅读': 'Reading',
   '新建对局': 'New game', '重新开始': 'Restart', '轮到你了': 'Your turn', '对方思考中…': 'Opponent is thinking…',
   '视频通话中': 'Video call', '挂断': 'End call', '麦克风': 'Microphone', '打开麦克风': 'Turn microphone on',
   '关闭麦克风': 'Turn microphone off', '自由视角': 'Free camera', '摆放模式': 'Placement mode', '保存视角': 'Save camera',

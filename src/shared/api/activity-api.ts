@@ -112,7 +112,6 @@ export const readingApi = {
   categorizeBook: (book_id: string, category: string): Promise<ReadingLibraryBook> =>
     invokeActivity('activity_reading_categorize_book', { payload: { book_id, category } }),
 };
-
 // ── Gomoku ────────────────────────────────────────────────────────────────────
 
 export type GomokuCell = 'black' | 'white' | null;
@@ -294,22 +293,3 @@ export const chessApi = {
     invokeActivity('activity_chess_comment', { payload: { session_id } }),
 };
 
-// ── Dream Seed ────────────────────────────────────────────────────────────────
-
-export interface DreamSeedState {
-  active: boolean;
-  session_id: string | null;
-  has_seed: boolean;
-  seed_preview: string;
-}
-
-export const dreamSeedApi = {
-  start: (): Promise<{ session_id: string; status: string }> =>
-    invokeActivity('activity_dream_seed_start'),
-  state: (): Promise<DreamSeedState> =>
-    invokeActivity('activity_dream_seed_state'),
-  chat: (session_id: string, message: string): Promise<{ session_id: string; reply: string }> =>
-    invokeActivity('activity_dream_seed_chat', { payload: { session_id, message } }),
-  close: (session_id: string): Promise<{ success: boolean; seed_text: string }> =>
-    invokeActivity('activity_dream_seed_close', { payload: { session_id } }),
-};

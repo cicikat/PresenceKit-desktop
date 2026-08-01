@@ -15,7 +15,6 @@ import { ActivityHomePage } from './components/ActivityHomePage';
 import { ReadingPage } from './components/ReadingPage';
 import { GomokuPage } from './components/GomokuPage';
 import { ChessPage } from './components/ChessPage';
-import { DreamSeedPanel } from './components/DreamSeedPanel';
 import { ActivityPreferencesPanel } from './components/ActivitySettingsPage';
 import { toggleDayNight, getDayNight, subscribe as subscribeTheme } from '../../shared/theme/registry';
 
@@ -63,7 +62,6 @@ export function ActivityWindow({ onClose }: ActivityWindowProps) {
           {activeTab === 'reading' && <ReadingPage />}
           {activeTab === 'gomoku'  && <GomokuPage />}
           {activeTab === 'chess'   && <ChessPage />}
-          {activeTab === 'dream_seed' && <DreamSeedPanel />}
         </div>
       </div>
 

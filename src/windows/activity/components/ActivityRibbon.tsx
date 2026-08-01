@@ -3,7 +3,7 @@ import { useState } from 'react';
 // but contains no chat-specific state or behavior. TODO: move to shared/ui/UIKit.
 import { Icon } from '../../chat/components/UIKit';
 
-export type ActivityTab = 'home' | 'reading' | 'gomoku' | 'chess' | 'dream_seed';
+export type ActivityTab = 'home' | 'reading' | 'gomoku' | 'chess';
 
 function Sep() {
   return <div style={{ width: 24, height: 1, background: 'var(--forest-line, oklch(0.45 0.06 160))', margin: '6px 0' }} />;
@@ -114,7 +114,6 @@ export function ActivityRibbon({ activeTab, onTab, onClose, onOpenSettings, them
         customIcon={<GomokuIcon />} />
       <ABtn label="国际象棋" active={activeTab === 'chess'} onClick={() => onTab('chess')}
         customIcon={<ChessIcon />} />
-      <ABtn icon="sparkle" label="梦境预构" active={activeTab === 'dream_seed'} onClick={() => onTab('dream_seed')} />
       <div style={{ flex: 1 }} />
       <ABtn icon="settings" label="活动偏好" active={false} onClick={onOpenSettings} />
       <Sep />

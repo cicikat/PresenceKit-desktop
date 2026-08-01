@@ -12,7 +12,7 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
-const { readingApi, gomokuApi, chessApi, dreamSeedApi } = await import('./activity-api');
+const { readingApi, gomokuApi, chessApi } = await import('./activity-api');
 
 beforeEach(() => {
   invokeMock.mockReset();
@@ -200,31 +200,6 @@ describe('chessApi', () => {
   });
 });
 
-describe('dreamSeedApi', () => {
-  it('start() invokes activity_dream_seed_start with no args', async () => {
-    await dreamSeedApi.start();
-    expect(invokeMock).toHaveBeenCalledWith('activity_dream_seed_start', undefined);
-  });
-
-  it('state() invokes activity_dream_seed_state', async () => {
-    await dreamSeedApi.state();
-    expect(invokeMock).toHaveBeenCalledWith('activity_dream_seed_state', undefined);
-  });
-
-  it('chat() invokes activity_dream_seed_chat with session_id/message', async () => {
-    await dreamSeedApi.chat('sess-1', 'hello');
-    expect(invokeMock).toHaveBeenCalledWith('activity_dream_seed_chat', {
-      payload: { session_id: 'sess-1', message: 'hello' },
-    });
-  });
-
-  it('close() invokes activity_dream_seed_close with session_id', async () => {
-    await dreamSeedApi.close('sess-1');
-    expect(invokeMock).toHaveBeenCalledWith('activity_dream_seed_close', {
-      payload: { session_id: 'sess-1' },
-    });
-  });
-});
 
 describe('activity error parsing', () => {
   it('passes through "HTTP <status>: <body>" errors from the backend unchanged', async () => {
