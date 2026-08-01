@@ -2,7 +2,7 @@
 
 ## 偏好 IA 与 ChatWindow controller（2026-07-30）
 
-Chat 偏好仍是 modal；顶层分类为「常规、模型、能力与权限、界面、角色与对话、桌宠与互动、高级」。`preferencesInfoArchitecture.ts` 是供 tab bar 与纯逻辑测试使用的小型归类契约，不是动态设置 schema。能力与权限中的 `McpToolConsole` 通过 `src/shared/api/mcpConsole.ts` 和三个 Tauri command 读取 MCP 运行态、调用或确认工具；它只编辑 JSON 参数并呈现后端返回的安全摘要/audit id，不在客户端保存调用历史、凭据或 MCP transport。
+Chat 偏好仍是 modal；顶层分类为「常规、模型、能力与权限、界面、角色与对话、桌宠与互动、高级」。`preferencesInfoArchitecture.ts` 是供 tab bar 与纯逻辑测试使用的小型归类契约，不是动态设置 schema。
 
 Activity 偏好只保留「外观」和「调试」。其日间 / 夜间主题继续以 `ThemePicker slot="day"` / `slot="night"` 复用 Chat 的全局 theme registry。`ComputerOperationSafetySettings` 位于 Chat「能力与权限」，保留 `get_meta_mode` / `patch_meta_mode`。`ChatWindow` 将外观、桌宠和导航状态分别委托给 `src/windows/chat/hooks/` 下的三个 controller hook。
 
