@@ -85,6 +85,7 @@ src/windows/chat/
 职责：
 
 - 创建并持有单个 `StateEngine`。
+- 创建并持有 `ToolStatusOverlayController`：订阅 WS `tool_status`，只向 Sidebar NOW 传递内存瞬态覆盖值，不改写 `StateEngine` 或本地偏好。
 - 管理 UI 状态：主题、侧栏开关、侧栏 tab、侧栏宽度、帮助面板、偏好面板、桌宠开关。侧栏 tab 使用 `chat.sidebarTab` 全局持久化；开关使用 `chat.sidebarOpen.<layoutId>` 按布局持久化，尚无用户偏好时才回退布局 manifest 的默认显隐。
 - 管理 Dream UI v2 preview 的本地状态：Ribbon 入口打开 overlay，Esc / WAKE 关闭并显示 afterglow。
 - 订阅 WS `dream_invite` UI 事件；收到角色邀请时清除 afterglow 并打开 Dream overlay。
@@ -337,6 +338,7 @@ mood 真值。Chat 偏好 “3 · 桌宠” 页可切换粒子风格、关闭全
 - 在 Sidebar 的 `flow` tab 中展示叶瑄此刻的动向（Live Feed）。
 - 不直接请求后端；读取并订阅 StateEngine。Sidebar 挂载的共享 `useBackendStatePolling()` 在 flow tab 使用 mood 60s / activity 90s 周期。
 - 从 engine `activity / focus / presence` 派生叙事文本（`buildNarrative`），不发起新网络请求。
+- 有 `ToolStatusOverlayController` 状态时，只在 NOW 原位替换叙事文本；同一状态原位更新，不进入 timeline 或 `uiPreferences`，多项调用每项至少展示 1 秒，完成后恢复 engine 派生动向。
 - 维护组件内 ring buffer（最多 10 条），追踪 activity/focus 变化历史。
 
 `buildNarrative(activity, focus, presence)` 模板（优先级从高到低）：

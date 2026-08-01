@@ -25,6 +25,25 @@ export interface StickerPayload {
   data_url: string;
 }
 
+export type ToolEphemeralKind =
+  | 'pending_confirmation'
+  | 'queued'
+  | 'waiting'
+  | 'finished'
+  | 'failed'
+  | 'outcome_unknown'
+  | 'cancelled';
+
+export interface ToolStatusPayload {
+  status_id: string;
+  kind: ToolEphemeralKind;
+  label: string;
+  index: number;
+  total: number;
+  attempt: number;
+  ttl_ms: number;
+}
+
 export type ServerMessage =
   | { type: 'hello_ack'; server_version: string }
   | { type: 'channel_message'; content: string; msg_id: string; source?: string; domain?: GroupDomain; char_id?: string; round_id?: string; sticker?: StickerPayload }
@@ -35,7 +54,8 @@ export type ServerMessage =
   | { type: 'message_stream_delta'; msg_id: string; delta: string; domain?: GroupDomain; char_id?: string; round_id?: string }
   | { type: 'message_stream_end'; msg_id: string; domain?: GroupDomain; char_id?: string; round_id?: string }
   | { type: 'group_round_start'; round_id: string; group_id: string; domain?: GroupDomain }
-  | { type: 'group_round_end'; round_id: string; group_id: string; domain?: GroupDomain };
+  | { type: 'group_round_end'; round_id: string; group_id: string; domain?: GroupDomain }
+  | ({ type: 'tool_status' } & ToolStatusPayload);
 
 export type ClientMessage =
   | { type: 'hello'; client: string; version: string }

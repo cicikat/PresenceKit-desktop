@@ -23,7 +23,7 @@ const SIDEBAR_HEADER: Record<string, { title: string; subtitle: string }> = {
   garden: { title: '陪伴花园', subtitle: 'GARDEN · 他在你不看的时候也在生长' },
 };
 
-export function SidebarPanel({ engine, sidebarRectRef, tab, onClose }: any) {
+export function SidebarPanel({ engine, toolStatus, sidebarRectRef, tab, onClose }: any) {
   const { t } = useI18n();
   const rootRef = useRef<HTMLDivElement>(null);
   const backendStateCadence = tab === 'flow'
@@ -74,7 +74,7 @@ export function SidebarPanel({ engine, sidebarRectRef, tab, onClose }: any) {
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
         <ErrorBoundary key={tab} fallbackLabel={meta.title}>
           {tab === 'flow' ? (
-            <SubFlow engine={engine} />
+            <SubFlow engine={engine} toolStatus={toolStatus} />
           ) : tab === 'garden' ? (
             <SubGarden />
           ) : tab === 'diary' ? (

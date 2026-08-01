@@ -1,7 +1,8 @@
 # PresenceKit-desktop 协议 v0.1
 
+MCP 调用仍只在后端执行；桌面端只能收到不含远端工具细节的本地瞬态状态。
+
 本文件是本仓与 `Emerald-presence` 当前桌面通信协议的单一权威。v0.1 将现有 legacy 协议冻结为正式协议：不实现 v1，不协商 capabilities，不允许任一端单边新增 action。
-MCP is backend-only and is not part of the desktop/mobile client transport contract.
 
 ## 连接
 
@@ -22,8 +23,11 @@ MCP is backend-only and is not part of the desktop/mobile client transport contr
 | `message_stream_delta` | S→C | `msg_id`、`delta` | 无 |
 | `message_stream_end` | S→C | `msg_id` | 无 |
 | `group_round_start` / `group_round_end` | S→C | `round_id`、`group_id` | 无 |
+| `tool_status` | S→C | `status_id`、`kind`、`label`、`index`、`total`、`attempt`、`ttl_ms` | 无 |
 
 `segments[]` 为 `{ type, text, perform? }`。`type` 是 `say | do | env | feel | narration`；`perform` 可选包含 `expression`、`intensity`、`head`、`posture`、`gaze`、`energy`，未知或非法字段忽略。
+
+`tool_status` 仅覆盖侧栏“动向”NOW，不创建聊天气泡、不追加 timeline，也不写入 localStorage 或 `uiPreferences`。`ttl_ms` 从客户端接收时刻开始计算，过期事件直接丢弃、重连后不重放。相同 `status_id` 原位更新 `queued → waiting → terminal`；不同调用在本地串行展示，每项至少展示 1 秒。`pending_confirmation` 不显示在 NOW，确认交互仍由既有聊天流程承担。`label` 只能是后端本地 policy 配置的展示名；载荷不得包含远端工具名、description、参数或结果。旧客户端忽略未知类型即可。
 
 ## Desktop action allowlist
 

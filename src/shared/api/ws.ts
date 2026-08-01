@@ -8,7 +8,9 @@ import type {
   DesktopActionType,
   NarrativeSegment,
   StickerPayload,
+  ToolStatusPayload,
 } from './types';
+import { isToolStatusPayload } from '../state/toolStatusOverlay';
 import { isPresenceNagEnabled } from '../presenceNag';
 import { getActiveCharacterInfo } from '../activeCharacter';
 import { actionType, actionParams, stringParam } from './wsActionParams';
@@ -25,6 +27,7 @@ type EventMap = {
   message_stream_end: { msg_id: string; domain?: 'reality' | 'dream'; char_id?: string; round_id?: string };
   group_round_start: { round_id: string; group_id: string; domain?: 'reality' | 'dream' };
   group_round_end: { round_id: string; group_id: string; domain?: 'reality' | 'dream' };
+  tool_status: ToolStatusPayload;
 };
 
 type NativeMessageEvent = { connectionId: number; data: string };
@@ -202,6 +205,9 @@ class WSClient {
         break;
       case 'group_round_end':
         this.emit('group_round_end', { round_id: msg.round_id, group_id: msg.group_id, domain: msg.domain });
+        break;
+      case 'tool_status':
+        if (isToolStatusPayload(msg)) this.emit('tool_status', msg);
         break;
     }
   }

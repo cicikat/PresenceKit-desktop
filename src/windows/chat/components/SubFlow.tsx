@@ -7,6 +7,7 @@ import { MOOD_TABLE } from '../../../shared/state/store';
 import { chatThemeFontSize } from '../../../shared/chatAppearance';
 import { getUIPref, removeUIPref, setUIPref } from '../../../shared/uiPreferences';
 import type { Mood } from '../../../shared/state/store';
+import type { ToolStatusOverlayState } from '../../../shared/state/toolStatusOverlay';
 import { useI18n } from '../../../shared/i18n';
 import { translateLegacyText } from '../../../shared/i18n/legacy';
 import { getActiveCharacterInfo, subscribeActiveCharacter } from '../../../shared/activeCharacter';
@@ -54,8 +55,23 @@ function formatAgo(timestamp: number): string {
   return `${Math.floor(dt / 86_400_000)}d ago`;
 }
 
-export function SubFlow({ engine }: { engine: any }) {
-  const { language } = useI18n();
+function toolStatusNarrative(status: ToolStatusOverlayState, translate: (key: any) => string): string {
+  const template = status.kind === 'waiting'
+    ? translate('flow.toolStatus.waiting')
+    : status.kind === 'failed'
+      ? translate('flow.toolStatus.failed')
+      : status.kind === 'outcome_unknown'
+        ? translate('flow.toolStatus.outcomeUnknown')
+        : status.kind === 'cancelled'
+          ? translate('flow.toolStatus.cancelled')
+          : status.kind === 'finished'
+            ? translate('flow.toolStatus.finished')
+            : translate('flow.toolStatus.calling');
+  return template.replace('{label}', status.label);
+}
+
+export function SubFlow({ engine, toolStatus }: { engine: any; toolStatus?: ToolStatusOverlayState | null }) {
+  const { language, t } = useI18n();
   const [state, setState] = useState(engine.get());
   useEffect(() => engine.subscribe(setState), [engine]);
   const [charId, setCharId] = useState(() => getActiveCharacterInfo().id);
@@ -127,7 +143,9 @@ export function SubFlow({ engine }: { engine: any }) {
 
   const hue = MOOD_HUE[state.mood] ?? 70;
   const moodCfg = MOOD_TABLE[state.mood] ?? MOOD_TABLE['平静'];
-  const narrative = buildNarrative(state.activity, state.focus, state.presence);
+  const narrative = toolStatus
+    ? toolStatusNarrative(toolStatus, t)
+    : buildNarrative(state.activity, state.focus, state.presence);
   const localizedNarrative = language === 'en-US' ? translateLegacyText(narrative) : narrative;
 
   return (

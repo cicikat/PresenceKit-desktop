@@ -67,6 +67,7 @@ Rust/Tauri HTTP client 统一显式禁用代理并设置超时：普通请求 15
 | `src/shared/api/backend.ts` | `sendChat()`、`loadHistory()`、`loadGardenState()`、`loadDiaryList()`、`loadDiaryEntry()`、`loadSensorRealtime()`、`getPromptAssets()`、`patchPromptAssets()` |
 | `src/shared/api/chat-settings.ts` | `getChatSettings()`、`setChatMode()`、`setChatStyle()`、`setChatMultiMessage()`，由偏好面板「其他」tab 的 `ChatSettingsSection` 调用 |
 | `src/shared/api/ws.ts` | `wsClient.connect()`、通过 Tauri commands / events 完成 legacy WS 收发 |
+| `src/shared/state/toolStatusOverlay.ts` | 内存态 `tool_status` 队列；仅覆盖动向 NOW，不写 StateEngine、timeline 或本地偏好 |
 | `src-tauri/src/ws_bridge.rs` | 原生 WS 连接、Bearer header、URL 清洗与前端事件桥接 |
 | `src-tauri/src/lib.rs` | `send_chat`、`load_history`、`load_garden_state`、`load_diary_list`、`load_diary_entry`、`get_prompt_assets`、`patch_prompt_assets`、头像 / Dream 背景文件 commands、Dream 字体目录扫描、主题 Mod manifest 扫描 |
 | `src/windows/chat/components/ChatPanel.tsx` | 启动历史、发送消息、订阅 WS 主动消息 |

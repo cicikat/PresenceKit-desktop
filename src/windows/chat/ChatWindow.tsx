@@ -1,7 +1,9 @@
 ﻿import { useState, useEffect, useRef, useCallback, type CSSProperties } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { StateEngine } from '../../shared/state/store';
+import { ToolStatusOverlayController, type ToolStatusOverlayState } from '../../shared/state/toolStatusOverlay';
 import { useBackendStatePolling } from '../../shared/state/useBackendStatePolling';
+import { wsClient } from '../../shared/api/ws';
 import { refreshActiveCharacterInfo, subscribeActiveCharacter } from '../../shared/activeCharacter';
 import { getCharacterAvatar, getPromptAssets } from '../../shared/api/backend';
 import { isPresenceNagEnabled, patchPresenceNagEnabled } from '../../shared/presenceNag';
@@ -28,6 +30,10 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivi
   const engineRef = useRef<StateEngine | null>(null);
   if (!engineRef.current) engineRef.current = new StateEngine();
   const engine = engineRef.current;
+  const toolStatusRef = useRef<ToolStatusOverlayController | null>(null);
+  if (!toolStatusRef.current) toolStatusRef.current = new ToolStatusOverlayController();
+  const toolStatusController = toolStatusRef.current;
+  const [toolStatus, setToolStatus] = useState<ToolStatusOverlayState | null>(() => toolStatusController.get());
   useBackendStatePolling(engine, { moodMs: 120_000, activityMs: 180_000 });
 
   const appearanceController = useChatAppearanceController(engine);
@@ -37,6 +43,16 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivi
   const [proactiveGapHours, setProactiveGapHours] = useState(0.75);
   const [characterAvatarDataUrl, setCharacterAvatarDataUrl] = useState<string | null>(null);
   const [charSwitchKey, setCharSwitchKey] = useState(0);
+
+  useEffect(() => {
+    const unsubscribeState = toolStatusController.subscribe(setToolStatus);
+    const unsubscribeWs = wsClient.on('tool_status', payload => toolStatusController.receive(payload));
+    return () => {
+      unsubscribeState();
+      unsubscribeWs();
+      toolStatusController.dispose();
+    };
+  }, [toolStatusController]);
 
   useEffect(() => {
     if (!navigation.prefsOpen) return;
@@ -112,6 +128,7 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivi
               {appearanceController.sidebarOnRight && <Divider onDrag={appearanceController.onDividerDrag} />}
               <div style={{ flex: 1, minWidth: 0 }}><SidebarPanel
                 engine={engine}
+                toolStatus={toolStatus}
                 sidebarRectRef={sidebarRectRef}
                 tab={appearanceController.sidebarTab}
                 onClose={appearanceController.closeSidebar} /></div>

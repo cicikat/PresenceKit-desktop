@@ -71,6 +71,7 @@ Token 由后端 `POST /auth/tokens` 签发；scope 表、profile 表、管理操
 主窗口是 `src/windows/chat/ChatWindow.tsx`：
 
 - 创建单个 `StateEngine` 实例。
+- 创建 `ToolStatusOverlayController`，将 WS `tool_status` 作为只影响 Sidebar NOW 的内存覆盖态；它不写入 `StateEngine`、聊天历史或本地偏好。
 - 通过三个 controller hook 管理外观/布局、桌宠和导航 UI 状态；Sidebar 的当前 tab 全局持久化，展开/收起状态按布局持久化，首次使用仍服从 layout manifest 的默认显隐。
 - 通过 `src/shared/layout/registry.ts` 的声明式 LayoutHost 排布 Ribbon、Sidebar 和主内容区；偏好「界面」中的布局预览器可立即切换已发现的布局。布局 mod 还能用受控 `mainLayout` 模板重排 ChatPanel 内的标题、消息流、输入框；它不能替换或执行区域组件。
 - 使用 `src/shared/chatAppearance.ts` 保存 Chat 聊天字号、主题字号和字体包；Sidebar 宽度仅通过界面分隔条拖拽调整。
@@ -170,7 +171,7 @@ WebSocket 在 `src/shared/api/ws.ts`：
 
 - 前端通过 Tauri commands / events 调用 `src-tauri/src/ws_bridge.rs` 的原生 WebSocket client。
 - Rust 从本地 client config 读取 admin token，并在握手请求中设置 `Authorization: Bearer ...`；token 不进入 URL 或 WebView。
-- 支持 legacy `hello_ack`、`channel_message`、`message_segments`、`action`、`ping`。
+- 支持 legacy `hello_ack`、`channel_message`、`message_segments`、`action`、`ping`，以及只覆盖 Sidebar NOW 的 `tool_status`。
 - `action` 保持 legacy envelope，不改协议；收到后异步 dispatch 到 Tauri action commands，并按执行结果回 `ack`。
 - 自动重连，指数退避最大 30 秒。
 - 当前没有实现 v1 envelope，也没有发送 `user_message` / `client_event`。
