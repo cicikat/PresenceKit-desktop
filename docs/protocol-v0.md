@@ -25,6 +25,10 @@ MCP 调用仍只在后端执行；桌面端只能收到不含远端工具细节�
 | `group_round_start` / `group_round_end` | S→C | `round_id`、`group_id` | 无 |
 | `tool_status` | S→C | `status_id`、`kind`、`label`、`index`、`total`、`attempt`、`ttl_ms` | 无 |
 
+`msg_id` 是不透明的非空字符串关联键。客户端不得把它解析为时间戳或数字，也不得依赖长度；
+服务端保证自动生成的 ID 在同一进程内唯一。流式帧、canonical 消息与对应 ack 需要关联同一
+对象时必须复用同一个 `msg_id`，不同并发 action 必须使用不同 ID。
+
 `segments[]` 为 `{ type, text, perform? }`。`type` 是 `say | do | env | feel | narration`；`perform` 可选包含 `expression`、`intensity`、`head`、`posture`、`gaze`、`energy`，未知或非法字段忽略。
 
 `tool_status` 仅覆盖侧栏“动向”NOW，不创建聊天气泡、不追加 timeline，也不写入 localStorage 或 `uiPreferences`。`ttl_ms` 从客户端接收时刻开始计算，过期事件直接丢弃、重连后不重放。相同 `status_id` 原位更新 `queued → waiting → terminal`；不同调用在本地串行展示，每项至少展示 1 秒。`pending_confirmation` 不显示在 NOW，确认交互仍由既有聊天流程承担。`label` 只能是后端本地 policy 配置的展示名；载荷不得包含远端工具名、description、参数或结果。旧客户端忽略未知类型即可。
