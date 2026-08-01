@@ -7,7 +7,8 @@
 // /activity/reading/…(5)、/activity/gomoku/…(5)、/activity/chess/…(5)、
 // /group/list|create|{id}|{id}/send|{id}/history|{id}/settings|{id}/roster(7)、
 // /system/meta-mode、/lorebook(4)、/jailbreak-entries(4)、/settings/tool-loop、
-// /settings/thinking，共 54 个不同路径）均为字面量硬编码。
+// /settings/thinking、/settings/mcp、/settings/mcp/console/invoke、
+// /settings/mcp/console/confirm，共 57 个不同路径）均为字面量硬编码。
 // publisher.rs 另有 /sensor/realtime。后端路由变更时需手动同步这两个文件。
 mod actions;
 mod client_config;
@@ -75,6 +76,17 @@ fn llm_http_client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
         .no_proxy()
         .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .map_err(|_| "无法创建后端连接".to_string())
+}
+
+// MCP server-side tool deadlines are configurable up to 300 seconds.  The
+// desktop bridge deliberately waits slightly longer, so it never masks the
+// backend's bounded tool timeout with its normal 15-second request limit.
+fn mcp_console_http_client() -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .no_proxy()
+        .timeout(std::time::Duration::from_secs(310))
         .build()
         .map_err(|_| "无法创建后端连接".to_string())
 }
@@ -2596,6 +2608,52 @@ async fn update_tool_loop_settings(
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
 
+// ── MCP Admin Tool-call Console ─────────────────────────────────────────────
+
+#[tauri::command]
+async fn get_mcp_console_settings(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let resp = authorized_request(&cfg, http_client()?.get(backend_url(&cfg, "/settings/mcp")))
+        .send().await.map_err(|e| e.to_string())?;
+    require_success(resp).await?.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn invoke_mcp_console(
+    app: tauri::AppHandle,
+    server: String,
+    tool: String,
+    arguments: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    if !arguments.is_object() {
+        return Err("MCP 工具参数必须是 JSON 对象".to_string());
+    }
+    let cfg = load_client_config(&app);
+    let body = serde_json::json!({"server": server, "tool": tool, "arguments": arguments});
+    let resp = authorized_request(
+        &cfg,
+        mcp_console_http_client()?.post(backend_url(&cfg, "/settings/mcp/console/invoke")),
+    )
+    .json(&body)
+    .send().await.map_err(|e| e.to_string())?;
+    require_success(resp).await?.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn confirm_mcp_console(
+    app: tauri::AppHandle,
+    confirmation_id: String,
+) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let resp = authorized_request(
+        &cfg,
+        mcp_console_http_client()?.post(backend_url(&cfg, "/settings/mcp/console/confirm")),
+    )
+    .json(&serde_json::json!({"confirmation_id": confirmation_id}))
+    .send().await.map_err(|e| e.to_string())?;
+    require_success(resp).await?.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
 // ── Thinking (cc-tasks/17) ──────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -2985,6 +3043,9 @@ pub fn run() {
             synthesize_desktop_voice,
             get_tool_loop_settings,
             update_tool_loop_settings,
+            get_mcp_console_settings,
+            invoke_mcp_console,
+            confirm_mcp_console,
             get_thinking_settings,
             update_thinking_settings,
             get_output_segment_enforce_settings,

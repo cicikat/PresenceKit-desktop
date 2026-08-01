@@ -2,7 +2,7 @@
 
 ## Chat 偏好与 controller（2026-07-30）
 
-`PreferencesPanel` 保持 modal 形式，按作用域分为「常规、模型、能力与权限、界面、角色与对话、桌宠与互动、高级」。Chat 和 Activity 的日间 / 夜间入口继续复用 `ThemePicker` 与同一 theme registry，分别读写 `chat.theme.day` / `chat.theme.night`。电脑操作安全 / 危险模式是全局能力，只在 Chat「能力与权限」中展示；Activity 仅保留外观与活动调试偏好。
+`PreferencesPanel` 保持 modal 形式，按作用域分为「常规、模型、能力与权限、界面、角色与对话、桌宠与互动、高级」。Chat 和 Activity 的日间 / 夜间入口继续复用 `ThemePicker` 与同一 theme registry，分别读写 `chat.theme.day` / `chat.theme.night`。电脑操作安全 / 危险模式与 MCP Tool-call Console 都是全局能力，只在 Chat「能力与权限」中展示；后者通过 Tauri 转发后端受控 dispatcher 调用，不建立浏览器到 MCP 的直连。Activity 仅保留外观与活动调试偏好。
 
 `ChatWindow` 仍是编排根节点：`useChatAppearanceController` 负责主题、布局、聊天外观和字体生命周期；`usePetController` 负责桌宠窗口、桌宠偏好和消息转发；`useChatWindowNavigation` 负责偏好 / Spec / Dream / 群聊视图状态。`ChatPanel` 的消息发送、去重和 fallback 仍留在原组件。
 
