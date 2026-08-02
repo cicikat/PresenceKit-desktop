@@ -1,5 +1,7 @@
 # PresenceKit-desktop v0.1 发布范围
 
+> **后续状态（2026-08-02）**：下方 TTS 条目记录的是 v0.1 当时的范围；TTS 已在后续版本交付，不再是当前 Client 技术债。
+
 本页冻结 0.1.0 的功能边界。协议以 [protocol-v0.md](protocol-v0.md) 为准；未列入 IN 的增强默认进入 post-v0.1。
 
 ## IN：v0.1 已具备
@@ -14,7 +16,7 @@
 
 ## OUT：post-v0.1
 
-- **TTS 语音播放**：当前文字对话和语音输入可用，但客户端没有合成音频播放端。
+- **TTS 语音播放**：v0.1 当时不含客户端合成音频播放端；该能力已在后续版本交付。
 - **v1 WS 协议**：当前正式使用 v0.1 legacy 消息；`assistant_message`、`state_update`、`user_message`、`client_event`、envelope 与 capabilities 均不在本版。
 - **用户输入 WS 化**：当前 `POST /desktop/chat` 就是正式发送路径，并有 HTTP/WS 双路径对账。
 - **花园交互**：当前可查看槽位、阶段和计数；浇水、harvest、vase 操作不在本版。

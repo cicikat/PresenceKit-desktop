@@ -8,7 +8,6 @@
 
 - **支出意向单确认 / 拒绝** — `open`（外部前置）。等后端 Brief 63 冻结鉴权、二次确认和审计契约后实现写入口。
 - **v1 WS 协议与用户输入 WS 化** — `post-v0.1`，见 [protocol-v0.md](protocol-v0.md)；v0.1 的 HTTP `/desktop/chat` 是正式契约。
-- **TTS 合成播放** — `post-v0.1`，见 [release-v0.1.md](release-v0.1.md)。
 - **花园 harvest / vase 详情与操作** — `post-v0.1`，后端先冻结详情和写接口；见 [release-v0.1.md](release-v0.1.md)。
 - **日记 emotion 数据** — `post-v0.1`；客户端已安全判空，见 [release-v0.1.md](release-v0.1.md)。
 - **Garden daily lifecycle 端到端体感** — `observe`；需至少一周真实周期记录发言频率和多事件体感。
@@ -17,7 +16,7 @@
 - **Dream 期间 Reality park / 退梦 flush 端到端验收** — `open`。当前 `ChatPanel` 已保持挂载，Dream 使用 overlay，静态前置条件已满足；仍需在真实后端连接下于入梦期间注入 Reality `channel_message` + `message_segments`，确认 Dream UI 不显示、退梦只 flush 一次且分段不重复。
 - **macOS 客户端首轮真人冒烟** — `open`。Release CI 已配置产出 Universal `.dmg`，但 Windows 开发机无法验证透明置顶桌宠、多窗口、Live2D/WebGL 与实际 Gatekeeper 流程。首个 macOS 包须标注 experimental，并至少确认启动、连接本机后端和聊天收发。macOS sensor 当前固定降级为不可用（`sensor_not_supported_on_macos`），不申请 Accessibility 权限也不上传空数据。
 
-本轮已关闭：Panes 历史 TS 条目、backend-integration L213、ChatPanel 三处内联 `15000`、Tauri 模板名、Header 偏好死按钮、system 消息气泡、SubFlow 跨角色单桶。system 样式经现有代码核对已先于本工单修好；关闭证据保留在下方历史快照和 Git 历史。
+本轮已关闭：TTS 合成播放（后端合成端点、Tauri bridge、聊天/桌宠语音条、场景自动播放与跨窗口顺序播放均已接通）；Panes 历史 TS 条目、backend-integration L213、ChatPanel 三处内联 `15000`、Tauri 模板名、Header 偏好死按钮、system 消息气泡、SubFlow 跨角色单桶。system 样式经现有代码核对已先于本工单修好；关闭证据保留在下方历史快照和 Git 历史。
 
 ## 历史快照（已由上方权威清单覆盖）
 
@@ -32,9 +31,9 @@ Brief 63 落地并冻结鉴权、二次确认和审计契约后，再补全该�
 
 ---
 
-## post-v0.1：TTS 语音播放
+## 已完成：TTS 语音播放（原 post-v0.1）
 
-客户端当前没有 TTS 合成音频播放端；文字对话和语音输入不受影响。该增强明确不属于 v0.1，见 [release-v0.1.md](release-v0.1.md)。
+v0.1 时 TTS 不在发布范围；后续已接通 `/tts/synthesize`、Tauri bridge、聊天与桌宠语音条、场景自动播放，以及跨窗口 FIFO 播放队列。仍需独立进行真人桌面播放验收时，应作为发布验收记录，而不是重新列为实现技术债。
 
 ---
 
