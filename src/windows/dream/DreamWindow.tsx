@@ -172,13 +172,22 @@ export function DreamWindow({ mode = 'single', groupId = null, groupRoster = {},
       console.debug('[Dream] dreamEnter error:', e);
       const classified = classifyHttpError(e);
       if (classified.status === 409) {
-        setPhaseError(`当前状态无法进入梦境（${classified.message}）`);
+        await refreshState();
+        if (classified.code === 'GROUP_DREAM_ALREADY_ACTIVE') {
+          setPhase('active');
+          addSystemMsg(t('groupDream.system.entered'));
+        } else {
+          setPhaseError(classified.code === 'SOLO_DREAM_ACTIVE'
+            ? t('groupDream.error.soloActive')
+            : classified.retryable ? t('groupDream.error.retryable') : t('groupDream.error.notRetryable'));
+          setPhase('ready');
+        }
       } else if (classified.status === 503) {
         setPhaseError(`服务暂不可用（${classified.message}）`);
       } else {
         setPhaseError(`连接失败：${classified.message}`);
       }
-      setPhase('ready');
+      if (classified.status !== 409) setPhase('ready');
     }
   };
 

@@ -35,4 +35,10 @@ describe('classifyHttpError', () => {
     expect(result.kind).toBe('other');
     expect(result.status).toBe(500);
   });
+
+  it('preserves structured 409 conflict details', () => {
+    const result = classifyHttpError('HTTP 409|code=GROUP_DREAM_ENTERING|retryable=true|message=Entering');
+    expect(result.code).toBe('GROUP_DREAM_ENTERING');
+    expect(result.retryable).toBe(true);
+  });
 });

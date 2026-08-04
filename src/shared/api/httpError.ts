@@ -10,6 +10,8 @@ export interface ClassifiedHttpError {
   retryAfterSeconds: number | null;
   /** 已剥离 retry_after 元数据后缀、便于直接展示给用户的原始文案。 */
   message: string;
+  code: string | null;
+  retryable: boolean | null;
 }
 
 const STATUS_RE = /\bHTTP (\d+)/;
@@ -29,5 +31,6 @@ export function classifyHttpError(err: unknown): ClassifiedHttpError {
   else if (status === 429) kind = 'rateLimited';
   else if (status === null) kind = 'network';
 
-  return { kind, status, retryAfterSeconds, message };
+  const detail = raw.match(/\|code=([A-Z_]+)\|retryable=(true|false)\|message=(.*)$/);
+  return { kind, status, retryAfterSeconds, message: detail ? detail[3] : message, code: detail ? detail[1] : null, retryable: detail ? detail[2] === 'true' : null };
 }

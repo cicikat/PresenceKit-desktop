@@ -127,7 +127,18 @@ async fn safe_http_error(response: reqwest::Response) -> String {
 
     let mut scope_detail: Option<String> = None;
     let mut unauthorized_hint: Option<String> = None;
-    if status.as_u16() == 401 || status.as_u16() == 403 {
+    if status.as_u16() == 409 || status.as_u16() == 422 {
+        if let Ok(body) = response.json::<serde_json::Value>().await {
+            if let Some(detail) = body.get("detail") {
+                let code = detail.get("code").and_then(|v| v.as_str());
+                let message = detail.get("message").and_then(|v| v.as_str());
+                let retryable = detail.get("retryable").and_then(|v| v.as_bool());
+                if let (Some(code), Some(message), Some(retryable)) = (code, message, retryable) {
+                    return format!("HTTP {}|code={}|retryable={}|message={}", status.as_u16(), code, retryable, message);
+                }
+            }
+        }
+    } else if status.as_u16() == 401 || status.as_u16() == 403 {
         if let Ok(body) = response.json::<serde_json::Value>().await {
             if let Some(detail) = body.get("detail") {
                 if let Some(s) = detail.as_str() {

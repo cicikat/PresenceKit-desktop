@@ -3,6 +3,8 @@
 后端版本：v2.1（`core/dream/dream_hud.py`）  
 前端版本：v1.1（`DreamStatusSidebar.tsx`）
 
+群梦入场遇到 retryable conflict 时保留入口界面且不自动重试；单人梦占用或状态不确定时展示本地化诊断。已激活群梦会在一次 state refresh 后接续 active UI。
+
 ---
 
 ## 数据来源
