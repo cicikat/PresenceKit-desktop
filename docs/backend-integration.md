@@ -746,7 +746,16 @@ Authorization: Bearer <admin_token>
 本文件只记录 HTTP/Tauri 接入细节，不再复制协议定义，避免双份文档漂移。ChatPanel 的回复去重、fallback、早到 segments 与 TTL 规则见 [chat-correlation.md](chat-correlation.md)。
 
 ---
-## Tauri IPC Commands
+  ## Diary presentation contract
+
+  `/diary/list` and `/diary/{date}` are presentation-only views. The backend
+  keeps the `## 今日事件` section for prompt and search consumers, but does
+  not return it to the desktop client. `title`, `feeling`, and the legacy
+  `body` compatibility field are derived from `## 今日感受`; unheaded legacy
+  files are treated as one feeling block. Empty feelings are rendered through
+  the localized `diary.noFeeling` empty state.
+
+  ## Tauri IPC Commands
 
 文件：`src-tauri/src/lib.rs`
 

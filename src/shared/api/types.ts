@@ -160,6 +160,7 @@ export interface DiaryListItem {
   date: string;
   title: string;
   emotion: string | null;
+  feeling: string;
 }
 
 export interface DiaryListResponse {
@@ -171,6 +172,7 @@ export interface DiaryEntry {
   date: string;
   title: string;
   emotion: string | null;
+  feeling: string;
   body: string;
 }
 

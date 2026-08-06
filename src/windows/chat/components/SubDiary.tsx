@@ -7,6 +7,7 @@ import type { DiaryListResponse, DiaryListItem, DiaryEntry } from '../../../shar
 import type { PromptAssetCharacter } from '../../../shared/api/types';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { chatThemeFontSize } from '../../../shared/chatAppearance';
+import { useI18n } from '../../../shared/i18n';
 
 /* emotion → hue 映射，emotion 为 null 时整个标签不渲染 */
 const EMOTION_HUE: Record<string, number> = {
@@ -60,6 +61,7 @@ function renderBody(body: string): React.ReactNode[] {
 
 /* ── 日记详情浮窗内容 ── */
 export function DiaryDetailPane({ date, charId }: { date: string; charId?: string }) {
+  const { t } = useI18n();
   const [entry, setEntry] = useState<DiaryEntry | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -104,7 +106,9 @@ export function DiaryDetailPane({ date, charId }: { date: string; charId?: strin
       </h1>
       <div style={{ height: 1, background: 'var(--paper-edge)', marginBottom: 20 }} />
       <div className="serif" style={{ fontSize: chatThemeFontSize(16), lineHeight: 1.85, color: 'var(--ink)', fontStyle: 'normal' }}>
-        {renderBody(entry.body)}
+        {(entry.feeling || entry.body || '').trim() ? renderBody(entry.feeling || entry.body) : (
+          <p style={{ margin: 0, color: 'var(--ink-2)', fontStyle: 'italic' }}>{t('diary.noFeeling')}</p>
+        )}
       </div>
     </div>
   );
@@ -112,6 +116,7 @@ export function DiaryDetailPane({ date, charId }: { date: string; charId?: strin
 
 /* ── 列表 entry 行 ── */
 function DiaryListEntry({ item, onClick }: { item: DiaryListItem; onClick: () => void }) {
+  const { t } = useI18n();
   const hue = item.emotion !== null ? emotionHue(item.emotion) : 168;
   return (
     <button
@@ -149,7 +154,7 @@ function DiaryListEntry({ item, onClick }: { item: DiaryListItem; onClick: () =>
         fontSize: chatThemeFontSize(12), color: 'var(--on-forest-2)', lineHeight: 1.5,
         fontFamily: 'var(--font-serif)', fontStyle: 'italic',
       }}>
-        —
+        {(item.feeling || '').trim() || t('diary.noFeeling')}
       </div>
     </button>
   );

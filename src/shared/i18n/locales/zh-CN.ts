@@ -150,6 +150,7 @@ export const zhCN = {
   'groupDream.prefs.perChar.title': '逐角色破限',
   'groupDream.prefs.perChar.hint': '留空时跟随群默认预设',
   'groupDream.status.tension': '角色张力',
+  'diary.noFeeling': '今天没有留下感受。',
 } as const;
 
 export type MessageKey = keyof typeof zhCN;

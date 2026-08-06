@@ -152,4 +152,5 @@ export const enUS: Record<MessageKey, string> = {
   'groupDream.prefs.perChar.title': 'Per-character presets',
   'groupDream.prefs.perChar.hint': 'Leave empty to follow the group defaults',
   'groupDream.status.tension': 'Character tension',
+  'diary.noFeeling': 'No feeling was recorded today.',
 };
