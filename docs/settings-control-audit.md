@@ -6,6 +6,7 @@
 
 | 偏好内容 | Chat 分类 |
 |---|---|
+| Signal-first autonomy lifecycle | Backend-owned; the client does not create or send proactive messages. Redacted observation is available at `GET /observability/autonomy-opportunities`; prompt snapshots remain admin-only. |
 | 语言、后端连接 | 常规 |
 | 全局 / 角色模型路由、思考、输出分段 | 模型 |
 | 桌面 TTS、Tool loop、视觉感知、电脑操作安全 | 能力与权限 |
