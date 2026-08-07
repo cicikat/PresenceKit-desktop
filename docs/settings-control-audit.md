@@ -7,6 +7,12 @@
 | 偏好内容 | Chat 分类 |
 |---|---|
 | Signal-first autonomy lifecycle | Backend-owned; the client does not create or send proactive messages. Redacted observation is available at `GET /observability/autonomy-opportunities`; prompt snapshots remain admin-only. |
+
+The backend admin control center exposes `GET /admin/control-center/effective-state` as the
+authoritative global overview for configured versus runtime-effective values. The desktop client
+does not consume this admin-only projection or infer Tool Loop, MCP, scheduler, autonomy, TTS,
+Embedding, channel, model-routing, or frozen Intiface state from its local settings; it continues
+to use only the persona-scoped settings and runtime endpoints documented below.
 | 语言、后端连接 | 常规 |
 | 全局 / 角色模型路由、思考、输出分段 | 模型 |
 | 桌面 TTS、Tool loop、视觉感知、电脑操作安全 | 能力与权限 |
