@@ -151,6 +151,10 @@ export const zhCN = {
   'groupDream.prefs.perChar.hint': '留空时跟随群默认预设',
   'groupDream.status.tension': '角色张力',
   'diary.noFeeling': '今天没有留下感受。',
+  'dream.prefs.scenarioId': '剧本 ID',
+  'dream.prefs.scenarioIdHint': '对应后端 userdata/characters/dream/scenarios/{script_id}.yaml；旧 data/dream/scenarios 仅作只读兼容',
+  'dream.prefs.scenarioEmpty': '暂无可用剧本',
+  'dream.prefs.scenarioLegacy': '旧路径只读',
 } as const;
 
 export type MessageKey = keyof typeof zhCN;

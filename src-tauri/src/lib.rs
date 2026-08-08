@@ -1548,6 +1548,16 @@ async fn dream_list_worlds(app: tauri::AppHandle) -> Result<serde_json::Value, S
 }
 
 #[tauri::command]
+async fn dream_list_scenarios(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let resp = authorized_request(&cfg, client.get(backend_url(&cfg, "/dream/scenarios")))
+        .send().await.map_err(|_| "Dream scenarios 请求失败".to_string())?;
+    let resp = require_success(resp).await?;
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 async fn get_prompt_assets(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
     let client = http_client()?;
@@ -2929,6 +2939,7 @@ pub fn run() {
             dream_group_update_settings,
             dream_list_presets,
             dream_list_worlds,
+            dream_list_scenarios,
             get_prompt_assets,
             patch_prompt_assets,
             load_hidden_state_debug,

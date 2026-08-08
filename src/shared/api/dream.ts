@@ -14,6 +14,7 @@ import type {
   DreamGroupState,
   DreamGroupChatResponse,
   DreamPresetOption,
+  DreamScenarioOption,
 } from './dream-types';
 
 const DREAM_SETTINGS_TIMEOUT_MS = 5000;
@@ -143,5 +144,22 @@ export async function dreamListWorlds(): Promise<DreamPresetOption[]> {
     const value = item as { id?: unknown; name?: unknown; label?: unknown };
     const id = typeof value.id === 'string' ? value.id : typeof value.name === 'string' ? value.name : null;
     return id ? [{ id, label: typeof value.label === 'string' ? value.label : id }] : [];
+  });
+}
+
+export async function dreamListScenarios(): Promise<DreamScenarioOption[]> {
+  const raw = await invokeGated<unknown>('dream_list_scenarios');
+  const list = raw && typeof raw === 'object' && Array.isArray((raw as { scenarios?: unknown[] }).scenarios)
+    ? (raw as { scenarios: unknown[] }).scenarios
+    : [];
+  return list.flatMap(item => {
+    if (!item || typeof item !== 'object') return [];
+    const value = item as { id?: unknown; title?: unknown; source?: unknown };
+    if (typeof value.id !== 'string' || !value.id) return [];
+    return [{
+      id: value.id,
+      title: typeof value.title === 'string' && value.title ? value.title : value.id,
+      source: typeof value.source === 'string' ? value.source : 'user',
+    }];
   });
 }

@@ -153,4 +153,8 @@ export const enUS: Record<MessageKey, string> = {
   'groupDream.prefs.perChar.hint': 'Leave empty to follow the group defaults',
   'groupDream.status.tension': 'Character tension',
   'diary.noFeeling': 'No feeling was recorded today.',
+  'dream.prefs.scenarioId': 'Scenario ID',
+  'dream.prefs.scenarioIdHint': 'Uses backend userdata/characters/dream/scenarios/{script_id}.yaml; legacy data/dream/scenarios is read-only compatibility',
+  'dream.prefs.scenarioEmpty': 'No scenarios available',
+  'dream.prefs.scenarioLegacy': 'Legacy read-only',
 };

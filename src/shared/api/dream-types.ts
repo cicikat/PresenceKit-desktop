@@ -223,3 +223,9 @@ export interface DreamPresetOption {
   id: string;
   label: string;
 }
+
+export interface DreamScenarioOption {
+  id: string;
+  title: string;
+  source: 'user' | 'legacy' | string;
+}

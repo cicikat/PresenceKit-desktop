@@ -11,10 +11,12 @@ import {
   type BoundaryLevel,
   type LucidMode,
   type DreamJailbreakPreset,
+  type DreamScenarioOption,
 } from '../../../shared/api/dream-types';
 import {
   dreamGetSettings, dreamUpdateSettings, dreamGetStats,
   dreamGroupGetSettings, dreamGroupUpdateSettings, dreamListPresets, dreamListWorlds,
+  dreamListScenarios,
 } from '../../../shared/api/dream';
 import { getPromptAssets } from '../../../shared/api/backend';
 import type { PromptAssetOption } from '../../../shared/api/types';
@@ -682,6 +684,7 @@ export function DreamPrefsPane({
   const [backgrounds, setBackgrounds] = useState(() => avatarStore.get().dreamBackgrounds);
   const [availablePresets, setAvailablePresets] = useState<PromptAssetOption[]>([]);
   const [availableWorldCards, setAvailableWorldCards] = useState<PromptAssetOption[]>([]);
+  const [availableScenarios, setAvailableScenarios] = useState<DreamScenarioOption[]>([]);
   const [backgroundCropSrc, setBackgroundCropSrc] = useState<string | null>(null);
   const [backgroundCropTone, setBackgroundCropTone] = useState<DreamBackgroundTone | null>(null);
   const [backgroundSaving, setBackgroundSaving] = useState(false);
@@ -751,6 +754,7 @@ export function DreamPrefsPane({
     getPromptAssets()
       .then(data => setAvailableWorldCards(data.world_cards ?? []))
       .catch(() => {});
+    dreamListScenarios().then(setAvailableScenarios).catch(() => setAvailableScenarios([]));
   }, [mode, open]);
 
   const patch = useCallback(async (update: Partial<DreamSettings>) => {
@@ -1180,16 +1184,24 @@ export function DreamPrefsPane({
                   />
                 </SettingRow>
                 {entryMode === 'scenario' && (
-                  <SettingRow label="剧本 ID" hint="对应后端 data/dream/scenarios/{script_id}.yaml" deferred={isDreamActive}>
-                    <input
+                  <SettingRow
+                    label={t('dream.prefs.scenarioId')}
+                    hint={t('dream.prefs.scenarioIdHint')}
+                    deferred={isDreamActive}
+                  >
+                    <select
                       className="dream-prefs__text-input"
-                      type="text"
                       value={scenarioScriptId}
                       disabled={isDreamActive}
-                      placeholder="例如 prison_demo"
-                      spellCheck={false}
                       onChange={event => onScenarioScriptIdChange(event.target.value)}
-                    />
+                    >
+                      <option value="">{t('dream.prefs.scenarioEmpty')}</option>
+                      {availableScenarios.map(scenario => (
+                        <option key={scenario.id} value={scenario.id}>
+                          {scenario.title} · {scenario.id}{scenario.source === 'legacy' ? ` · ${t('dream.prefs.scenarioLegacy')}` : ''}
+                        </option>
+                      ))}
+                    </select>
                   </SettingRow>
                 )}
                 {entryMode === 'mirror' && (
