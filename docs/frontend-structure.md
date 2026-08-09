@@ -120,8 +120,10 @@ src/windows/chat/
 src/windows/dream/
 ├── DreamWindow.tsx          状态机编排（loading → ready → entering → active → ended）
 ├── components/
-│   ├── DreamChatPanel.tsx   消息区 + 输入框（append-only，无历史分页）
+│   ├── DreamChatPanel.tsx   消息区 + 输入框（append-only；支持回放只读模式）
 │   ├── DreamSidebar.tsx     status / emotional_tension / scene_state / symbolic_anchors / dream flow 摘要
+│   ├── DreamReplaySidebar.tsx 归档列表、分页和选中态
+│   ├── DreamReplayTranscript.tsx 主 Dream 区的只读回放详情与有界分批
 │   ├── DreamStatusSidebar.tsx Dream HUD v1.1 状态页 + /dream/settings 隐藏项开关
 │   ├── DreamGlowPanel.tsx   发光状态卡，支持 title / status / tags / children
 │   ├── DreamGlowBubble.tsx  发光聊天气泡，支持 left / right 与可选消息元信息
@@ -143,7 +145,8 @@ src/windows/dream/
 - `/dream/chat` 返回 `exit_accepted` 或 `force_exited` 时，禁用输入框，刷新状态，进入 ended 阶段。
 - 409 / 503 做可见错误提示，不 crash。
 - WAKE 按钮 / ESC：调用 `/dream/exit`，然后关闭窗口并触发 `DreamAfterglowBanner`（位于 `components/DreamAfterglowBanner.tsx`）。
-- Dream Ribbon 顶部聊天图标是固定选中的装饰入口，以短分隔线与功能区隔开；动向 / 状态 / 潜意识打开左侧副栏，其中潜意识挂载只读 hidden state 面板；偏好 / 帮助打开居中 modal，交互层级与 Chat 的偏好 / 帮助窗口一致。
+- Dream Ribbon 顶部聊天图标是固定选中的装饰入口，以短分隔线与功能区隔开；动向 / 状态 / 潜意识 / 梦境回放打开左侧副栏，其中潜意识挂载只读 hidden state 面板；偏好 / 帮助打开居中 modal，交互层级与 Chat 的偏好 / 帮助窗口一致。
+- 梦境回放的归档列表留在 Dream Sidebar；选中场次后由 DreamWindow 将主聊天区切换为只读 DreamChatPanel，隐藏 WAKE、续留和输入，返回后恢复当前 Dream 内容。详情不进入 Dream WS、Reality Chat、StateEngine、TTS 或 pipeline；旧详情响应不会覆盖后续选择。
 - Dream 动向 Sidebar 的「梦境流动」区域读取 `/dream/state` 的 `flow_entries: {ts, kind, summary}[]`（后端规则驱动生成，零额外 LLM 调用，见 backend Brief 25 §2）；最多展示 5 条、最新在上，带 `formatAgo` 风格相对时间。旧后端未提供或本轮梦境刚开始（`flow_entries` 为空）时从当前 dream state 派生 3 条短文案兜底，不读取或展示 chat transcript。
 - Dream 状态 Sidebar 读取 `/dream/state` 的 Dream HUD v1.1 字段，以状态 pill 和 0-100 进度条展示；情绪 pill 按边界 / 亲密 / 执念方向做轻量视觉区分，未知标签保持原样显示。缺失数字显示 `—` 且条宽为 0。Dream 未激活时显示空态。`physiological_arousal` 默认隐藏，仅当 `/dream/settings` 返回 `display.physiological_arousal === true` 时展示。
 - 群梦状态 Sidebar 读取 `roster` 与 `char_tension: Record<char_id, number>`，逐角色展示张力；`body` 仍是全群共享的一份状态。群梦偏好读写群 settings，世界列表来自 `/dream/worlds`、破限选项来自 `/dream/presets`，`per_char` 空数组表示跟随群默认；本地字号、主题与背景继续复用单人外观存储。
@@ -483,13 +486,13 @@ Ring buffer：`useState<{mood, aura}[]>` 长度 60；2s 采样；mood 轨迹柱�
 | 日记列表 | `loadDiaryList(charId?)` → Tauri `load_diary_list` | 从后端 `/diary/list?char_id=<v>` 读取 |
 | 日记正文 | `loadDiaryEntry(date, charId?)` → Tauri `load_diary_entry` | 从后端 `/diary/{date}?char_id=<v>` 懒加载 |
 
-## SubDreamReplay
+## Dream replay
 
-文件：`src/windows/chat/components/SubDreamReplay.tsx`
+文件：`src/windows/dream/components/DreamReplaySidebar.tsx`、`DreamReplayTranscript.tsx`
 
-- 在 Sidebar 的 `dream-replay` tab 中展示已归档的单人 Dream；列表通过后端分页读取安全元数据，当前活动梦不在 archive 范围内。
-- 点击场次在同一侧栏切换到详情，逐回合渲染只读用户/角色气泡；长梦使用“加载更多”，不创建 Webview、不替换 ChatPanel。
-- 详情只显示 `role/content/ts` 与安全元数据，不订阅 WS、不写 StateEngine、不进入当前聊天历史、不提供输入/重试/编辑/删除/继续梦境，也不触发 TTS 或逐字动画。
+- Dream Sidebar 的回放 tab 通过 `dreamListArchive()` 分页读取安全元数据；当前活动梦不在 archive 范围内。
+- 选中场次后，DreamWindow 调 `dreamGetArchive()` 并把主 Dream transcript 切换为只读 DreamChatPanel；回放消息复用正常 Dream 气泡、头像和滚动，不创建 Webview，也不在 Sidebar 展示正文。
+- 详情只显示 `role/content/ts` 与安全元数据；长梦在前端按 80 条有界分批，支持继续加载，不提供输入、退出 Dream、续留、编辑、删除或继续梦境，也不触发 WS、StateEngine、TTS、逐字动画或 pipeline。
 - `src/shared/api/dream-replay.ts` 只做响应归一化：旧 archive 缺字段时显示未知值，过滤 tool/未知角色和空内容，避免把 prompt、hidden state 或其他归档字段带入 UI。
 
 ---
@@ -501,7 +504,7 @@ Ring buffer：`useState<{mood, aura}[]>` 长度 60；2s 采样；mood 轨迹柱�
 职责：
 
 - 左侧固定 52px 功能条。
-- 切换 Sidebar tab：动向、日记、梦境回放、状态、花园。
+- 切换 Sidebar tab：动向、日记、状态、花园。
 - 切换本地 `petVisible`。
 - 通过与其他 Ribbon 图标同色的空心圆入口打开 Dream overlay。
 - 打开偏好和帮助面板。
@@ -515,11 +518,10 @@ WS 连接状态来自 `wsClient.getState()` 和 `wsClient.on("state")`。
 
 文件：`src/windows/chat/components/Sidebar.tsx`
 
-所有五个 tab 已接入真实数据：
+四个 tab 已接入真实数据：
 
 - `flow`：动向，挂 `SubFlow`，从 engine 读 mood/activity/focus/presence
 - `diary`：他的日记，读取后端日记列表和正文
-- `dream-replay`：梦境回放，分页读取后端归档并在同一侧栏展示只读聊天记录
 - `status`：状态，挂 `SubStatus`，读取 engine 并显示共享 poller 的 mood/activity 错误与重试
 - `garden`：陪伴花园，读取后端花园状态
 

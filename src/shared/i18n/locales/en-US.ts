@@ -157,7 +157,6 @@ export const enUS: Record<MessageKey, string> = {
   'dream.prefs.scenarioIdHint': 'Uses backend userdata/characters/dream/scenarios/{script_id}.yaml; legacy data/dream/scenarios is read-only compatibility',
   'dream.prefs.scenarioEmpty': 'No scenarios available',
   'dream.prefs.scenarioLegacy': 'Legacy read-only',
-  'dreamReplay.ribbon': 'Dream replay',
   'dreamReplay.title': 'Dream replay',
   'dreamReplay.subtitle': 'REPLAY · READ-ONLY SOLO DREAM ARCHIVES',
   'dreamReplay.archived': 'archived dreams',
@@ -191,4 +190,6 @@ export const enUS: Record<MessageKey, string> = {
   'dreamReplay.mechanism.user_hard_exit': 'User hard exit',
   'dreamReplay.mechanism.system_fallback': 'System fallback',
   'dreamReplay.mechanism.unknown': 'Unknown exit mechanism',
+  'dreamReplay.readOnly': 'Read-only replay',
+  'dreamReplay.returnToCurrent': 'Return to current dream',
 };

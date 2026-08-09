@@ -7,10 +7,8 @@ import { SubGarden } from './SubGarden';
 import { SubDiary } from './SubDiary';
 import { SubStatus } from './SubStatus';
 import { SubFlow } from './SubFlow';
-import { SubDreamReplay } from './SubDreamReplay';
 import { chatThemeFontSize } from '../../../shared/chatAppearance';
 import { ErrorBoundary } from '../../../shared/ui/ErrorBoundary';
-import { useI18n } from '../../../shared/i18n';
 import {
   FLOW_BACKEND_STATE_CADENCE,
   STATUS_BACKEND_STATE_CADENCE,
@@ -25,7 +23,6 @@ const SIDEBAR_HEADER: Record<string, { title: string; subtitle: string }> = {
 };
 
 export function SidebarPanel({ engine, toolStatus, sidebarRectRef, tab, onClose }: any) {
-  const { t } = useI18n();
   const rootRef = useRef<HTMLDivElement>(null);
   const backendStateCadence = tab === 'flow'
     ? FLOW_BACKEND_STATE_CADENCE
@@ -44,9 +41,7 @@ export function SidebarPanel({ engine, toolStatus, sidebarRectRef, tab, onClose 
     return () => { window.removeEventListener('resize', update); clearInterval(h); };
   }, []);
 
-  const meta = tab === 'dream-replay'
-    ? { title: t('dreamReplay.title'), subtitle: t('dreamReplay.subtitle') }
-    : SIDEBAR_HEADER[tab] || SIDEBAR_HEADER.flow;
+  const meta = SIDEBAR_HEADER[tab] || SIDEBAR_HEADER.flow;
 
   return (
     <div ref={rootRef} style={{
@@ -82,8 +77,6 @@ export function SidebarPanel({ engine, toolStatus, sidebarRectRef, tab, onClose 
             <SubGarden />
           ) : tab === 'diary' ? (
             <SubDiary />
-          ) : tab === 'dream-replay' ? (
-            <SubDreamReplay />
           ) : (
             <SubStatus engine={engine} backendStatePolling={backendStatePolling} />
           )}

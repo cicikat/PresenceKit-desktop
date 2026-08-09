@@ -926,17 +926,17 @@ Mirror 入梦只提交模式，不提交 `script_id`：
 
 ### HTTP：只读 Dream archive 回放
 
-主聊天 Sidebar 的 `dream-replay` tab 使用以下只读链路：
+DreamWindow 的 Dream Sidebar 回放 tab 使用以下只读链路：
 
 ```text
-SubDreamReplay
+DreamReplaySidebar / DreamWindow
   → dreamListArchive() / dreamGetArchive()
   → Tauri invoke("dream_list_archive" / "dream_get_archive")
   → Rust reqwest Client.no_proxy() + Bearer desktop token
   → GET /dream/archive[/{dream_id}]
 ```
 
-列表请求带有受限的 `offset`、`limit` 和可选 `char_id`；详情的 `dream_id`、`char_id` 在 Rust 侧先做 ASCII allowlist 校验，避免用户输入成为路径片段。客户端只读取后端已经过滤好的 archive 元数据和 `role/content/ts`，不读取本机 Dream 文件，也不把回放消息写入当前聊天、StateEngine、WS 去重或 TTS。
+列表请求带有受限的 `offset`、`limit` 和可选 `char_id`；详情的 `dream_id`、`char_id` 在 Rust 侧先做 ASCII allowlist 校验，避免用户输入成为路径片段。客户端只读取后端已经过滤好的 archive 元数据和 `role/content/ts`，不读取本机 Dream 文件，也不把回放消息写入当前聊天、StateEngine、WS 去重或 TTS。选中详情后由 DreamWindow 将主 Dream transcript 切换为只读视图；详情请求的旧响应会被客户端请求序号丢弃。
 
 `src/shared/api/dream-replay.ts` 对旧字段、空列表、部分损坏响应做 fail-closed 归一化；详情只保留 `user` / `assistant`，过滤 tool 和空内容。此 UI 属于用户回放，不是 Dream debug/运维面；后者继续由 Presence 后端管理面提供。
 

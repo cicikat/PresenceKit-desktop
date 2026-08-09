@@ -155,7 +155,6 @@ export const zhCN = {
   'dream.prefs.scenarioIdHint': '对应后端 userdata/characters/dream/scenarios/{script_id}.yaml；旧 data/dream/scenarios 仅作只读兼容',
   'dream.prefs.scenarioEmpty': '暂无可用剧本',
   'dream.prefs.scenarioLegacy': '旧路径只读',
-  'dreamReplay.ribbon': '梦境回放',
   'dreamReplay.title': '梦境回放',
   'dreamReplay.subtitle': 'REPLAY · 只读浏览已归档的单人梦境',
   'dreamReplay.archived': '场已归档',
@@ -189,6 +188,8 @@ export const zhCN = {
   'dreamReplay.mechanism.user_hard_exit': '用户强制退出',
   'dreamReplay.mechanism.system_fallback': '系统兜底',
   'dreamReplay.mechanism.unknown': '未知退出机制',
+  'dreamReplay.readOnly': '只读回放',
+  'dreamReplay.returnToCurrent': '返回当前梦境',
 } as const;
 
 export type MessageKey = keyof typeof zhCN;

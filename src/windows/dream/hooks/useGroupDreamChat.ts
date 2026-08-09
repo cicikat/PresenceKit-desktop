@@ -12,7 +12,7 @@ const newId = () => `gdm-${Date.now()}-${++nextId}`;
 const normalize = (text: string) => text.replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n');
 const httpStatus = (error: unknown) => String(error).match(/\bHTTP (\d+)/)?.[1];
 
-export function useGroupDreamChat(groupId: string | null) {
+export function useGroupDreamChat(groupId: string | null, enabled = true) {
   const { t } = useI18n();
   const [messages, setMessages] = useState<DreamMessage[]>([]);
   const [loading, setLoading] = useState(false);
@@ -82,7 +82,7 @@ export function useGroupDreamChat(groupId: string | null) {
   }, []);
 
   useEffect(() => {
-    if (!groupId) return;
+    if (!groupId || !enabled) return;
     const belongs = (domain?: string, roundId?: string) => belongsToOpenGroupDream(domain, roundId, activeRounds.current);
 
     const offStart = wsClient.on('message_stream_start', ({ msg_id, domain, char_id, round_id }) => {
@@ -159,12 +159,13 @@ export function useGroupDreamChat(groupId: string | null) {
     return () => {
       offStart(); offDelta(); offEnd(); offSegments(); offMessage(); offRoundStart(); offRoundEnd(); offConnection();
       clearRecoveryTimer();
+      clearLoading();
       streamIds.current.clear(); streamText.current.clear(); liveStreams.current.clear(); activeRounds.current.clear(); repliedRounds.current.clear();
     };
-  }, [addSystemMsg, clearRecoveryTimer, finishRound, groupId, markRoundReplied, recoverFromState, scheduleRecovery, t]);
+  }, [addSystemMsg, clearLoading, clearRecoveryTimer, enabled, finishRound, groupId, markRoundReplied, recoverFromState, scheduleRecovery, t]);
 
   const send = useCallback(async (text: string) => {
-    if (!groupId) return;
+    if (!groupId || !enabled) return;
     const trimmed = normalize(text.trim());
     if (!trimmed) return;
     setMessages(prev => [...prev, { id: newId(), role: 'user', text: trimmed }]);
@@ -185,7 +186,7 @@ export function useGroupDreamChat(groupId: string | null) {
       finishAllRounds();
       addSystemMsg(t(status === '422' ? 'groupDream.error.invalidRequest' : 'groupDream.error.sendFailed'));
     }
-  }, [addSystemMsg, finishAllRounds, groupId, recoverFromState, scheduleRecovery, t]);
+  }, [addSystemMsg, enabled, finishAllRounds, groupId, recoverFromState, scheduleRecovery, t]);
 
   return { messages, loading, streamingActive, send, addSystemMsg };
 }

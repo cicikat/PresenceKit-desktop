@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, memo, type CSSProperties } from 'react';
+import { useState, useEffect, useRef, memo, type CSSProperties, type ReactNode } from 'react';
 import type { DreamMessage } from '../../../shared/api/dream-types';
 import type { NarrativeSegment } from '../../../shared/api/types';
 import { DreamSceneBlock } from './DreamSceneBlock';
@@ -16,8 +16,12 @@ interface DreamChatPanelProps {
   herDataUrl: string | null;
   mode?: 'single' | 'group';
   roster?: Record<string, { label: string; avatarDataUrl: string | null }>;
+  speakerName?: string;
   onSend: (text: string) => void;
   endedMessage?: string;
+  readOnly?: boolean;
+  emptyMessage?: ReactNode;
+  readOnlyFooter?: ReactNode;
 }
 
 type BubbleLine = { kind: 'action' | 'text'; content: string };
@@ -127,11 +131,13 @@ const DreamMsgRow = memo(function DreamMsgRow({
   herDataUrl,
   mode,
   roster,
+  speakerName,
 }: {
   msg: DreamMessage;
   herDataUrl: string | null;
   mode: 'single' | 'group';
   roster: Record<string, { label: string; avatarDataUrl: string | null }>;
+  speakerName?: string;
 }) {
   if (msg.role === 'system') {
     return <DreamSceneBlock text={msg.text} />;
@@ -139,7 +145,7 @@ const DreamMsgRow = memo(function DreamMsgRow({
 
   const fromUser = msg.role === 'user';
   const rosterEntry = msg.speakerId ? roster[msg.speakerId] : undefined;
-  const speaker = mode === 'group' ? (rosterEntry?.label ?? msg.speakerId ?? 'HIM') : 'HIM';
+  const speaker = mode === 'group' ? (rosterEntry?.label ?? msg.speakerId ?? 'HIM') : (speakerName || 'HIM');
   const speakerAvatar = mode === 'group' ? (rosterEntry?.avatarDataUrl ?? null) : herDataUrl;
   const speakerHue = msg.speakerId
     ? [...msg.speakerId].reduce((sum, char) => sum + char.charCodeAt(0), 0) % 120 + 190
@@ -187,8 +193,12 @@ export function DreamChatPanel({
   herDataUrl,
   mode = 'single',
   roster = {},
+  speakerName,
   onSend,
   endedMessage,
+  readOnly = false,
+  emptyMessage,
+  readOnlyFooter,
 }: DreamChatPanelProps) {
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -217,21 +227,28 @@ export function DreamChatPanel({
         )}
 
         {messages.map(m => (
-          <DreamMsgRow key={m.id} msg={m} herDataUrl={herDataUrl} mode={mode} roster={roster} />
+          <DreamMsgRow key={m.id} msg={m} herDataUrl={herDataUrl} mode={mode} roster={roster} speakerName={speakerName} />
         ))}
+
+        {messages.length === 0 && emptyMessage && (
+          <div className="serif" style={{ color: 'var(--dt-ink-3)', fontSize: 'calc(13px * var(--dream-theme-font-scale, 1))', fontStyle: 'italic', textAlign: 'center', padding: 24 }}>
+            {emptyMessage}
+          </div>
+        )}
 
         {loading && !streamingActive && (
           <div className="dream-msg dream-msg--her">
             <div className="dream-msg__content">
-              <DreamGlowBubble side="left" speaker={mode === 'group' ? undefined : 'HIM'} className="dream-glow-bubble--typing">
+              <DreamGlowBubble side="left" speaker={mode === 'group' ? undefined : (speakerName || 'HIM')} className="dream-glow-bubble--typing">
                 <TypingDots color="var(--dt-ink-3)" />
               </DreamGlowBubble>
             </div>
           </div>
         )}
+        {readOnlyFooter}
       </div>
 
-      <div className="dream-chat__input-bar">
+      {!readOnly && <div className="dream-chat__input-bar">
         <div className="dream-chat__input-row">
           <textarea
             className="dream-chat__textarea"
@@ -260,7 +277,7 @@ export function DreamChatPanel({
             ENTER 发送 · SHIFT+ENTER 换行
           </span>
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

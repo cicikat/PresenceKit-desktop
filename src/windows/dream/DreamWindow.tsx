@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, type CSSProperties } from 'react';
-import { dreamEnter, dreamExit, dreamWake, dreamResume, dreamGroupEnter, dreamGroupExit } from '../../shared/api/dream';
+import { dreamEnter, dreamExit, dreamWake, dreamResume, dreamGroupEnter, dreamGroupExit, dreamGetArchive } from '../../shared/api/dream';
 import { useDreamState } from './hooks/useDreamState';
 import { useDreamChat } from './hooks/useDreamChat';
 import { useGroupDreamChat } from './hooks/useGroupDreamChat';
@@ -9,12 +9,16 @@ import { DreamPrefsPane } from './components/DreamPrefsPane';
 import { DreamHelpPanel } from './components/DreamHelpPanel';
 import { DreamControlBar } from './components/DreamControlBar';
 import { DreamChatPanel } from './components/DreamChatPanel';
+import { DreamReplaySidebar } from './components/DreamReplaySidebar';
+import { DreamReplayTranscript } from './components/DreamReplayTranscript';
+import { isCurrentReplayRequest } from './replaySelection';
 import { SubHiddenStatePanel } from './components/SubHiddenStatePanel';
 import { Icon } from '../chat/components/UIKit';
 import { classifyHttpError } from '../../shared/api/httpError';
 import { getUIPref, setUIPref } from '../../shared/uiPreferences';
 import { avatarStore } from '../../shared/avatars/store';
-import type { DreamEntryMode } from '../../shared/api/dream-types';
+import type { DreamArchiveDetailResponse, DreamArchiveMetadata, DreamEntryMode } from '../../shared/api/dream-types';
+import { getActiveCharacterName } from '../../shared/activeCharacter';
 import {
   dreamFontFamily,
   dreamFontUrl,
@@ -26,7 +30,7 @@ import '../../features/dream/DreamTokens.css';
 import { useI18n } from '../../shared/i18n';
 
 type WindowPhase = 'loading' | 'ready' | 'entering' | 'active' | 'ended';
-type DreamSideTab = 'flow' | 'status' | 'subconscious';
+type DreamSideTab = 'flow' | 'status' | 'subconscious' | 'replay';
 type DreamModal = 'prefs' | 'help' | null;
 type DreamTone = 'day' | 'night';
 
@@ -61,8 +65,15 @@ export function DreamWindow({ mode = 'single', groupId = null, groupRoster = {},
   const [loadedFontFamily, setLoadedFontFamily] = useState<string | null>(null);
   // Soft retention state: shown when backend returns retained=true from /dream/wake
   const [retentionText, setRetentionText] = useState<string | null>(null);
+  const [replayDreamId, setReplayDreamId] = useState<string | null>(null);
+  const [replayViewActive, setReplayViewActive] = useState(false);
+  const [replayDetail, setReplayDetail] = useState<DreamArchiveDetailResponse | null>(null);
+  const [replayLoading, setReplayLoading] = useState(false);
+  const [replayError, setReplayError] = useState(false);
   const shellRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef(false);
+  const replayRequestRef = useRef(0);
+  const replayActive = replayViewActive;
 
   const updateAppearance = useCallback((patch: Partial<DreamAppearance>) => {
     setAppearance(current => {
@@ -103,8 +114,43 @@ export function DreamWindow({ mode = 'single', groupId = null, groupRoster = {},
   }, [refreshState]);
 
   const singleChat = useDreamChat(handleExited);
-  const groupChat = useGroupDreamChat(groupMode ? groupId : null);
+  const groupChat = useGroupDreamChat(groupMode ? groupId : null, !replayActive);
   const { messages, loading: chatLoading, streamingActive, send, addSystemMsg } = groupMode ? groupChat : singleChat;
+  const dreamCharacterName = getActiveCharacterName();
+
+  const openReplay = useCallback(async (item: DreamArchiveMetadata) => {
+    const requestId = ++replayRequestRef.current;
+    setSideTab('replay');
+    setSideOpen(true);
+    setReplayDreamId(item.dream_id);
+    setReplayViewActive(true);
+    setReplayDetail(null);
+    setReplayError(false);
+    setReplayLoading(true);
+    try {
+      const detail = await dreamGetArchive(item.dream_id, item.char_id);
+      if (requestId !== replayRequestRef.current) return;
+      if (!isCurrentReplayRequest(requestId, replayRequestRef.current, item.dream_id, detail.dream_id)) {
+        setReplayError(true);
+        return;
+      }
+      setReplayDetail(detail);
+    } catch {
+      if (requestId === replayRequestRef.current) setReplayError(true);
+    } finally {
+      if (requestId === replayRequestRef.current) setReplayLoading(false);
+    }
+  }, []);
+
+  const closeReplay = useCallback(() => {
+    replayRequestRef.current += 1;
+    setReplayViewActive(false);
+    setReplayDetail(null);
+    setReplayLoading(false);
+    setReplayError(false);
+  }, []);
+
+  useEffect(() => () => { replayRequestRef.current += 1; }, []);
 
   // Keep phase in sync with backend state on every poll.
   // Exception: never interrupt an in-progress enter attempt.
@@ -246,11 +292,15 @@ export function DreamWindow({ mode = 'single', groupId = null, groupRoster = {},
         setOpenModal(null);
         return;
       }
+      if (replayActive) {
+        closeReplay();
+        return;
+      }
       handleWake();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [handleWake, openModal]);
+  }, [closeReplay, handleWake, openModal, replayActive]);
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
@@ -345,6 +395,8 @@ export function DreamWindow({ mode = 'single', groupId = null, groupRoster = {},
               groupId={groupId}
               roster={groupRoster}
               herDataUrl={herAvatarDataUrl}
+              selectedReplayDreamId={replayDreamId}
+              onReplaySelect={openReplay}
               onClose={() => setSideOpen(false)}
             />
             <div
@@ -368,10 +420,35 @@ export function DreamWindow({ mode = 'single', groupId = null, groupRoster = {},
               aria-hidden="true"
             />
           )}
-          <DreamControlBar dreamState={dreamState} phase={phase} herDataUrl={herAvatarDataUrl} onWake={handleWake} />
+          {!replayActive && <DreamControlBar dreamState={dreamState} phase={phase} herDataUrl={herAvatarDataUrl} onWake={handleWake} />}
 
           {/* State-specific content */}
-          {phase === 'loading' && (
+          {replayActive ? (
+            replayLoading ? (
+              <div className="dream-theme__stage">
+                <span className="mono" style={{ fontSize: 'calc(11px * var(--dream-theme-font-scale, 1))', color: 'var(--dt-ink-3)', letterSpacing: 1.5 }}>
+                  {t('common.loading')}…
+                </span>
+              </div>
+            ) : replayError ? (
+              <div className="dream-theme__stage dream-theme__stage--ready">
+                <div className="dream-theme__ready-copy">
+                  <div className="dream-theme__ready-kicker">REPLAY</div>
+                  <div className="dream-theme__ready-title">{t('dreamReplay.loadFailed')}</div>
+                </div>
+                <button type="button" className="dream-theme__enter" onClick={closeReplay}>
+                  {t('dreamReplay.returnToCurrent')}
+                </button>
+              </div>
+            ) : replayDetail ? (
+              <DreamReplayTranscript
+                detail={replayDetail}
+                herDataUrl={herAvatarDataUrl}
+                characterName={dreamCharacterName}
+                onExit={closeReplay}
+              />
+            ) : null
+          ) : phase === 'loading' && (
             <div className="dream-theme__stage">
               {stateError ? (
                 <div className="mono" style={{ fontSize: 'calc(11px * var(--dream-theme-font-scale, 1))', color: 'oklch(0.52 0.14 20)', letterSpacing: 1 }}>
@@ -385,7 +462,7 @@ export function DreamWindow({ mode = 'single', groupId = null, groupRoster = {},
             </div>
           )}
 
-          {phase === 'ready' && (
+          {!replayActive && phase === 'ready' && (
             <div className="dream-theme__stage dream-theme__stage--ready">
               <div className="dream-theme__ready-copy">
                 <div className="dream-theme__ready-kicker">DREAM ENTRANCE</div>
@@ -407,7 +484,7 @@ export function DreamWindow({ mode = 'single', groupId = null, groupRoster = {},
             </div>
           )}
 
-          {phase === 'entering' && (
+          {!replayActive && phase === 'entering' && (
             <div className="dream-theme__stage">
               <span className="mono" style={{ fontSize: 'calc(11px * var(--dream-theme-font-scale, 1))', color: 'var(--dt-ink-3)', letterSpacing: 1.5 }}>
                 坠入中…
@@ -415,7 +492,7 @@ export function DreamWindow({ mode = 'single', groupId = null, groupRoster = {},
             </div>
           )}
 
-          {(phase === 'active' || phase === 'ended') && (
+          {!replayActive && (phase === 'active' || phase === 'ended') && (
             <>
               <DreamChatPanel
                 messages={messages}
@@ -425,6 +502,7 @@ export function DreamWindow({ mode = 'single', groupId = null, groupRoster = {},
                 herDataUrl={herAvatarDataUrl}
                 mode={mode}
                 roster={groupRoster}
+                speakerName={dreamCharacterName}
                 onSend={send}
                 endedMessage={phase === 'ended' ? '梦境已关闭。按 WAKE 醒来。' : undefined}
               />
@@ -496,6 +574,8 @@ function DreamRibbon({
   onModal: (modal: DreamModal) => void;
   onToneToggle: () => void;
 }) {
+  const { t } = useI18n();
+
   return (
     <nav className="dream-ribbon" aria-label="梦境导航">
       <RibbonButton label="聊天" icon="chat" iconSize={16} active decorative compact />
@@ -504,6 +584,7 @@ function DreamRibbon({
         <RibbonButton label="动向" icon="wind" active={sideOpen && sideTab === 'flow'} onClick={() => onTab('flow')} />
         <RibbonButton label="状态" icon="pulse" active={sideOpen && sideTab === 'status'} onClick={() => onTab('status')} />
         <RibbonButton label="潜意识" icon="sparkle" active={sideOpen && sideTab === 'subconscious'} onClick={() => onTab('subconscious')} />
+        <RibbonButton label={t('dreamReplay.title')} icon="bookmark" active={sideOpen && sideTab === 'replay'} onClick={() => onTab('replay')} />
       </div>
       <div className="dream-ribbon__spacer" />
       <div className="dream-ribbon__group">
@@ -545,6 +626,8 @@ function DreamSidePane({
   groupId,
   roster,
   herDataUrl,
+  selectedReplayDreamId,
+  onReplaySelect,
   onClose,
 }: {
   tab: DreamSideTab;
@@ -553,6 +636,8 @@ function DreamSidePane({
   groupId: string | null;
   roster: Record<string, { label: string; avatarDataUrl: string | null }>;
   herDataUrl: string | null;
+  selectedReplayDreamId: string | null;
+  onReplaySelect: (item: DreamArchiveMetadata) => void;
   onClose: () => void;
 }) {
   if (tab === 'flow') {
@@ -572,6 +657,16 @@ function DreamSidePane({
         mode={mode}
         groupId={groupId}
         roster={roster}
+        onClose={onClose}
+      />
+    );
+  }
+
+  if (tab === 'replay') {
+    return (
+      <DreamReplaySidebar
+        selectedDreamId={selectedReplayDreamId}
+        onSelect={onReplaySelect}
         onClose={onClose}
       />
     );

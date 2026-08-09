@@ -10,7 +10,6 @@ import type { ConnectionState } from '../../../shared/api/types';
 import { DreamEntryButton } from '../../../features/dream';
 import { chatThemeFontSize } from '../../../shared/chatAppearance';
 import { getDayNight, subscribe as subscribeTheme, toggleDayNight } from '../../../shared/theme/registry';
-import { useI18n } from '../../../shared/i18n';
 
 function Sep() {
   return <div style={{ width: 24, height: 1, background: 'var(--forest-line)', margin: '6px 0' }} />;
@@ -75,7 +74,6 @@ export function Ribbon({
   playModeEnabled,
   onGroupOpen,
 }: any) {
-  const { t } = useI18n();
   const [connState, setConnState] = useState<ConnectionState>(wsClient.getState());
   const [dayNightActive, setDayNightActive] = useState<'day' | 'night'>(() => getDayNight().active);
   useEffect(() => wsClient.on('state', setConnState), []);
@@ -124,9 +122,6 @@ export function Ribbon({
       <RibBtn icon="diary"  label="日记"
         active={sidebarOpen && sidebarTab === 'diary'}
         onClick={() => { if (sidebarOpen && sidebarTab === 'diary') onCloseSidebar(); else onSidebarTab('diary'); }} />
-      <RibBtn icon="bookmark" label={t('dreamReplay.ribbon')}
-        active={sidebarOpen && sidebarTab === 'dream-replay'}
-        onClick={() => { if (sidebarOpen && sidebarTab === 'dream-replay') onCloseSidebar(); else onSidebarTab('dream-replay'); }} />
       <RibBtn icon="mood"   label="状态"
         active={sidebarOpen && sidebarTab === 'status'}
         onClick={() => { if (sidebarOpen && sidebarTab === 'status') onCloseSidebar(); else onSidebarTab('status'); }} />
