@@ -23,4 +23,28 @@ describe('isCurrentReplayRequest', () => {
       { id: 'replay:dream-4:9', role: 'user', text: 'a remembered prompt' },
     ]);
   });
+
+  it('maps backend segments and stripped content without invoking live behavior', () => {
+    expect(mapArchiveMessages('dream-segments', [
+      {
+        role: 'assistant',
+        content: '<say>你好</say><do>抬头</do>',
+        segmented_content: '你好\n抬头',
+        segments: [
+          { type: 'say', text: '你好' },
+          { type: 'do', text: '抬头' },
+        ],
+        ts: 10,
+      },
+    ])).toEqual([{
+      id: 'replay:dream-segments:0',
+      role: 'her',
+      text: '<say>你好</say><do>抬头</do>',
+      segmentedContent: '你好\n抬头',
+      segments: [
+        { type: 'say', text: '你好' },
+        { type: 'do', text: '抬头' },
+      ],
+    }]);
+  });
 });

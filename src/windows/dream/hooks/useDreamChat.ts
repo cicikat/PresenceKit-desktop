@@ -4,13 +4,10 @@ import type { DreamMessage } from '../../../shared/api/dream-types';
 import type { NarrativeSegment } from '../../../shared/api/types';
 import { armHttpPseudoStream } from '../../../shared/api/pseudoStreamText';
 import { parseIncremental } from '../../../shared/api/incrementalNarrativeParser';
+import { mapCanonicalDreamMessage, normalizeDreamText } from '../dreamMessage';
 
 let _id = 0;
 function newId() { return `dm-${Date.now()}-${++_id}`; }
-
-function normalizeDreamText(text: string): string {
-  return text.replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n');
-}
 
 // Dream chat is HTTP-primary: the reply text comes via the dreamChat() HTTP
 // response. Brief 84 added a server-side pseudo-stream typewriter replay that
@@ -77,16 +74,18 @@ export function useDreamChat(onExited: () => void) {
           onExitedRef.current();
         }
         if (resp.reply) {
-          const finalPatch = {
-            text: normalizeDreamText(resp.reply),
-            segments: resp.segments as NarrativeSegment[] | undefined,
-            segmentedContent: resp.segmented_content ? normalizeDreamText(resp.segmented_content) : undefined,
-          };
+          const finalMessage = mapCanonicalDreamMessage({
+            id: streamId || newId(),
+            role: 'her',
+            text: resp.reply,
+            segments: resp.segments,
+            segmentedContent: resp.segmented_content,
+          });
           if (streamId) {
             const id: string = streamId;
-            setMessages(prev => prev.map(m => (m.id === id ? { ...m, ...finalPatch } : m)));
+            setMessages(prev => prev.map(m => (m.id === id ? { ...m, ...finalMessage, id } : m)));
           } else {
-            setMessages(prev => [...prev, { id: newId(), role: 'her', ...finalPatch }]);
+            setMessages(prev => [...prev, finalMessage]);
           }
         } else if (streamId) {
           const id: string = streamId;

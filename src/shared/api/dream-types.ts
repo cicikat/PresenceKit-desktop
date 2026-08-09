@@ -230,6 +230,9 @@ export interface DreamArchiveMessage {
   role: 'user' | 'assistant';
   content: string;
   ts: number | null;
+  segments?: NarrativeSegment[];
+  segmented_content?: string;
+  segment_parse_fallback?: boolean;
 }
 
 export interface DreamArchiveDetailResponse {

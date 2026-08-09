@@ -1,4 +1,5 @@
 import type { DreamArchiveMessage, DreamMessage } from '../../shared/api/dream-types';
+import { mapCanonicalDreamMessage } from './dreamMessage';
 
 export function isCurrentReplayRequest(
   requestId: number,
@@ -16,9 +17,11 @@ export function mapArchiveMessages(
   messages: DreamArchiveMessage[],
   offset = 0,
 ): DreamMessage[] {
-  return messages.map((message, index) => ({
+  return messages.map((message, index) => mapCanonicalDreamMessage({
     id: `replay:${dreamId}:${offset + index}`,
     role: message.role === 'assistant' ? 'her' : 'user',
     text: message.content,
+    segments: message.segments,
+    segmentedContent: message.segmented_content,
   }));
 }

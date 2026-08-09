@@ -4,6 +4,7 @@ import type {
   DreamArchiveMessage,
   DreamArchiveMetadata,
 } from './dream-types';
+import { normalizeDreamSegments } from '../../windows/dream/dreamMessage';
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -73,7 +74,26 @@ function normalizeMessage(value: unknown): DreamArchiveMessage | null {
   if (raw.role !== 'user' && raw.role !== 'assistant') return null;
   const content = stringValue(raw.content);
   if (!content) return null;
-  return { role: raw.role, content, ts: numberValue(raw.ts) };
+  const message: DreamArchiveMessage = { role: raw.role, content, ts: numberValue(raw.ts) };
+  if (raw.role === 'assistant') {
+    const hasSegments = raw.segments !== undefined;
+    const segments = hasSegments ? normalizeDreamSegments(raw.segments) : null;
+    if (segments !== null) {
+      message.segments = segments;
+      if (typeof raw.segmented_content === 'string') {
+        message.segmented_content = raw.segmented_content;
+      }
+    } else if (hasSegments || raw.segment_parse_fallback === true) {
+      message.segmented_content = content;
+      message.segment_parse_fallback = true;
+    }
+    if (raw.segment_parse_fallback === true) {
+      message.segmented_content = content;
+      delete message.segments;
+      message.segment_parse_fallback = true;
+    }
+  }
+  return message;
 }
 
 export function normalizeDreamArchiveDetail(value: unknown): DreamArchiveDetailResponse | null {

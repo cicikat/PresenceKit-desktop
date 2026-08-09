@@ -3,13 +3,14 @@ import { dreamGroupChat, dreamGroupGetState } from '../../../shared/api/dream';
 import type { DreamMessage } from '../../../shared/api/dream-types';
 import { wsClient } from '../../../shared/api/ws';
 import { parseIncremental } from '../../../shared/api/incrementalNarrativeParser';
+import { mapCanonicalDreamMessage, normalizeDreamText } from '../dreamMessage';
 import { useI18n } from '../../../shared/i18n';
 import { belongsToOpenGroupDream, isOpenGroupDreamRound } from '../groupDreamRouting';
 import { GROUP_DREAM_ROUND_RECOVERY_DELAY_MS, isTerminalGroupDreamRound, terminalGroupDreamRoundError } from '../groupRoundRecovery';
 
 let nextId = 0;
 const newId = () => `gdm-${Date.now()}-${++nextId}`;
-const normalize = (text: string) => text.replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n');
+const normalize = normalizeDreamText;
 const httpStatus = (error: unknown) => String(error).match(/\bHTTP (\d+)/)?.[1];
 
 export function useGroupDreamChat(groupId: string | null, enabled = true) {
@@ -115,11 +116,20 @@ export function useGroupDreamChat(groupId: string | null, enabled = true) {
       if (!char_id || !belongs(domain, round_id)) return;
       markRoundReplied(round_id);
       const id = streamIds.current.get(msg_id);
-      const patch = { text: normalize(content), segmentedContent: normalize(content), segments, speakerId: char_id, roundId: round_id, wsMsgId: msg_id };
+      const canonical = mapCanonicalDreamMessage({
+        id: id ?? newId(),
+        role: 'her',
+        text: content,
+        segmentedContent: content,
+        segments,
+        speakerId: char_id,
+        roundId: round_id,
+        wsMsgId: msg_id,
+      });
       setMessages(prev => {
         const existing = prev.find(message => message.id === id || message.wsMsgId === msg_id);
-        if (existing) return prev.map(message => message.id === existing.id ? { ...message, ...patch } : message);
-        return [...prev, { id: newId(), role: 'her', ...patch }];
+        if (existing) return prev.map(message => message.id === existing.id ? { ...message, ...canonical, id: existing.id } : message);
+        return [...prev, canonical];
       });
       streamIds.current.delete(msg_id);
       streamText.current.delete(msg_id);
@@ -129,11 +139,18 @@ export function useGroupDreamChat(groupId: string | null, enabled = true) {
       if (!char_id || !belongs(domain, round_id)) return;
       markRoundReplied(round_id);
       const id = streamIds.current.get(msg_id);
-      const patch = { text: normalize(content), speakerId: char_id, roundId: round_id, wsMsgId: msg_id };
+      const canonical = mapCanonicalDreamMessage({
+        id: id ?? newId(),
+        role: 'her',
+        text: content,
+        speakerId: char_id,
+        roundId: round_id,
+        wsMsgId: msg_id,
+      });
       if (id) {
-        setMessages(prev => prev.map(message => message.id === id ? { ...message, ...patch } : message));
+        setMessages(prev => prev.map(message => message.id === id ? { ...message, ...canonical, id } : message));
       } else {
-        setMessages(prev => prev.some(message => message.wsMsgId === msg_id) ? prev : [...prev, { id: newId(), role: 'her', ...patch }]);
+        setMessages(prev => prev.some(message => message.wsMsgId === msg_id) ? prev : [...prev, canonical]);
       }
       streamIds.current.delete(msg_id);
       streamText.current.delete(msg_id);

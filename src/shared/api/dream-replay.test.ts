@@ -43,6 +43,39 @@ describe('dream archive normalization', () => {
     ]);
   });
 
+  it('normalizes canonical segments and falls back on an unknown segment type', () => {
+    const result = normalizeDreamArchiveDetail({
+      dream_id: 'replay_segments',
+      char_id: 'dreamer',
+      metadata: { dream_id: 'replay_segments', char_id: 'dreamer' },
+      messages: [
+        {
+          role: 'assistant',
+          content: '<say>hello</say>',
+          segmented_content: 'hello',
+          segments: [{ type: 'say', text: 'hello' }],
+        },
+        {
+          role: 'assistant',
+          content: 'legacy',
+          segmented_content: 'unsafe projection',
+          segments: [{ type: 'unknown', text: 'do not render' }],
+        },
+      ],
+    });
+
+    expect(result?.messages[0]).toMatchObject({
+      segments: [{ type: 'say', text: 'hello' }],
+      segmented_content: 'hello',
+    });
+    expect(result?.messages[1]).toMatchObject({
+      content: 'legacy',
+      segmented_content: 'legacy',
+      segment_parse_fallback: true,
+    });
+    expect(result?.messages[1]).not.toHaveProperty('segments');
+  });
+
   it('fails closed when detail metadata is absent', () => {
     expect(normalizeDreamArchiveDetail({ dream_id: 'missing', messages: [] })).toBeNull();
   });
