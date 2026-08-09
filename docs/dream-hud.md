@@ -230,6 +230,6 @@ GET /dream/state（梦境结束后）
 | `/dream/chat` | POST | 独立 pipeline；更新 body_state；不触碰 HUD state |
 | `/dream/exit` | POST | 硬退出；删除 HUD state；转为 REALITY_AFTERGLOW |
 
-## Dream archive replay (Brief 165)
+## Dream archive replay (Brief 168)
 
-用户回放不属于 Dream HUD：DreamWindow 的 Dream Sidebar 回放 tab 通过 Rust Tauri command 读取后端 `GET /dream/archive` 和 `GET /dream/archive/{dream_id}`。它只显示归档的安全元数据及 `user` / `assistant` 逐回合文本，列表在 Dream Sidebar 内分页，详情在 DreamWindow 的主聊天区以正常 Dream 气泡只读显示；不创建新窗口、不连接 WS、不播放 TTS、不写当前聊天或 StateEngine。活动 Dream 的 `tmp/current_dream*`、prompt、hidden state 和现实记忆永远不进入回放。
+用户回放不属于 Dream HUD：DreamWindow 的 Dream Sidebar 回放 tab 通过 Rust Tauri command 读取后端 `GET /dream/archive` 和 `GET /dream/archive/{dream_id}`。它只显示归档的安全元数据及 `user` / `assistant` 逐回合内容；assistant 的 `segments` / `segmented_content` 由后端 canonical narrative parser 在读取时派生，历史 archive 不迁移。列表在 Dream Sidebar 内分页，详情在 DreamWindow 的主聊天区以与实时 Dream 相同的 say/do/env/feel/narration 结构只读显示；不创建新窗口、不连接 WS、不播放 TTS、不写当前聊天或 StateEngine。活动 Dream 的 `tmp/current_dream*`、prompt、hidden state 和现实记忆永远不进入回放。

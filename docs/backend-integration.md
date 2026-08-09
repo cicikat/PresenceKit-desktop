@@ -936,9 +936,9 @@ DreamReplaySidebar / DreamWindow
   → GET /dream/archive[/{dream_id}]
 ```
 
-列表请求带有受限的 `offset`、`limit` 和可选 `char_id`；详情的 `dream_id`、`char_id` 在 Rust 侧先做 ASCII allowlist 校验，避免用户输入成为路径片段。客户端只读取后端已经过滤好的 archive 元数据和 `role/content/ts`，不读取本机 Dream 文件，也不把回放消息写入当前聊天、StateEngine、WS 去重或 TTS。选中详情后由 DreamWindow 将主 Dream transcript 切换为只读视图；详情请求的旧响应会被客户端请求序号丢弃。
+列表请求带有受限的 `offset`、`limit` 和可选 `char_id`；详情的 `dream_id`、`char_id` 在 Rust 侧先做 ASCII allowlist 校验，避免用户输入成为路径片段。客户端只读取后端已经过滤好的 archive 元数据和 `role/content/ts`；assistant 详情额外带有后端由 canonical narrative parser 派生的 `segments`、`segmented_content`，解析失败时使用原文和固定 fallback 标记。客户端不读取本机 Dream 文件，也不把回放消息写入当前聊天、StateEngine、WS 去重或 TTS。选中详情后由 DreamWindow 将主 Dream transcript 切换为只读视图；详情请求的旧响应会被客户端请求序号丢弃。
 
-`src/shared/api/dream-replay.ts` 对旧字段、空列表、部分损坏响应做 fail-closed 归一化；详情只保留 `user` / `assistant`，过滤 tool 和空内容。此 UI 属于用户回放，不是 Dream debug/运维面；后者继续由 Presence 后端管理面提供。
+`src/shared/api/dream-replay.ts` 对旧字段、空列表、部分损坏响应做 fail-closed 归一化；详情只保留 `user` / `assistant`，过滤 tool 和空内容，并严格校验 segment type/text，非法 projection 回落原文。`src/windows/dream/dreamMessage.ts` 是 live final、group canonical envelope 与 replay 共用的纯映射 helper；回放只把已完成 segments 交给现有 `DreamChatPanel`，不触发增量解析、动画、WS、TTS 或发送。此 UI 属于用户回放，不是 Dream debug/运维面；后者继续由 Presence 后端管理面提供。
 
 ### `flow_entries` / `char_tension`（backend Brief 25 §2、§3 P2）
 
