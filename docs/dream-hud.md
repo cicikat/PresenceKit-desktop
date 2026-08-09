@@ -229,3 +229,7 @@ GET /dream/state（梦境结束后）
 | `/dream/enter` | POST | 进入梦境；冻结 world/lucid；清除旧 HUD state |
 | `/dream/chat` | POST | 独立 pipeline；更新 body_state；不触碰 HUD state |
 | `/dream/exit` | POST | 硬退出；删除 HUD state；转为 REALITY_AFTERGLOW |
+
+## Dream archive replay (Brief 164)
+
+用户回放不属于 Dream HUD：Chat 主窗口 Sidebar 的 `dream-replay` tab 通过 Rust Tauri command 读取后端 `GET /dream/archive` 和 `GET /dream/archive/{dream_id}`。它只显示归档的安全元数据及 `user` / `assistant` 逐回合文本，使用列表分页和侧栏内详情切换；不创建新窗口、不连接 WS、不播放 TTS、不写当前聊天或 StateEngine。活动 Dream 的 `tmp/current_dream*`、prompt、hidden state 和现实记忆永远不进入回放。

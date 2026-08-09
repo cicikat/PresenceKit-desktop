@@ -155,6 +155,12 @@ Dream 窗口是 `src/windows/dream/DreamWindow.tsx`：
 - Rust 侧分别 GET `http://127.0.0.1:8080/diary/list` 和 `/diary/{date}`，Bearer token + `reqwest.no_proxy()`。
 - 只读展示，不轮询，不写文件。
 
+梦境回放面板是 `src/windows/chat/components/SubDreamReplay.tsx`：
+
+- 由 Chat Sidebar 的 `dream-replay` tab 挂载，像日记一样列出已关闭的单人 Dream；列表分页，当前 `tmp/current_dream*` 不属于读取范围。
+- 点击场次在同一 Sidebar 内切换为逐回合聊天气泡详情，不创建独立 Webview，不打开 Dream overlay，不替换主聊天区。
+- 只读内容不订阅 WS、不写 StateEngine、不注册当前聊天去重、不触发 Reality/Dream pipeline、TTS 或逐字动画；运维状态仍留在 Presence 后端管理面。
+
 成长、视觉、支出、群聊仲裁和记忆摘要的观测面已迁入 PresenceKit 后端管理面。桌面端原
 `ObservabilityPanel`、`observability-api` 与 Tauri `observability_get` command 已移除；接口、
 鉴权和当前入口以 `docs/backend-integration.md` 的「五类观测面板」为准。

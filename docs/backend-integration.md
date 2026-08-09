@@ -924,6 +924,22 @@ Mirror 入梦只提交模式，不提交 `script_id`：
 - Mirror dev 信息可显示 `version`、`source`、`snapshot_buckets` 和 `symbolic_hints`；客户端
   不读取 hidden_state、不计算 bucket、不写回 Mirror 状态。
 
+### HTTP：只读 Dream archive 回放
+
+主聊天 Sidebar 的 `dream-replay` tab 使用以下只读链路：
+
+```text
+SubDreamReplay
+  → dreamListArchive() / dreamGetArchive()
+  → Tauri invoke("dream_list_archive" / "dream_get_archive")
+  → Rust reqwest Client.no_proxy() + Bearer desktop token
+  → GET /dream/archive[/{dream_id}]
+```
+
+列表请求带有受限的 `offset`、`limit` 和可选 `char_id`；详情的 `dream_id`、`char_id` 在 Rust 侧先做 ASCII allowlist 校验，避免用户输入成为路径片段。客户端只读取后端已经过滤好的 archive 元数据和 `role/content/ts`，不读取本机 Dream 文件，也不把回放消息写入当前聊天、StateEngine、WS 去重或 TTS。
+
+`src/shared/api/dream-replay.ts` 对旧字段、空列表、部分损坏响应做 fail-closed 归一化；详情只保留 `user` / `assistant`，过滤 tool 和空内容。此 UI 属于用户回放，不是 Dream debug/运维面；后者继续由 Presence 后端管理面提供。
+
 ### `flow_entries` / `char_tension`（backend Brief 25 §2、§3 P2）
 
 `GET /dream/state` 现在额外返回：

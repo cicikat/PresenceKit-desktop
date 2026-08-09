@@ -11,11 +11,14 @@ import type {
   DreamSettingsResponse,
   DreamSettingsUpdateRequest,
   DreamStats,
+  DreamArchiveListResponse,
+  DreamArchiveDetailResponse,
   DreamGroupState,
   DreamGroupChatResponse,
   DreamPresetOption,
   DreamScenarioOption,
 } from './dream-types';
+import { normalizeDreamArchiveDetail, normalizeDreamArchiveList } from './dream-replay';
 
 const DREAM_SETTINGS_TIMEOUT_MS = 5000;
 
@@ -69,6 +72,29 @@ export async function dreamGetSettings(): Promise<DreamSettings> {
 
 export async function dreamGetStats(): Promise<DreamStats> {
   return invokeGated<DreamStats>('dream_get_stats');
+}
+
+export async function dreamListArchive(options: {
+  offset?: number;
+  limit?: number;
+  char_id?: string;
+} = {}): Promise<DreamArchiveListResponse> {
+  const raw = await invokeGated<unknown>('dream_list_archive', {
+    offset: options.offset ?? 0,
+    limit: options.limit ?? 20,
+    charId: options.char_id ?? null,
+  });
+  return normalizeDreamArchiveList(raw);
+}
+
+export async function dreamGetArchive(dreamId: string, charId?: string): Promise<DreamArchiveDetailResponse> {
+  const raw = await invokeGated<unknown>('dream_get_archive', {
+    dreamId,
+    charId: charId ?? null,
+  });
+  const detail = normalizeDreamArchiveDetail(raw);
+  if (!detail) throw new Error('dream_archive_invalid_response');
+  return detail;
 }
 
 export async function dreamUpdateSettings(update: DreamSettingsUpdateRequest): Promise<DreamSettingsResponse> {

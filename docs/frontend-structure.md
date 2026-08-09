@@ -483,6 +483,15 @@ Ring buffer：`useState<{mood, aura}[]>` 长度 60；2s 采样；mood 轨迹柱�
 | 日记列表 | `loadDiaryList(charId?)` → Tauri `load_diary_list` | 从后端 `/diary/list?char_id=<v>` 读取 |
 | 日记正文 | `loadDiaryEntry(date, charId?)` → Tauri `load_diary_entry` | 从后端 `/diary/{date}?char_id=<v>` 懒加载 |
 
+## SubDreamReplay
+
+文件：`src/windows/chat/components/SubDreamReplay.tsx`
+
+- 在 Sidebar 的 `dream-replay` tab 中展示已归档的单人 Dream；列表通过后端分页读取安全元数据，当前活动梦不在 archive 范围内。
+- 点击场次在同一侧栏切换到详情，逐回合渲染只读用户/角色气泡；长梦使用“加载更多”，不创建 Webview、不替换 ChatPanel。
+- 详情只显示 `role/content/ts` 与安全元数据，不订阅 WS、不写 StateEngine、不进入当前聊天历史、不提供输入/重试/编辑/删除/继续梦境，也不触发 TTS 或逐字动画。
+- `src/shared/api/dream-replay.ts` 只做响应归一化：旧 archive 缺字段时显示未知值，过滤 tool/未知角色和空内容，避免把 prompt、hidden state 或其他归档字段带入 UI。
+
 ---
 
 ## Ribbon
@@ -492,7 +501,7 @@ Ring buffer：`useState<{mood, aura}[]>` 长度 60；2s 采样；mood 轨迹柱�
 职责：
 
 - 左侧固定 52px 功能条。
-- 切换 Sidebar tab：动向、日记、状态、花园。
+- 切换 Sidebar tab：动向、日记、梦境回放、状态、花园。
 - 切换本地 `petVisible`。
 - 通过与其他 Ribbon 图标同色的空心圆入口打开 Dream overlay。
 - 打开偏好和帮助面板。
@@ -510,6 +519,7 @@ WS 连接状态来自 `wsClient.getState()` 和 `wsClient.on("state")`。
 
 - `flow`：动向，挂 `SubFlow`，从 engine 读 mood/activity/focus/presence
 - `diary`：他的日记，读取后端日记列表和正文
+- `dream-replay`：梦境回放，分页读取后端归档并在同一侧栏展示只读聊天记录
 - `status`：状态，挂 `SubStatus`，读取 engine 并显示共享 poller 的 mood/activity 错误与重试
 - `garden`：陪伴花园，读取后端花园状态
 

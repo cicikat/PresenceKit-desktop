@@ -196,6 +196,50 @@ export interface DreamStats {
   last_dream_at: number | null;
 }
 
+export interface DreamArchiveMetadata {
+  dream_id: string;
+  char_id: string;
+  started_at: number | null;
+  ended_at: number | null;
+  valid_turns: number;
+  valid_user_turns: number;
+  valid_assistant_turns: number;
+  dream_mode: string;
+  world_name: string;
+  exit_mechanism: string;
+  exit_initiator: string;
+  completion: string;
+  exit_reason: string;
+  summary_present: boolean;
+  summary_created_at: number | null;
+  summary_title?: string;
+  summary_preview?: string;
+  archive_parse_error?: boolean;
+}
+
+export interface DreamArchiveListResponse {
+  char_id: string;
+  items: DreamArchiveMetadata[];
+  offset: number;
+  limit: number;
+  total: number;
+  has_more: boolean;
+}
+
+export interface DreamArchiveMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  ts: number | null;
+}
+
+export interface DreamArchiveDetailResponse {
+  dream_id: string;
+  char_id: string;
+  metadata: DreamArchiveMetadata;
+  messages: DreamArchiveMessage[];
+  partial_read: boolean;
+}
+
 export interface DreamMessage {
   id: string;
   role: 'her' | 'user' | 'system';

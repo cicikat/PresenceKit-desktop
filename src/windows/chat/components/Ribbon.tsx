@@ -124,6 +124,9 @@ export function Ribbon({
       <RibBtn icon="diary"  label="日记"
         active={sidebarOpen && sidebarTab === 'diary'}
         onClick={() => { if (sidebarOpen && sidebarTab === 'diary') onCloseSidebar(); else onSidebarTab('diary'); }} />
+      <RibBtn icon="bookmark" label={t('dreamReplay.ribbon')}
+        active={sidebarOpen && sidebarTab === 'dream-replay'}
+        onClick={() => { if (sidebarOpen && sidebarTab === 'dream-replay') onCloseSidebar(); else onSidebarTab('dream-replay'); }} />
       <RibBtn icon="mood"   label="状态"
         active={sidebarOpen && sidebarTab === 'status'}
         onClick={() => { if (sidebarOpen && sidebarTab === 'status') onCloseSidebar(); else onSidebarTab('status'); }} />

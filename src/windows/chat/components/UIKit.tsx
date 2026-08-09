@@ -135,6 +135,7 @@ export function Icon({ name, size = 18, stroke = 'currentColor', strokeWidth = 1
     case 'phone-off': return <svg {...common}><path d="M10.7 5.8a14 14 0 0 1 8.5 8.5M9 6l3 3-2 2.5c1.2 1.9 2.5 3.2 4.4 4.4L17 13.5l3 3-2 2c-5.5-.5-10-5-10.5-10.5l2-2z"/><line x1="2" y1="2" x2="22" y2="22"/></svg>;
     case 'move':    return <svg {...common}><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg>;
     case 'bookmark': return <svg {...common}><path d="M5 4h14v17l-7-4-7 4V4z"/></svg>;
+    case 'moon':     return <svg {...common}><path d="M19 15.5A7.5 7.5 0 0 1 8.5 5 7.5 7.5 0 1 0 19 15.5z"/></svg>;
     default:        return <svg {...common}><circle cx="12" cy="12" r="4"/></svg>;
   }
 }

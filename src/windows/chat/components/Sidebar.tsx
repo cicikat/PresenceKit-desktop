@@ -7,6 +7,7 @@ import { SubGarden } from './SubGarden';
 import { SubDiary } from './SubDiary';
 import { SubStatus } from './SubStatus';
 import { SubFlow } from './SubFlow';
+import { SubDreamReplay } from './SubDreamReplay';
 import { chatThemeFontSize } from '../../../shared/chatAppearance';
 import { ErrorBoundary } from '../../../shared/ui/ErrorBoundary';
 import { useI18n } from '../../../shared/i18n';
@@ -43,7 +44,9 @@ export function SidebarPanel({ engine, toolStatus, sidebarRectRef, tab, onClose 
     return () => { window.removeEventListener('resize', update); clearInterval(h); };
   }, []);
 
-  const meta = SIDEBAR_HEADER[tab] || SIDEBAR_HEADER.flow;
+  const meta = tab === 'dream-replay'
+    ? { title: t('dreamReplay.title'), subtitle: t('dreamReplay.subtitle') }
+    : SIDEBAR_HEADER[tab] || SIDEBAR_HEADER.flow;
 
   return (
     <div ref={rootRef} style={{
@@ -79,6 +82,8 @@ export function SidebarPanel({ engine, toolStatus, sidebarRectRef, tab, onClose 
             <SubGarden />
           ) : tab === 'diary' ? (
             <SubDiary />
+          ) : tab === 'dream-replay' ? (
+            <SubDreamReplay />
           ) : (
             <SubStatus engine={engine} backendStatePolling={backendStatePolling} />
           )}

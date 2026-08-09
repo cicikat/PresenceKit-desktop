@@ -7,7 +7,7 @@
 // /activity/reading/…(5)、/activity/gomoku/…(5)、/activity/chess/…(5)、
 // /group/list|create|{id}|{id}/send|{id}/history|{id}/settings|{id}/roster(7)、
 // /system/meta-mode、/lorebook(4)、/jailbreak-entries(4)、/settings/tool-loop、
-// /settings/thinking，共 54 个不同路径）均为字面量硬编码。
+// /settings/thinking、/dream/archive(2)，共 56 个不同路径）均为字面量硬编码。
 // publisher.rs 另有 /sensor/realtime。后端路由变更时需手动同步这两个文件。
 mod actions;
 mod client_config;
@@ -1320,6 +1320,88 @@ async fn dream_get_stats(app: tauri::AppHandle) -> Result<serde_json::Value, Str
         .send()
         .await
         .map_err(|_| "Dream stats 请求失败".to_string())?;
+    let resp = require_success(resp).await?;
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+fn validate_dream_archive_component(value: &str, label: &str) -> Result<(), String> {
+    if value.is_empty()
+        || value.len() > 160
+        || !value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
+    {
+        return Err(format!("Dream {label} 不合法"));
+    }
+    Ok(())
+}
+
+fn dream_archive_url(
+    cfg: &crate::client_config::ClientConfig,
+    path: &str,
+    offset: Option<u32>,
+    limit: Option<u32>,
+    char_id: Option<&str>,
+) -> Result<String, String> {
+    let mut url = url::Url::parse(&backend_url(cfg, path))
+        .map_err(|_| "Dream archive 后端地址无效".to_string())?;
+    {
+        let mut query = url.query_pairs_mut();
+        if let Some(offset) = offset {
+            query.append_pair("offset", &offset.to_string());
+        }
+        if let Some(limit) = limit {
+            query.append_pair("limit", &limit.to_string());
+        }
+        if let Some(char_id) = char_id {
+            query.append_pair("char_id", char_id);
+        }
+    }
+    Ok(url.into())
+}
+
+#[tauri::command]
+async fn dream_list_archive(
+    app: tauri::AppHandle,
+    offset: Option<u32>,
+    limit: Option<u32>,
+    char_id: Option<String>,
+) -> Result<serde_json::Value, String> {
+    let offset = offset.unwrap_or(0);
+    let limit = limit.unwrap_or(20);
+    if offset > 10_000 || !(1..=100).contains(&limit) {
+        return Err("Dream archive 分页范围无效".to_string());
+    }
+    if let Some(char_id) = char_id.as_deref() {
+        validate_dream_archive_component(char_id, "char_id")?;
+    }
+    let cfg = load_client_config(&app);
+    let url = dream_archive_url(&cfg, "/dream/archive", Some(offset), Some(limit), char_id.as_deref())?;
+    let resp = authorized_request(&cfg, http_client()?.get(url))
+        .send()
+        .await
+        .map_err(|_| "Dream archive 列表请求失败".to_string())?;
+    let resp = require_success(resp).await?;
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn dream_get_archive(
+    app: tauri::AppHandle,
+    dream_id: String,
+    char_id: Option<String>,
+) -> Result<serde_json::Value, String> {
+    validate_dream_archive_component(&dream_id, "dream_id")?;
+    if let Some(char_id) = char_id.as_deref() {
+        validate_dream_archive_component(char_id, "char_id")?;
+    }
+    let cfg = load_client_config(&app);
+    let path = format!("/dream/archive/{dream_id}");
+    let url = dream_archive_url(&cfg, &path, None, None, char_id.as_deref())?;
+    let resp = authorized_request(&cfg, http_client()?.get(url))
+        .send()
+        .await
+        .map_err(|_| "Dream archive 详情请求失败".to_string())?;
     let resp = require_success(resp).await?;
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
@@ -2924,6 +3006,8 @@ pub fn run() {
             hardware_get_devices,
             hardware_connect,
             dream_get_stats,
+            dream_list_archive,
+            dream_get_archive,
             dream_enter,
             dream_chat,
             dream_exit,
