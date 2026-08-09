@@ -28,6 +28,7 @@ import {
 } from '../../shared/dreamAppearance';
 import '../../features/dream/DreamTokens.css';
 import { useI18n } from '../../shared/i18n';
+import { shouldAutoCloseDream, type ObservedDreamStatus } from './dreamCloseTransition';
 
 type WindowPhase = 'loading' | 'ready' | 'entering' | 'active' | 'ended';
 type DreamSideTab = 'flow' | 'status' | 'subconscious' | 'replay';
@@ -73,6 +74,8 @@ export function DreamWindow({ mode = 'single', groupId = null, groupRoster = {},
   const shellRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef(false);
   const replayRequestRef = useRef(0);
+  const observedDreamRef = useRef<ObservedDreamStatus | null>(null);
+  const closeIssuedRef = useRef(false);
   const replayActive = replayViewActive;
 
   const updateAppearance = useCallback((patch: Partial<DreamAppearance>) => {
@@ -108,10 +111,19 @@ export function DreamWindow({ mode = 'single', groupId = null, groupRoster = {},
     return () => { disposed = true; };
   }, [appearance.fontFile]);
 
-  const handleExited = useCallback(() => {
+  const closeWindowOnce = useCallback(() => {
+    if (closeIssuedRef.current) return;
+    closeIssuedRef.current = true;
     refreshState();
     setPhase('ended');
-  }, [refreshState]);
+    // Let the final Dream message state commit before the parent unmounts the
+    // window. The ref guard still makes HTTP/poll/manual close one-shot.
+    window.setTimeout(onClose, 0);
+  }, [onClose, refreshState]);
+
+  const handleExited = useCallback(() => {
+    closeWindowOnce();
+  }, [closeWindowOnce]);
 
   const singleChat = useDreamChat(handleExited);
   const groupChat = useGroupDreamChat(groupMode ? groupId : null, !replayActive);
@@ -158,11 +170,21 @@ export function DreamWindow({ mode = 'single', groupId = null, groupRoster = {},
     if (!dreamState || phase === 'entering') return;
     const { status } = dreamState;
     if (status === 'DREAM_ACTIVE' || status === 'DREAM_EXIT_REQUESTED') {
+      const dreamId = String(dreamState.dream_id || '').trim();
+      if (dreamId) {
+        observedDreamRef.current = { dreamId, status };
+      }
       if (phase !== 'active') {
         if (phase === 'loading') addSystemMsg('— 已在梦境中 —');
         setPhase('active');
       }
-    } else if (status === 'DREAM_CLOSING' || status === 'REALITY_AFTERGLOW') {
+    } else if (status === 'DREAM_CLOSING' || status === 'REALITY_AFTERGLOW' || status === 'REALITY_CHAT') {
+      const observed = observedDreamRef.current;
+      if (shouldAutoCloseDream(observed, { status, dreamId: dreamState.dream_id })) {
+        observedDreamRef.current = null;
+        closeWindowOnce();
+        return;
+      }
       if (phase === 'active' || phase === 'ended') {
         if (phase !== 'ended') setPhase('ended');
       } else if (phase !== 'ready') {
@@ -172,7 +194,7 @@ export function DreamWindow({ mode = 'single', groupId = null, groupRoster = {},
       // REALITY_CHAT / DREAM_ENTRANCE_AVAILABLE / DREAM_LOCKED → ready
       if (phase !== 'ready') setPhase('ready');
     }
-  }, [dreamState, phase, addSystemMsg]);
+  }, [dreamState, phase, addSystemMsg, closeWindowOnce]);
 
   useEffect(() => {
     if (!dreamState || (dreamState.status !== 'DREAM_ACTIVE' && dreamState.status !== 'DREAM_EXIT_REQUESTED')) return;
@@ -244,8 +266,8 @@ export function DreamWindow({ mode = 'single', groupId = null, groupRoster = {},
       if (groupMode && groupId) await dreamGroupExit(groupId);
       else await dreamExit();
     } catch { /* hard exit always succeeds per spec */ }
-    onClose();
-  }, [groupId, groupMode, onClose]);
+    closeWindowOnce();
+  }, [groupId, groupMode, closeWindowOnce]);
 
   // WAKE button handler — routes through soft retention gate first.
   // If backend retains: show retention text + stay/leave choice.
@@ -268,13 +290,13 @@ export function DreamWindow({ mode = 'single', groupId = null, groupRoster = {},
         setRetentionText(result.retention_text);
       } else {
         // Gate not met or LLM failed — backend already exited
-        onClose();
+        closeWindowOnce();
       }
     } catch {
       // Network / unexpected error → fall back to hard exit
       await handleForceExit();
     }
-  }, [groupId, groupMode, retentionText, handleForceExit, addSystemMsg, onClose]);
+  }, [groupId, groupMode, retentionText, handleForceExit, addSystemMsg, closeWindowOnce]);
 
   const handleRetentionStay = useCallback(async () => {
     setRetentionText(null);

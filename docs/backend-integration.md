@@ -924,6 +924,22 @@ Mirror 入梦只提交模式，不提交 `script_id`：
 - Mirror dev 信息可显示 `version`、`source`、`snapshot_buckets` 和 `symbolic_hints`；客户端
   不读取 hidden_state、不计算 bucket、不写回 Mirror 状态。
 
+### Dream exit handoff（Brief 170）
+
+`DreamWindow` records an observed single-user `dream_id` while the backend is
+`DREAM_ACTIVE` or `DREAM_EXIT_REQUESTED`. It closes the window only when that
+same observed Dream reaches `DREAM_CLOSING`, `REALITY_AFTERGLOW`, or
+`REALITY_CHAT`; opening the window while the backend is already in Reality
+therefore remains an entry/replay surface. The HTTP `exit_accepted` callback
+and the state poll share a one-shot close guard, and `useDreamChat()` installs
+the final canonical reply before invoking it.
+
+Reality WS messages received while Dream is open remain parked in `ChatPanel`.
+The existing transition effect flushes them once when `dreamActive` becomes
+false; this handoff does not synthesize `desktop_wake` or another proactive
+reply. Backend `/dream/exit` and duplicate `/dream/wake` responses expose
+`already_closed` and preserve the first close metadata.
+
 ### HTTP：只读 Dream archive 回放
 
 DreamWindow 的 Dream Sidebar 回放 tab 使用以下只读链路：

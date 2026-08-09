@@ -70,9 +70,6 @@ export function useDreamChat(onExited: () => void) {
         }
         setMessages(prev => [...prev, { id: newId(), role: 'system', text: `（${resp.error}）` }]);
       } else {
-        if (resp.exit_accepted || resp.force_exited) {
-          onExitedRef.current();
-        }
         if (resp.reply) {
           const finalMessage = mapCanonicalDreamMessage({
             id: streamId || newId(),
@@ -90,6 +87,12 @@ export function useDreamChat(onExited: () => void) {
         } else if (streamId) {
           const id: string = streamId;
           setMessages(prev => prev.filter(m => m.id !== id));
+        }
+        // Finalize the visible Dream reply before asking the window to close.
+        // This prevents the HTTP/poll close race from unmounting the panel
+        // before the canonical final message replaces the pseudo-stream.
+        if (resp.exit_accepted || resp.force_exited) {
+          onExitedRef.current();
         }
       }
     } catch (e) {
