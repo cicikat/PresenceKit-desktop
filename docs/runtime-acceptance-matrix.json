@@ -1,0 +1,86 @@
+{
+  "schema_version": "1.0.0",
+  "release_line": "v1",
+  "scope": "desktop_runtime_acceptance",
+  "status_summary": "partial",
+  "evidence_level": "automated_only",
+  "environment": {
+    "desktop_commit": "",
+    "os": "",
+    "tauri_runtime": "",
+    "window_artifact": "",
+    "executed_at": ""
+  },
+  "cases": [
+    {
+      "id": "chat-timer-unit",
+      "area": "automated",
+      "scenario": "Latest input timer cancels stale callbacks across replacement, engine switch, and unmount.",
+      "status": "passed",
+      "evidence": "tests/chatTimer.test.ts"
+    },
+    {
+      "id": "protocol-fixture-consumer",
+      "area": "automated",
+      "scenario": "Desktop consumes the canonical backend protocol fixture bundle and rejects forbidden client fields.",
+      "status": "passed",
+      "evidence": "tests/protocol-fixtures.test.ts"
+    },
+    {
+      "id": "tauri-real-window-launch",
+      "area": "windows",
+      "scenario": "Launch the packaged Tauri application in a real window and complete one owner chat turn.",
+      "status": "not-run",
+      "evidence": ""
+    },
+    {
+      "id": "tauri-ipc-chat-correlation",
+      "area": "windows",
+      "scenario": "Verify real-window Tauri IPC, desktop HTTP/WS correlation, reconnect, and action dispatch against the pinned backend.",
+      "status": "not-run",
+      "evidence": ""
+    },
+    {
+      "id": "live2d-webgl-render",
+      "area": "windows",
+      "scenario": "Verify the real window renders the target Live2D model and WebGL canvas without a blank or fallback-only scene.",
+      "status": "not-run",
+      "evidence": ""
+    },
+    {
+      "id": "window-hide-reconnect",
+      "area": "windows",
+      "scenario": "Hide/minimize and restore the window during an active connection; verify visibility changes do not lose or duplicate turns.",
+      "status": "not-run",
+      "evidence": ""
+    },
+    {
+      "id": "windows-packaged-smoke",
+      "area": "windows",
+      "scenario": "Install or launch the packaged artifact from a clean user profile and verify startup, asset loading, and close/reopen lifecycle.",
+      "status": "not-run",
+      "evidence": ""
+    },
+    {
+      "id": "macos-build-launch",
+      "area": "macos",
+      "scenario": "Build and launch the Tauri application on macOS, including the real window and backend connection.",
+      "status": "not-run",
+      "evidence": ""
+    },
+    {
+      "id": "macos-live2d-webgl",
+      "area": "macos",
+      "scenario": "Verify Live2D/WebGL rendering and window lifecycle on the supported macOS target.",
+      "status": "not-run",
+      "evidence": ""
+    },
+    {
+      "id": "macos-permission-and-reconnect",
+      "area": "macos",
+      "scenario": "Verify macOS permission prompts, reconnect behavior, and graceful shutdown/restart on the target release artifact.",
+      "status": "not-run",
+      "evidence": ""
+    }
+  ]
+}
