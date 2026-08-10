@@ -35,6 +35,10 @@ export function PresenceNagWindow() {
   }, []);
 
   useEffect(() => {
+    void invoke('presence_nag_ready').catch(error => console.warn('[presence_nag] ready 通知失败:', error));
+  }, []);
+
+  useEffect(() => {
     let disposed = false;
     let unlisten: (() => void) | undefined;
     listen<PresenceNagPayload>('presence-nag', event => setPayload(event.payload))

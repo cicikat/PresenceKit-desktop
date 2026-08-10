@@ -89,6 +89,8 @@ export const zhCN = {
   'common.refresh': '刷新',
   'common.loading': '加载中',
   'common.loadFailed': '加载失败',
+  'common.windowLoadFailed': '此窗口无法完成本地模块加载，请关闭后重试。',
+  'common.close': '关闭',
   'common.notEnabled': '暂无数据或功能未启用',
   'flow.toolStatus.calling': '他正在调用 {label}',
   'flow.toolStatus.waiting': '他正在等待 {label} 的回应',

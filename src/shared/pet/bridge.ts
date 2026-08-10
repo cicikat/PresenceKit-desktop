@@ -1,4 +1,5 @@
 import { emit, emitTo, listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { invoke } from '@tauri-apps/api/core';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { DEFAULT_PET_SNAPSHOT, type PetSnapshot } from './types';
 import type { NarrativeSegment, StickerPayload } from '../api/types';
@@ -58,13 +59,14 @@ export async function listenPetSnapshots(
 }
 
 export async function setPetWindowVisible(visible: boolean) {
+  if (visible) await invoke('ensure_pet_window');
   const petWindow = await WebviewWindow.getByLabel(PET_WINDOW_LABEL);
-  if (!petWindow) throw new Error('pet window 尚未注册');
+  if (!petWindow) throw new Error('pet window 创建失败');
   if (visible) {
     await petWindow.show();
     await sendCurrentSnapshot();
   } else {
-    await petWindow.hide();
+    await invoke('destroy_pet_window');
   }
 }
 

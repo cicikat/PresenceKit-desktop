@@ -1,5 +1,9 @@
+use crate::window_lifecycle::{
+    ensure_presence_nag_window, WindowLifecycleState, PRESENCE_NAG_WINDOW_LABEL,
+};
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, Manager, UserAttentionType, WebviewWindow};
+use std::sync::Mutex;
+use tauri::{AppHandle, Emitter, Manager, State, UserAttentionType, WebviewWindow};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_opener::OpenerExt;
@@ -103,8 +107,19 @@ struct PresenceNagPayload {
     avatar: String,
 }
 
+#[derive(Default)]
+pub struct PresenceNagState {
+    payload: Mutex<Option<PresenceNagPayload>>,
+}
+
 #[tauri::command]
-pub async fn presence_nag(app: AppHandle, text: String, avatar: Option<String>) -> Result<(), String> {
+pub async fn presence_nag(
+    app: AppHandle,
+    lifecycle: State<'_, WindowLifecycleState>,
+    nag_state: State<'_, PresenceNagState>,
+    text: String,
+    avatar: Option<String>,
+) -> Result<(), String> {
     let text = text.trim();
     if text.is_empty() {
         return Err("text 不能为空".to_string());
@@ -114,18 +129,18 @@ pub async fn presence_nag(app: AppHandle, text: String, avatar: Option<String>) 
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .unwrap_or("character");
-    let window = app
-        .get_webview_window("presence-nag")
-        .ok_or_else(|| "presence-nag window 不存在".to_string())?;
+    let payload = PresenceNagPayload {
+        text: text.to_string(),
+        avatar: avatar.to_string(),
+    };
+    *nag_state
+        .payload
+        .lock()
+        .map_err(|_| "presence-nag payload lock poisoned".to_string())? = Some(payload.clone());
+    let window = ensure_presence_nag_window(&app, &lifecycle)?;
 
     window
-        .emit(
-            "presence-nag",
-            PresenceNagPayload {
-                text: text.to_string(),
-                avatar: avatar.to_string(),
-            },
-        )
+        .emit("presence-nag", payload)
         .map_err(|e| e.to_string())?;
     window.show().map_err(|e| e.to_string())?;
     window.set_focus().map_err(|e| e.to_string())?;
@@ -134,10 +149,31 @@ pub async fn presence_nag(app: AppHandle, text: String, avatar: Option<String>) 
 
 #[tauri::command]
 pub async fn presence_nag_close_all(app: AppHandle) -> Result<(), String> {
-    let window = app
-        .get_webview_window("presence-nag")
-        .ok_or_else(|| "presence-nag window 不存在".to_string())?;
-    window.hide().map_err(|e| e.to_string())
+    if let Some(window) = app.get_webview_window(PRESENCE_NAG_WINDOW_LABEL) {
+        window.destroy().map_err(|e| e.to_string())?;
+        eprintln!("[window-lifecycle] destroyed presence-nag window");
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn presence_nag_ready(
+    app: AppHandle,
+    nag_state: State<'_, PresenceNagState>,
+) -> Result<(), String> {
+    let payload = nag_state
+        .payload
+        .lock()
+        .map_err(|_| "presence-nag payload lock poisoned".to_string())?
+        .clone();
+    if let (Some(payload), Some(window)) =
+        (payload, app.get_webview_window(PRESENCE_NAG_WINDOW_LABEL))
+    {
+        window
+            .emit("presence-nag", payload)
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 fn is_supported_url(url: &str) -> bool {

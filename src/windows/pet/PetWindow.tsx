@@ -70,7 +70,10 @@ export function PetWindow() {
         await v.start();
       }
     }).then(fn => { unlisten = fn; }).catch(console.warn);
-    return () => { unlisten?.(); };
+    return () => {
+      unlisten?.();
+      void invoke('stop_voice_hotkey_listener').catch(() => {});
+    };
   }, []);
 
   useEffect(() => {

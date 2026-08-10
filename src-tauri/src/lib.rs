@@ -14,6 +14,7 @@ mod client_config;
 mod diary_sync;
 mod ui_prefs;
 mod ws_bridge;
+mod window_lifecycle;
 pub mod sensor;
 
 use std::fs;
@@ -2891,6 +2892,8 @@ pub fn run() {
     tauri::Builder::default()
         .manage(VoiceHotkeyState { running: AtomicBool::new(false) })
         .manage(VisualRunnerState::default())
+        .manage(actions::PresenceNagState::default())
+        .manage(window_lifecycle::WindowLifecycleState::default())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
@@ -2959,6 +2962,9 @@ pub fn run() {
             actions::action_play_netease,
             actions::presence_nag,
             actions::presence_nag_close_all,
+            actions::presence_nag_ready,
+            window_lifecycle::ensure_pet_window,
+            window_lifecycle::destroy_pet_window,
             client_config::load_public_client_config,
             client_config::get_token_status,
             client_config::test_backend_auth,

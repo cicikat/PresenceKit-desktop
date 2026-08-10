@@ -91,6 +91,8 @@ export const enUS: Record<MessageKey, string> = {
   'common.refresh': 'Refresh',
   'common.loading': 'Loading',
   'common.loadFailed': 'Failed to load',
+  'common.windowLoadFailed': 'This window could not load its local module. Close it and try again.',
+  'common.close': 'Close',
   'common.notEnabled': 'No data yet or this feature is not enabled',
   'flow.toolStatus.calling': 'Calling {label}',
   'flow.toolStatus.waiting': 'Waiting for {label} to respond',
