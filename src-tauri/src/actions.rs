@@ -148,7 +148,14 @@ pub async fn presence_nag(
 }
 
 #[tauri::command]
-pub async fn presence_nag_close_all(app: AppHandle) -> Result<(), String> {
+pub async fn presence_nag_close_all(
+    app: AppHandle,
+    nag_state: State<'_, PresenceNagState>,
+) -> Result<(), String> {
+    *nag_state
+        .payload
+        .lock()
+        .map_err(|_| "presence-nag payload lock poisoned".to_string())? = None;
     if let Some(window) = app.get_webview_window(PRESENCE_NAG_WINDOW_LABEL) {
         window.destroy().map_err(|e| e.to_string())?;
         eprintln!("[window-lifecycle] destroyed presence-nag window");

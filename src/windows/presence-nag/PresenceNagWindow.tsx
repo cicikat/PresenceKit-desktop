@@ -39,6 +39,12 @@ export function PresenceNagWindow() {
   }, []);
 
   useEffect(() => {
+    if (!payload.text) return;
+    const timeout = window.setTimeout(closeAll, 60_000);
+    return () => window.clearTimeout(timeout);
+  }, [closeAll, payload.text]);
+
+  useEffect(() => {
     let disposed = false;
     let unlisten: (() => void) | undefined;
     listen<PresenceNagPayload>('presence-nag', event => setPayload(event.payload))
