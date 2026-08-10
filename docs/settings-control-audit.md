@@ -66,3 +66,10 @@ to use only the persona-scoped settings and runtime endpoints documented below.
 4b. 角色 · 模型绑定：清除某角色的绑定即回落全局 `active_routing`；后端不支持 Brief 87 API（旧版本）时前端整段隐藏，不报错。
 5. 生成后段落兜底：关闭开关后不再插入空行，直接显示后端清理后的模型原文；不会改写短期记忆。
 6. 高级功能：管理面板逐项关闭对应白名单开关；不会连带清除已有配置。
+## Brief 171 diary sync
+
+The General preferences page exposes an explicit directory picker and manual
+sync action for the user's Obsidian diary. The chosen directory and local
+manifest are desktop-local configuration only. No diary path is returned by a
+Tauri command or sent to the backend; the backend receives bounded dated
+entries through the scoped diary integration endpoint.

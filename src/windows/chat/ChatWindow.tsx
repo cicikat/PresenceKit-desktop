@@ -4,6 +4,7 @@ import { StateEngine } from '../../shared/state/store';
 import { ToolStatusOverlayController, type ToolStatusOverlayState } from '../../shared/state/toolStatusOverlay';
 import { useBackendStatePolling } from '../../shared/state/useBackendStatePolling';
 import { wsClient } from '../../shared/api/ws';
+import { getDiarySyncStatus, syncDiary } from '../../shared/api/diary-sync';
 import { refreshActiveCharacterInfo, subscribeActiveCharacter } from '../../shared/activeCharacter';
 import { getCharacterAvatar, getPromptAssets } from '../../shared/api/backend';
 import { isPresenceNagEnabled, patchPresenceNagEnabled } from '../../shared/presenceNag';
@@ -53,6 +54,32 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivi
       toolStatusController.dispose();
     };
   }, [toolStatusController]);
+
+  useEffect(() => {
+    let running = false;
+    const runDiarySync = async () => {
+      if (running) return;
+      running = true;
+      try {
+        const status = await getDiarySyncStatus();
+        if (status.configured) await syncDiary();
+      } catch {
+        // Diary sync is optional and must never block chat or surface a
+        // background network error as a chat/auth failure.
+      } finally {
+        running = false;
+      }
+    };
+    void runDiarySync();
+    const unsubscribeWs = wsClient.on('state', state => {
+      if (state === 'connected') void runDiarySync();
+    });
+    const timer = window.setInterval(() => void runDiarySync(), 15 * 60 * 1000);
+    return () => {
+      unsubscribeWs();
+      window.clearInterval(timer);
+    };
+  }, []);
 
   useEffect(() => {
     if (!navigation.prefsOpen) return;

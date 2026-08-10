@@ -1023,3 +1023,17 @@ Dream entry 被后端一次性消费。
 ## P0–P2 设置接口（2026-07-13）
 
 新增 persona 接口：GET/PUT /settings/model-routing、GET/POST /settings/tts-desktop、POST /tts/synthesize；均经 Tauri command 调用。管理端另有 /model-presets/bootstrap 和 /settings/feature-flags。完整权限与降级边界见 settings-control-audit.md。
+## Brief 171: local Obsidian diary sync
+
+The desktop client keeps the selected diary directory and its local manifest in
+untracked `config/client.local.json`. The Rust Tauri command scans nested
+directories for exact `YYYY-MM-DD.md` filenames, skips symlinks and hidden
+content, hashes UTF-8 text locally, and sends only bounded changed entries to
+`POST /integrations/diary/sync` with the desktop token. It never sends the
+selected filesystem path. Deletes become server-side tombstones; local files
+are never modified or removed.
+
+`get_diary_sync_status`, `set_diary_directory`, `clear_diary_directory`, and
+`sync_diary` are the only client IPC surface for this feature. HTTP uses the
+existing Rust `reqwest` no-proxy client. `SubDiary` remains the read-only
+character-inner-diary view; sync is exposed separately in Preferences.

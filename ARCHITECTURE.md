@@ -424,3 +424,14 @@ Dream 模式只在正式 Dream 系统内显示，不进入 Chat 侧边栏。当�
 ## P0–P2 设置控制面
 
 桌面设置、管理面板、权限边界和降级路径的当前事实以 docs/settings-control-audit.md 为准。模型密钥只在后端管理面维护；桌面只切已有 routing profile。
+## Brief 171: Obsidian diary mirror
+
+`DiarySyncSettingsPage` is deliberately separate from `SubDiary`: the latter
+reads the backend's character-inner diary display, while the former owns the
+user-authored Obsidian mirror flow. The native Rust module
+`src-tauri/src/diary_sync.rs` selects a local directory, recursively scans only
+exact `YYYY-MM-DD.md` files, computes SHA-256/revision deltas, batches at the
+backend limits, and posts through `reqwest::Client::no_proxy()`. It stores the
+path and local manifest in `config/client.local.json`; the request body contains
+logical dates and authored text but never filesystem paths. Deletion is a
+server-side tombstone and never mutates the local vault.

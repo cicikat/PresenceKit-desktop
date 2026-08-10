@@ -12,6 +12,7 @@ import { ChatColorPage } from '../ChatColorPage';
 import { CallSettingsPage } from '../CallSettingsPage';
 import { CoplaySettingsPage } from '../CoplaySettingsPage';
 import { ConnectionSettingsPage } from '../ConnectionSettingsPage';
+import { DiarySyncSettingsPage } from '../DiarySyncSettingsPage';
 import { ToolLoopSettingsPage } from '../ToolLoopSettingsPage';
 import { ThinkingSettingsPage } from '../ThinkingSettingsPage';
 import { OutputSegmentEnforceSettingsPage } from '../OutputSegmentEnforceSettingsPage';
@@ -155,6 +156,8 @@ export function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, 
                 </PrefRow>
                 <div style={{ height: 1, background: 'var(--paper-edge)' }} />
                 <ConnectionSettingsPage />
+                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
+                <DiarySyncSettingsPage />
               </>
             ) : tab === 'models' ? (
               <>
