@@ -57,13 +57,13 @@ export async function dreamExit(): Promise<DreamExitResponse> {
 }
 
 /** Soft retention gate — call instead of dreamExit() when user taps WAKE. */
-export async function dreamWake(): Promise<DreamWakeResponse> {
-  return invokeGated<DreamWakeResponse>('dream_wake');
+export async function dreamWake(dreamId?: string | null): Promise<DreamWakeResponse> {
+  return invokeGated<DreamWakeResponse>('dream_wake', { dreamId: dreamId ?? null });
 }
 
 /** Resume dream after soft retention — user chose to stay. */
-export async function dreamResume(): Promise<DreamResumeResponse> {
-  return invokeGated<DreamResumeResponse>('dream_resume');
+export async function dreamResume(dreamId?: string | null): Promise<DreamResumeResponse> {
+  return invokeGated<DreamResumeResponse>('dream_resume', { dreamId: dreamId ?? null });
 }
 
 export async function dreamGetSettings(): Promise<DreamSettings> {

@@ -1457,11 +1457,14 @@ async fn dream_exit(app: tauri::AppHandle) -> Result<serde_json::Value, String> 
 }
 
 #[tauri::command]
-async fn dream_wake(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+async fn dream_wake(
+    app: tauri::AppHandle,
+    dream_id: Option<String>,
+) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
     let client = llm_http_client()?;
     let resp = authorized_request(&cfg, client.post(backend_url(&cfg, "/dream/wake")))
-        .json(&serde_json::json!({}))
+        .json(&serde_json::json!({ "dream_id": dream_id }))
         .send()
         .await
         .map_err(|_| "Dream wake 请求失败".to_string())?;
@@ -1470,11 +1473,14 @@ async fn dream_wake(app: tauri::AppHandle) -> Result<serde_json::Value, String> 
 }
 
 #[tauri::command]
-async fn dream_resume(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+async fn dream_resume(
+    app: tauri::AppHandle,
+    dream_id: Option<String>,
+) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
     let client = llm_http_client()?;
     let resp = authorized_request(&cfg, client.post(backend_url(&cfg, "/dream/resume")))
-        .json(&serde_json::json!({}))
+        .json(&serde_json::json!({ "dream_id": dream_id }))
         .send()
         .await
         .map_err(|_| "Dream resume 请求失败".to_string())?;

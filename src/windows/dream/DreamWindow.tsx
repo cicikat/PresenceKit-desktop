@@ -29,6 +29,7 @@ import {
 import '../../features/dream/DreamTokens.css';
 import { useI18n } from '../../shared/i18n';
 import { shouldAutoCloseDream, type ObservedDreamStatus } from './dreamCloseTransition';
+import { isConfirmedDreamClose, isDreamResumeSuccess } from './dreamWakeTransition';
 
 type WindowPhase = 'loading' | 'ready' | 'entering' | 'active' | 'ended';
 type DreamSideTab = 'flow' | 'status' | 'subconscious' | 'replay';
@@ -66,6 +67,7 @@ export function DreamWindow({ mode = 'single', groupId = null, groupRoster = {},
   const [loadedFontFamily, setLoadedFontFamily] = useState<string | null>(null);
   // Soft retention state: shown when backend returns retained=true from /dream/wake
   const [retentionText, setRetentionText] = useState<string | null>(null);
+  const [retentionDreamId, setRetentionDreamId] = useState<string | null>(null);
   const [replayDreamId, setReplayDreamId] = useState<string | null>(null);
   const [replayViewActive, setReplayViewActive] = useState(false);
   const [replayDetail, setReplayDetail] = useState<DreamArchiveDetailResponse | null>(null);
@@ -174,6 +176,14 @@ export function DreamWindow({ mode = 'single', groupId = null, groupRoster = {},
       if (dreamId) {
         observedDreamRef.current = { dreamId, status };
       }
+      if (status === 'DREAM_EXIT_REQUESTED' && dreamId) {
+        setRetentionDreamId(dreamId);
+        // A backend restart can leave a valid confirmation-pending session
+        // without the original in-memory retention sentence.  Keep the
+        // choice visible and tied to the observed session instead of silently
+        // treating the window as active.
+        if (retentionText === null) setRetentionText(t('dream.wake.pending'));
+      }
       if (phase !== 'active') {
         if (phase === 'loading') addSystemMsg('— 已在梦境中 —');
         setPhase('active');
@@ -194,7 +204,7 @@ export function DreamWindow({ mode = 'single', groupId = null, groupRoster = {},
       // REALITY_CHAT / DREAM_ENTRANCE_AVAILABLE / DREAM_LOCKED → ready
       if (phase !== 'ready') setPhase('ready');
     }
-  }, [dreamState, phase, addSystemMsg, closeWindowOnce]);
+  }, [dreamState, phase, retentionText, addSystemMsg, closeWindowOnce, t]);
 
   useEffect(() => {
     if (!dreamState || (dreamState.status !== 'DREAM_ACTIVE' && dreamState.status !== 'DREAM_EXIT_REQUESTED')) return;
@@ -259,15 +269,52 @@ export function DreamWindow({ mode = 'single', groupId = null, groupRoster = {},
     }
   };
 
-  // Hard exit helper — always succeeds, closes window (Invariant D).
+  const reportDreamTransitionFailure = useCallback(async (message: string) => {
+    await refreshState();
+    addSystemMsg(message);
+  }, [addSystemMsg, refreshState]);
+
+  // Hard exit helper — close the window only after the backend confirms the
+  // exit/archive contract.  A network or archive failure keeps a retry path.
   const handleForceExit = useCallback(async () => {
-    setRetentionText(null);
     try {
-      if (groupMode && groupId) await dreamGroupExit(groupId);
-      else await dreamExit();
-    } catch { /* hard exit always succeeds per spec */ }
-    closeWindowOnce();
-  }, [groupId, groupMode, closeWindowOnce]);
+      const result = groupMode && groupId
+        ? await dreamGroupExit(groupId)
+        : await dreamExit();
+      const confirmed = groupMode && groupId
+        ? result.ok && result.exited
+        : isConfirmedDreamClose(result);
+      if (confirmed) {
+        setRetentionText(null);
+        setRetentionDreamId(null);
+        closeWindowOnce();
+        return;
+      }
+      await reportDreamTransitionFailure(t('dream.wake.archiveUnconfirmed'));
+    } catch {
+      await reportDreamTransitionFailure(t('dream.wake.requestFailed'));
+    }
+  }, [groupId, groupMode, closeWindowOnce, reportDreamTransitionFailure, t]);
+
+  const handleConfirmWake = useCallback(async () => {
+    const dreamId = retentionDreamId || dreamState?.dream_id || null;
+    if (!dreamId) {
+      await reportDreamTransitionFailure(t('dream.wake.sessionUnavailable'));
+      return;
+    }
+    try {
+      const result = await dreamWake(dreamId);
+      if (isConfirmedDreamClose(result)) {
+        setRetentionText(null);
+        setRetentionDreamId(null);
+        closeWindowOnce();
+        return;
+      }
+      await reportDreamTransitionFailure(t('dream.wake.archiveUnconfirmed'));
+    } catch {
+      await reportDreamTransitionFailure(t('dream.wake.requestFailed'));
+    }
+  }, [closeWindowOnce, dreamState?.dream_id, reportDreamTransitionFailure, retentionDreamId, t]);
 
   // WAKE button handler — routes through soft retention gate first.
   // If backend retains: show retention text + stay/leave choice.
@@ -277,9 +324,10 @@ export function DreamWindow({ mode = 'single', groupId = null, groupRoster = {},
       await handleForceExit();
       return;
     }
-    // If retention choice is already showing, second WAKE tap → hard exit
+    // If retention choice is already showing, second WAKE tap confirms the
+    // same dream session through /dream/wake; it is not a UI-only close.
     if (retentionText !== null) {
-      await handleForceExit();
+      await handleConfirmWake();
       return;
     }
     try {
@@ -287,25 +335,44 @@ export function DreamWindow({ mode = 'single', groupId = null, groupRoster = {},
       if (result.retained) {
         // Show retention text as a character message; present stay/leave choice
         addSystemMsg(result.retention_text);
+        setRetentionDreamId(result.dream_id);
         setRetentionText(result.retention_text);
-      } else {
-        // Gate not met or LLM failed — backend already exited
+      } else if (isConfirmedDreamClose(result)) {
+        // Gate not met or LLM failed — backend proved the close/archive.
         closeWindowOnce();
+      } else {
+        await reportDreamTransitionFailure(t('dream.wake.archiveUnconfirmed'));
       }
     } catch {
-      // Network / unexpected error → fall back to hard exit
-      await handleForceExit();
+      // Network / unexpected error → retain the window and offer retry.
+      await reportDreamTransitionFailure(t('dream.wake.requestFailed'));
     }
-  }, [groupId, groupMode, retentionText, handleForceExit, addSystemMsg, closeWindowOnce]);
+  }, [groupId, groupMode, retentionText, handleConfirmWake, addSystemMsg, closeWindowOnce, reportDreamTransitionFailure, t]);
 
   const handleRetentionStay = useCallback(async () => {
-    setRetentionText(null);
-    try { await dreamResume(); } catch { /* no-op on error; dream will still be active */ }
-  }, []);
+    const dreamId = retentionDreamId || dreamState?.dream_id || null;
+    if (!dreamId) {
+      await reportDreamTransitionFailure(t('dream.wake.sessionUnavailable'));
+      return;
+    }
+    try {
+      const result = await dreamResume(dreamId);
+      if (isDreamResumeSuccess(result)) {
+        setRetentionText(null);
+        setRetentionDreamId(null);
+        setPhaseError(null);
+        await refreshState();
+        return;
+      }
+      await reportDreamTransitionFailure(t('dream.wake.resumeUnconfirmed'));
+    } catch {
+      await reportDreamTransitionFailure(t('dream.wake.requestFailed'));
+    }
+  }, [dreamState?.dream_id, refreshState, reportDreamTransitionFailure, retentionDreamId, t]);
 
   const handleRetentionLeave = useCallback(async () => {
-    await handleForceExit();
-  }, [handleForceExit]);
+    await handleConfirmWake();
+  }, [handleConfirmWake]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -361,7 +428,10 @@ export function DreamWindow({ mode = 'single', groupId = null, groupRoster = {},
     document.body.style.userSelect = 'none';
   };
 
-  const inputDisabled = phase !== 'active' || chatLoading;
+  const inputDisabled = phase !== 'active'
+    || chatLoading
+    || retentionText !== null
+    || dreamState?.status === 'DREAM_EXIT_REQUESTED';
   const sidebarPixels = sideOpen ? sidebarWidth : 0;
   const backgroundDataUrl = backgrounds[tone].dataUrl;
   const herAvatarDataUrl = characterAvatarDataUrl ?? defaultHerAvatarDataUrl;

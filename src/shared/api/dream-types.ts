@@ -132,9 +132,11 @@ export interface DreamGroupChatResponse {
 }
 
 export interface DreamExitResponse {
-  ok: true;
-  exited: true;
+  ok: boolean;
+  exited: boolean;
   already_closed?: boolean;
+  closed_now?: boolean;
+  error?: string;
   dream_id?: string | null;
   dream_mode?: string | null;
   exit_mechanism?: string | null;
@@ -148,12 +150,30 @@ export interface DreamExitResponse {
 
 /** Response from POST /dream/wake — soft retention gate. */
 export type DreamWakeResponse =
-  | { retained: false; exited: true; already_closed?: boolean; dream_id?: string | null }
+  | {
+      retained: false;
+      exited: boolean;
+      already_closed?: boolean;
+      closed_now?: boolean;
+      archive_ok?: boolean | null;
+      error?: string;
+      dream_id?: string | null;
+      dream_mode?: string | null;
+      exit_mechanism?: string | null;
+      exit_initiator?: string | null;
+      completion?: string | null;
+      exit_reason?: string | null;
+      assistant_turns?: number | null;
+      exited_at?: number | null;
+    }
   | { retained: true; retention_text: string; dream_id: string };
 
 /** Response from POST /dream/resume — resume after soft retention. */
 export interface DreamResumeResponse {
   ok: boolean;
+  resumed?: boolean;
+  dream_id?: string | null;
+  error?: string;
 }
 
 export type MemoryAccess = 'card_only' | 'relationship_summary' | 'full_snapshot';
