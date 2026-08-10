@@ -11,6 +11,7 @@
 // publisher.rs 另有 /sensor/realtime。后端路由变更时需手动同步这两个文件。
 mod actions;
 mod client_config;
+mod diary_sync;
 mod ui_prefs;
 mod ws_bridge;
 pub mod sensor;
@@ -2962,6 +2963,10 @@ pub fn run() {
             client_config::get_token_status,
             client_config::test_backend_auth,
             client_config::save_client_config,
+            diary_sync::get_diary_sync_status,
+            diary_sync::set_diary_directory,
+            diary_sync::clear_diary_directory,
+            diary_sync::sync_diary,
             get_visual_perception_settings,
             update_visual_perception_settings,
             ui_prefs::load_ui_prefs,
@@ -3143,7 +3148,7 @@ mod sensor_response_tests {
 #[cfg(test)]
 mod auth_tests {
     use super::*;
-    use crate::client_config::{ClientConfig, SensorConfig};
+    use crate::client_config::{ClientConfig, DiarySyncConfig, SensorConfig};
     use reqwest::header::AUTHORIZATION;
 
     fn test_config() -> ClientConfig {
@@ -3154,6 +3159,7 @@ mod auth_tests {
             sensor_config: SensorConfig::default(),
             visual_perception_config: VisualPerceptionConfig::default(),
             bot_user_id: String::new(),
+            diary_sync: DiarySyncConfig::default(),
         }
     }
 

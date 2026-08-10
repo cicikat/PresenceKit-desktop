@@ -8,5 +8,10 @@
     "windowSeconds": 30,
     "tickSeconds": 5,
     "sensorVersion": "emerald-client-rust-1.0"
+  },
+  "diarySync": {
+    "obsidian_path": null,
+    "manifest": {},
+    "last_sync_at": null
   }
 }

@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Once;
 use tauri::Manager;
@@ -27,6 +28,27 @@ pub struct SensorConfig {
     pub sensor_version: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct DiaryManifestEntry {
+    pub sha256: String,
+    #[serde(default)]
+    pub revision: i64,
+    #[serde(default)]
+    pub mtime: i64,
+    #[serde(default)]
+    pub deleted: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct DiarySyncConfig {
+    #[serde(default)]
+    pub obsidian_path: Option<String>,
+    #[serde(default)]
+    pub manifest: BTreeMap<String, DiaryManifestEntry>,
+    #[serde(default)]
+    pub last_sync_at: Option<f64>,
+}
+
 impl Default for SensorConfig {
     fn default() -> Self {
         Self {
@@ -47,6 +69,7 @@ pub struct ClientConfig {
     pub sensor_config: SensorConfig,
     pub visual_perception_config: crate::sensor::visual::VisualPerceptionConfig,
     pub bot_user_id: String,
+    pub diary_sync: DiarySyncConfig,
 }
 
 impl Default for ClientConfig {
@@ -61,6 +84,7 @@ impl Default for ClientConfig {
             sensor_config: SensorConfig::default(),
             visual_perception_config: crate::sensor::visual::VisualPerceptionConfig::default(),
             bot_user_id: DEFAULT_BOT_USER_ID.into(),
+            diary_sync: DiarySyncConfig::default(),
         }
     }
 }
@@ -80,6 +104,8 @@ struct PartialClientConfig {
     visual_perception_config: Option<PartialVisualPerceptionConfig>,
     #[serde(default, alias = "bot_user_id")]
     bot_user_id: Option<String>,
+    #[serde(default, alias = "diary_sync")]
+    diary_sync: Option<DiarySyncConfig>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -152,6 +178,9 @@ fn apply_partial(cfg: &mut ClientConfig, partial: PartialClientConfig) {
     if let Some(v) = partial.bot_user_id {
         cfg.bot_user_id = v;
     }
+    if let Some(v) = partial.diary_sync {
+        cfg.diary_sync = v;
+    }
     if let Some(sensor) = partial.sensor_config {
         if let Some(v) = sensor.enabled {
             cfg.sensor_config.enabled = v;
@@ -209,7 +238,7 @@ fn trim_trailing_slash(value: String) -> String {
     value.trim_end_matches('/').to_string()
 }
 
-fn read_json(path: &PathBuf) -> Option<String> {
+pub(crate) fn read_json(path: &PathBuf) -> Option<String> {
     std::fs::read_to_string(path)
         .ok()
         .map(|s| s.trim_start_matches('\u{feff}').to_string())
@@ -433,7 +462,7 @@ fn merge_client_config_json(
     serde_json::Value::Object(obj)
 }
 
-fn target_config_path<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<PathBuf, String> {
+pub(crate) fn target_config_path<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<PathBuf, String> {
     let candidates = local_config_candidates(app);
     if let Some(existing) = candidates.iter().find(|p| p.exists()) {
         return Ok(existing.clone());
@@ -563,6 +592,7 @@ mod save_config_tests {
                 sample_interval_seconds: Some(0),
             }),
             bot_user_id: None,
+            diary_sync: None,
         });
         assert!(!cfg.visual_perception_config.enabled);
         assert_eq!(cfg.visual_perception_config.sample_interval_seconds, 300);
