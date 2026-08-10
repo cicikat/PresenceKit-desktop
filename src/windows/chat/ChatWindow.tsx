@@ -35,18 +35,18 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen, isCovered = 
   if (!toolStatusRef.current) toolStatusRef.current = new ToolStatusOverlayController();
   const toolStatusController = toolStatusRef.current;
   const [toolStatus, setToolStatus] = useState<ToolStatusOverlayState | null>(() => toolStatusController.get());
+  const navigation = useChatWindowNavigation();
   const [documentVisible, setDocumentVisible] = useState(() => !document.hidden);
   useEffect(() => {
     const handleVisibility = () => setDocumentVisible(!document.hidden);
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, []);
-  const visualPaused = isCovered || !documentVisible;
+  const visualPaused = isCovered || navigation.dreamWindowOpen || !documentVisible;
   useBackendStatePolling(engine, { moodMs: 120_000, activityMs: 180_000 }, visualPaused);
 
   const appearanceController = useChatAppearanceController(engine);
   const petController = usePetController(engine, onToyOpen);
-  const navigation = useChatWindowNavigation();
   const [presenceNagEnabled, setPresenceNagEnabledState] = useState(() => isPresenceNagEnabled());
   const [proactiveGapHours, setProactiveGapHours] = useState(0.75);
   const [characterAvatarDataUrl, setCharacterAvatarDataUrl] = useState<string | null>(null);
@@ -180,7 +180,7 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen, isCovered = 
             <ParticleBackground engine={engine} blur={appearanceController.appearance.backgroundBlur} paused={visualPaused} />
           )}
           {appearanceController.appearance.backgroundKind === 'video' && appearanceController.appearance.backgroundVideoPath && (
-            <VideoBg src={appearanceController.appearance.backgroundVideoPath} blur={appearanceController.appearance.backgroundBlur} />
+            <VideoBg src={appearanceController.appearance.backgroundVideoPath} blur={appearanceController.appearance.backgroundBlur} paused={visualPaused} />
           )}
           <div style={{ height: '100%', minWidth: 0 }}>
             {navigation.groupView === null ? (

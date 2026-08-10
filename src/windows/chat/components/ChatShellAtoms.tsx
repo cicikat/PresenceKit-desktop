@@ -20,21 +20,22 @@ export function Divider({ onDrag }: any) {
 }
 
 /* ── 视频背景组件 ── */
-export function VideoBg({ src, blur }: { src: string; blur: number }) {
+export function VideoBg({ src, blur, paused = false }: { src: string; blur: number; paused?: boolean }) {
   const ref = useRef<HTMLVideoElement>(null);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const onVis = () => { document.hidden ? el.pause() : el.play().catch(() => {}); };
+    const onVis = () => { document.hidden || paused ? el.pause() : el.play().catch(() => {}); };
     document.addEventListener('visibilitychange', onVis);
+    onVis();
     return () => document.removeEventListener('visibilitychange', onVis);
-  }, []);
+  }, [paused]);
   return (
     <video
       ref={ref}
       className="chat-ui__background"
       src={src}
-      autoPlay
+      autoPlay={!paused}
       loop
       muted
       playsInline
