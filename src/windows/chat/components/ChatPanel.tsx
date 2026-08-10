@@ -39,6 +39,7 @@ import {
   pruneRenderedFallbacks,
   setBoundedMapEntry,
 } from '../correlation';
+import { createLatestTimer } from '../chatTimer';
 
 function splitReply(text: string): string[] {
   return text.split(/\n+/).map(s => s.trim()).filter(s => s.length > 0);
@@ -1632,14 +1633,15 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
 
   // ── 输入处理 ──────────────────────────────────────────────────────────────
 
-  const inputTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inputTimer = useRef(createLatestTimer());
   const onInputChange = (v: string) => {
     setInput(v);
     engine.markInteraction();
     if (state.focus !== '看你打字') engine.setLocalFocus('看你打字');
-    if (inputTimer.current) clearTimeout(inputTimer.current);
-    inputTimer.current = setTimeout(() => engine.setLocalFocus('看你'), 2500);
+    inputTimer.current.schedule(() => engine.setLocalFocus('看你'), 2500);
   };
+
+  useEffect(() => () => inputTimer.current.cancel(), [engine]);
 
   const send = async () => {
     const t = input.trim();
@@ -2147,9 +2149,9 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
             ))}
           </div>
         )}
-        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
-          <button onClick={() => void handleMicClick()} title={voice.isRecording ? '点击停止录音' : '语音输入 (Alt+1)'} style={{
-            width: 40, height: 40, borderRadius: 'var(--radius-md)',
+        <div className="chat-composer-row" style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+          <button onClick={() => void handleMicClick()} title={voice.isRecording ? '点击停止录音' : '语音输入 (Alt+1)'} aria-label={voice.isRecording ? '点击停止录音' : '语音输入 (Alt+1)'} style={{
+            width: 44, height: 44, borderRadius: 'var(--radius-md)',
             background: voice.isRecording ? 'oklch(0.55 0.18 25)' : 'var(--paper)',
             color: voice.isRecording ? '#fff' : 'var(--ink)',
             border: '1px solid var(--paper-edge)',
@@ -2159,8 +2161,8 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
           }}>
             <Icon name="mic" size={18} />
           </button>
-          <button onClick={() => setShowAttachMenu(s => !s)} style={{
-            width: 40, height: 40, borderRadius: 'var(--radius-md)',
+          <button onClick={() => setShowAttachMenu(s => !s)} title="更多操作" aria-label="更多操作" style={{
+            width: 44, height: 44, borderRadius: 'var(--radius-md)',
             background: showAttachMenu ? 'var(--ink)' : 'var(--paper)',
             color: showAttachMenu ? 'var(--paper)' : 'var(--ink)',
             border: '1px solid var(--paper-edge)',
@@ -2180,11 +2182,11 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
               padding: '11px 14px', borderRadius: 'var(--radius-md)',
               background: 'var(--paper)', border: '1px solid var(--paper-edge)',
               color: 'var(--ink)', fontSize: chatFontSize, fontFamily: 'var(--font-serif)',
-              outline: 'none', minHeight: 40, maxHeight: 120, lineHeight: 1.5,
+              outline: 'none', minHeight: 44, maxHeight: 120, lineHeight: 1.5,
             }}
           />
           <button onClick={send} style={{
-            height: 40, padding: '0 18px', borderRadius: 'var(--radius-md)',
+            height: 44, padding: '0 18px', borderRadius: 'var(--radius-md)',
             background: 'var(--accent)', color: 'var(--paper)',
             border: 'none', fontWeight: 600, cursor: 'pointer',
             fontFamily: 'inherit', fontSize: chatThemeFontSize(13),
