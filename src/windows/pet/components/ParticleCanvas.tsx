@@ -419,7 +419,7 @@ function drawInteractionPulse(
   context.stroke();
 }
 
-export function ParticleCanvas({ snapshot, reaction, volume = 0 }: { snapshot: PetSnapshot; reaction?: PetMouseReaction | null; volume?: number }) {
+export function ParticleCanvas({ snapshot, reaction, volume = 0, paused = false }: { snapshot: PetSnapshot; reaction?: PetMouseReaction | null; volume?: number; paused?: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const snapshotRef = useRef(snapshot);
   const reactionRef = useRef<PetMouseReaction | null>(reaction ?? null);
@@ -447,6 +447,7 @@ export function ParticleCanvas({ snapshot, reaction, volume = 0 }: { snapshot: P
   useEffect(() => subscribePetRippleSettings(s => { rippleSettingsRef.current = s; }), []);
 
   useEffect(() => {
+    if (paused) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const context = canvas.getContext('2d');
@@ -585,7 +586,7 @@ export function ParticleCanvas({ snapshot, reaction, volume = 0 }: { snapshot: P
       window.cancelAnimationFrame(frame);
       window.removeEventListener('resize', resize);
     };
-  }, []);
+  }, [paused]);
 
   return (
     <canvas

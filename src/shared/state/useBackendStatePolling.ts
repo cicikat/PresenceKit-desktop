@@ -30,6 +30,7 @@ export const STATUS_BACKEND_STATE_CADENCE: BackendStatePollingCadence = {
 export function useBackendStatePolling(
   engine: StateEngine,
   cadence: BackendStatePollingCadence | null,
+  paused = false,
 ): BackendStatePollingControls {
   const [moodError, setMoodError] = useState<string | null>(null);
   const [activityError, setActivityError] = useState<string | null>(null);
@@ -88,24 +89,24 @@ export function useBackendStatePolling(
   }, [engine]);
 
   useEffect(() => {
-    if (!cadence) return;
+    if (!cadence || paused) return;
     fetchMood();
     moodIntervalRef.current = setInterval(fetchMood, cadence.moodMs);
     return () => {
       if (moodIntervalRef.current !== null) clearInterval(moodIntervalRef.current);
       moodIntervalRef.current = null;
     };
-  }, [cadence, fetchMood]);
+  }, [cadence, fetchMood, paused]);
 
   useEffect(() => {
-    if (!cadence) return;
+    if (!cadence || paused) return;
     fetchActivity();
     activityIntervalRef.current = setInterval(fetchActivity, cadence.activityMs);
     return () => {
       if (activityIntervalRef.current !== null) clearInterval(activityIntervalRef.current);
       activityIntervalRef.current = null;
     };
-  }, [cadence, fetchActivity]);
+  }, [cadence, fetchActivity, paused]);
 
   return {
     moodError,

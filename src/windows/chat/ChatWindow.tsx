@@ -27,7 +27,7 @@ import { useChatAppearanceController } from './hooks/useChatAppearanceController
 import { usePetController } from './hooks/usePetController';
 import { useChatWindowNavigation } from './hooks/useChatWindowNavigation';
 
-export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivityOpen?: () => void; onToyOpen?: () => void; onRoomOpen?: () => void } = {}) {
+export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen, isCovered = false }: { onActivityOpen?: () => void; onToyOpen?: () => void; onRoomOpen?: () => void; isCovered?: boolean } = {}) {
   const engineRef = useRef<StateEngine | null>(null);
   if (!engineRef.current) engineRef.current = new StateEngine();
   const engine = engineRef.current;
@@ -35,7 +35,14 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivi
   if (!toolStatusRef.current) toolStatusRef.current = new ToolStatusOverlayController();
   const toolStatusController = toolStatusRef.current;
   const [toolStatus, setToolStatus] = useState<ToolStatusOverlayState | null>(() => toolStatusController.get());
-  useBackendStatePolling(engine, { moodMs: 120_000, activityMs: 180_000 });
+  const [documentVisible, setDocumentVisible] = useState(() => !document.hidden);
+  useEffect(() => {
+    const handleVisibility = () => setDocumentVisible(!document.hidden);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, []);
+  const visualPaused = isCovered || !documentVisible;
+  useBackendStatePolling(engine, { moodMs: 120_000, activityMs: 180_000 }, visualPaused);
 
   const appearanceController = useChatAppearanceController(engine);
   const petController = usePetController(engine, onToyOpen);
@@ -157,6 +164,7 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivi
                 engine={engine}
                 toolStatus={toolStatus}
                 sidebarRectRef={sidebarRectRef}
+                paused={visualPaused}
                 tab={appearanceController.sidebarTab}
                 onClose={appearanceController.closeSidebar} /></div>
               {!appearanceController.sidebarOnRight && <Divider onDrag={appearanceController.onDividerDrag} />}
@@ -169,7 +177,7 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen }: { onActivi
                  aria-hidden="true" />
           )}
           {appearanceController.appearance.backgroundKind === 'particles' && (
-            <ParticleBackground engine={engine} blur={appearanceController.appearance.backgroundBlur} />
+            <ParticleBackground engine={engine} blur={appearanceController.appearance.backgroundBlur} paused={visualPaused} />
           )}
           {appearanceController.appearance.backgroundKind === 'video' && appearanceController.appearance.backgroundVideoPath && (
             <VideoBg src={appearanceController.appearance.backgroundVideoPath} blur={appearanceController.appearance.backgroundBlur} />

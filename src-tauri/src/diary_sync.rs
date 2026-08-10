@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -58,7 +59,7 @@ struct DiaryBatchResponse {
 #[derive(Debug, Clone)]
 struct ScannedEntry {
     logical_date: String,
-    content: String,
+    content: Option<String>,
     sha256: String,
     mtime: i64,
     revision: i64,
@@ -71,10 +72,28 @@ fn now_millis() -> i64 {
         .unwrap_or(0)
 }
 
+#[cfg(test)]
 fn sha256(content: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(content.as_bytes());
     format!("{:x}", hasher.finalize())
+}
+
+fn sha256_file(path: &Path) -> Result<String, String> {
+    let mut file = fs::File::open(path)
+        .map_err(|_| "diary file could not be opened for hashing".to_string())?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0u8; 64 * 1024];
+    loop {
+        let read = file
+            .read(&mut buffer)
+            .map_err(|_| "diary file could not be hashed".to_string())?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+    Ok(format!("{:x}", hasher.finalize()))
 }
 
 fn valid_date_filename(name: &str) -> Option<String> {
@@ -115,14 +134,18 @@ fn modified_millis(metadata: &fs::Metadata) -> i64 {
         .unwrap_or(0)
 }
 
-fn scan_directory(root: &Path) -> Result<BTreeMap<String, ScannedEntry>, String> {
+fn scan_directory(
+    root: &Path,
+    manifest: &BTreeMap<String, DiaryManifestEntry>,
+) -> Result<BTreeMap<String, ScannedEntry>, String> {
     let mut result = BTreeMap::new();
-    scan_directory_inner(root, &mut result)?;
+    scan_directory_inner(root, manifest, &mut result)?;
     Ok(result)
 }
 
 fn scan_directory_inner(
     root: &Path,
+    manifest: &BTreeMap<String, DiaryManifestEntry>,
     result: &mut BTreeMap<String, ScannedEntry>,
 ) -> Result<(), String> {
     let mut children = fs::read_dir(root)
@@ -144,7 +167,7 @@ fn scan_directory_inner(
         }
         let path = entry.path();
         if file_type.is_dir() {
-            scan_directory_inner(&path, result)?;
+            scan_directory_inner(&path, manifest, result)?;
             continue;
         }
         if !file_type.is_file() {
@@ -164,14 +187,25 @@ fn scan_directory_inner(
         if metadata.len() > MAX_ENTRY_BYTES {
             return Err("diary file exceeds the 256 KiB limit".to_string());
         }
-        let content = fs::read_to_string(&path)
-            .map_err(|_| "diary file could not be decoded as UTF-8".to_string())?;
+        let sha256 = sha256_file(&path)?;
+        let content = if manifest
+            .get(&logical_date)
+            .map(|previous| !previous.deleted && previous.sha256 == sha256)
+            .unwrap_or(false)
+        {
+            None
+        } else {
+            Some(
+                fs::read_to_string(&path)
+                    .map_err(|_| "diary file could not be decoded as UTF-8".to_string())?,
+            )
+        };
         let mtime = modified_millis(&metadata);
         result.insert(
             logical_date.clone(),
             ScannedEntry {
                 logical_date,
-                sha256: sha256(&content),
+                sha256,
                 content,
                 mtime,
                 revision: mtime,
@@ -196,11 +230,14 @@ fn pending_entries(
         if unchanged {
             continue;
         }
+        let Some(content) = current_entry.content.as_ref() else {
+            continue;
+        };
         pending.insert(
             logical_date.clone(),
             DiarySyncEntry {
                 logical_date: current_entry.logical_date.clone(),
-                content: current_entry.content.clone(),
+                content: content.clone(),
                 sha256: current_entry.sha256.clone(),
                 mtime: current_entry.mtime,
                 revision: current_entry.revision,
@@ -407,7 +444,7 @@ pub fn clear_diary_directory(app: tauri::AppHandle) -> Result<DiarySyncStatus, S
 pub async fn sync_diary(app: tauri::AppHandle) -> Result<DiarySyncSummary, String> {
     let cfg = load_client_config(&app);
     let root = configured_directory(&cfg)?;
-    let current = scan_directory(&root)?;
+    let current = scan_directory(&root, &cfg.diary_sync.manifest)?;
     let pending = pending_entries(&cfg, &current);
     let mut next_manifest = cfg.diary_sync.manifest.clone();
     if pending.is_empty() {
@@ -499,7 +536,7 @@ mod tests {
             "2026-08-10".to_string(),
             ScannedEntry {
                 logical_date: "2026-08-10".to_string(),
-                content: "today".to_string(),
+                content: Some("today".to_string()),
                 sha256: sha256("today"),
                 mtime: 2,
                 revision: 2,

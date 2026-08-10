@@ -116,9 +116,11 @@ function useTelemetrySignals(
 export function SubStatus({
   engine,
   backendStatePolling,
+  paused = false,
 }: {
   engine: any;
   backendStatePolling: BackendStatePollingControls;
+  paused?: boolean;
 }) {
   const [state, setState] = useState(engine.get());
   useEffect(() => engine.subscribe(setState), [engine]);
@@ -149,10 +151,11 @@ export function SubStatus({
   };
 
   useEffect(() => {
+    if (paused) return;
     fetchSensor();
     const h = setInterval(fetchSensor, 10_000);
     return () => clearInterval(h);
-  }, []);
+  }, [paused]);
 
   const signals = useTelemetrySignals(engine, sensorData, sensorAvailable);
   const hue = MOOD_HUE[state.mood] ?? 70;
@@ -166,13 +169,14 @@ export function SubStatus({
   });
 
   useEffect(() => {
+    if (paused) return;
     const h = setInterval(() => {
       const { mood } = engine.get();
       const a = MOOD_AURA_BASE[mood] ?? 20;
       setRingBuffer(prev => [...prev.slice(1), { mood, aura: a }]);
     }, 2000);
     return () => clearInterval(h);
-  }, [engine]);
+  }, [engine, paused]);
 
   const { moodError, activityError, retryMood, retryActivity } = backendStatePolling;
   const hasError = moodError || activityError;

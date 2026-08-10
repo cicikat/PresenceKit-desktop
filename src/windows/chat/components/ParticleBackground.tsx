@@ -6,9 +6,10 @@ import type { StateEngine } from '../../../shared/state/store';
 interface ParticleBackgroundProps {
   engine: StateEngine;
   blur: number;
+  paused?: boolean;
 }
 
-export function ParticleBackground({ engine, blur }: ParticleBackgroundProps) {
+export function ParticleBackground({ engine, blur, paused = false }: ParticleBackgroundProps) {
   const [snapshot, setSnapshot] = useState<PetSnapshot>(() => {
     const s = engine.get();
     return { ...DEFAULT_PET_SNAPSHOT, mood: s.mood, presence: s.presence };
@@ -32,7 +33,7 @@ export function ParticleBackground({ engine, blur }: ParticleBackgroundProps) {
     return () => document.removeEventListener('visibilitychange', onVisibility);
   }, []);
 
-  if (!visible) return null;
+  if (!visible || paused) return null;
 
   return (
     <div

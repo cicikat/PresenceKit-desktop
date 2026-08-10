@@ -22,14 +22,14 @@ const SIDEBAR_HEADER: Record<string, { title: string; subtitle: string }> = {
   garden: { title: '陪伴花园', subtitle: 'GARDEN · 他在你不看的时候也在生长' },
 };
 
-export function SidebarPanel({ engine, toolStatus, sidebarRectRef, tab, onClose }: any) {
+export function SidebarPanel({ engine, toolStatus, sidebarRectRef, tab, onClose, paused = false }: any) {
   const rootRef = useRef<HTMLDivElement>(null);
   const backendStateCadence = tab === 'flow'
     ? FLOW_BACKEND_STATE_CADENCE
     : tab === 'status'
       ? STATUS_BACKEND_STATE_CADENCE
       : null;
-  const backendStatePolling = useBackendStatePolling(engine, backendStateCadence);
+  const backendStatePolling = useBackendStatePolling(engine, backendStateCadence, paused);
 
   useEffect(() => {
     const update = () => {
@@ -78,7 +78,7 @@ export function SidebarPanel({ engine, toolStatus, sidebarRectRef, tab, onClose 
           ) : tab === 'diary' ? (
             <SubDiary />
           ) : (
-            <SubStatus engine={engine} backendStatePolling={backendStatePolling} />
+            <SubStatus engine={engine} backendStatePolling={backendStatePolling} paused={paused} />
           )}
         </ErrorBoundary>
       </div>
