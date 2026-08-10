@@ -790,8 +790,8 @@ Authorization: Bearer <admin_token>
 | `list_dream_fonts()` | 前端 → Rust | packaged 优先扫描 `resource_dir/fonts`，debug/dev 回退源码 `public/fonts/`；目录不可用时报明确错误 |
 | `list_themes()` | 前端 → Rust | packaged 优先扫描 `resource_dir/themes/*/theme.json`，debug/dev 回退源码 `public/themes/`；原样返回 manifest，由前端校验 token 契约 |
 | `read_theme_css(id, file)` | 前端 → Rust | 读取 `themes/<id>/<file>` 的磁盘 mod CSS；仅允许单级 id、同目录 `.css` 文件，并经 canonical 路径校验拒绝绝对路径、穿越和 symlink 逃逸；CSS 文本仍由前端 `inspectThemeCss()` 安检 |
-| `dream_get_settings()` | 前端 → Rust → 后端 | GET `/dream/settings`；读取 Dream 上下文与 `display.physiological_arousal` |
-| `dream_update_settings(..., jailbreak_preset, display)` | 前端 → Rust → 后端 | PATCH `/dream/settings`；透传 Dream 独立 `jailbreak_preset`，`display` 可透传 `{ "physiological_arousal": boolean }` |
+| `dream_get_settings()` | 前端 → Rust → 后端 | GET `/dream/settings`；读取 Dream 上下文、`display.physiological_arousal` 与后端管理的 Scenario injection mode |
+| `dream_update_settings(..., jailbreak_preset, display)` | 前端 → Rust → 后端 | PATCH `/dream/settings`；桌面命令透传现有 Dream 字段；`scenario_injection_mode` 由后端管理面保存，当前不在客户端设置命令中暴露 |
 | `dream_group_enter/chat/exit(group_id, ...)` | 前端 → Rust → 后端 | POST `/group/{id}/dream/enter|send|exit`；群梦 send 返回 `{round_id,status}`，角色回复走 WS |
 | `dream_group_get_state/get_settings(group_id)` | 前端 → Rust → 后端 | GET `/group/{id}/dream/state|settings`；state 含 roster、逐角色 char_tension、blocks_chat，以及用于 WS 漏帧/重连恢复的 `round_status`（`idle|running|failed|timed_out`）和 `last_round_error` |
 | `dream_group_update_settings(group_id, ...)` | 前端 → Rust → 后端 | PATCH `/group/{id}/dream/settings`；透传世界、世界书、边界、群默认与 per-char 破限 |
@@ -894,6 +894,9 @@ DreamWindow
 Scenario / Mirror 状态 UI 只消费 `/dream/state`，显示位置是 Dream 偏好窗口的“世界”页。
 它不新增后端接口、WebSocket 或 progress 写回。Scenario 前端优先读取 `state.scenario`，
 并兼容同名平铺字段；Mirror 前端优先读取 `state.mirror_core`，并兼容 `state.mirror`。
+单人 Scenario state 还可返回冻结的 `scenario_injection_mode` 和正文无关的
+`projection` budget/status metadata；客户端不得把 projection 内容或 authored 剧本文件
+当作 Reality prompt 或本地运行时真值。设置变更在 active Dream 中不切换当前模式。
 
 世界页的“入梦模式”复用现有 `POST /dream/enter`：
 

@@ -41,7 +41,7 @@ to use only the persona-scoped settings and runtime endpoints documented below.
 
 ## 管理面板（admin token）
 
-- 模型路由支持从 legacy `llm` 一键初始化 `model_presets`，之后可维护 preset、密钥、URL、模型、`api_protocol`（`chat_completions` / `responses`）与 routing profile。管理面重命名 preset 时会自动更新所有 routing profile 引用并热重载。profile 内的 `sensor_judge` 是后端后台裁决专用 category（缺失时兼容回退 `intent → chat`），桌面端不单独展示或编辑其超时、重试和断路器策略。协议字段只由后端管理面配置；桌面端仍只选择既有 routing profile，不下发 API key、URL 或协议配置。
+- 模型路由支持从 legacy `llm` 一键初始化 `model_presets`，之后可维护 preset、密钥、URL、模型、`api_protocol`（`chat_completions` / `responses`）与 routing profile。管理面重命名 preset 时会自动更新所有 routing profile 引用并热重载。profile 内的 `sensor_judge` 与 `scenario_reconcile` 是后端后台 category，分别用于传感器裁决与 Dream 发送后的语义校准（缺失时兼容回退 `intent → chat`），桌面端不单独展示或编辑其超时、重试和断路器策略。协议字段只由后端管理面配置；桌面端仍只选择既有 routing profile，不下发 API key、URL 或协议配置。
 - 代理、上下文轮数、legacy LLM 参数和视觉模型不再是假只读镜像，保存后热重载。
 - TTS 管理配置含服务端总开关、桌面语音条开关、情绪分档、服务 URL、参考音频/文本与语速；provider 的选择、参数和试听只在后端管理面处理。桌面端只调用 `/settings/tts-desktop`、`/settings/tts-auto-play` 和 `/tts/synthesize`，不读取 provider 配置或密钥；兼容层仍返回 `{audio_b64, mime}`。
 - 表情包由后端管理面经 `GET/PUT /sticker-config` 管理总开关与 0–1 触发概率；它不是桌面客户端设置项，关闭后后端不会向任一通道发送或广播表情包。
