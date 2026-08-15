@@ -90,7 +90,7 @@ function GomokuBoard({
   const boardPx = (BOARD_SIZE - 1) * cellSize + pad * 2;
 
   return (
-    <div style={{
+    <div className="activity-game-page" style={{
       position: 'relative',
       width: boardPx, height: boardPx,
       background: 'var(--goban-bg)',
@@ -359,7 +359,7 @@ export function GomokuPage() {
       background: 'var(--paper)', color: 'var(--ink)',
     }}>
       {/* header */}
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', minWidth: 0 }}>
         <div className="serif" style={{ fontSize: 22, fontWeight: 600, letterSpacing: -0.3 }}>
           五子棋
         </div>
@@ -397,7 +397,7 @@ export function GomokuPage() {
 
       {/* error */}
       {error && (
-        <div className="mono" style={{
+        <div className="mono activity-game-error" style={{
           padding: '8px 12px', background: 'oklch(0.95 0.05 20)',
           border: '1px solid oklch(0.80 0.10 20)', borderRadius: 'var(--radius-sm)',
           fontSize: 11, color: 'oklch(0.40 0.14 20)', letterSpacing: 0.5,
@@ -441,10 +441,11 @@ export function GomokuPage() {
       </div>
 
       {/* board row: left=board+info, right=companion */}
-      <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', position: 'relative' }}>
+      <div className="activity-game-layout" style={{ display: 'flex', gap: 24, alignItems: 'flex-start', position: 'relative' }}>
         {/* left: game info + board (responsive) */}
         <div
           ref={boardContainerRef}
+          className="activity-game-board-column"
           style={{ flex: 1, minWidth: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 12 }}
         >
           {/* info panel */}

@@ -94,7 +94,7 @@ export function ToySidebar() {
           disabled={connecting}
           style={{
             justifySelf: 'start',
-            padding: '6px 14px', fontSize: 12, fontFamily: 'inherit',
+            minHeight: 36, padding: '6px 14px', fontSize: 12, fontFamily: 'inherit',
             border: '1px solid var(--paper-edge)', borderRadius: 6,
             background: 'var(--paper)', color: 'var(--ink)',
             cursor: connecting ? 'default' : 'pointer', opacity: connecting ? 0.6 : 1,
@@ -102,7 +102,7 @@ export function ToySidebar() {
           {connecting ? '连接中…' : connected ? '重新扫描' : '连接 Intiface'}
         </button>
         {error && (
-          <div style={{ fontSize: 11.5, color: 'var(--status-error, oklch(0.65 0.2 25))', lineHeight: 1.5 }}>
+          <div style={{ fontSize: 11.5, color: 'var(--status-error, oklch(0.65 0.2 25))', lineHeight: 1.5, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
             读取失败：{error}
           </div>
         )}
@@ -128,7 +128,7 @@ export function ToySidebar() {
                 background: 'var(--paper)', border: '1px solid var(--paper-edge)',
               }}>
                 <Dot on={d.connected} />
-                <span style={{ fontSize: 12.5, color: 'var(--ink)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span title={d.display_name || d.name} style={{ fontSize: 12.5, color: 'var(--ink)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {d.display_name || d.name}
                 </span>
                 {d.can_vibrate && (

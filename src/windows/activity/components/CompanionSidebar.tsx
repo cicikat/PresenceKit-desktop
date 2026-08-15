@@ -22,6 +22,8 @@ export function CompanionSidebar({ activityId, sessionId, sessionActive, session
       <button
         onClick={expand}
         title="展开对话"
+        aria-label="展开对话"
+        className="activity-companion-expand"
         style={{
           position: 'absolute', top: 10, right: 10, zIndex: 10,
           width: 30, height: 30, borderRadius: 'var(--radius-sm)',
@@ -35,7 +37,7 @@ export function CompanionSidebar({ activityId, sessionId, sessionActive, session
   }
 
   return (
-    <div style={{
+    <div className="activity-companion-sidebar" style={{
       width: 'clamp(260px, 30%, 340px)',
       flexShrink: 0,
       display: 'flex',

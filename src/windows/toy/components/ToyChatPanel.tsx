@@ -108,7 +108,7 @@ export function ToyChatPanel({ chatFontSize = 14 }: { chatFontSize?: number }) {
 
       {error && (
         <div style={{
-          padding: '6px 22px', fontSize: 11.5,
+          padding: '6px 22px', fontSize: 11.5, overflowWrap: 'anywhere', wordBreak: 'break-word',
           color: 'var(--status-error, oklch(0.65 0.2 25))',
         }}>
           发送失败：{error}
@@ -116,7 +116,7 @@ export function ToyChatPanel({ chatFontSize = 14 }: { chatFontSize?: number }) {
       )}
 
       <div style={{
-        padding: '12px 18px', borderTop: '1px solid var(--paper-edge)',
+        padding: '12px 18px', borderTop: '1px solid var(--paper-edge)', minWidth: 0,
         display: 'flex', gap: 10, alignItems: 'flex-end', background: 'var(--paper-2)',
       }}>
         <textarea
@@ -126,7 +126,7 @@ export function ToyChatPanel({ chatFontSize = 14 }: { chatFontSize?: number }) {
           rows={1}
           placeholder={`和${getActiveCharacterName()}说点什么…`}
           style={{
-            flex: 1, resize: 'none', maxHeight: 120,
+            flex: 1, minWidth: 0, resize: 'none', maxHeight: 120,
             padding: '9px 12px', fontSize: chatFontSize, fontFamily: 'inherit',
             border: '1px solid var(--paper-edge)', borderRadius: 10,
             background: 'var(--paper)', color: 'var(--ink)', outline: 'none',
@@ -136,7 +136,7 @@ export function ToyChatPanel({ chatFontSize = 14 }: { chatFontSize?: number }) {
           onClick={() => void send()}
           disabled={sending || !input.trim()}
           style={{
-            padding: '9px 18px', fontSize: 13, fontFamily: 'inherit', fontWeight: 600,
+            minHeight: 40, padding: '9px 18px', fontSize: 13, fontFamily: 'inherit', fontWeight: 600,
             border: 'none', borderRadius: 10,
             background: 'var(--forest)', color: 'var(--on-forest)',
             cursor: sending || !input.trim() ? 'default' : 'pointer',

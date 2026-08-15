@@ -169,3 +169,49 @@ input, textarea { font-family: inherit; }
 }
 
 @keyframes vn-cursor-blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+
+/* Narrow-window interaction guards. Keep overlays and activity tools inside the
+   viewport while allowing their content areas to own scrolling. */
+.avatar-cropper {
+  position: fixed; inset: 0; z-index: 120; box-sizing: border-box;
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px; overflow: auto;
+  background: oklch(0.10 0.04 60 / 0.80); backdrop-filter: blur(8px);
+}
+.avatar-cropper__panel {
+  width: min(440px, 100%); max-height: calc(100dvh - 32px);
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--paper); border: 1px solid var(--paper-edge);
+  border-radius: 10px; box-shadow: 0 30px 80px var(--shadow-rgb-mix);
+}
+.avatar-cropper__stage { position: relative; width: 100%; height: min(340px, 48dvh); min-height: 180px; flex: 1 1 auto; background: oklch(0.12 0.03 60); }
+.avatar-cropper__footer { padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; background: var(--paper-2); flex-shrink: 0; }
+.avatar-cropper__zoom { display: flex; align-items: center; gap: 12px; }
+.avatar-cropper__zoom input { flex: 1; min-width: 0; }
+.avatar-cropper__actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.activity-game-page { min-width: 0; overflow-x: hidden; }
+.activity-game-layout { min-width: 0; }
+.activity-game-board-column { min-width: 0; }
+.activity-companion-sidebar { min-width: 0; height: min(calc(100dvh - 40px), 520px); }
+.activity-companion-sidebar > * { min-height: 0; height: 100%; }
+.chat-composer-row { min-width: 0; }
+
+@media (max-width: 760px) {
+  .activity-game-page { padding: 20px 16px !important; gap: 16px !important; }
+  .activity-game-layout { flex-direction: column !important; gap: 16px !important; }
+  .activity-game-board-column { width: 100%; overflow: visible !important; align-items: center; }
+  .activity-companion-sidebar { position: static !important; width: 100% !important; height: min(42dvh, 360px) !important; max-height: min(42dvh, 360px) !important; }
+  .activity-companion-expand { top: 8px !important; right: 8px !important; }
+  .chat-composer-row { gap: 6px !important; }
+  .chat-composer-row > textarea { min-width: 0; }
+}
+@media (max-width: 380px) {
+  .avatar-cropper { padding: 8px; }
+  .avatar-cropper__panel { max-height: calc(100dvh - 16px); }
+  .avatar-cropper__stage { height: min(300px, 42dvh); min-height: 150px; }
+  .avatar-cropper__footer { padding: 12px; gap: 10px; }
+  .avatar-cropper__actions { justify-content: stretch; }
+  .avatar-cropper__actions button { flex: 1; min-width: 0; padding-inline: 10px !important; }
+  .chat-composer-row > button { width: 40px !important; padding-inline: 0 !important; }
+  .chat-composer-row > button:last-child { width: auto !important; padding-inline: 10px !important; }
+}

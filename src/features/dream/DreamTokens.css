@@ -1878,13 +1878,13 @@
 }
 
 .dream-background-cropper {
-  position: absolute;
+  position: fixed;
   inset: 0;
   z-index: 40;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: 16px;
   box-sizing: border-box;
   background: rgb(5 9 19 / 0.78);
   backdrop-filter: blur(12px);
@@ -1892,6 +1892,9 @@
 
 .dream-background-cropper__panel {
   width: min(880px, calc(100vw - 48px));
+  max-height: calc(100dvh - 32px);
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--dt-border);
   border-radius: 12px;
@@ -1927,7 +1930,8 @@
 .dream-background-cropper__stage {
   position: relative;
   width: 100%;
-  height: min(54vw, 500px);
+  height: min(54vw, 500px, calc(100dvh - 190px));
+  min-height: 160px;
   background: var(--dt-bg-1);
 }
 
@@ -1937,6 +1941,17 @@
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+@media (max-width: 560px) {
+  .dream-background-cropper { padding: 8px; }
+  .dream-background-cropper__panel { width: 100%; max-height: calc(100dvh - 16px); }
+  .dream-background-cropper__header { padding: 12px 14px; }
+  .dream-background-cropper__footer { align-items: stretch; padding: 12px 14px; gap: 10px; }
+  .dream-background-cropper__zoom { width: 100%; }
+  .dream-background-cropper__actions { justify-content: stretch; }
+  .dream-background-cropper__actions button { flex: 1; min-height: 40px; min-width: 0; }
+  .dream-background-cropper__stage { height: min(54vw, calc(100dvh - 180px)); }
 }
 
 .dream-background-cropper__zoom {

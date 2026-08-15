@@ -13,6 +13,7 @@ export const prefSelectStyle: CSSProperties = {
 
 export const prefActionButtonStyle: CSSProperties = {
   justifySelf: 'start',
+  minHeight: 36,
   padding: '6px 14px',
   borderRadius: 'var(--radius-sm)',
   fontSize: 12,
@@ -54,16 +55,16 @@ export function PrefRange({ min, max, step, value, onChange }: any) {
   );
 }
 
-export function PrefSwitch({ active, onClick }: any) {
+export function PrefSwitch({ active, onClick, ariaLabel = '切换设置' }: any) {
   return (
-    <button onClick={onClick} style={{
-      width: 42, height: 22, borderRadius: 11,
+    <button onClick={onClick} aria-label={ariaLabel} aria-pressed={active} style={{
+      width: 44, height: 32, borderRadius: 16,
       background: active ? 'var(--accent-3)' : 'var(--paper-3)',
       border: '1px solid var(--paper-edge)',
       cursor: 'pointer', position: 'relative', padding: 0, transition: 'background 0.2s',
     }}>
       <span style={{
-        position: 'absolute', top: 1, left: active ? 21 : 1,
+        position: 'absolute', top: 6, left: active ? 25 : 5,
         width: 18, height: 18, borderRadius: '50%',
         background: 'var(--paper)', boxShadow: '0 1px 3px var(--shadow-rgb-mix)',
         transition: 'left 0.2s',

@@ -252,10 +252,11 @@ export function ActivityCompanionPanel({ activityId, sessionId, sessionActive, s
         <button
           onClick={() => onCollapse?.()}
           title="收起"
+          aria-label="收起"
           style={{
             border: 'none', background: 'transparent', cursor: 'pointer',
             color: 'var(--ink-3)', fontSize: 14, lineHeight: 1,
-            padding: '0 2px', display: 'flex', alignItems: 'center',
+            minWidth: 36, minHeight: 36, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}
         >»</button>
       </div>
@@ -290,7 +291,7 @@ export function ActivityCompanionPanel({ activityId, sessionId, sessionActive, s
                 : msg.error ? 'oklch(0.40 0.14 20)' : 'var(--ink)',
               border: msg.role === 'user' ? 'none' : '1px solid var(--paper-edge)',
               fontSize: 12.5, lineHeight: 1.6,
-              wordBreak: 'break-word',
+              whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowWrap: 'anywhere',
             }}>
               {msg.text}
             </div>
@@ -323,7 +324,7 @@ export function ActivityCompanionPanel({ activityId, sessionId, sessionActive, s
       ) : (
         <div style={{
           padding: '8px 10px', borderTop: '1px solid var(--paper-edge)',
-          display: 'flex', gap: 6, flexShrink: 0,
+          display: 'flex', gap: 6, flexShrink: 0, minWidth: 0,
         }}>
           <input
             value={input}
@@ -334,7 +335,7 @@ export function ActivityCompanionPanel({ activityId, sessionId, sessionActive, s
             placeholder={`和${getActiveCharacterName()}说一句……`}
             disabled={!canSend}
             style={{
-              flex: 1, fontFamily: 'inherit', fontSize: 12,
+              flex: 1, minWidth: 0, minHeight: 36, fontFamily: 'inherit', fontSize: 12,
               padding: '5px 8px', borderRadius: 'var(--radius-sm)',
               border: '1px solid var(--paper-edge)', background: 'var(--paper)',
               color: 'var(--ink)', outline: 'none',
@@ -345,7 +346,7 @@ export function ActivityCompanionPanel({ activityId, sessionId, sessionActive, s
             onClick={handleSend}
             disabled={!canSend || !input.trim()}
             style={{
-              fontFamily: 'inherit', fontSize: 12, padding: '5px 10px',
+              minHeight: 36, fontFamily: 'inherit', fontSize: 12, padding: '5px 10px',
               borderRadius: 'var(--radius-sm)', border: '1px solid var(--ink)',
               background: 'var(--ink)', color: 'var(--paper)',
               cursor: !canSend || !input.trim() ? 'not-allowed' : 'pointer',
