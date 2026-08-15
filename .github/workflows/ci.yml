@@ -12,6 +12,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Checkout frozen backend protocol fixtures
+        uses: actions/checkout@v4
+        with:
+          repository: cicikat/PresenceKit
+          ref: d12f3ff438c7aacc01d3b0b1f66dbba9677267b5
+          path: Emerald-presence
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -25,6 +32,8 @@ jobs:
 
       - name: Run frontend tests
         run: npm test
+        env:
+          PRESENCEKIT_PROTOCOL_FIXTURES: ${{ github.workspace }}/Emerald-presence/tests/protocol_fixtures/v1
 
       - name: Build frontend
         run: npm run build
