@@ -1,0 +1,66 @@
+/* Celadon Tea - theme.css */
+[data-theme="celadon-tea"] .chat-ui {
+  background: 
+    radial-gradient(circle at 10% 10%, rgb(255 255 255 / 0.7), transparent 40%),
+    radial-gradient(circle at 90% 90%, rgb(130 179 146 / 0.08), transparent 50%),
+    linear-gradient(to bottom, var(--paper), var(--paper-2));
+  font-family: var(--font-serif), Georgia, serif;
+}
+
+[data-theme="celadon-tea"] [data-layout-slot="ribbon"],
+[data-theme="celadon-tea"] [data-layout-slot="sidebar"],
+[data-theme="celadon-tea"] [data-layout-slot="main"] {
+  border: 1px solid var(--paper-edge);
+  background: rgb(255 255 255 / 0.65);
+  box-shadow: 0 4px 20px rgb(0 0 0 / 0.02), inset 0 1px 0 white;
+  backdrop-filter: blur(12px);
+}
+
+[data-theme="celadon-tea"] [data-layout-slot="main"] {
+  border-radius: var(--radius-lg);
+}
+
+[data-theme="celadon-tea"] [data-layout-slot="ribbon"] {
+  border-radius: var(--radius-lg);
+}
+
+[data-theme="celadon-tea"] [data-layout-slot="sidebar"] {
+  border-radius: var(--radius-lg);
+}
+
+/* Chat bubble styling: clean cards with soft borders */
+[data-theme="celadon-tea"] .chat-bubble {
+  border: 1px solid var(--paper-edge);
+  border-radius: var(--radius-md) !important;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.02);
+  font-family: var(--font-serif), Georgia, serif;
+}
+
+[data-theme="celadon-tea"] .chat-bubble--user {
+  background: var(--forest) !important;
+  color: var(--on-forest) !important;
+  box-shadow: 0 4px 12px rgb(80 112 90 / 0.15);
+  border: 1px solid var(--forest-1);
+}
+
+[data-theme="celadon-tea"] .chat-bubble--assistant {
+  background: var(--paper-2) !important;
+  color: var(--ink) !important;
+  border: 1px solid var(--paper-edge);
+}
+
+/* Scrollbars custom styling */
+[data-theme="celadon-tea"] ::-webkit-scrollbar-thumb {
+  background: var(--paper-edge);
+  border-radius: var(--radius-pill);
+}
+
+[data-theme="celadon-tea"] .chat-ui button {
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--paper-edge);
+}
+
+[data-theme="celadon-tea"] .chat-ui button:hover {
+  background: var(--paper-3);
+  transform: translateY(-1px);
+}
