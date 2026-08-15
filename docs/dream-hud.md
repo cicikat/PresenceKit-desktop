@@ -67,7 +67,13 @@ EMA 公式：`smooth = α × raw + (1 - α) × old`
 
 ## 世界包配置
 
-世界包目录：`characters/dream_worlds/{world_id}/`
+世界包是 backend authored 资产，路径由 backend `DataPaths` / `AssetRegistry` 解析，不能作为桌面端文件契约：
+
+- canonical 写入：`userdata/characters/dream/worlds/{world_id}/`
+- tracked seed：`defaults/dream_worlds/_default/`
+- legacy 只读回退：`characters/dream_worlds/{world_id}/`
+
+桌面端只通过 `GET /dream/state` 消费派生后的 HUD，不直接读取上述目录。
 
 ### symbolic_profile.yaml
 
@@ -94,7 +100,7 @@ symbolic_profile:
 - 顶层键可以是 `symbolic_profile:` 包裹的嵌套结构，或直接平铺
 - `default` 键作为未命中锚的默认权重
 
-**缺失时：** 自动 fallback 到 `characters/dream_worlds/anchor_weights.json`（只含 weight，tags 为空）。
+**缺失时：** 由 backend loader 在已解析的 world roots 中寻找全局 `anchor_weights.json`（只含 weight，tags 为空）；桌面端不自行定位该文件。
 
 ### hud_labels.yaml
 

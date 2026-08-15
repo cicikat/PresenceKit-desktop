@@ -260,7 +260,7 @@ Emerald-presence push_action_and_wait()
   → 成功/失败后回 ack
 ```
 
-当前接入四类基础 desktop action：`minimize_window`、`open_url`、`show_notify`、`media_play_pause`，以及只打开 Dream overlay 的 UI action `dream_invite`。未知 action 不执行，并回 `ok:false`。
+当前接入 9 类 desktop action：`minimize_window`、`open_url`、`show_notify`、`media_play_pause`、`play_netease`、`dream_invite`、`toy_invite`、`presence_nag`、`avatar_directive`。未知 action 不执行，并回 `ok:false`；完整字段和 ack 语义见 `docs/protocol-v0.md`。
 
 ### 聊天历史按日懒加载（Phase 2c+）
 
@@ -397,7 +397,7 @@ Dream 背景按 `day` / `night` 分开记录。旧版单字段 `dream_background
 
 - 客户端和后端当前正式使用冻结的 v0.1 WS 协议。
 - `assistant_message` / `state_update` / `user_message` / `client_event` 是未排期的后续设计，当前未实现且不阻塞产品 v1。
-- action executor 只覆盖四类基础动作，尚未接入桌宠行为或 v1 capabilities。
+- action executor 当前覆盖 v0.1 的 9 类 allowlist 动作，尚未接入 v1 capabilities。
 - P-02 已将 backend base、WebSocket base、admin token 和 sensor config 外化到 client config；`config/client.local.json` 不提交。`bot_user_id` 默认为空，`load_history` 在空 id 时返回空历史；token 默认值仅为不可用占位符 `CHANGE_ME`。
 
 完整列表见 `docs/known-issues.md`。

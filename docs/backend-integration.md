@@ -1,6 +1,8 @@
 # docs/backend-integration.md — 后端接口与接入现状
 
-本文档记录本仓当前和 `Emerald-presence` 的连接方式。桌面协议统一见 `docs/protocol-v0.md`。
+本文档记录本仓当前和 `Emerald-presence` 的连接方式。三仓接口总账见
+`Emerald-presence/docs/three-repo-interface-catalog.md`；桌面消息细节统一见
+`docs/protocol-v0.md`。
 
 群梦 `POST /group/{id}/dream/enter` 的预期 409 返回 `detail.code`、`detail.message` 与 `detail.retryable`。客户端按 code 分支，任一 409 后刷新一次 state；`GROUP_DREAM_ALREADY_ACTIVE` 刷新到 active 时接续既有群梦。此 HTTP 契约不新增 WebSocket 帧，5xx 正文不透传到 WebView。
 

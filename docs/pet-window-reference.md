@@ -1,15 +1,13 @@
-# pet-window-reference.md - desktop companion UI reference
+# pet-window-reference.md - 桌面陪伴 UI 参考
 
-This document extracts the useful design intent from the old
-`pet.jsx` and `spec.jsx` in the `Emerald-desktopUI` repo (usually a sibling
-of this repo).
-It remains a tuning reference for the implemented PresenceKit-desktop pet window;
-it is not a requirement to preserve the old JSX implementation or file structure.
+本文从旧 `Emerald-desktopUI` 仓库（通常是本仓库的 sibling）中的 `pet.jsx` 和 `spec.jsx` 提取有用的设计意图。
+它仍是已实现 PresenceKit-desktop pet window 的调参参考，不要求保留旧 JSX 实现或文件结构。
 
-## Current status
+## 当前状态
 
-The pet window is implemented in `src/windows/pet/` as a transparent/topmost Tauri window with particle, 3D, and Live2D stages. It receives state and speaking events from the main window, supports mouse-aware retreat/nuzzle/drag behavior, and does not open its own WebSocket. The richer concrete behavior loop described below remains post-v0.1 reference material.
-Relevant new-client entry points:
+Pet window 已在 `src/windows/pet/` 实现为透明/置顶的 Tauri window，包含粒子、3D 和 Live2D stage。它从主 window 接收 state 和 speaking event，支持鼠标感知的 retreat/nuzzle/drag 行为，并且不会打开自己的 WebSocket。下文描述的更丰富 concrete behavior loop 仍属于 post-v0.1 参考资料。
+
+相关的新客户端入口：
 
 - `src/windows/chat/ChatWindow.tsx`
 - `src/shared/state/store.ts`
@@ -20,268 +18,234 @@ Relevant new-client entry points:
 - `src/shared/theme/globals.css`
 - `src-tauri/tauri.conf.json`
 
-## Core principle
+## 核心原则
 
-The pet is state-driven, not message-driven. The user should be able to feel
-that the companion is present even when no chat bubble appears.
+Pet 是 state-driven，而不是 message-driven。即使没有 chat bubble，用户也应能感到 companion 在场。
 
-The durable state model is:
+持久化 state model 为：
 
-- `mood`: long-lived emotional tone.
-- `focus`: short-lived attention target or posture.
-- `presence`: active, idle, or away availability.
-- `mode`: `companion` or `chat-only`.
-- `wantToSpeak`: a transient signal that something almost became a message.
+- `mood`：长期情绪基调。
+- `focus`：短期注意力目标或姿态。
+- `presence`：active、idle 或 away availability。
+- `mode`：`companion` 或 `chat-only`。
+- `wantToSpeak`：某件事差一点成为消息时的瞬时 signal。
 
-Messages are only one expression of this state. The pet window should also
-express state through breathing, gaze, posture, aura, delay, and small failed
-or incomplete behaviors.
+消息只是这种 state 的一种表现。Pet window 还应通过呼吸、视线、姿势、aura、延迟，以及小型失败/未完成行为来表达 state。
 
-## Design principles from `spec.jsx`
+## `spec.jsx` 中的设计原则
 
 ### 1. State Before Message
 
-Mood and focus must be continuously visible through ambient signals. Avoid
-making mood only a tag, icon, or line of text. The pet should communicate mood
-before it says anything.
+Mood 和 focus 必须通过 ambient signal 持续可见。不要把 mood 只做成 tag、icon 或文字行。Pet 应在说话前就传达 mood。
 
-Examples of continuous signals:
+连续 signal 示例：
 
-- Breathing rhythm and depth.
-- Gaze lock strength.
-- Blink interval and irregularity.
-- Aura hue and intensity.
-- Body tilt and micro drift.
-- Reaction delay.
+- 呼吸节奏和深度。
+- 视线锁定强度。
+- 眨眼间隔和不规则性。
+- Aura 色相和强度。
+- 身体倾斜和微漂移。
+- Reaction delay。
 
 ### 2. Permanent Micro Motion
 
-A perfectly still pet feels dead. Even when idle, the pet needs subtle motion:
+完全静止的 pet 会显得死气沉沉。即使 idle，pet 也需要细微运动：
 
-- Breathing.
-- Tiny position drift.
-- Eye movement.
-- Occasional blink.
-- Slight changes in posture.
+- 呼吸。
+- 微小位置漂移。
+- 眼睛移动。
+- 偶尔眨眼。
+- 姿势的轻微变化。
 
-The old spec treated stillness longer than roughly 800ms as a failure for the
-companion illusion. The new implementation does not need to copy that exact
-number, but it should preserve the principle.
+旧 spec 将大约超过 800ms 的静止视为 companion illusion 的失败。新实现不必复制这个精确数字，但应保留这一原则。
 
 ### 3. Delay Creates Personality
 
-Not every reaction should be instant. Delay is part of character expression:
+并非每个反应都应立即发生。延迟是 character expression 的一部分：
 
-- Low mood can react more slowly.
-- Distracted mood can have a delayed or indirect gaze response.
-- Hesitation before moving toward the cursor matters more than the movement
-  itself.
+- 低落 mood 可以反应更慢。
+- 分心 mood 可以产生延迟或间接的视线响应。
+- 向 cursor 移动前的犹豫，比实际移动本身更重要。
 
-This should be implemented intentionally, not as accidental UI lag.
+这应当被有意实现，不能变成偶然的 UI lag。
 
 ### 4. Failure Is Valuable
 
-Some behaviors should fail or remain incomplete. The old prototype used a
-40 percent failure chance for mouse-nudge behavior. The exact probability can
-change, but the design intent should remain:
+有些行为应当失败或停留在未完成状态。旧 prototype 为 mouse-nudge behavior 使用了 40% 的失败概率。具体概率可以变化，但设计意图应保留：
 
-- Sometimes the pet starts moving toward the user and gives up.
-- Sometimes it wants to say something, then does not.
-- Sometimes it looks away before fully engaging.
+- Pet 有时开始朝用户移动，又放弃了。
+- 有时它想说什么，最后没有说。
+- 有时它在完全投入前先移开视线。
 
-A pet that always completes every action feels like a button. A pet that
-sometimes fails feels more alive.
+如果每个 action 都总能完成，pet 会像按钮；偶尔失败会让它更有生命感。
 
 ### 5. Asymmetric Attention
 
-The pet should not always stare directly at the cursor. Attention should vary:
+Pet 不应总是直视 cursor。注意力应有所变化：
 
-- Direct gaze when focused on the user.
-- Wandering gaze when distracted.
-- Downward gaze when thinking.
-- Sidebar/chat/screen-oriented gaze when reacting to UI context.
-- Occasional glance behavior that is short and easy to miss.
+- focused on user 时直视。
+- distracted 时游移。
+- thinking 时向下看。
+- 对 UI context 作出反应时看向 sidebar/chat/screen。
+- 偶尔快速瞥一眼，让人不易察觉。
 
-This is especially important if Dream UI adds softer, more ambiguous states.
+如果 Dream UI 加入更柔和、更含混的状态，这一点尤其重要。
 
-## Behavior model from `pet.jsx`
+## `pet.jsx` 中的行为模型
 
-The old pet implementation had useful behavior categories, even though the SVG
-placeholder character should not be treated as final art.
+旧 pet 实现包含有用的行为分类，尽管其中的 SVG placeholder character 不能视为最终美术。
 
-### Visual inputs
+### Visual input
 
-The pet visual responded to:
+Pet visual 对以下输入作出反应：
 
-- Current mood.
-- Current focus/activity.
-- Presence state.
-- Mouse position.
-- Chat panel bounds.
-- Sidebar bounds.
-- `wantToSpeak`.
+- 当前 mood。
+- 当前 focus/activity。
+- Presence state。
+- Mouse position。
+- Chat panel bounds。
+- Sidebar bounds。
+- `wantToSpeak`。
 
-For the new client, equivalent inputs should come from:
+对于新客户端，对应输入应来自：
 
-- `StateEngine` in `src/shared/state/store.ts`.
-- Chat and sidebar geometry from `ChatWindow.tsx`.
-- Backend mood/activity/sensor state from existing API wrappers.
-- Future backend `state_update` events over WebSocket.
+- `src/shared/state/store.ts` 中的 `StateEngine`。
+- `ChatWindow.tsx` 中的 chat 和 sidebar geometry。
+- 现有 API wrapper 提供的 backend mood/activity/sensor state。
+- 未来通过 WebSocket 传入的 backend `state_update` event。
 
 ### Continuous animation
 
-The old pet used `requestAnimationFrame` for:
+旧 pet 使用 `requestAnimationFrame` 实现：
 
-- Breathing scale.
-- Body tilt interpolation.
-- Eye offset interpolation.
-- Blink timing.
-- Aura hue/intensity interpolation.
-- Micro drift.
-- Nudge movement.
+- 呼吸缩放。
+- 身体倾斜插值。
+- 眼睛偏移插值。
+- 眨眼计时。
+- Aura 色相/强度插值。
+- 微漂移。
+- Nudge movement。
 
-Future implementation should keep animation local to the pet surface, while
-keeping business state outside the pet renderer.
+未来实现应让 animation 留在 pet surface 内部，同时把 business state 保持在 pet renderer 之外。
 
 ### Mouse nudge
 
-The nudge behavior had four phases:
+Nudge behavior 有四个阶段：
 
-1. Hesitate: small pause before moving.
-2. Going: move partly toward the cursor.
-3. Hold: brief stay near the cursor, only on success.
-4. Retreat: return toward a nearby home position.
+1. Hesitate：移动前短暂停顿。
+2. Going：向 cursor 部分移动。
+3. Hold：仅在成功时短暂停在 cursor 附近。
+4. Retreat：回到附近的 home position。
 
-Important details:
+重要细节：
 
-- Trigger only when the cursor is near enough.
-- Use mood-dependent trigger rates.
-- Include a failure path.
-- Do not return to the exact same pixel; slight imprecision helps.
+- 只有 cursor 足够近时才触发。
+- 使用 mood-dependent trigger rate。
+- 包含 failure path。
+- 不要回到完全相同的 pixel；轻微不精确会更自然。
 
 ### Click reaction
 
-Clicking the pet should not feel like pressing a normal button. The old
-prototype treated click as a small startle or shyness event:
+点击 pet 不应像按普通 button。旧 prototype 将 click 视为轻微受惊或害羞：
 
-- Mark user interaction.
-- Cancel current nudge.
-- Move slightly away.
-- Return focus toward the user after a short delay.
+- 标记 user interaction。
+- 取消当前 nudge。
+- 稍微移开。
+- 短暂延迟后将 focus 移回用户。
 
-If future UI needs a pet menu, prefer long press, context menu, or a secondary
-control. A normal click should remain expressive first.
+如果未来 UI 需要 pet menu，优先考虑 long press、context menu 或 secondary control。普通 click 应首先保持 expressive。
 
 ### Want-to-speak signal
 
-`wantToSpeak` should be visible without necessarily sending a message.
+`wantToSpeak` 应在不一定发送消息的情况下可见。
 
-The old prototype used a small "UNSENT" envelope above the pet. The exact visual
-can change, but the semantics are useful:
+旧 prototype 在 pet 上方显示小型 “UNSENT” envelope。具体视觉可以改变，但语义有用：
 
-- The companion almost said something.
-- The signal is temporary.
-- It should create tension without forcing a chat bubble.
+- Companion 差一点说了什么。
+- Signal 是暂时的。
+- 它应制造 tension，但不能强制出现 chat bubble。
 
-The chat panel already has a related typing flash path in
-`src/windows/chat/components/ChatPanel.tsx`; the current pet window can consume the
-same state signal.
+Chat panel 已在 `src/windows/chat/components/ChatPanel.tsx` 有相关 typing flash path；当前 pet window 可以消费同一个 state signal。
 
-## Mood and focus mapping
+## Mood 与 focus 映射
 
-The old mapping is still useful as tuning reference. The new `StateEngine`
-already preserves the main tables in `src/shared/state/store.ts`.
+旧映射仍可作为调参参考。新的 `StateEngine` 已在 `src/shared/state/store.ts` 保留主要表格。
 
-Mood should influence:
+Mood 应影响：
 
-- Breath period and depth.
-- Blink interval and jitter.
-- Eye follow strength and damping.
-- Micro drift.
-- Aura hue and intensity.
-- Reaction delay.
-- Lid droop or visible tiredness.
+- Breath period 和 depth。
+- Blink interval 和 jitter。
+- Eye follow strength 和 damping。
+- Micro drift。
+- Aura hue 和 intensity。
+- Reaction delay。
+- Lid droop 或可见的疲惫感。
 
-Focus should influence:
+Focus 应影响：
 
-- Gaze target: cursor, chat panel, sidebar, screen edge, down, or idle drift.
-- Body tilt.
-- Extra lid closure.
-- Optional particles, such as thought or glance.
-- Optional duration before returning to default focus.
+- Gaze target：cursor、chat panel、sidebar、screen edge、down 或 idle drift。
+- Body tilt。
+- Extra lid closure。
+- 可选粒子，例如 thought 或 glance。
+- 回到默认 focus 前的可选 duration。
 
-Presence should influence:
+Presence 应影响：
 
-- Opacity.
-- Scale.
-- Whether behavior is allowed.
-- Whether proactive signaling is allowed.
-- Position strategy, such as free movement versus parked corner.
+- Opacity。
+- Scale。
+- 是否允许行为。
+- 是否允许 proactive signaling。
+- Position strategy，例如自由移动还是停在角落。
 
-## Companion Mode vs Chat-Only Mode
+## Companion Mode 与 Chat-Only Mode
 
-The old spec separated two modes:
+旧 spec 分离了两种 mode：
 
-- `companion`: pet visible, behavior loop active, ambient state fully expressed.
-- `chat-only`: pet hidden or faded out, proactive behavior disabled, chat remains
-  the primary tool.
+- `companion`：pet 可见、behavior loop active，ambient state 完整表达。
+- `chat-only`：pet 隐藏或淡出，proactive behavior 关闭，chat 仍是主要工具。
 
-The new client already has a `petVisible` ribbon toggle and calls
-`engine.setMode("companion" | "chat-only")` in `ChatWindow.tsx`. Future work
-should attach real pet-window behavior to that existing mode instead of adding
-an unrelated switch.
+新客户端已有 `petVisible` ribbon toggle，并在 `ChatWindow.tsx` 调用 `engine.setMode("companion" | "chat-only")`。未来工作应把真实 pet-window behavior 接到现有 mode，而不是再加一个无关 switch。
 
-## Dream UI implications
+## Dream UI 的影响
 
-Dream UI should build on the new client, not the old prototype.
+Dream UI 应建立在新客户端上，而不是旧 prototype 上。
 
-Recommended shape:
+建议形态：
 
-- Start as a chat mode plus theme overlay.
-- Use `data-theme` tokens in `src/shared/theme/globals.css`.
-- Add any dream-specific state to `StateEngine` only if it affects multiple
-  surfaces.
-- Reuse `ChatPanel`, `PaneHost`, `SubDiary`, and theme infrastructure.
+- 从 chat mode 加 theme overlay 开始。
+- 使用 `src/shared/theme/globals.css` 中的 `data-theme` token。
+- 只有在影响多个 surface 时，才把 Dream-specific state 加到 `StateEngine`。
+- 复用 `ChatPanel`、`PaneHost`、`SubDiary` 和 theme infrastructure。
 
-Avoid starting Dream UI as a separate window unless it specifically needs
-independent transparency, always-on-top behavior, or separate lifecycle control.
-The current app has no router and only one Tauri window, so a new route/window
-would add structural work before the Dream experience is proven.
+除非 Dream 明确需要独立 transparency、always-on-top behavior 或独立 lifecycle control，否则不要一开始就做成 separate window。当前 app 没有 router，只有一个 Tauri window；在 Dream experience 被验证前，新增 route/window 会增加结构性工作。
 
-Most likely Dream UI touch points:
+最可能的 Dream UI touch point：
 
-- `src/shared/theme/globals.css`: add `data-theme="dream"` or overlay tokens.
-- `src/windows/chat/ChatWindow.tsx`: add mode/theme state and pass it downward.
-- `src/windows/chat/components/Ribbon.tsx`: expose a Dream entry if needed.
-- `src/windows/chat/components/ChatPanel.tsx`: adjust message atmosphere,
-  header, and input presentation for Dream mode.
-- `src/shared/state/store.ts`: add dream-specific state only if it is shared
-  across chat, sidebar, and pet.
-- `src/windows/chat/components/SubDiary.tsx`: Dream-related diary filtering may
-  reuse existing emotion/category UI.
+- `src/shared/theme/globals.css`：增加 `data-theme="dream"` 或 overlay token。
+- `src/windows/chat/ChatWindow.tsx`：增加 mode/theme state 并向下传递。
+- `src/windows/chat/components/Ribbon.tsx`：需要时暴露 Dream entry。
+- `src/windows/chat/components/ChatPanel.tsx`：调整 Dream mode 的消息氛围、header 和输入呈现。
+- `src/shared/state/store.ts`：只有 chat、sidebar、pet 共享时才加入 Dream-specific state。
+- `src/windows/chat/components/SubDiary.tsx`：Dream 相关 diary filtering 可以复用既有 emotion/category UI。
 
-Old files are only needed as reference for:
+旧文件只作为以下内容的参考：
 
-- `pet.jsx`: behavior timing, mouse-aware reactions, and pet presence details.
-- `spec.jsx`: design principles for aliveness, delay, failure, and asymmetric
-  attention.
+- `pet.jsx`：行为 timing、mouse-aware reaction 和 pet presence 细节。
+- `spec.jsx`：关于 aliveness、delay、failure 和 asymmetric attention 的设计原则。
 
-Old files are not needed for:
+旧文件不需要用于：
 
-- Main layout.
-- Chat rendering.
-- Sidebar structure.
-- Garden rendering.
-- Diary panes.
-- Theme token names.
-- Floating pane mechanics.
+- Main layout。
+- Chat rendering。
+- Sidebar structure。
+- Garden rendering。
+- Diary pane。
+- Theme token name。
+- Floating pane mechanics。
 
-## Deletion note
+## 删除说明
 
-After this document exists, deleting the `Emerald-desktopUI` repo would no longer
-lose the high-level pet-window design principles. Deletion should still wait
-until the project explicitly decides whether the desktop pet is:
+本文存在后，删除 `Emerald-desktopUI` 仓库不会再丢失高层 pet-window 设计原则。但删除仍应等项目明确决定 desktop pet 是：
 
-- Still planned, in which case this document becomes the implementation guide.
-- Abandoned, in which case docs that mention an unimplemented pet window should
-  be updated to say it is intentionally deferred or removed.
+- 仍计划实现：本文转为 implementation guide。
+- 已放弃：将提到未实现 pet window 的文档改为明确说明它被有意延后或移除。

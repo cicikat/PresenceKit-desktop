@@ -58,6 +58,7 @@ PresenceKit-desktop 是 `PresenceKit` AI 陪伴系统的新桌面客户端，技
 | 理解客户端全貌 | `ARCHITECTURE.md` |
 | 改聊天窗口、Ribbon、Sidebar、样式 | `docs/frontend-structure.md` |
 | 改后端通信、协议、Tauri IPC | `docs/backend-integration.md` |
+| 整理或修改三仓接口、跨端设置/观测、调用链 | `Emerald-presence/docs/three-repo-interface-catalog.md`；本仓细节仍见 `docs/backend-integration.md` |
 | 改记忆 / 潜意识 / hidden state UI | `docs/memory.md` |
 | 改 Dream HUD / 梦境状态展示 | `docs/dream-hud.md` |
 | 改桌宠窗口、模型舞台或鼠标互动 | `docs/pet-window-reference.md` |
@@ -203,3 +204,14 @@ Vite 固定端口是 `1420`，见 `vite.config.ts`。
 ## 设置控制面文档
 
 修改模型路由、TTS、scheduler、relay、thinking、tool loop 或高级功能开关时，必须同步 docs/settings-control-audit.md，不得把配置字段存在写成已有 UI。
+
+## 当前阶段：每个小功能都要做三面闭环检查
+
+现在这个阶段，新增、删除或修改任何小功能都必须执行跨仓闭环检查，不能因为改动很小而跳过：
+
+1. 查后端管理面板：功能是否需要设置开关、默认值、effective state、只读观测、审计记录；新增落盘状态、trace、队列或台账时，观测端点必须同单提供。
+2. 查桌面设置面，并回查手机：是否已有对应功能设置、能力检查、权限/降级提示；手机消费同一功能时还要检查 Flutter/Android 设置、后台服务和 relay，不把后端配置字段误当成客户端 UI。
+3. 查原调用链和相邻功能：从触发器/输入 → 后端 router/pipeline → queue/WS → Tauri IPC/React 或 mobile channel → UI/通知，核对鉴权 scope、字段、关联键、去重、ack、TTL、锁、生命周期和 fallback，确认不会让原调用链失效或误伤其他功能。
+4. 为原路径和相邻路径补最小回归测试；未做全的部分必须记入本仓 `docs/known-issues.md`，并同步 `Emerald-presence/docs/three-repo-interface-catalog.md`，明确 `open`/`roadmap`/`observe`。
+
+三仓施工均适用本规则；接口、协议或 IPC 改动还必须更新本仓 `docs/backend-integration.md`、必要时的 `docs/protocol-v0.md`，以及后端总账。

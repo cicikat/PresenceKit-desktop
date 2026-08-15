@@ -51,8 +51,9 @@ npm run tauri build   # production build
 | [AGENTS.md](AGENTS.md) | Working entry point for AI collaborators |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Current architecture overview |
 | [docs/backend-integration.md](docs/backend-integration.md) | Backend HTTP, WebSocket, and Tauri IPC details |
-| [docs/frontend-structure.md](docs/frontend-structure.md) | React window/component/state guide |
-| [docs/design-constraints.md](docs/design-constraints.md) | Cross-pipeline and transport constraints |
+  | [docs/frontend-structure.md](docs/frontend-structure.md) | React window/component/state guide |
+  | [docs/testing.md](docs/testing.md) | Automated tests, CI scope, and release smoke boundaries |
+  | [docs/design-constraints.md](docs/design-constraints.md) | Cross-pipeline and transport constraints |
 | [docs/known-issues.md](docs/known-issues.md) | Bugs, risks, and technical debt |
 
 ---
