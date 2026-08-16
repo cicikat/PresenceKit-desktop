@@ -1,0 +1,148 @@
+/* surveillance-noir: CRT monitor phosphor, tape-room dividers, restrained REC red. */
+
+[data-theme="surveillance-noir"] {
+  color-scheme: dark;
+}
+
+/* The actual app hooks. Inline surfaces are intentionally overridden so the
+   theme remains visible in all three Chat layouts and the Activity window. */
+[data-theme="surveillance-noir"] .chat-ui,
+[data-theme="surveillance-noir"] .activity-window {
+  background-color: var(--paper);
+  color: var(--ink);
+}
+
+[data-theme="surveillance-noir"] .chat-ui__layout > [data-layout-slot="ribbon"],
+[data-theme="surveillance-noir"] .chat-ui__layout > [data-layout-slot="sidebar"] {
+  border-right-color: var(--forest-line);
+}
+
+[data-theme="surveillance-noir"] .chat-ui__body,
+[data-theme="surveillance-noir"] .chat-panel,
+[data-theme="surveillance-noir"] .activity-page {
+  background-color: var(--paper) !important;
+}
+
+[data-theme="surveillance-noir"] [data-chat-region="header"],
+[data-theme="surveillance-noir"] [data-chat-region="composer"] {
+  border-color: var(--paper-edge) !important;
+}
+
+[data-theme="surveillance-noir"] [data-chat-region="transcript"] {
+  background-color: var(--paper) !important;
+}
+
+[data-theme="surveillance-noir"] [data-chat-region="composer"] {
+  background-color: var(--paper-2) !important;
+}
+
+[data-theme="surveillance-noir"] .chat-ui button,
+[data-theme="surveillance-noir"] .activity-page button,
+[data-theme="surveillance-noir"] .activity-page input {
+  border-radius: var(--radius-sm);
+}
+
+[data-theme="surveillance-noir"] .chat-ui textarea,
+[data-theme="surveillance-noir"] .chat-ui input,
+[data-theme="surveillance-noir"] .chat-ui select,
+[data-theme="surveillance-noir"] .activity-page input {
+  background-color: var(--paper-3) !important;
+  border-color: var(--paper-edge) !important;
+  color: var(--ink) !important;
+}
+
+[data-theme="surveillance-noir"] .activity-ribbon {
+  background-color: var(--forest) !important;
+  border-right-color: var(--forest-line) !important;
+}
+
+[data-theme="surveillance-noir"] .activity-companion-sidebar > * {
+  border-radius: var(--radius-md);
+  border-color: var(--paper-edge);
+}
+
+[data-theme="surveillance-noir"] .activity-page button {
+  background-color: var(--paper-2);
+  border-color: var(--paper-edge);
+}
+
+/* Keep timestamps and status labels in the recording-console voice. */
+[data-message-meta], [data-status-label], [data-timestamp] {
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+  opacity: 0.75;
+}
+
+[data-status-active] {
+  animation: noir-breathe var(--motion-slow, 500ms) var(--ease-standard, ease) infinite alternate;
+}
+
+@keyframes noir-breathe {
+  from { opacity: 0.7; }
+  to { opacity: 1; }
+}
+
+[data-rec-indicator] {
+  background: var(--danger);
+  animation: noir-rec 2.4s ease-in-out infinite;
+}
+
+@keyframes noir-rec {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+[data-bubble] {
+  border-radius: var(--radius-sm);
+  border-left: var(--border-regular) solid var(--accent);
+}
+
+/* Stable layout selectors provide the same visual treatment for current
+   bubbles, which predate the optional data-bubble hook. */
+[data-theme="surveillance-noir"] .chat-panel [data-chat-region="transcript"] .mono {
+  font-family: var(--font-mono);
+}
+
+[data-theme="surveillance-noir"] .chat-panel [data-chat-region="transcript"] > div > div > div > div[style*="border-left"] {
+  border-left-width: var(--border-regular) !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+[data-theme="surveillance-noir"] .chat-panel [data-chat-region="transcript"] div[style*="box-shadow"] {
+  border-radius: var(--radius-sm) !important;
+}
+
+[data-theme="surveillance-noir"] .activity-companion-sidebar div[style*="border-radius"] {
+  border-radius: var(--radius-sm) !important;
+}
+
+/* Current SubFlow markup predates data-rec-indicator; its inline flowPulse
+   marker is stable and lets the theme preserve the requested REC behavior. */
+[data-theme="surveillance-noir"] [style*="flowPulse"] {
+  background: var(--danger) !important;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--danger) 48%, transparent) !important;
+  animation: noir-rec 2.4s ease-in-out infinite !important;
+}
+
+/* CRT scan lines: low contrast, static, and local. */
+[data-app-shell],
+[data-theme="surveillance-noir"] .chat-ui__body,
+[data-theme="surveillance-noir"] .activity-window {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    oklch(0 0 0 / 0.02) 0,
+    oklch(0 0 0 / 0.02) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+}
+
+[data-theme="surveillance-noir"] ::-webkit-scrollbar-thumb {
+  border-radius: var(--radius-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-status-active], [data-rec-indicator] {
+    animation: none;
+  }
+}
