@@ -185,6 +185,7 @@ cargo check
 GitHub Actions `ci.yml` 会在 main 的 push / PR 覆盖同套前端检查，以及 Windows 上的 `cargo check`。
 
 Vite 固定端口是 `1420`，见 `vite.config.ts`。
+Tauri 开发启动通过 `scripts/tauri-dev-server.mjs` 守护 Vite：若 1420 已是本项目 Vite 则复用，若被其他服务占用则等待释放，不因端口冲突瞬间退出命令行。
 
 ---
 
