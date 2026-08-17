@@ -14,6 +14,7 @@ import {
   STATUS_BACKEND_STATE_CADENCE,
   useBackendStatePolling,
 } from '../../../shared/state/useBackendStatePolling';
+import { useDesignMounts } from '../../../shared/design-mod/mounts';
 
 const SIDEBAR_HEADER: Record<string, { title: string; subtitle: string }> = {
   flow:   { title: '动向',     subtitle: 'LIVE FEED · 他现在在做什么' },
@@ -23,6 +24,12 @@ const SIDEBAR_HEADER: Record<string, { title: string; subtitle: string }> = {
 };
 
 export function SidebarPanel({ engine, toolStatus, sidebarRectRef, tab, onClose, paused = false }: any) {
+  const { active } = useDesignMounts();
+  if (active) return null;
+  return <SidebarCapability engine={engine} toolStatus={toolStatus} sidebarRectRef={sidebarRectRef} tab={tab} onClose={onClose} paused={paused} shell />;
+}
+
+export function SidebarCapability({ engine, toolStatus, sidebarRectRef, tab, onClose, paused = false, shell = false }: any) {
   const rootRef = useRef<HTMLDivElement>(null);
   const backendStateCadence = tab === 'flow'
     ? FLOW_BACKEND_STATE_CADENCE
@@ -43,13 +50,27 @@ export function SidebarPanel({ engine, toolStatus, sidebarRectRef, tab, onClose,
 
   const meta = SIDEBAR_HEADER[tab] || SIDEBAR_HEADER.flow;
 
+  const content = (
+    <ErrorBoundary fallbackLabel={meta.title}>
+      {tab === 'flow' ? (
+        <SubFlow engine={engine} toolStatus={toolStatus} />
+      ) : tab === 'garden' ? (
+        <SubGarden />
+      ) : tab === 'diary' ? (
+        <SubDiary />
+      ) : (
+        <SubStatus engine={engine} backendStatePolling={backendStatePolling} paused={paused} />
+      )}
+    </ErrorBoundary>
+  );
+
   return (
     <div ref={rootRef} style={{
       height: '100%', background: 'var(--forest)', color: 'var(--on-forest)',
       display: 'flex', flexDirection: 'column',
-      borderRight: '1px solid var(--forest-1)',
+      borderRight: shell ? '1px solid var(--forest-1)' : undefined,
     }}>
-      <div style={{
+      {shell && <div style={{
         padding: '14px 16px 10px', borderBottom: '1px solid var(--forest-line)',
         display: 'flex', alignItems: 'flex-start', gap: 8,
       }}>
@@ -68,19 +89,9 @@ export function SidebarPanel({ engine, toolStatus, sidebarRectRef, tab, onClose,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: chatThemeFontSize(14), lineHeight: 1, fontFamily: 'inherit',
         }}>×</button>
-      </div>
+      </div>}
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-        <ErrorBoundary key={tab} fallbackLabel={meta.title}>
-          {tab === 'flow' ? (
-            <SubFlow engine={engine} toolStatus={toolStatus} />
-          ) : tab === 'garden' ? (
-            <SubGarden />
-          ) : tab === 'diary' ? (
-            <SubDiary />
-          ) : (
-            <SubStatus engine={engine} backendStatePolling={backendStatePolling} paused={paused} />
-          )}
-        </ErrorBoundary>
+        {content}
       </div>
     </div>
   );

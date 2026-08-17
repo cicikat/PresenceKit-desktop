@@ -12,6 +12,7 @@ const NIGHT_END   = 6;  // 06:00 → day resumes
 
 const listeners = new Set<() => void>();
 let records: ThemeRecord[] | null = null;
+let designThemeRecord: ThemeRecord | null = null;
 let currentThemeId = 'paper';
 let autoTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -82,6 +83,8 @@ export async function listThemes(refresh = false): Promise<ThemeRecord[]> {
     if (record) merged.set(preset.id, record);
   }
 
+  if (designThemeRecord) merged.set(designThemeRecord.manifest.id, designThemeRecord);
+
   const valid: ThemeRecord[] = [];
   for (const record of merged.values()) {
     if (record.manifest.css) {
@@ -127,6 +130,24 @@ export async function setTheme(id: string): Promise<void> {
   setUIPref('chat.theme', currentThemeId);
   listeners.forEach(listener => listener());
   setTimeout(() => document.documentElement.classList.remove('theme-transitioning'), 600);
+}
+
+/** Applies a theme embedded in a trusted design Mod without copying it into public/themes. */
+export function applyDesignTheme(record: ThemeRecord): void {
+  designThemeRecord = record;
+  records = null;
+  applyTheme(record.manifest);
+  applyThemeCss(record.manifest.id, record.cssText ?? null);
+  resetMoodOverlayBase();
+  currentThemeId = record.manifest.id;
+  listeners.forEach(listener => listener());
+}
+
+/** Re-applies the user's configured day/night theme after leaving a design Mod. */
+export function restoreConfiguredTheme(): void {
+  designThemeRecord = null;
+  records = null;
+  void applyByMode().catch(error => console.warn('[theme] 恢复用户主题失败:', error));
 }
 
 export function subscribe(listener: () => void): () => void {

@@ -318,6 +318,7 @@ enum ModBuildMode {
 enum ModResourceKind {
     Themes,
     Layouts,
+    DesignMods,
 }
 
 impl ModResourceKind {
@@ -325,6 +326,7 @@ impl ModResourceKind {
         match self {
             Self::Themes => "themes",
             Self::Layouts => "layouts",
+            Self::DesignMods => "design-mods",
         }
     }
 
@@ -332,6 +334,7 @@ impl ModResourceKind {
         match self {
             Self::Themes => "主题",
             Self::Layouts => "布局",
+            Self::DesignMods => "设计 Mod",
         }
     }
 }
@@ -567,6 +570,101 @@ fn read_layout_css_in_dir(layout_dir: &Path, id: &str, file: &str) -> Result<Str
 #[tauri::command]
 fn read_layout_css(app: tauri::AppHandle, id: String, file: String) -> Result<String, String> {
     read_layout_css_in_dir(&layouts_dir(&app)?, &id, &file)
+}
+
+fn design_mods_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    mod_resource_dir(app, ModResourceKind::DesignMods)
+}
+
+fn list_design_mods_in_dir(design_mod_dir: &Path) -> Result<serde_json::Value, String> {
+    let mut manifests = Vec::new();
+    for entry in fs::read_dir(design_mod_dir)
+        .map_err(|error| format!("无法读取设计 Mod 目录 {}: {error}", design_mod_dir.display()))?
+    {
+        let entry = entry.map_err(|error| error.to_string())?;
+        let path = entry.path();
+        if !path.is_dir() { continue; }
+        let manifest_path = path.join("mod.json");
+        if !manifest_path.is_file() { continue; }
+        match fs::read_to_string(&manifest_path)
+            .map_err(|error| error.to_string())
+            .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).map_err(|error| error.to_string()))
+        {
+            Ok(value) if value.is_object() => manifests.push(value),
+            Ok(_) => eprintln!("[design-mods] 忽略非对象 manifest: {}", manifest_path.display()),
+            Err(error) => eprintln!("[design-mods] 忽略无法解析的 manifest {}: {error}", manifest_path.display()),
+        }
+    }
+    manifests.sort_by(|a, b| a["id"].as_str().unwrap_or_default().cmp(b["id"].as_str().unwrap_or_default()));
+    Ok(serde_json::Value::Array(manifests))
+}
+
+#[tauri::command]
+fn list_design_mods(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    list_design_mods_in_dir(&design_mods_dir(&app)?)
+}
+
+fn is_safe_design_mod_file(value: &str) -> bool {
+    if value.is_empty() || value.contains('\\') || Path::new(value).is_absolute() { return false; }
+    let components: Vec<Component<'_>> = Path::new(value).components().collect();
+    !components.is_empty() && components.iter().all(|component| matches!(component, Component::Normal(_)))
+}
+
+fn canonical_design_mod_file(design_mod_dir: &Path, id: &str, file: &str) -> Result<PathBuf, String> {
+    if !is_safe_theme_path_part(id) || !is_safe_design_mod_file(file) {
+        return Err("设计 Mod 路径必须是安全的相对路径".to_string());
+    }
+    let canonical_root = fs::canonicalize(design_mod_dir).map_err(|error| format!("无法定位设计 Mod 目录: {error}"))?;
+    let mod_root = fs::canonicalize(design_mod_dir.join(id)).map_err(|_| "设计 Mod 不存在或无法读取".to_string())?;
+    if !mod_root.starts_with(&canonical_root) || !mod_root.is_dir() {
+        return Err("设计 Mod 不在允许的资源目录内".to_string());
+    }
+    let canonical_file = fs::canonicalize(mod_root.join(file)).map_err(|_| "设计 Mod 文件不存在或无法读取".to_string())?;
+    if !canonical_file.starts_with(&mod_root) || !canonical_file.is_file() {
+        return Err("设计 Mod 文件不在该 Mod 目录内".to_string());
+    }
+    Ok(canonical_file)
+}
+
+fn read_design_mod_file_in_dir(design_mod_dir: &Path, id: &str, file: &str) -> Result<String, String> {
+    let path = canonical_design_mod_file(design_mod_dir, id, file)?;
+    let metadata = fs::metadata(&path).map_err(|error| error.to_string())?;
+    if metadata.len() > 10 * 1024 * 1024 { return Err("设计 Mod 文件超过 10MB 限制".to_string()); }
+    fs::read_to_string(path).map_err(|_| "设计 Mod 文本文件无法按 UTF-8 读取".to_string())
+}
+
+#[tauri::command]
+fn read_design_mod_file(app: tauri::AppHandle, id: String, file: String) -> Result<String, String> {
+    read_design_mod_file_in_dir(&design_mods_dir(&app)?, &id, &file)
+}
+
+fn design_mod_mime(file: &str) -> &'static str {
+    match Path::new(file).extension().and_then(|value| value.to_str()).unwrap_or_default().to_ascii_lowercase().as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "webp" => "image/webp",
+        "gif" => "image/gif",
+        "svg" => "image/svg+xml",
+        "woff" => "font/woff",
+        "woff2" => "font/woff2",
+        "ttf" => "font/ttf",
+        "json" => "application/json",
+        "css" => "text/css",
+        "js" => "text/javascript",
+        "glsl" | "txt" => "text/plain",
+        _ => "application/octet-stream",
+    }
+}
+
+#[tauri::command]
+fn read_design_mod_asset(app: tauri::AppHandle, id: String, file: String) -> Result<serde_json::Value, String> {
+    let path = canonical_design_mod_file(&design_mods_dir(&app)?, &id, &file)?;
+    let bytes = fs::read(&path).map_err(|error| format!("无法读取设计 Mod 资源: {error}"))?;
+    if bytes.len() > 10 * 1024 * 1024 { return Err("设计 Mod 资源超过 10MB 限制".to_string()); }
+    Ok(serde_json::json!({
+        "mime": design_mod_mime(&file),
+        "base64": base64::engine::general_purpose::STANDARD.encode(bytes),
+    }))
 }
 
 fn room_assets_dir(app: &tauri::AppHandle, kind: &str) -> Result<PathBuf, String> {
@@ -3050,6 +3148,9 @@ pub fn run() {
             read_theme_css,
             list_layouts,
             read_layout_css,
+            list_design_mods,
+            read_design_mod_file,
+            read_design_mod_asset,
             list_room_assets,
             list_room_props,
             list_live2d_models,
@@ -3549,6 +3650,54 @@ mod mod_resource_root_tests {
         .unwrap_err();
         assert!(release_error.contains("resource_dir"), "{release_error}");
         assert!(release_error.contains("不存在"), "{release_error}");
+    }
+
+    #[test]
+    fn design_mod_root_obeys_the_same_debug_release_boundary() {
+        let roots = TempModRoots::new();
+        let public_root = roots.project_root.join("public");
+        fs::create_dir_all(public_root.join("design-mods").join("fixture")).unwrap();
+        fs::write(
+            public_root.join("design-mods").join("fixture").join("mod.json"),
+            r#"{"schemaVersion":1,"id":"fixture","name":"Fixture"}"#,
+        ).unwrap();
+        fs::create_dir_all(roots.resource_dir.join("design-mods").join("stale")).unwrap();
+        fs::write(
+            roots.resource_dir.join("design-mods").join("stale").join("mod.json"),
+            r#"{"id":"stale"}"#,
+        ).unwrap();
+
+        let debug_dir = resolve_mod_resource_dir(
+            ModBuildMode::Debug,
+            Some(&roots.project_root),
+            Some(&roots.resource_dir),
+            ModResourceKind::DesignMods,
+        ).unwrap();
+        assert_eq!(debug_dir, public_root.join("design-mods"));
+        assert_eq!(list_design_mods_in_dir(&debug_dir).unwrap(), serde_json::json!([{"schemaVersion":1,"id":"fixture","name":"Fixture"}]));
+
+        let release_dir = resolve_mod_resource_dir(
+            ModBuildMode::Release,
+            Some(&roots.project_root),
+            Some(&roots.resource_dir),
+            ModResourceKind::DesignMods,
+        ).unwrap();
+        assert_eq!(release_dir, roots.resource_dir.join("design-mods"));
+        assert_eq!(list_design_mods_in_dir(&release_dir).unwrap(), serde_json::json!([{"id":"stale"}]));
+    }
+
+    #[test]
+    fn design_mod_file_reader_allows_nested_assets_but_rejects_escape() {
+        let roots = TempModRoots::new();
+        let design_dir = roots.project_root.join("public").join("design-mods");
+        fs::create_dir_all(design_dir.join("fixture").join("assets")).unwrap();
+        fs::write(design_dir.join("fixture").join("entry.js"), "export function activate() {}").unwrap();
+        fs::write(design_dir.join("fixture").join("assets").join("shader.glsl"), "void main() {}").unwrap();
+        assert_eq!(read_design_mod_file_in_dir(&design_dir, "fixture", "entry.js").unwrap(), "export function activate() {}");
+        assert_eq!(read_design_mod_file_in_dir(&design_dir, "fixture", "assets/shader.glsl").unwrap(), "void main() {}");
+        for file in ["../entry.js", "assets/../entry.js", "C:/escape.js", "assets\\escape.js"] {
+            assert!(read_design_mod_file_in_dir(&design_dir, "fixture", file).is_err(), "file={file}");
+        }
     }
 }
 

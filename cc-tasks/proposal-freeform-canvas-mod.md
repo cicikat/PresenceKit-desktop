@@ -1,8 +1,11 @@
 # 提案：功能 mod / 自由画布（freeform canvas mod）
 
-> 状态：草案，待 gpt-sol 评审拍板。本提案对应 `ui-mods.md` §8 预留的"功能 mod"坑位——
+> 状态：已被 `cc-tasks/54-trusted-design-mod-runtime.md` 取代。本提案对应 `ui-mods.md` §8 预留的"功能 mod"坑位——
 > 现有 UI mod（token+CSS）和布局 mod（三槽位受控模板）都是纯声明式、零执行代码，这份提案是
 > 第一次真正开放"执行代码 + 自由定位"的口子，性质上是新的信任级别，不是前两者的扩展。
+>
+> 当前实现路线、component/signal/command 契约和作者流程见 [`docs/design-mods.md`](../docs/design-mods.md)。
+> 本草案中的 iframe、postMessage、elementSpec 白名单不再是第一版路线。
 
 ---
 

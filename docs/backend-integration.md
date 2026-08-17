@@ -794,6 +794,9 @@ Authorization: Bearer <admin_token>
 | `read_theme_css(id, file)` | 前端 → Rust | 与 `list_themes()` 共用同一主题根；读取 `themes/<id>/<file>` 的磁盘 mod CSS；仅允许单级 id、同目录 `.css` 文件，并经 canonical 路径校验拒绝绝对路径、穿越和 symlink 逃逸；CSS 文本仍由前端 `inspectThemeCss()` 安检 |
 | `list_layouts()` | 前端 → Rust | debug / `npm run tauri dev` 只扫描 `public/layouts/*/layout.json`；release / 安装包只扫描 `resource_dir/layouts/*/layout.json`；原样返回 manifest；缺失当前模式目录时报错，不跨模式 fallback |
 | `read_layout_css(id, file)` | 前端 → Rust | 与 `list_layouts()` 共用同一布局根；读取 `layouts/<id>/<file>` 的磁盘 mod CSS；仅允许单级 id、同目录 `.css` 文件，并经 canonical 路径校验拒绝绝对路径、穿越和 symlink 逃逸；CSS 文本仍由前端 `inspectThemeCss()` 安检 |
+| `list_design_mods()` | 前端 → Rust | debug 只扫描 `public/design-mods/*/mod.json`；release 只扫描 `resource_dir/design-mods/*/mod.json`；与文本和资源读取共用同一 design-mod 根，缺失当前模式目录时报错，不跨模式 fallback |
+| `read_design_mod_file(id, file)` | 前端 → Rust | 读取当前 design-mod 包内的 UTF-8 manifest/entry/style/theme/layout 文本；只允许安全相对路径，canonical 校验拒绝绝对路径、穿越和 symlink 逃逸，单文件上限 10MB |
+| `read_design_mod_asset(id, file)` | 前端 → Rust | 读取当前 design-mod `assets/` 下的图片、字体、纹理、shader 或二进制资源，返回 MIME + base64 供前端生成 Blob URL；与 `read_design_mod_file()` 共用根和路径校验，单文件上限 10MB |
 | `dream_get_settings()` | 前端 → Rust → 后端 | GET `/dream/settings`；读取 Dream 上下文、`display.physiological_arousal` 与后端管理的 Scenario injection mode |
 | `dream_update_settings(..., jailbreak_preset, display)` | 前端 → Rust → 后端 | PATCH `/dream/settings`；桌面命令透传现有 Dream 字段；`scenario_injection_mode` 由后端管理面保存，当前不在客户端设置命令中暴露 |
 | `dream_group_enter/chat/exit(group_id, ...)` | 前端 → Rust → 后端 | POST `/group/{id}/dream/enter|send|exit`；群梦 send 返回 `{round_id,status}`，角色回复走 WS |

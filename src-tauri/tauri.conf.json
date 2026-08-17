@@ -29,6 +29,7 @@
       "../public/fonts/": "fonts/",
       "../public/themes/": "themes/",
       "../public/layouts/": "layouts/",
+      "../public/design-mods/": "design-mods/",
       "../public/room/": "room/"
     },
     "icon": [

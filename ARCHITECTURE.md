@@ -74,6 +74,8 @@ Token 由后端 `POST /auth/tokens` 签发；scope 表、profile 表、管理操
 - 创建 `ToolStatusOverlayController`，将 WS `tool_status` 作为只影响 Sidebar NOW 的内存覆盖态；它不写入 `StateEngine`、聊天历史或本地偏好。
 - 通过三个 controller hook 管理外观/布局、桌宠和导航 UI 状态；Sidebar 的当前 tab 全局持久化，展开/收起状态按布局持久化，首次使用仍服从 layout manifest 的默认显隐。
 - 通过 `src/shared/layout/registry.ts` 的声明式 LayoutHost 排布 Ribbon、Sidebar 和主内容区；偏好「界面」中的布局预览器可立即切换已发现的布局。布局 mod 还能用受控 `mainLayout` 模板重排 ChatPanel 内的标题、消息流、输入框；它不能替换或执行区域组件。
+- `DesignModHost` 是独立的可信自由合成路线：`public/design-mods/`（debug）或 `resource_dir/design-mods/`（release）中的单文件 ESM 通过固定 viewport 的 underlay/components/overlay 三层运行。真实 Ribbon、Chat header/transcript/composer 和四个 Sidebar capability 由 React portal 挂到 Mod 创建的容器，ChatPanel 的消息、输入、WS/history/TTS owner 不复制。恢复默认只撤销舞台，不改变原调用链。
+- Design Mod 只覆盖 Chat Webview 内部，不承诺跨出 Tauri 原生窗口；高频 session、pointer、viewport、native-window motion 和 geometry 走 `src/shared/design-mod/` 外部 store，Activity/Toy/Room/Dream 覆盖时暂停 rAF。作者契约见 `docs/design-mods.md`。
 - 使用 `src/shared/chatAppearance.ts` 保存 Chat 聊天字号、主题字号和字体包；Sidebar 宽度仅通过界面分隔条拖拽调整。
 - 偏好面板的「角色与对话」页通过 `getPromptAssets()` / `patchPromptAssets()` 管理 Reality Prompt Assets：角色卡单选、世界书多选和破限多选。可用选项来自后端，客户端不展示文件路径。
 - 把 engine 传给 `ChatPanel`。
@@ -200,6 +202,7 @@ Tauri Rust 在 `src-tauri/src/lib.rs`：
 - `list_dream_fonts`：打包后优先扫描 `resource_dir/fonts`，debug/dev 模式回退源码 `public/fonts/`；目录不可用时返回明确错误。
 - `list_themes` / `read_theme_css`：debug / `npm run tauri dev` 只读源码 `public/themes/`，release / 安装包只读 `resource_dir/themes/`；两个 command 共用同一主题根解析器，前端注册中心负责契约校验和内置主题合并。`target/**` 与 `dist/**` 不参与扫描。
 - `list_layouts` / `read_layout_css`：debug / `npm run tauri dev` 只读源码 `public/layouts/`，release / 安装包只读 `resource_dir/layouts/`；两个 command 共用同一布局根解析器。缺失当前模式目录时明确报错，不跨模式 fallback。
+- `list_design_mods` / `read_design_mod_file` / `read_design_mod_asset`：debug 只读 `public/design-mods/`，release 只读 `resource_dir/design-mods/`；manifest、文本入口和 assets 共用同一资源根，canonical 路径检查拒绝穿越与 symlink 逃逸，前端负责 schema/CSS/主题/布局校验。
 - sensor `title_sanitizer` 采用保守默认：Browser 仅返回域名，Editor 仅返回安全 basename，Chat / Other / 未知及文件查看类应用不返回 `title_hint`。
 - 视觉观察的默认 5 分钟是本地采样/比对周期，不是上传周期；预检失败、后端关闭、锁屏/无桌面会话或画面不变时均不上传。
 

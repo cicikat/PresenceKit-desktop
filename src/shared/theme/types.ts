@@ -10,7 +10,7 @@ export interface ThemeManifest {
   tokens: Partial<Record<TokenName, string>> & Record<string, string>;
 }
 
-export type ThemeSource = 'builtin' | 'disk';
+export type ThemeSource = 'builtin' | 'disk' | 'design-mod';
 
 export interface ThemeRecord {
   manifest: ThemeManifest;

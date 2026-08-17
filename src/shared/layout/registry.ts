@@ -8,6 +8,7 @@ import type { LayoutManifest, LayoutRecord } from './types';
 const PREF_KEY = 'chat.layout';
 const listeners = new Set<() => void>();
 let records: LayoutRecord[] | null = null;
+let designLayoutRecord: LayoutRecord | null = null;
 let currentLayout: LayoutRecord = { manifest: OBSIDIAN_DEFAULT_LAYOUT, source: 'builtin' };
 
 function validRecord(manifest: unknown, source: LayoutRecord['source']): LayoutRecord | null {
@@ -52,6 +53,7 @@ export async function listLayouts(refresh = false): Promise<LayoutRecord[]> {
     const record = validRecord(manifest, 'builtin');
     if (record) merged.set(manifest.id, record);
   }
+  if (designLayoutRecord) merged.set(designLayoutRecord.manifest.id, designLayoutRecord);
   try {
     const diskLayouts = await invoke<unknown[]>('list_layouts');
     for (const manifest of diskLayouts) {
@@ -95,6 +97,22 @@ export async function setLayout(id: string): Promise<LayoutRecord> {
   setUIPref(PREF_KEY, currentLayout.manifest.id);
   listeners.forEach(listener => listener());
   return currentLayout;
+}
+
+/** Applies a layout embedded in a trusted design Mod without duplicating it under public/layouts. */
+export function applyDesignLayout(record: LayoutRecord): void {
+  designLayoutRecord = record;
+  records = null;
+  currentLayout = record;
+  applyLayoutCss(record.manifest.id, record.cssText ?? null);
+  listeners.forEach(listener => listener());
+}
+
+/** Re-applies the user's configured standalone layout after leaving a design Mod. */
+export function restoreConfiguredLayout(): void {
+  designLayoutRecord = null;
+  records = null;
+  void setLayout(getUIPref(PREF_KEY, OBSIDIAN_DEFAULT_LAYOUT.id)).catch(error => console.warn('[layout] 恢复用户布局失败:', error));
 }
 
 export function subscribe(listener: () => void): () => void {

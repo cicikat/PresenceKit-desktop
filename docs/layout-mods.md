@@ -86,8 +86,8 @@ Grid；布局由 `mainLayout` 的受控模板负责，CSS 只做装饰。
 主区的三个固定区域（标题、消息流、输入框）的受控模板和装饰性 CSS。它不能替换或新增组件、
 执行 JS、接入 IPC，也不能把 Ribbon 的竖排图标改成横排。`mainLayout` 不是任意 CSS Grid：
 它只接受 `stack`、`workbench`、`hud`，未知值会被整个 manifest 校验拒绝。
-真正的任意布局或功能扩展属于 [UI mod 文档](ui-mods.md) §8 的功能 mod 范畴，仍需要独立的
-沙箱与权限设计。
+真正的任意布局或执行代码扩展属于 [可信设计 Mod 文档](design-mods.md)；它使用同域可信本地代码和
+独立 viewport 舞台，不改变本布局 Mod 的受控边界。第三方不可信沙箱仍是后续独立信任等级。
 
 ## 7. 当前边界
 

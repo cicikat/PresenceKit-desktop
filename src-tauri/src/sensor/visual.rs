@@ -341,8 +341,8 @@ fn perceptual_hash(frame: &RgbImage) -> u64 {
     hash
 }
 
-fn luminance(pixel: [u8; 3]) -> u16 {
-    299 * pixel[0] as u16 + 587 * pixel[1] as u16 + 114 * pixel[2] as u16
+fn luminance(pixel: [u8; 3]) -> u32 {
+    299 * pixel[0] as u32 + 587 * pixel[1] as u32 + 114 * pixel[2] as u32
 }
 
 fn hamming_distance(left: u64, right: u64) -> u32 {
@@ -466,6 +466,11 @@ mod tests {
     fn hash_distance_detects_material_change() {
         assert_eq!(hamming_distance(0, 0), 0);
         assert_eq!(hamming_distance(0, u64::MAX), 64);
+    }
+
+    #[test]
+    fn luminance_accepts_full_brightness_pixels_without_overflow() {
+        assert_eq!(luminance([255, 255, 255]), 255_000);
     }
 
     #[test]

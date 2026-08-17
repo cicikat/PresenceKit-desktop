@@ -27,6 +27,7 @@ import { ChatSettingsSection } from './ChatSettingsSection';
 import { MinuteSelect, PrefRange, PrefRow, PrefSwitch, prefActionButtonStyle, prefSelectStyle } from './PrefAtoms';
 import { ComputerOperationSafetySettings } from './ComputerOperationSafetySettings';
 import { PeriodDateSettings } from './PeriodDateSettings';
+import { DesignModSettings } from './DesignModSettings';
 import { CHAT_PREFERENCE_TABS, type ChatPreferenceTab } from './preferencesInfoArchitecture';
 export function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHeaderVisible, onChatHeaderToggle, appearance, onAppearanceChange, activeLayout, layoutOptions, onLayoutChange, onCharacterAvatarChange, onCharacterSwitched, petMouseSettings, onPetMouseSettingsChange, petVisualStyle, onPetVisualStyleChange, model3dZoom, onModel3dZoomChange, live2dZoom, onLive2dZoomChange, presenceNagEnabled, onPresenceNagToggle, proactiveGapHours, onProactiveGapChange, playModeEnabled, onPlayModeToggle, petRoamEnabled, onPetRoamToggle, petRippleEnabled, onPetRippleToggle, onYandereOpen }: any) {
   const { language, setLanguage, t } = useI18n();
@@ -207,6 +208,7 @@ export function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, 
                     ))}
                   </select>
                 </PrefRow>
+                <DesignModSettings />
                 <PrefRow label="聊天字体大小" hint="控制聊天气泡、语音转文字与输入框文字">
                   <PrefRange
                     min={11}

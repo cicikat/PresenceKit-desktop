@@ -18,7 +18,7 @@ export interface LayoutManifest {
   css?: string;
 }
 
-export type LayoutSource = 'builtin' | 'disk';
+export type LayoutSource = 'builtin' | 'disk' | 'design-mod';
 
 export interface LayoutRecord {
   manifest: LayoutManifest;

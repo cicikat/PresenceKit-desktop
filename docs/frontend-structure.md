@@ -86,7 +86,7 @@ src/windows/chat/
 
 - 创建并持有单个 `StateEngine`。
 - 创建并持有 `ToolStatusOverlayController`：订阅 WS `tool_status`，只向 Sidebar NOW 传递内存瞬态覆盖值，不改写 `StateEngine` 或本地偏好。
-- 管理 UI 状态：主题、侧栏开关、侧栏 tab、侧栏宽度、帮助面板、偏好面板、桌宠开关。侧栏 tab 使用 `chat.sidebarTab` 全局持久化；开关使用 `chat.sidebarOpen.<layoutId>` 按布局持久化，尚无用户偏好时才回退布局 manifest 的默认显隐。
+- 管理 UI 状态：主题、侧栏开关、侧栏 tab、侧栏宽度、可信设计 Mod、帮助面板、偏好面板、桌宠开关。侧栏 tab 使用 `chat.sidebarTab` 全局持久化；开关使用 `chat.sidebarOpen.<layoutId>` 按布局持久化，尚无用户偏好时才回退布局 manifest 的默认显隐；设计 Mod 使用 `chat.designMod`。
 - 管理 Dream UI v2 preview 的本地状态：Ribbon 入口打开 overlay，Esc / WAKE 关闭并显示 afterglow。
 - 订阅 WS `dream_invite` UI 事件；收到角色邀请时清除 afterglow 并打开 Dream overlay。
 - 布局三列：Ribbon、Sidebar、ChatPanel。
@@ -94,7 +94,7 @@ src/windows/chat/
 - 负责偏好面板内的头像上传/裁剪入口。
 - 世界页角色卡头像同样复用 `AvatarCropper`，选择 PNG / JPEG / WebP 后先裁剪为 256 × 256 PNG，再通过角色头像后端接口上传。
 - Chat 偏好浮层使用顶部横栏分类：常规、模型、能力与权限、界面、角色与对话、桌宠与互动、高级。`OutputSegmentEnforceSettingsPage` 位于模型分类，通过 Tauri IPC 热切换生成后段落兜底，只展示开关和有效阈值，不展示 Prompt 检视数据；`VisualPerceptionSettingsPage` 位于能力与权限，是本地 opt-in 与采样间隔控制面，展示最近结果、推送时间和失败计数。界面提供主题、信息栏、布局预览器、聊天字号、主题字号、动态字体包、背景、颜色和头像设置。角色与对话通过 `PromptAssetsSettings` 读取和保存 Reality Prompt Assets，提供角色卡单选、Reality 世界书多选和 Reality 破限多选；桌宠与互动承载视频通话和 Coplay。
-- `LayoutHost` 读取 `src/shared/layout/registry.ts` 的当前 manifest，排布 `ribbon`、`sidebar`、`main` 三个既有 slot：方向、顺序、Ribbon/Sidebar 宽度与 Sidebar 默认显隐均由声明式布局决定；slot 内组件仍由 ChatWindow 创建。V2 `mainLayout` 只重排 ChatPanel 内稳定的标题、消息流、输入框区域（`stack` / `workbench` / `hud`），窄于 760px 自动回退纵向 `stack`，不会重挂载 ChatPanel。磁盘布局由 Tauri `list_layouts` / `read_layout_css` 提供，debug 只读 `public/layouts/`，release 只读 `resource_dir/layouts/`；列表和 CSS 使用同一资源根。ChatPanel 为主题 CSS 暴露只读装饰锚点 `data-chat-region="header|transcript|composer"` 和 `data-main-layout`；它们不能改变区域组件或 Grid 结构。背景层及 Dream、Pane、帮助、偏好、Yandere 等应用级 overlay 不属于 slot，继续由 ChatWindow 顶层管理。
+- `LayoutHost` 读取 `src/shared/layout/registry.ts` 的当前 manifest，排布 `ribbon`、`sidebar`、`main` 三个既有 slot：方向、顺序、Ribbon/Sidebar 宽度与 Sidebar 默认显隐均由声明式布局决定；slot 内组件仍由 ChatWindow 创建。V2 `mainLayout` 只重排 ChatPanel 内稳定的标题、消息流、输入框区域（`stack` / `workbench` / `hud`），窄于 760px 自动回退纵向 `stack`，不会重挂载 ChatPanel。磁盘布局由 Tauri `list_layouts` / `read_layout_css` 提供，debug 只读 `public/layouts/`，release 只读 `resource_dir/layouts/`；列表和 CSS 使用同一资源根。ChatPanel 为主题 CSS 暴露只读装饰锚点 `data-chat-region="header|transcript|composer"` 和 `data-main-layout`；它们不能改变区域组件或 Grid 结构。`DesignModHost` 在同一个 Chat 编排根旁提供可信 ESM 的 underlay/components/overlay viewport；ChatPanel 只把三块渲染出口 portal 到 Mod 容器，消息、输入、WS/history/TTS 状态仍是一份。Sidebar 的 `SidebarCapability` 可同时挂载 flow/garden/diary/status 四个真实能力，默认无 Mod 时仍由 `SidebarPanel` 按当前 tab 呈现。背景层及 Dream、Pane、帮助、偏好、Yandere 等应用级 overlay 不属于 slot，继续由 ChatWindow 顶层管理。
 
 关键状态：
 

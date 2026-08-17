@@ -23,6 +23,9 @@ import { DreamWindow } from '../dream/DreamWindow';
 import { PreferencesPanel } from './components/preferences/PreferencesPanel';
 import { Divider, VideoBg } from './components/ChatShellAtoms';
 import { LayoutHost } from './components/LayoutHost';
+import { DesignAwareRegion, DesignModHost } from './components/DesignModHost';
+import { SidebarCapability } from './components/Sidebar';
+import { setSelectedDesignModId } from '../../shared/design-mod/runtime';
 import { useChatAppearanceController } from './hooks/useChatAppearanceController';
 import { usePetController } from './hooks/usePetController';
 import { useChatWindowNavigation } from './hooks/useChatWindowNavigation';
@@ -138,11 +141,25 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen, isCovered = 
           } : {}),
         } as CSSProperties}
       >
-        <LayoutHost
+        <DesignModHost
+          engine={engine}
+          toolStatus={toolStatus}
+          isCovered={isCovered}
+          dreamActive={navigation.dreamWindowOpen}
+          navigation={{ groupView: navigation.groupView, sidebarTab: appearanceController.sidebarTab, sidebarOpen: appearanceController.sidebarOpen }}
+          commands={{
+            closeSidebar: appearanceController.closeSidebar,
+            setSidebarTab: appearanceController.onSidebarTab,
+            openPrefs: () => navigation.setPrefsOpen(true),
+              restoreDefault: () => { setSelectedDesignModId('builtin-default'); navigation.setPrefsOpen(true); },
+          }}
+          renderSidebar={tab => <SidebarCapability engine={engine} toolStatus={toolStatus} sidebarRectRef={sidebarRectRef} paused={visualPaused} tab={tab} />}
+          renderChat={
+          <LayoutHost
           manifest={appearanceController.activeLayout.manifest}
           sidebarSize={appearanceController.sidebarWidth}
           slots={{
-            ribbon: <Ribbon
+            ribbon: <DesignAwareRegion id="chat.ribbon"><Ribbon
               sidebarOpen={appearanceController.sidebarOpen}
               sidebarTab={appearanceController.sidebarTab}
               onSidebarTab={appearanceController.onSidebarTab}
@@ -157,7 +174,7 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen, isCovered = 
               onToyOpen={onToyOpen}
               playModeEnabled={petController.playModeEnabled}
               onGroupOpen={() => navigation.setGroupView('list')}
-            />,
+            /></DesignAwareRegion>,
             sidebar: appearanceController.sidebarOpen ? <div style={{ display: 'flex', height: '100%', minWidth: 0, flex: 1 }}>
               {appearanceController.sidebarOnRight && <Divider onDrag={appearanceController.onDividerDrag} />}
               <div style={{ flex: 1, minWidth: 0 }}><SidebarPanel
@@ -201,6 +218,7 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen, isCovered = 
           </div>
             </div>,
           }}
+          />}
         />
       </div>
 

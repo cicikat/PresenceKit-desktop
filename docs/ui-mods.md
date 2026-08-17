@@ -158,13 +158,13 @@ release 只读 `resource_dir/themes/`；新放入目录的 mod 点击 ThemePicke
 
 布局排布 mod 已有独立的 [布局 Mod 说明书](layout-mods.md)：它只重排 Chat 的既有三区及主区内
 标题 / 消息流 / 输入框的受控模板，不能执行或替换组件。外接功能（自定义面板/小组件/接外部服务）与 UI mod 是不同的信任级别：UI mod 是纯
-声明式 token+受限 CSS，功能 mod 需要可执行代码或 IPC 面，涉及沙箱、权限、与后端
-`presence_ext` 的关系。**方案未定，待专门讨论后另立文档与工单**；在那之前不要把
-可执行内容塞进主题包（安检也会拒）。
+声明式 token+受限 CSS。Chat 内可信自由合成的执行代码路线已经由
+[可信设计 Mod 文档](design-mods.md) 定义；它是独立的 design-mod 包和 viewport host，不得把
+可执行内容塞进主题包。第三方不可信沙箱、权限和市场分发仍不在当前范围内。
 
 ---
 
 ## 9. 已知缺口
 
 cc-tasks/42 已补齐 UI mod 的磁盘 CSS 读取、样例目录名与主题列表手动刷新入口；当前没有
-已确认的 UI mod 加载缺口。功能 mod 仍不在 UI mod 范围内，见 §8。
+已确认的 UI mod 加载缺口。功能自由合成不属于 UI mod，见 §8 和 [design-mods.md](design-mods.md)。

@@ -4,6 +4,7 @@
  * ============================================================ */
 
 import { useState, useEffect, useRef, useCallback, memo, type CSSProperties, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { format, subDays, parseISO } from 'date-fns';
 import { Tag, Icon, Btn } from './UIKit';
 import { MOOD_HUE, MOOD_LABEL_EN, FOCUS_LABEL_EN } from './UIKit';
@@ -25,6 +26,8 @@ import { notifyOnMessage } from '../../../shared/api/notify';
 import { getActiveCharacterName } from '../../../shared/activeCharacter';
 import { chatThemeFontSize } from '../../../shared/chatAppearance';
 import { useI18n } from '../../../shared/i18n';
+import { useDesignMounts } from '../../../shared/design-mod/mounts';
+import { chatSessionMetrics } from '../../../shared/design-mod/metrics';
 import { publishPetSnapshot } from '../../../shared/pet/bridge';
 import { TypingDots } from '../../../shared/ui/TypingDots';
 import type { ChatLogEntry, UploadError, NarrativeSegment, StickerPayload } from '../../../shared/api/types';
@@ -585,6 +588,8 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
   const [wakeLoading, setWakeLoading] = useState(false);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const metricsHistoryInitializedRef = useRef(false);
+  const metricsMessageIdsRef = useRef(new Set<string>());
 
   // cc-tasks/36：右键引用回复。ctxMenu 是当前打开的气泡右键菜单（全局单例，避免多开）；
   // replyTarget 是待发送的引用态，text 为展示用原文、time 为该消息的整条时间戳（毫秒）。
@@ -685,6 +690,25 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
   // Route through a ref (kept in sync on every render, below) instead of a direct closure
   // reference to avoid a TDZ error in init's useCallback dependency array.
   const scheduleAssistantSegmentsRef = useRef<((fullText: string, wsMsgId?: string, preGeneratedIds?: string[]) => void) | null>(null);
+
+  useEffect(() => {
+    if (historyStatus.kind === 'loading') return;
+    const visibleEntries = messages.filter(message => message.role === 'user' || message.role === 'assistant');
+    if (!metricsHistoryInitializedRef.current) {
+      metricsHistoryInitializedRef.current = true;
+      visibleEntries.forEach(message => metricsMessageIdsRef.current.add(message.id));
+      chatSessionMetrics.markHistoryLoaded(visibleEntries.length);
+      return;
+    }
+    for (const message of visibleEntries) {
+      if (metricsMessageIdsRef.current.has(message.id)) continue;
+      metricsMessageIdsRef.current.add(message.id);
+      chatSessionMetrics.recordEntry();
+    }
+  }, [historyStatus.kind, messages]);
+
+  useEffect(() => { chatSessionMetrics.setTyping(typing); }, [typing]);
+  useEffect(() => { chatSessionMetrics.setLoading(loading || wakeLoading); }, [loading, wakeLoading]);
 
   const rootRef  = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -1652,6 +1676,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
     setInput('');
     setReplyTarget(null);
     setMessages(m => [...m, { id: newId(), role: 'user', text: t, time: Date.now() }]);
+    chatSessionMetrics.recordTurn();
     engine.setLocalFocus('想事情');
     setLoading(true);
     try {
@@ -1909,6 +1934,11 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
   const resolvedMainLayout: MainLayoutId = compactLayout ? 'stack' : mainLayout;
   const isSideComposer = resolvedMainLayout === 'workbench';
   const isHud = resolvedMainLayout === 'hud';
+  const { mounts: designMounts } = useDesignMounts();
+  const designRegion = (id: 'chat.header' | 'chat.transcript' | 'chat.composer', content: ReactNode) => {
+    const mount = designMounts[id];
+    return mount ? createPortal(content, mount, `design-${id}`) : content;
+  };
 
   return (
     <div ref={rootRef} className="chat-panel" data-main-layout={resolvedMainLayout} style={{
@@ -1919,7 +1949,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       ...mainLayoutGrid(resolvedMainLayout),
     }}>
       {/* HEADER */}
-      {headerVisible && (
+      {designRegion('chat.header', headerVisible && (
         <div data-chat-region="header" style={{
           gridArea: 'header', minWidth: 0,
           padding: '20px 28px 14px', borderBottom: '1px solid var(--paper-edge)',
@@ -1962,10 +1992,10 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
             )}
           </div>
         </div>
-      )}
+      ))}
 
       {/* MESSAGES */}
-      <div
+      {designRegion('chat.transcript', <div
         ref={scrollRef}
         data-chat-region="transcript"
         onScroll={onScroll}
@@ -2054,7 +2084,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
             </div>
           </div>
         )}
-      </div>
+      </div>)}
 
       {/* 气泡右键菜单：cc-tasks/36，全局单例，onMouseDown stopPropagation 避免点击项时被外部关闭逻辑抢先卸载 */}
       {ctxMenu && (
@@ -2092,7 +2122,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       )}
 
       {/* INPUT */}
-      <div data-chat-region="composer" style={{ gridArea: 'composer', position: 'relative', minWidth: 0, padding: 18, borderTop: isSideComposer ? 'none' : '1px solid var(--paper-edge)', borderLeft: isSideComposer ? '1px solid var(--paper-edge)' : 'none', background: avatars.chatBackground?.dataUrl ? 'oklch(from var(--paper-2) l c h / 0.85)' : 'var(--paper-2)', ...(isSideComposer ? { overflowY: 'auto' } : {}), ...(isHud ? { borderRight: '1px solid var(--paper-edge)' } : {}) }}>
+      {designRegion('chat.composer', <div data-chat-region="composer" style={{ gridArea: 'composer', position: 'relative', minWidth: 0, padding: 18, borderTop: isSideComposer ? 'none' : '1px solid var(--paper-edge)', borderLeft: isSideComposer ? '1px solid var(--paper-edge)' : 'none', background: avatars.chatBackground?.dataUrl ? 'oklch(from var(--paper-2) l c h / 0.85)' : 'var(--paper-2)', ...(isSideComposer ? { overflowY: 'auto' } : {}), ...(isHud ? { borderRight: '1px solid var(--paper-edge)' } : {}) }}>
         {replyTarget && (
           <div style={{
             display: 'flex', alignItems: 'center', gap: 8,
@@ -2205,7 +2235,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
             </span>
           )}
         </div>
-      </div>
+      </div>)}
 
       {isDraggingOver && (
         <div style={{

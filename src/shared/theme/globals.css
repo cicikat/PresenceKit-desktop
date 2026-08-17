@@ -215,3 +215,37 @@ input, textarea { font-family: inherit; }
   .chat-composer-row > button { width: 40px !important; padding-inline: 0 !important; }
   .chat-composer-row > button:last-child { width: auto !important; padding-inline: 10px !important; }
 }
+/* Trusted design Mod host: the viewport is an application-internal surface.
+ * Its layers intentionally sit beside the three-slot layout so ChatPanel's
+ * overflow clipping cannot crop Mod-owned decoration or portal mounts. */
+.design-mod-host {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  overflow: visible;
+  perspective: 1200px;
+  transform-style: preserve-3d;
+}
+
+.design-mod-layer {
+  position: fixed;
+  inset: 0;
+  overflow: visible;
+  transform-style: preserve-3d;
+  pointer-events: none;
+}
+
+.design-mod-underlay { z-index: 0; }
+.design-mod-components { z-index: 1; }
+.design-mod-overlay { z-index: 2; }
+.design-mod-components > *,
+.design-mod-overlay > [data-design-interactive="true"] {
+  pointer-events: auto;
+}
+.design-mod-sidebar-capability {
+  height: 100%;
+  min-width: 0;
+  overflow: hidden;
+  pointer-events: auto;
+}

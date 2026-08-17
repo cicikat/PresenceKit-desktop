@@ -15,6 +15,7 @@
 - **ChatPanel 对账 timer 竞态测试** — `post-v0.1`；下一步把 timer orchestration 抽为纯控制器，用 vitest 假时钟覆盖 WS 先到、timer 先到和 fallback 命中。
 - **Dream 期间 Reality park / 退梦 flush 端到端验收** — `open`。当前 `ChatPanel` 已保持挂载，Dream 使用 overlay，静态前置条件已满足；仍需在真实后端连接下于入梦期间注入 Reality `channel_message` + `message_segments`，确认 Dream UI 不显示、退梦只 flush 一次且分段不重复。
 - **macOS 客户端首轮真人冒烟** — `open`。Release CI 已配置产出 Universal `.dmg`，但 Windows 开发机无法验证透明置顶桌宠、多窗口、Live2D/WebGL 与实际 Gatekeeper 流程。首个 macOS 包须标注 experimental，并至少确认启动、连接本机后端和聊天收发。macOS sensor 当前固定降级为不可用（`sensor_not_supported_on_macos`），不申请 Accessibility 权限也不上传空数据。
+- **可信设计 Mod 真实窗口 fixture 验收** — `open`。代码、纯逻辑测试、开发版 Tauri 启动和本地调试目标已通过；仍需在真实窗口内选择 `freeform-capability-fixture`，完成 800x600/宽桌面/窄窗口、拖动/resize/Sidebar 变化/原生移动及 20 次切换的交互验收，并单独验证 release 包的 `resource_dir/design-mods`。
 
 本轮已关闭：TTS 合成播放（后端合成端点、Tauri bridge、聊天/桌宠语音条、场景自动播放与跨窗口顺序播放均已接通）；Panes 历史 TS 条目、backend-integration L213、ChatPanel 三处内联 `15000`、Tauri 模板名、Header 偏好死按钮、system 消息气泡、SubFlow 跨角色单桶。system 样式经现有代码核对已先于本工单修好；关闭证据保留在下方历史快照和 Git 历史。
 
