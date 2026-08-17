@@ -73,3 +73,12 @@ sync action for the user's Obsidian diary. The chosen directory and local
 manifest are desktop-local configuration only. No diary path is returned by a
 Tauri command or sent to the backend; the backend receives bounded dated
 entries through the scoped diary integration endpoint.
+
+## Brief 194: admin panel native entry
+
+Preferences -> General -> Connection provides an "Open admin panel" command
+and local-bridge status. It is not a settings switch and does not mirror or
+modify any backend configuration. The Tauri process owns the loopback bridge;
+the system browser only sees a short-lived capability URL and continues to use
+the normal scoped-token login flow. Mobile has no equivalent entry and remains
+dependent on its own VPN, DIRECT/PAC, or working system network path.

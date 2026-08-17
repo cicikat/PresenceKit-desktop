@@ -10,6 +10,7 @@
 // /settings/thinking、/dream/archive(2)，共 56 个不同路径）均为字面量硬编码。
 // publisher.rs 另有 /sensor/realtime。后端路由变更时需手动同步这两个文件。
 mod actions;
+mod admin_bridge;
 mod client_config;
 mod diary_sync;
 mod ui_prefs;
@@ -2895,10 +2896,11 @@ async fn delete_jailbreak_entry(app: tauri::AppHandle, eid: String) -> Result<se
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .manage(VoiceHotkeyState { running: AtomicBool::new(false) })
         .manage(VisualRunnerState::default())
         .manage(actions::PresenceNagState::default())
+        .manage(admin_bridge::AdminBridgeState::default())
         .manage(window_lifecycle::WindowLifecycleState::default())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_dialog::init())
@@ -2969,6 +2971,9 @@ pub fn run() {
             actions::presence_nag,
             actions::presence_nag_close_all,
             actions::presence_nag_ready,
+            admin_bridge::open_admin_panel,
+            admin_bridge::admin_bridge_status,
+            admin_bridge::stop_admin_bridge,
             window_lifecycle::ensure_pet_window,
             window_lifecycle::destroy_pet_window,
             client_config::load_public_client_config,
@@ -3121,8 +3126,14 @@ pub fn run() {
             update_jailbreak_entry,
             delete_jailbreak_entry,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(|app, event| {
+        if matches!(event, tauri::RunEvent::Exit | tauri::RunEvent::ExitRequested { .. }) {
+            admin_bridge::stop_bridge(&app.state::<admin_bridge::AdminBridgeState>());
+        }
+    });
 }
 
 #[cfg(test)]

@@ -3,6 +3,7 @@ import { getClientConfig, invalidateClientConfig } from '../../../shared/api/con
 import { getTokenStatus, testBackendAuth, saveClientConfig } from '../../../shared/api/connectionSettings';
 import type { TokenStatus } from '../../../shared/api/connectionSettings';
 import { wsClient } from '../../../shared/api/ws';
+import { getAdminBridgeStatus, openAdminPanel, stopAdminBridge, type AdminBridgeStatus } from '../../../shared/api/adminBridge';
 
 // ─── local styles (kept local to avoid coupling to ChatWindow.tsx internals) ──
 
@@ -80,6 +81,9 @@ export function ConnectionSettingsPage() {
   const [saveResult, setSaveResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [showReconnect, setShowReconnect] = useState(false);
+  const [adminBridge, setAdminBridge] = useState<AdminBridgeStatus | null>(null);
+  const [adminBridgeBusy, setAdminBridgeBusy] = useState(false);
+  const [adminBridgeError, setAdminBridgeError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -92,6 +96,16 @@ export function ConnectionSettingsPage() {
       })
       .catch(e => { if (mounted) setSaveResult({ ok: false, msg: `读取失败：${String(e)}` }); })
       .finally(() => { if (mounted) setLoading(false); });
+    return () => { mounted = false; };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    getAdminBridgeStatus().then(status => {
+      if (mounted) setAdminBridge(status);
+    }).catch(() => {
+      if (mounted) setAdminBridge(null);
+    });
     return () => { mounted = false; };
   }, []);
 
@@ -143,6 +157,30 @@ export function ConnectionSettingsPage() {
   function handleReconnect() {
     wsClient.reconnect(websocketBase.trim());
     setShowReconnect(false);
+  }
+
+  async function handleOpenAdminPanel() {
+    setAdminBridgeBusy(true);
+    setAdminBridgeError(null);
+    try {
+      setAdminBridge(await openAdminPanel());
+    } catch (error) {
+      setAdminBridgeError(String(error));
+    } finally {
+      setAdminBridgeBusy(false);
+    }
+  }
+
+  async function handleStopAdminBridge() {
+    setAdminBridgeBusy(true);
+    setAdminBridgeError(null);
+    try {
+      setAdminBridge(await stopAdminBridge());
+    } catch (error) {
+      setAdminBridgeError(String(error));
+    } finally {
+      setAdminBridgeBusy(false);
+    }
   }
 
   if (loading) {
@@ -224,6 +262,29 @@ export function ConnectionSettingsPage() {
           <button style={ghostBtn} onClick={handleReconnect}>立即重连</button>
         </Row>
       )}
+
+      <Divider />
+
+      <Row label="管理面板" hint="通过仅本机的原生 bridge 打开；浏览器不会直接访问远程后端，也不会获得或注入 token">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <button style={primaryBtn} disabled={adminBridgeBusy} onClick={() => void handleOpenAdminPanel()}>
+            {adminBridgeBusy ? '启动中…' : '打开管理面板'}
+          </button>
+          {adminBridge?.active && (
+            <button style={ghostBtn} disabled={adminBridgeBusy} onClick={() => void handleStopAdminBridge()}>
+              关闭本地入口
+            </button>
+          )}
+          <span className="mono" style={{ fontSize: 10.5, color: adminBridge?.active ? 'var(--ink-2)' : 'var(--ink-3)' }}>
+            {adminBridge?.active ? `本地入口已开启，闲置 ${Math.round(adminBridge.idleTimeoutSeconds / 60)} 分钟后关闭` : '本地入口未开启'}
+          </span>
+        </div>
+        {adminBridgeError && (
+          <div className="mono" style={{ fontSize: 10.5, letterSpacing: 0.6, color: 'var(--danger)' }}>
+            启动失败：{adminBridgeError}
+          </div>
+        )}
+      </Row>
 
       <Divider />
 

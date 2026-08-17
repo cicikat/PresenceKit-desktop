@@ -1042,3 +1042,18 @@ are never modified or removed.
 `sync_diary` are the only client IPC surface for this feature. HTTP uses the
 existing Rust `reqwest` no-proxy client. `SubDiary` remains the read-only
 character-inner-diary view; sync is exposed separately in Preferences.
+
+## Brief 194: native admin-panel bridge
+
+The General preferences connection page can open the backend admin panel through
+`open_admin_panel`. The command creates one temporary `127.0.0.1` listener on
+an OS-assigned port and opens a capability-bearing loopback URL in the system
+browser. The browser receives no backend token and does not choose the upstream
+URL. Rust validates the saved `backendBase`, uses a `reqwest` client with
+`no_proxy()`, and forwards only the bounded admin HTTP allowlist.
+
+`admin_bridge_status` and `stop_admin_bridge` expose the local lifecycle to the
+settings page. Reopening reuses the single bridge for the same saved backend;
+changing connection settings, explicit stop, application exit, or 15 minutes of
+listener idleness invalidates the capability and releases the port. This is a
+desktop-only transport convenience, not a new backend authentication boundary.

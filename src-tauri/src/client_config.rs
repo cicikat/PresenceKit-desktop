@@ -476,10 +476,12 @@ pub(crate) fn target_config_path<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -
 #[tauri::command]
 pub fn save_client_config(
     app: tauri::AppHandle,
+    bridge: tauri::State<'_, crate::admin_bridge::AdminBridgeState>,
     backend_base: String,
     websocket_base: String,
     admin_token: Option<String>,
 ) -> Result<(), String> {
+    crate::admin_bridge::stop_bridge(&bridge);
     let path = target_config_path(&app)?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("无法创建配置目录: {e}"))?;

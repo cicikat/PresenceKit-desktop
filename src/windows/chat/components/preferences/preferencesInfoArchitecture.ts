@@ -24,7 +24,7 @@ export const CHAT_PREFERENCE_TABS: ReadonlyArray<{
 
 // This documents placement only. Rendering stays explicit in PreferencesPanel.
 export const CHAT_PREFERENCE_SECTION_IDS: Readonly<Record<ChatPreferenceTab, readonly string[]>> = {
-  general: ['language', 'connection', 'diarySync'],
+  general: ['language', 'connection', 'adminPanelBridge', 'diarySync'],
   models: ['modelRouting', 'characterModelRouting', 'thinking', 'outputSegmentEnforce'],
   capabilities: ['desktopTts', 'toolLoop', 'visualPerception', 'computerOperationSafety'],
   interface: ['themes', 'chatHeader', 'layout', 'font', 'background', 'moodReactive', 'avatars', 'color'],
