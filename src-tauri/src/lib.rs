@@ -13,6 +13,7 @@ mod actions;
 mod admin_bridge;
 mod client_config;
 mod diary_sync;
+mod design_satellite;
 mod ui_prefs;
 mod ws_bridge;
 mod window_lifecycle;
@@ -3053,11 +3054,21 @@ pub fn run() {
         .manage(actions::PresenceNagState::default())
         .manage(admin_bridge::AdminBridgeState::default())
         .manage(window_lifecycle::WindowLifecycleState::default())
+        .manage(design_satellite::DesignSatelliteState::default())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .setup(|app| {
+            if let Some(main_window) = app.get_webview_window(design_satellite::MAIN_WINDOW_LABEL) {
+                let app_handle = app.handle().clone();
+                main_window.on_window_event(move |event| {
+                    design_satellite::sync_from_main_event(&app_handle, event);
+                    if matches!(event, tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed) {
+                        design_satellite::destroy_for_main_close(&app_handle);
+                    }
+                });
+            }
             ws_bridge::register(app);
             let cfg = load_client_config(app.handle());
             let visual_state = app.state::<VisualRunnerState>();
@@ -3127,6 +3138,12 @@ pub fn run() {
             admin_bridge::stop_admin_bridge,
             window_lifecycle::ensure_pet_window,
             window_lifecycle::destroy_pet_window,
+            design_satellite::ensure_design_satellites,
+            design_satellite::update_design_satellite_bounds,
+            design_satellite::set_design_satellites_visible,
+            design_satellite::destroy_design_satellites,
+            design_satellite::design_satellite_ready,
+            design_satellite::design_satellite_command,
             client_config::load_public_client_config,
             client_config::get_token_status,
             client_config::test_backend_auth,
@@ -3285,6 +3302,7 @@ pub fn run() {
 
     app.run(|app, event| {
         if matches!(event, tauri::RunEvent::Exit | tauri::RunEvent::ExitRequested { .. }) {
+            design_satellite::destroy_for_main_close(app);
             admin_bridge::stop_bridge(&app.state::<admin_bridge::AdminBridgeState>());
         }
     });
