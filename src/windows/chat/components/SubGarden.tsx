@@ -1,11 +1,11 @@
 /* SubGarden — 陪伴花园 panel (Phase 2d.5c) */
 
-import { useState, useEffect } from 'react';
 import { Tag, Btn, MicroLabel } from './UIKit';
-import { loadGardenState } from '../../../shared/api/backend';
 import type { GardenState, GardenSlot } from '../../../shared/api/types';
-import { normalizeGardenState } from '../../../shared/api/stateResponseNormalization';
 import { chatThemeFontSize } from '../../../shared/chatAppearance';
+import { usePresenterSnapshot } from '../../../shared/design-mod/presenters/react';
+import type { GardenPresenter } from '../../../shared/design-mod/presenters/types';
+import { DesignAwareRegion } from '../../../shared/design-mod/regions';
 
 const FLOWER_COLOR: Record<string, string> = {
   calm:    'var(--flower-calm)',
@@ -23,71 +23,54 @@ const FLOWER_HUE: Record<string, number> = {
   adrift:  295,
 };
 
-export function SubGarden() {
-  const [data, setData] = useState<GardenState | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const fetchData = async () => {
-    try {
-      const result = normalizeGardenState(await loadGardenState());
-      if (!result) throw new Error('花园状态响应格式无效');
-      setData(result);
-      setError(null);
-    } catch (e: any) {
-      console.error('loadGardenState failed:', e);
-      setError(String(e));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-    const h = setInterval(fetchData, 30_000);
-    return () => clearInterval(h);
-  }, []);
-
-  if (loading) {
+export function SubGarden({ presenter }: { presenter: GardenPresenter }) {
+  const snapshot = usePresenterSnapshot(presenter, 'official.sidebar.garden');
+  const data = snapshot.garden;
+  if (snapshot.loading && !data) {
     return (
-      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div data-sidebar-capability="garden" style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <span className="mono" style={{ fontSize: chatThemeFontSize(11), color: 'var(--on-forest-2)', letterSpacing: 1.2 }}>加载中…</span>
       </div>
     );
   }
 
-  if (error || !data) {
+  if (snapshot.error && !data) {
     return (
-      <div style={{
+      <div data-sidebar-capability="garden" style={{
         height: '100%', display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24,
       }}>
         <span className="mono" style={{ fontSize: chatThemeFontSize(11), color: 'var(--on-forest-2)', letterSpacing: 1.2, textAlign: 'center' }}>
-          {error || '无数据'}
+          {snapshot.error || '无数据'}
         </span>
-        <Btn onClick={() => { setLoading(true); fetchData(); }}>重试</Btn>
+        <Btn onClick={presenter.commands.refresh}>重试</Btn>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: '12px 14px 18px', overflowY: 'auto', height: '100%' }}>
-      <div className="serif" style={{
+    <div data-sidebar-capability="garden" style={{ padding: '12px 14px 18px', overflowY: 'auto', height: '100%' }}>
+      <DesignAwareRegion id="chat.sidebar.garden.summary">
+        <div className="serif" style={{
         fontSize: chatThemeFontSize(12.5), color: 'var(--on-forest-2)',
         marginBottom: 12, lineHeight: 1.6, fontStyle: 'italic',
-      }}>
+        }}>
         每种心情都让对应的植物多长出一点。它在你不看的时候，也在生长。
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-        <MicroLabel style={{ color: 'var(--on-forest-2)' }}>
-          收获 {data.harvest_count ?? 0} · 花瓶 {data.vase_count ?? 0}
-        </MicroLabel>
-      </div>
-      <div style={{ display: 'grid', gap: 10 }}>
-        {(data.slots ?? []).map(slot => (
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+          <MicroLabel style={{ color: 'var(--on-forest-2)' }}>收获 {data?.harvest_count ?? 0} · 花瓶 {data?.vase_count ?? 0}</MicroLabel>
+        </div>
+      </DesignAwareRegion>
+      <DesignAwareRegion id="chat.sidebar.garden.controls">
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}><Btn onClick={presenter.commands.refresh}>刷新</Btn></div>
+      </DesignAwareRegion>
+      <DesignAwareRegion id="chat.sidebar.garden.visual">
+        <div style={{ display: 'grid', gap: 10 }}>
+        {(data?.slots ?? []).map(slot => (
           <SlotCard key={slot.slot_key} slot={slot} />
         ))}
-      </div>
+        </div>
+      </DesignAwareRegion>
     </div>
   );
 }

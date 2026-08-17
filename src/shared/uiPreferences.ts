@@ -88,7 +88,7 @@ export function setUIPref<T>(key: string, value: T): void {
   } catch {
     // quota exceeded or private browsing — silently ignore
   }
-  window.dispatchEvent(new CustomEvent(PREF_CHANGE_EVENT, { detail: { key } }));
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(PREF_CHANGE_EVENT, { detail: { key } }));
   scheduleSave();
 }
 
@@ -99,12 +99,13 @@ export function removeUIPref(key: string): void {
   } catch {
     // localStorage unavailable — the file-backed map is still authoritative.
   }
-  window.dispatchEvent(new CustomEvent(PREF_CHANGE_EVENT, { detail: { key } }));
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(PREF_CHANGE_EVENT, { detail: { key } }));
   scheduleSave();
 }
 
 export function onUIPrefChange(handler: (key: string) => void): () => void {
   const listener = (e: Event) => handler((e as CustomEvent<{ key: string }>).detail.key);
+  if (typeof window === 'undefined') return () => {};
   window.addEventListener(PREF_CHANGE_EVENT, listener);
   return () => window.removeEventListener(PREF_CHANGE_EVENT, listener);
 }
@@ -113,7 +114,7 @@ export function onUIPrefChange(handler: (key: string) => void): () => void {
 // a native `storage` event here (not in the writer's own window). Fold it into our
 // in-memory Map and re-emit the same in-process event so onUIPrefChange subscribers
 // don't need to know the difference between a local and a cross-window change.
-window.addEventListener('storage', event => {
+if (typeof window !== 'undefined') window.addEventListener('storage', event => {
   if (!event.key || !event.key.startsWith(STORAGE_PREFIX)) return;
   const key = event.key.slice(STORAGE_PREFIX.length);
   if (event.newValue === null) {

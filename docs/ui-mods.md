@@ -162,6 +162,9 @@ release 只读 `resource_dir/themes/`；新放入目录的 mod 点击 ThemePicke
 [可信设计 Mod 文档](design-mods.md) 定义；它是独立的 design-mod 包和 viewport host，不得把
 可执行内容塞进主题包。第三方不可信沙箱、权限和市场分发仍不在当前范围内。
 
+可信设计 Mod 的 Sidebar presenter、视觉区域 ownership 和语义 CSS hook 见
+[可信设计 Mod 文档](design-mods.md)；主题 Mod 只负责 token/CSS，不应读取或重建 presenter 数据。
+
 ---
 
 ## 9. 已知缺口

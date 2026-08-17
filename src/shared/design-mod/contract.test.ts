@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DESIGN_MOD_DEFAULT_ID, DESIGN_COMPONENT_IDS, selectDesignMod, validateDesignModManifest, validateDesignModPackage } from './contract';
+import { DESIGN_MOD_DEFAULT_ID, DESIGN_COMPONENT_IDS, isDesignComponentOwnershipConflict, selectDesignMod, validateDesignModManifest, validateDesignModPackage } from './contract';
 
 const valid = {
   schemaVersion: 1,
@@ -31,6 +31,8 @@ describe('trusted design Mod contract', () => {
     const records = [{ manifest: { id: DESIGN_MOD_DEFAULT_ID } }, { manifest: { id: 'fixture' } }];
     expect(selectDesignMod(records, 'fixture')?.manifest.id).toBe('fixture');
     expect(selectDesignMod(records, 'missing')?.manifest.id).toBe(DESIGN_MOD_DEFAULT_ID);
-    expect(DESIGN_COMPONENT_IDS).toHaveLength(8);
+    expect(DESIGN_COMPONENT_IDS).toHaveLength(15);
+    expect(isDesignComponentOwnershipConflict('chat.sidebar.flow', 'chat.sidebar.flow.now')).toBe(true);
+    expect(isDesignComponentOwnershipConflict('chat.sidebar.flow', 'chat.sidebar.garden')).toBe(false);
   });
 });

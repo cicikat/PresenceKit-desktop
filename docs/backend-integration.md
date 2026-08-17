@@ -72,12 +72,14 @@ Rust/Tauri HTTP client 统一显式禁用代理并设置超时：普通请求 15
 | `src/shared/api/chat-settings.ts` | `getChatSettings()`、`setChatMode()`、`setChatStyle()`、`setChatMultiMessage()`，由偏好面板「其他」tab 的 `ChatSettingsSection` 调用 |
 | `src/shared/api/ws.ts` | `wsClient.connect()`、通过 Tauri commands / events 完成 legacy WS 收发 |
 | `src/shared/state/toolStatusOverlay.ts` | 内存态 `tool_status` 队列；仅覆盖动向 NOW，不写 StateEngine、timeline 或本地偏好 |
+| `src/shared/design-mod/presenters/` | 统一 Sidebar Status/Flow/Garden/Diary presenter；复用 Tauri API、共享 mood/activity poller，不新增后端接口 |
 | `src-tauri/src/ws_bridge.rs` | 原生 WS 连接、Bearer header、URL 清洗与前端事件桥接 |
 | `src-tauri/src/lib.rs` | `send_chat`、`load_history`、`load_garden_state`、`load_diary_list`、`load_diary_entry`、`get_prompt_assets`、`patch_prompt_assets`、头像 / Dream 背景文件 commands、Dream 字体目录扫描、主题 / 布局 Mod manifest 与 CSS 扫描 |
 | `src/windows/chat/components/ChatPanel.tsx` | 启动历史、发送消息、订阅 WS 主动消息 |
 | `src/windows/chat/components/Ribbon.tsx` | 读取 WS 连接状态 |
-| `src/windows/chat/components/SubGarden.tsx` | 读取并展示花园状态 |
-| `src/windows/chat/components/SubDiary.tsx` | 读取并展示日记列表和详情 |
+| `src/windows/chat/components/SubGarden.tsx` | 消费 `GardenPresenter` 展示花园状态 |
+| `src/windows/chat/components/SubDiary.tsx` | 消费 `DiaryPresenter` 展示日记列表并调用独立详情窗口 |
+| `src/windows/chat/components/SubStatus.tsx` / `SubFlow.tsx` | 消费 `StatusPresenter` / `FlowPresenter`；不自行建立 HTTP、WS 或 sensor 轮询 |
 | `src/windows/chat/ChatWindow.tsx` | Chat 偏好「世界」页读取并保存 Reality Prompt Assets |
 | `src/shared/api/connectionSettings.ts` | `getTokenStatus()`、`testBackendAuth()`、`saveClientConfig()`，由偏好面板「系统设置」tab 的 `ConnectionSettingsPage` 调用 |
 | `src-tauri/src/client_config.rs` | `get_token_status`、`test_backend_auth`、`save_client_config` |

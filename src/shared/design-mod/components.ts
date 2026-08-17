@@ -1,4 +1,4 @@
-import { DESIGN_COMPONENTS, type DesignComponentId } from './contract';
+import { DESIGN_COMPONENTS, isDesignComponentOwnershipConflict, type DesignComponentId } from './contract';
 
 export interface ComponentAttachment {
   id: DesignComponentId;
@@ -15,6 +15,8 @@ export class ComponentAttachmentRegistry {
     if (!descriptor) throw new Error(`未知设计组件: ${id}`);
     if (typeof HTMLElement !== 'undefined' && !(mount instanceof HTMLElement)) throw new Error(`组件挂载点不是 HTMLElement: ${id}`);
     if (this.attachments.has(descriptor.id)) throw new Error(`组件已挂载且为 singleton: ${id}`);
+    const conflict = [...this.attachments.keys()].find(existing => isDesignComponentOwnershipConflict(existing, descriptor.id));
+    if (conflict) throw new Error(`组件所有权冲突: ${conflict} 与 ${descriptor.id} 不能同时挂载父级和子区域`);
     const attachment = { id: descriptor.id, mount, attachedAt: Date.now() };
     this.attachments.set(descriptor.id, attachment);
     return attachment;

@@ -339,10 +339,10 @@ mood 真值。Chat 偏好 “3 · 桌宠” 页可切换粒子风格、关闭全
 职责：
 
 - 在 Sidebar 的 `flow` tab 中展示叶瑄此刻的动向（Live Feed）。
-- 不直接请求后端；读取并订阅 StateEngine。Sidebar 挂载的共享 `useBackendStatePolling()` 在 flow tab 使用 mood 60s / activity 90s 周期。
+- 不直接请求后端；读取并订阅 `FlowPresenter`。共享状态 poller 由 `SidebarPresenters` 合并后台 owner 与可见能力的 cadence。
 - 从 engine `activity / focus / presence` 派生叙事文本（`buildNarrative`），不发起新网络请求。
 - 有 `ToolStatusOverlayController` 状态时，只在 NOW 原位替换叙事文本；同一状态原位更新，不进入 timeline 或 `uiPreferences`，多项调用每项至少展示 1 秒，完成后恢复 engine 派生动向。
-- 维护组件内 ring buffer（最多 10 条），追踪 activity/focus 变化历史。
+- `FlowPresenter` 按激活角色维护 8 小时持久化 timeline；官方 renderer 只负责 NOW/timeline 视觉与子区域 portal。
 
 `buildNarrative(activity, focus, presence)` 模板（优先级从高到低）：
 
@@ -362,8 +362,8 @@ Timeline：`uiPreferences` 按激活角色分桶持久化（key `subflow_timelin
 
 | 来源 | 路径 | 轮询 |
 |---|---|---|
-| mood | `useBackendStatePolling()` → `engine.applyBackendState('mood-poll', {mood})` | 60s |
-| activity | `useBackendStatePolling()` → `engine.applyBackendState('activity-poll', {activity})` | 90s |
+| mood | `SidebarPresenters` shared poller → `engine.applyBackendState('mood-poll', {mood})` | 后台 120s；可见 presenter cadence 合并 |
+| activity | `SidebarPresenters` shared poller → `engine.applyBackendState('activity-poll', {activity})` | 后台 180s；可见 presenter cadence 合并 |
 | focus / presence | engine 现有值（由 ChatPanel 交互驱动） | — |
 
 ---
@@ -375,17 +375,17 @@ Timeline：`uiPreferences` 按激活角色分桶持久化（key `subflow_timelin
 职责：
 
 - 在 Sidebar 的 `status` tab 展示叶瑄持续状态信号。
-- 读取并订阅 StateEngine；Sidebar 共享 poller 负责 mood/activity 请求、写入和错误重试。
+- 读取 `StatusPresenter`；共享 poller 负责 mood/activity 请求、写入和错误重试，sensor 也由 presenter 统一管理。
 - 从 engine state 派生 4 个可感知信号（前端 derived，不进 engine state）。
-- 维护 60 格 ring buffer，2 秒采样一次，呈现近 2 分钟 mood 轨迹。
+- presenter 维护 60 格、每 2 秒带 `sampledAt` 的 ring buffer，renderer 只呈现近 2 分钟 mood 轨迹。
 
 数据源：
 
 | 来源 | 路径 | 轮询 |
 |---|---|---|
-| mood 后端持久值 | `useBackendStatePolling()` → `/mood/state` → `engine.applyBackendState('mood-poll', {mood})` | 30s |
-| activity 身体动作 | `useBackendStatePolling()` → `/activity/current` → `engine.applyBackendState('activity-poll', {activity})` | 60s |
-| sensor 实时快照 | `loadSensorRealtime()` → `/sensor/realtime` → Rust 兼容归一化 → TypeScript 完整结构校验 → 真实键鼠/焦点数据 | 10s |
+| mood 后端持久值 | `StatusPresenter` shared poller → `/mood/state` → `engine.applyBackendState('mood-poll', {mood})` | 共享 cadence |
+| activity 身体动作 | `StatusPresenter` shared poller → `/activity/current` → `engine.applyBackendState('activity-poll', {activity})` | 共享 cadence |
+| sensor 实时快照 | `StatusPresenter` → `loadSensorRealtime()` → `/sensor/realtime` → Rust 兼容归一化 → TypeScript 完整结构校验 | 10s |
 | presence | engine 现有值（默认 active）；sensor 可用时仅参与 4 个信号派生，不写入 engine | — |
 | focus | ChatPanel 输入驱动，SubStatus 不动 | — |
 
@@ -411,7 +411,7 @@ Ring buffer：`useState<{mood, aura}[]>` 长度 60；2s 采样；mood 轨迹柱�
 - 在 Sidebar 的 `garden` tab 中展示陪伴花园。
 - 调用 `loadGardenState()` 读取后端 `/garden/state`。
 - 在渲染前校验 `slots` 必须为数组、每个槽位的字符串/数值字段完整；异常 HTTP 200 响应进入面板内错误态，不交给 React ErrorBoundary。
-- 每 30 秒轮询一次。
+- `GardenPresenter` 在有 consumer 时每 30 秒刷新，组件只消费快照和 `refresh` 命令。
 - 展示五个情绪花槽、花名、英文名、阶段、阶段进度条和 bloom 标签。
 
 当前数据来源：
@@ -469,11 +469,11 @@ Ring buffer：`useState<{mood, aura}[]>` 长度 60；2s 采样；mood 轨迹柱�
 职责：
 
 - 在 Sidebar 的 `diary` tab 中展示各角色写的日记。
-- 挂载时调用 `getPromptAssets()` 拉角色列表，默认选中 active 角色。
+- `DiaryPresenter` 在有 consumer 时拉 `getPromptAssets()` 和当前角色列表，默认选中 active 角色。
 - 顶部角色分类栏：以 `getPromptAssets()` 返回的 characters 为 tab，显示名取 `label`（fallback `id`）；切换角色时重新拉该角色的日记列表。
-- 列表调用 `loadDiaryList(charId)` 读取轻量列表（date / title / emotion），不预拉正文。
+- 列表调用 `loadDiaryList(charId)` 读取轻量列表（date / title / emotion），presenter 不预拉正文。
 - 时间线滚动，最新在前，每条显示完整日期 + title + em dash 占位；emotion 非 null 时渲染标签。
-- 点击 entry 时懒加载正文：调 `loadDiaryEntry(date, charId)` 并通过 `panesApi.openPane()` 打开浮动详情窗，pane id 带 charId 避免串角色。
+- 点击 entry 时由 `DiaryPresenter.openEntry()` 打开当前角色独立 Tauri detail window；快照只保留 date/title/emotion/feeling 等元数据，不暴露本地路径。
 - 详情窗正文做最简渲染：`\n\n` 切段落 → `<p>`，段内 `\n` → `<br/>`，行首 `## ` → `<h3>`，其他 markdown 原样。
 - 顶部有刷新按钮；错误时显示错误文本 + 重试按钮；空状态显示"他还没开始写日记。"
 - 不轮询；emotion 字段后端当前恒为 null，遇 null 不渲染标签（标签行为保留以备后端填充）。
@@ -520,10 +520,10 @@ WS 连接状态来自 `wsClient.getState()` 和 `wsClient.on("state")`。
 
 四个 tab 已接入真实数据：
 
-- `flow`：动向，挂 `SubFlow`，从 engine 读 mood/activity/focus/presence
-- `diary`：他的日记，读取后端日记列表和正文
-- `status`：状态，挂 `SubStatus`，读取 engine 并显示共享 poller 的 mood/activity 错误与重试
-- `garden`：陪伴花园，读取后端花园状态
+- `flow`：动向，挂 `SubFlow`，消费共享 `FlowPresenter` 的 mood/activity/focus/presence、tool overlay 与 8 小时角色时间线
+- `diary`：他的日记，消费 `DiaryPresenter` 的角色、列表元数据和独立详情窗口命令
+- `status`：状态，挂 `SubStatus`，消费共享 `StatusPresenter` 的 telemetry、错误重试、语义 region 和 60 格轨迹
+- `garden`：陪伴花园，消费 `GardenPresenter` 的后端快照、刷新命令和 visual/summary/controls 子区域
 
 成长、视觉、支出、群聊仲裁和记忆摘要五类运行观测已迁入 PresenceKit 后端自带管理面板的“观测”分类；
 桌面聊天侧栏不再承载运维诊断入口。

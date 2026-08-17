@@ -9,12 +9,8 @@ import { SubStatus } from './SubStatus';
 import { SubFlow } from './SubFlow';
 import { chatThemeFontSize } from '../../../shared/chatAppearance';
 import { ErrorBoundary } from '../../../shared/ui/ErrorBoundary';
-import {
-  FLOW_BACKEND_STATE_CADENCE,
-  STATUS_BACKEND_STATE_CADENCE,
-  useBackendStatePolling,
-} from '../../../shared/state/useBackendStatePolling';
 import { useDesignMounts } from '../../../shared/design-mod/mounts';
+import type { SidebarPresenters } from '../../../shared/design-mod/presenters';
 
 const SIDEBAR_HEADER: Record<string, { title: string; subtitle: string }> = {
   flow:   { title: '动向',     subtitle: 'LIVE FEED · 他现在在做什么' },
@@ -23,20 +19,14 @@ const SIDEBAR_HEADER: Record<string, { title: string; subtitle: string }> = {
   garden: { title: '陪伴花园', subtitle: 'GARDEN · 他在你不看的时候也在生长' },
 };
 
-export function SidebarPanel({ engine, toolStatus, sidebarRectRef, tab, onClose, paused = false }: any) {
+export function SidebarPanel({ engine, toolStatus, presenters, sidebarRectRef, tab, onClose, paused = false }: any) {
   const { active } = useDesignMounts();
   if (active) return null;
-  return <SidebarCapability engine={engine} toolStatus={toolStatus} sidebarRectRef={sidebarRectRef} tab={tab} onClose={onClose} paused={paused} shell />;
+  return <SidebarCapability presenters={presenters} sidebarRectRef={sidebarRectRef} tab={tab} onClose={onClose} shell />;
 }
 
-export function SidebarCapability({ engine, toolStatus, sidebarRectRef, tab, onClose, paused = false, shell = false }: any) {
+export function SidebarCapability({ presenters, sidebarRectRef, tab, onClose, shell = false }: { presenters: SidebarPresenters; sidebarRectRef: any; tab: 'flow' | 'garden' | 'diary' | 'status'; onClose?: () => void; shell?: boolean }) {
   const rootRef = useRef<HTMLDivElement>(null);
-  const backendStateCadence = tab === 'flow'
-    ? FLOW_BACKEND_STATE_CADENCE
-    : tab === 'status'
-      ? STATUS_BACKEND_STATE_CADENCE
-      : null;
-  const backendStatePolling = useBackendStatePolling(engine, backendStateCadence, paused);
 
   useEffect(() => {
     const update = () => {
@@ -53,13 +43,13 @@ export function SidebarCapability({ engine, toolStatus, sidebarRectRef, tab, onC
   const content = (
     <ErrorBoundary fallbackLabel={meta.title}>
       {tab === 'flow' ? (
-        <SubFlow engine={engine} toolStatus={toolStatus} />
+        <SubFlow presenter={presenters.flow} />
       ) : tab === 'garden' ? (
-        <SubGarden />
+        <SubGarden presenter={presenters.garden} />
       ) : tab === 'diary' ? (
-        <SubDiary />
+        <SubDiary presenter={presenters.diary} />
       ) : (
-        <SubStatus engine={engine} backendStatePolling={backendStatePolling} paused={paused} />
+        <SubStatus presenter={presenters.status} />
       )}
     </ErrorBoundary>
   );

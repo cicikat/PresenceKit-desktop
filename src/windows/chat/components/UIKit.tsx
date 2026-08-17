@@ -5,36 +5,7 @@
 
 export { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { chatThemeFontSize } from '../../../shared/chatAppearance';
-
-export const MOOD_HUE: Record<string, number> = {
-  '平静': 72,
-  '开心': 55,
-  '低落': 232,
-  '病娇': 16,
-  '分心': 295,
-  '生气': 8,
-  '惊讶': 52,
-};
-
-export const MOOD_LABEL_EN: Record<string, string> = {
-  '平静': 'CALM',
-  '开心': 'BRIGHT',
-  '低落': 'LOW',
-  '病娇': 'YANDERE',
-  '分心': 'ADRIFT',
-  '生气': 'ANGRY',
-  '惊讶': 'SURPRISED',
-};
-
-export const FOCUS_LABEL_EN: Record<string, string> = {
-  '看你':        'WATCHING YOU',
-  '发呆':        'DAZING',
-  '想事情':      'THINKING',
-  '看屏幕':      'GLANCING SCREEN',
-  '看你打字':    'WATCHING TYPING',
-  '偷看':        'PEEKING',
-  '注意到了什么': 'NOTICED',
-};
+export { MOOD_HUE, MOOD_LABEL_EN, FOCUS_LABEL_EN } from '../../../shared/design-mod/presenters/constants';
 
 export function Tag({ children, hue, variant = 'solid', size = 'sm' }: any) {
   const fontSize = chatThemeFontSize(size === 'sm' ? 9.5 : 10.5);

@@ -10,8 +10,15 @@ export const DESIGN_COMPONENT_IDS = [
   'chat.transcript',
   'chat.composer',
   'chat.sidebar.flow',
+  'chat.sidebar.flow.now',
+  'chat.sidebar.flow.timeline',
   'chat.sidebar.garden',
+  'chat.sidebar.garden.visual',
+  'chat.sidebar.garden.summary',
+  'chat.sidebar.garden.controls',
   'chat.sidebar.diary',
+  'chat.sidebar.diary.characters',
+  'chat.sidebar.diary.entries',
   'chat.sidebar.status',
 ] as const;
 
@@ -23,6 +30,7 @@ export interface DesignComponentDescriptor {
   defaultSize: { width: number; height: number };
   minSize: { width: number; height: number };
   suspendPolicy: 'pause-when-covered';
+  parentId?: DesignComponentId;
 }
 export const DESIGN_COMPONENTS: readonly DesignComponentDescriptor[] = [
   { id: 'chat.ribbon', singleton: true, defaultSize: { width: 52, height: 600 }, minSize: { width: 44, height: 160 }, suspendPolicy: 'pause-when-covered' },
@@ -30,10 +38,21 @@ export const DESIGN_COMPONENTS: readonly DesignComponentDescriptor[] = [
   { id: 'chat.transcript', singleton: true, defaultSize: { width: 520, height: 360 }, minSize: { width: 180, height: 120 }, suspendPolicy: 'pause-when-covered' },
   { id: 'chat.composer', singleton: true, defaultSize: { width: 520, height: 112 }, minSize: { width: 220, height: 72 }, suspendPolicy: 'pause-when-covered' },
   { id: 'chat.sidebar.flow', singleton: true, defaultSize: { width: 280, height: 360 }, minSize: { width: 180, height: 120 }, suspendPolicy: 'pause-when-covered' },
+  { id: 'chat.sidebar.flow.now', parentId: 'chat.sidebar.flow', singleton: true, defaultSize: { width: 280, height: 160 }, minSize: { width: 180, height: 72 }, suspendPolicy: 'pause-when-covered' },
+  { id: 'chat.sidebar.flow.timeline', parentId: 'chat.sidebar.flow', singleton: true, defaultSize: { width: 280, height: 200 }, minSize: { width: 180, height: 96 }, suspendPolicy: 'pause-when-covered' },
   { id: 'chat.sidebar.garden', singleton: true, defaultSize: { width: 280, height: 360 }, minSize: { width: 180, height: 120 }, suspendPolicy: 'pause-when-covered' },
+  { id: 'chat.sidebar.garden.visual', parentId: 'chat.sidebar.garden', singleton: true, defaultSize: { width: 280, height: 260 }, minSize: { width: 180, height: 96 }, suspendPolicy: 'pause-when-covered' },
+  { id: 'chat.sidebar.garden.summary', parentId: 'chat.sidebar.garden', singleton: true, defaultSize: { width: 280, height: 72 }, minSize: { width: 180, height: 48 }, suspendPolicy: 'pause-when-covered' },
+  { id: 'chat.sidebar.garden.controls', parentId: 'chat.sidebar.garden', singleton: true, defaultSize: { width: 280, height: 48 }, minSize: { width: 180, height: 40 }, suspendPolicy: 'pause-when-covered' },
   { id: 'chat.sidebar.diary', singleton: true, defaultSize: { width: 280, height: 360 }, minSize: { width: 180, height: 120 }, suspendPolicy: 'pause-when-covered' },
+  { id: 'chat.sidebar.diary.characters', parentId: 'chat.sidebar.diary', singleton: true, defaultSize: { width: 280, height: 64 }, minSize: { width: 180, height: 48 }, suspendPolicy: 'pause-when-covered' },
+  { id: 'chat.sidebar.diary.entries', parentId: 'chat.sidebar.diary', singleton: true, defaultSize: { width: 280, height: 296 }, minSize: { width: 180, height: 96 }, suspendPolicy: 'pause-when-covered' },
   { id: 'chat.sidebar.status', singleton: true, defaultSize: { width: 280, height: 360 }, minSize: { width: 180, height: 120 }, suspendPolicy: 'pause-when-covered' },
 ];
+
+export function isDesignComponentOwnershipConflict(first: DesignComponentId, second: DesignComponentId): boolean {
+  return first === second || first.startsWith(`${second}.`) || second.startsWith(`${first}.`);
+}
 
 export function isSafeDesignPath(value: unknown, extension?: string): value is string {
   if (typeof value !== 'string' || !value || value.startsWith('/') || value.includes('\\')) return false;

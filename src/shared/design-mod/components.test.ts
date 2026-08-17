@@ -11,4 +11,13 @@ describe('design component registry', () => {
     expect(registry.detach('chat.sidebar.garden')).toBe(true);
     expect(registry.list()).toEqual([]);
   });
+
+  it('rejects parent and child region ownership conflicts', () => {
+    const registry = new ComponentAttachmentRegistry();
+    registry.attach('chat.sidebar.flow', {} as HTMLElement);
+    expect(() => registry.attach('chat.sidebar.flow.now', {} as HTMLElement)).toThrow('所有权冲突');
+    registry.clear();
+    registry.attach('chat.sidebar.diary.entries', {} as HTMLElement);
+    expect(() => registry.attach('chat.sidebar.diary', {} as HTMLElement)).toThrow('所有权冲突');
+  });
 });

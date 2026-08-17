@@ -2,7 +2,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { StateEngine } from '../../shared/state/store';
 import { ToolStatusOverlayController, type ToolStatusOverlayState } from '../../shared/state/toolStatusOverlay';
-import { useBackendStatePolling } from '../../shared/state/useBackendStatePolling';
 import { wsClient } from '../../shared/api/ws';
 import { getDiarySyncStatus, syncDiary } from '../../shared/api/diary-sync';
 import { refreshActiveCharacterInfo, subscribeActiveCharacter } from '../../shared/activeCharacter';
@@ -23,8 +22,10 @@ import { DreamWindow } from '../dream/DreamWindow';
 import { PreferencesPanel } from './components/preferences/PreferencesPanel';
 import { Divider, VideoBg } from './components/ChatShellAtoms';
 import { LayoutHost } from './components/LayoutHost';
-import { DesignAwareRegion, DesignModHost } from './components/DesignModHost';
+import { DesignModHost } from './components/DesignModHost';
+import { DesignAwareRegion } from '../../shared/design-mod/regions';
 import { SidebarCapability } from './components/Sidebar';
+import { createSidebarPresenters, type SidebarPresenters } from '../../shared/design-mod/presenters';
 import { setSelectedDesignModId } from '../../shared/design-mod/runtime';
 import { useChatAppearanceController } from './hooks/useChatAppearanceController';
 import { usePetController } from './hooks/usePetController';
@@ -34,6 +35,9 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen, isCovered = 
   const engineRef = useRef<StateEngine | null>(null);
   if (!engineRef.current) engineRef.current = new StateEngine();
   const engine = engineRef.current;
+  const presentersRef = useRef<SidebarPresenters | null>(null);
+  if (!presentersRef.current) presentersRef.current = createSidebarPresenters(engine);
+  const presenters = presentersRef.current;
   const toolStatusRef = useRef<ToolStatusOverlayController | null>(null);
   if (!toolStatusRef.current) toolStatusRef.current = new ToolStatusOverlayController();
   const toolStatusController = toolStatusRef.current;
@@ -41,12 +45,17 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen, isCovered = 
   const navigation = useChatWindowNavigation();
   const [documentVisible, setDocumentVisible] = useState(() => !document.hidden);
   useEffect(() => {
+    presenters.setToolStatus(toolStatus);
+  }, [presenters, toolStatus]);
+
+  useEffect(() => () => presenters.dispose(), [presenters]);
+
+  useEffect(() => {
     const handleVisibility = () => setDocumentVisible(!document.hidden);
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, []);
   const visualPaused = isCovered || navigation.dreamWindowOpen || !documentVisible;
-  useBackendStatePolling(engine, { moodMs: 120_000, activityMs: 180_000 }, visualPaused);
 
   const appearanceController = useChatAppearanceController(engine);
   const petController = usePetController(engine, onToyOpen);
@@ -143,6 +152,7 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen, isCovered = 
       >
         <DesignModHost
           engine={engine}
+          presenters={presenters}
           toolStatus={toolStatus}
           isCovered={isCovered}
           dreamActive={navigation.dreamWindowOpen}
@@ -153,7 +163,7 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen, isCovered = 
             openPrefs: () => navigation.setPrefsOpen(true),
               restoreDefault: () => { setSelectedDesignModId('builtin-default'); navigation.setPrefsOpen(true); },
           }}
-          renderSidebar={tab => <SidebarCapability engine={engine} toolStatus={toolStatus} sidebarRectRef={sidebarRectRef} paused={visualPaused} tab={tab} />}
+          renderSidebar={tab => <SidebarCapability presenters={presenters} sidebarRectRef={sidebarRectRef} tab={tab} />}
           renderChat={
           <LayoutHost
           manifest={appearanceController.activeLayout.manifest}
@@ -180,6 +190,7 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen, isCovered = 
               <div style={{ flex: 1, minWidth: 0 }}><SidebarPanel
                 engine={engine}
                 toolStatus={toolStatus}
+                presenters={presenters}
                 sidebarRectRef={sidebarRectRef}
                 paused={visualPaused}
                 tab={appearanceController.sidebarTab}

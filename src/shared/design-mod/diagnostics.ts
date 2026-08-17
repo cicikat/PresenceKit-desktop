@@ -10,6 +10,15 @@ export interface DesignModDiagnostics {
   activeSubscriptions: number;
   fps: number;
   surface: DesignSurface;
+  presenters: Record<string, PresenterDiagnostic>;
+}
+
+export interface PresenterDiagnostic {
+  schemaVersion?: number;
+  consumerCount: number;
+  active: boolean;
+  timerActive: boolean;
+  updatedAt: number;
 }
 
 let latestDiagnostics: DesignModDiagnostics = {
@@ -20,6 +29,7 @@ let latestDiagnostics: DesignModDiagnostics = {
   activeSubscriptions: 0,
   fps: 0,
   surface: 'main',
+  presenters: {},
 };
 const listeners = new Set<() => void>();
 

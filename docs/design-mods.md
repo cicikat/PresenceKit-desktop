@@ -64,6 +64,39 @@ WS/HTTP 链。
 | `chat.sidebar.diary` | 日记列表与详情入口 |
 | `chat.sidebar.status` | sensor / mood / presence 状态面板 |
 
+### Sidebar presenter 与视觉区域
+
+Sidebar 的四个能力由 `src/shared/design-mod/presenters/` 统一提供 presenter。设计 Mod 只能消费
+快照、订阅变化、取得消费者租约并调用已声明命令；不能自己请求 HTTP、Tauri command 或建立 WS。
+宿主通过 `host.presenters.status|flow|garden|diary` 暴露同一份数据源，并在 Mod disposer / 切换时
+回收订阅和租约。
+
+| presenter | 快照核心字段 | 命令 |
+|---|---|---|
+| `status` | `mood`、`activity`、`presence`、`telemetry`、60 格带 `sampledAt` 的 timeline、三类错误 | `retryMood` / `retryActivity` / `retrySensor` |
+| `flow` | NOW narrative、mood/focus/presence、tool overlay、按角色隔离的 8 小时 timeline | `refresh` |
+| `garden` | 后端 garden slots、stage/progress、loading/error/lastUpdated | `refresh` |
+| `diary` | characters、active character、entries 元数据、loading/error/selection | `refresh` / `selectCharacter` / `openEntry` |
+
+所有 presenter 都实现 `get()`、`subscribe()`、`acquire(consumerId)` 和诊断读取。共享状态轮询以
+最短活动 cadence 合并，ChatWindow 的后台 owner 与 Sidebar/Mod consumer 共用同一计时器；覆盖或
+隐藏时由 Host 统一 pause。状态 presenter 的官方 renderer 保留原有信号公式与 60×2 秒轨迹，
+session elapsed ticker 和 native window motion 在无事件后都会 settle，moving/velocity 回到零。
+
+父能力和子区域不可同时声明所有权；注册表会明确拒绝冲突。当前子区域目录为：
+
+| 能力 | 可挂载子区域 |
+|---|---|
+| flow | `chat.sidebar.flow.now`、`chat.sidebar.flow.timeline` |
+| garden | `chat.sidebar.garden.visual`、`chat.sidebar.garden.summary`、`chat.sidebar.garden.controls` |
+| diary | `chat.sidebar.diary.characters`、`chat.sidebar.diary.entries` |
+
+官方 renderer 会保留 `data-sidebar-capability` 与 `data-<capability>-region` 语义钩子。Status 额外
+提供 `data-status-element="mood-glow|mood-indicator"` 和 `--status-mood-hue`、
+`--status-aura`、`--status-breath`、`--status-gaze-lock`、`--status-rhythm`、
+`--status-indicator-size`、`--status-glow-x`、`--status-glow-y` CSS variables。挂载父能力时由
+官方 renderer 承担整块 fallback；只挂子区域时只替换对应视觉区域。
+
 ## 舞台与信号
 
 舞台覆盖当前 Chat Webview viewport，不覆盖 Tauri 原生窗口外的桌面区域。它有独立的
@@ -96,6 +129,8 @@ Blob URL。旧异步 activate 不能污染新一代 Mod。
 偏好键是 `chat.designMod`。选择、刷新和恢复默认入口在「偏好 → 界面」；恢复默认会重新应用用户原先的
 theme/layout 选择。Activity、Toy、Room 覆盖 Chat 时会暂停高频设计循环，返回后恢复。
 
-仓库附带 `public/design-mods/freeform-capability-fixture/`，只用于验收基础设施：同时挂载四个 Sidebar
-面板，使用 clip-path / perspective / matrix3d，SVG 连接几何，session 驱动装饰，内部拖拽与原生窗口
-运动信号均有示例。它不是产品视觉方案。
+仓库附带 `public/design-mods/freeform-capability-fixture/`，只用于验收基础设施：它挂载 flow/garden/diary
+官方能力，同时故意不挂载 `chat.sidebar.status`，改用 `host.presenters.status` 自绘一个非矩形
+Status renderer，覆盖 telemetry、timeline、错误重试和切换/清理路径。fixture 还保留
+clip-path / perspective / matrix3d、SVG 连接几何、session 驱动装饰、内部拖拽与原生窗口运动信号。
+它不是产品视觉方案。

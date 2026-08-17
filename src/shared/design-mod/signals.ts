@@ -66,17 +66,31 @@ export const viewportStore = createViewportStore();
 export function createNativeMotionStore() {
   let value: NativeMotionSnapshot = { x: 0, y: 0, delta: { x: 0, y: 0 }, velocity: { x: 0, y: 0 }, moving: false, updatedAt: 0 };
   let previous: NativeMotionSample | null = null;
+  let settleTimer: ReturnType<typeof setTimeout> | null = null;
   const listeners = new Set<() => void>();
+  const settle = () => {
+    settleTimer = null;
+    value = { ...value, delta: { x: 0, y: 0 }, velocity: { x: 0, y: 0 }, moving: false };
+    listeners.forEach(listener => listener());
+  };
   return {
     get: () => value,
     subscribe(listener: () => void) { listeners.add(listener); return () => listeners.delete(listener); },
     sample(x: number, y: number, timestamp = Date.now(), dpr = 1) {
+      if (settleTimer !== null) clearTimeout(settleTimer);
       const next = { x, y, timestamp };
       value = deriveNativeMotion(previous, next, dpr);
       previous = next;
       listeners.forEach(listener => listener());
+      if (value.moving) settleTimer = setTimeout(settle, 140);
     },
-    reset() { previous = null; value = { x: 0, y: 0, delta: { x: 0, y: 0 }, velocity: { x: 0, y: 0 }, moving: false, updatedAt: 0 }; listeners.forEach(listener => listener()); },
+    reset() {
+      if (settleTimer !== null) clearTimeout(settleTimer);
+      settleTimer = null;
+      previous = null;
+      value = { x: 0, y: 0, delta: { x: 0, y: 0 }, velocity: { x: 0, y: 0 }, moving: false, updatedAt: 0 };
+      listeners.forEach(listener => listener());
+    },
   };
 }
 

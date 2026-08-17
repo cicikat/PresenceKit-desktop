@@ -10,7 +10,6 @@ export function activate(host) {
     'chat.sidebar.flow': 'design-fixture-flow',
     'chat.sidebar.garden': 'design-fixture-garden',
     'chat.sidebar.diary': 'design-fixture-diary',
-    'chat.sidebar.status': 'design-fixture-status'
   };
   const attach = (id) => {
     const mount = document.createElement('div');
@@ -45,7 +44,49 @@ export function activate(host) {
       mount.remove();
     });
   };
-  ['chat.ribbon', 'chat.header', 'chat.transcript', 'chat.composer', 'chat.sidebar.flow', 'chat.sidebar.garden', 'chat.sidebar.diary', 'chat.sidebar.status'].forEach(attach);
+  ['chat.ribbon', 'chat.header', 'chat.transcript', 'chat.composer', 'chat.sidebar.flow', 'chat.sidebar.garden', 'chat.sidebar.diary'].forEach(attach);
+
+  // Status deliberately does not attach chat.sidebar.status. It exercises the
+  // shared presenter directly so the official renderer can be absent.
+  const statusRoot = document.createElement('section');
+  statusRoot.className = 'design-fixture-status-presenter';
+  statusRoot.dataset.fixturePresenter = 'status';
+  host.layers.components.appendChild(statusRoot);
+  const renderStatus = () => {
+    const snapshot = host.presenters.status.get();
+    statusRoot.replaceChildren();
+    const heading = document.createElement('div');
+    heading.className = 'design-fixture-status-heading';
+    heading.textContent = `${snapshot.mood.label} · ${snapshot.presence.id}`;
+    const ring = document.createElement('div');
+    ring.className = 'design-fixture-status-ring';
+    ring.style.setProperty('--fixture-hue', String(snapshot.mood.hue));
+    ring.style.setProperty('--fixture-aura', String(snapshot.telemetry.moodAura));
+    ring.dataset.statusElement = 'mood-indicator';
+    const telemetry = document.createElement('div');
+    telemetry.className = 'design-fixture-status-telemetry';
+    telemetry.textContent = `B ${snapshot.telemetry.breath} · G ${snapshot.telemetry.gazeLock} · R ${snapshot.telemetry.rhythm} · ${snapshot.telemetry.source}`;
+    const timeline = document.createElement('div');
+    timeline.className = 'design-fixture-status-timeline';
+    snapshot.timeline.slice(-24).forEach(entry => {
+      const bar = document.createElement('i');
+      bar.style.height = `${Math.max(12, entry.aura)}%`;
+      bar.style.background = `oklch(0.72 0.18 ${entry.hue})`;
+      timeline.appendChild(bar);
+    });
+    statusRoot.append(heading, ring, telemetry, timeline);
+    if (snapshot.errors.mood || snapshot.errors.activity || snapshot.errors.sensor) {
+      const retry = document.createElement('button');
+      retry.className = 'design-fixture-status-retry';
+      retry.textContent = 'retry';
+      retry.onclick = () => { snapshot.errors.mood && host.presenters.status.commands.retryMood(); snapshot.errors.activity && host.presenters.status.commands.retryActivity(); snapshot.errors.sensor && host.presenters.status.commands.retrySensor(); };
+      statusRoot.appendChild(retry);
+    }
+  };
+  cleanups.push(host.presenters.status.acquire('fixture.status'));
+  cleanups.push(host.presenters.status.subscribe(renderStatus));
+  renderStatus();
+  cleanups.push(() => statusRoot.remove());
 
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('viewBox', `0 0 ${Math.max(1, innerWidth)} ${Math.max(1, innerHeight)}`);
@@ -82,11 +123,11 @@ export function activate(host) {
   const updateLine = () => {
     const a = center('chat.sidebar.flow');
     const b = center('chat.sidebar.garden');
-    const c = center('chat.sidebar.status');
+    const c = center('chat.sidebar.diary');
     if (!a || !b || !c) return;
     line.setAttribute('d', `M ${a.x} ${a.y} C ${a.x + 60} ${a.y + 30}, ${b.x - 40} ${b.y - 30}, ${b.x} ${b.y} S ${c.x - 50} ${c.y - 20}, ${c.x} ${c.y}`);
   };
-  ['chat.sidebar.flow', 'chat.sidebar.garden', 'chat.sidebar.diary', 'chat.sidebar.status', 'chat.header', 'chat.transcript'].forEach(id => {
+  ['chat.sidebar.flow', 'chat.sidebar.garden', 'chat.sidebar.diary', 'chat.header', 'chat.transcript'].forEach(id => {
     cleanups.push(host.geometry.observe(id, updateLine));
   });
   const resize = () => { svg.setAttribute('viewBox', `0 0 ${Math.max(1, innerWidth)} ${Math.max(1, innerHeight)}`); host.geometry.flush(); updateLine(); };

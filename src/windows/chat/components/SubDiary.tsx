@@ -1,13 +1,14 @@
 /* SubDiary — 日记面板 (Phase 2d.2, char-tab) */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { Tag, Btn } from './UIKit';
-import { loadDiaryList, loadDiaryEntry, getPromptAssets } from '../../../shared/api/backend';
-import type { DiaryListResponse, DiaryListItem, DiaryEntry } from '../../../shared/api/types';
-import type { PromptAssetCharacter } from '../../../shared/api/types';
-import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { loadDiaryEntry } from '../../../shared/api/backend';
+import type { DiaryListItem, DiaryEntry } from '../../../shared/api/types';
 import { chatThemeFontSize } from '../../../shared/chatAppearance';
 import { useI18n } from '../../../shared/i18n';
+import { usePresenterSnapshot } from '../../../shared/design-mod/presenters/react';
+import type { DiaryPresenter } from '../../../shared/design-mod/presenters/types';
+import { DesignAwareRegion } from '../../../shared/design-mod/regions';
 
 /* emotion → hue 映射，emotion 为 null 时整个标签不渲染 */
 const EMOTION_HUE: Record<string, number> = {
@@ -161,131 +162,55 @@ function DiaryListEntry({ item, onClick }: { item: DiaryListItem; onClick: () =>
 }
 
 /* ── SubDiary 主组件 ── */
-export function SubDiary() {
-  const [characters, setCharacters] = useState<PromptAssetCharacter[]>([]);
-  const [activeCharId, setActiveCharId] = useState<string>('');
-  const [data, setData] = useState<DiaryListResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  /* 拉角色列表，初始选 active 角色 */
-  useEffect(() => {
-    getPromptAssets()
-      .then(assets => {
-        setCharacters(assets.characters);
-        const active = assets.active?.active_character;
-        setActiveCharId(active && active.length > 0 ? active : (assets.characters[0]?.id ?? ''));
-      })
-      .catch(() => {
-        /* 角色列表加载失败时静默降级，使用 active 字符 */
-      });
-  }, []);
-
-  const fetchList = async (charId: string) => {
-    setLoading(true);
-    try {
-      const result = await loadDiaryList(charId || undefined);
-      setData(result);
-      setError(null);
-    } catch (e: any) {
-      console.error('loadDiaryList failed:', e);
-      setError(String(e));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchList(activeCharId);
-  }, [activeCharId]);
-
-  const filtered = useMemo(() => {
-    if (!data) return [];
-    return data.entries;
-  }, [data]);
-
-  async function openEntry(item: DiaryListItem) {
-    const charId = activeCharId || '';
-    // Tauri window labels only allow [a-zA-Z0-9-/:_]; slug non-ASCII charId chars
-    const safeCharId = charId.replace(/[^a-zA-Z0-9_-]/g, c => `u${c.codePointAt(0)!.toString(16)}`);
-    const label = `diary-detail-${safeCharId}-${item.date}`;
-    const params = new URLSearchParams({ window: 'diary-detail', date: item.date, char: charId });
-    const existing = await WebviewWindow.getByLabel(label);
-    if (existing) {
-      await existing.setFocus();
-      return;
-    }
-    const w = new WebviewWindow(label, {
-      url: `index.html?${params.toString()}`,
-      title: `${formatDate(item.date)} · ${item.title}`,
-      width: 520,
-      height: 600,
-      decorations: false,
-      resizable: true,
-      focus: true,
-      visible: false,
-    });
-    w.once('tauri://error', e => console.error('[diary] window creation failed', e));
-  }
-
-  if (loading) {
+export function SubDiary({ presenter }: { presenter: DiaryPresenter }) {
+  const snapshot = usePresenterSnapshot(presenter, 'official.sidebar.diary');
+  const { commands } = presenter;
+  const { characters, activeCharacterId, entries } = snapshot;
+  if (snapshot.loading && entries.length === 0) {
     return (
-      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div data-sidebar-capability="diary" style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <span className="mono" style={{ fontSize: chatThemeFontSize(11), color: 'var(--on-forest-2)', letterSpacing: 1.2 }}>加载中…</span>
       </div>
     );
   }
 
-  if (error || !data) {
+  if (snapshot.error && entries.length === 0) {
     return (
-      <div style={{
+      <div data-sidebar-capability="diary" style={{
         height: '100%', display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24,
       }}>
         <span className="mono" style={{ fontSize: chatThemeFontSize(11), color: 'var(--on-forest-2)', letterSpacing: 1.2, textAlign: 'center' }}>
-          {error || '无数据'}
+          {snapshot.error || '无数据'}
         </span>
-        <Btn onClick={() => fetchList(activeCharId)}>重试</Btn>
+        <Btn onClick={commands.refresh}>重试</Btn>
       </div>
     );
   }
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* 角色分类栏 */}
-      <div style={{ padding: '10px 14px 6px', borderBottom: '1px solid var(--forest-line)' }}>
+    <div data-sidebar-capability="diary" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <DesignAwareRegion id="chat.sidebar.diary.characters">
+        <div style={{ padding: '10px 14px 6px', borderBottom: '1px solid var(--forest-line)' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, alignItems: 'center' }}>
           {characters.map(char => (
-            <button key={char.id} onClick={() => setActiveCharId(char.id)} style={{
-              padding: '3px 9px', borderRadius: 3, fontSize: chatThemeFontSize(11),
-              background: activeCharId === char.id ? 'var(--on-forest)' : 'transparent',
-              color: activeCharId === char.id ? 'var(--forest)' : 'var(--on-forest-2)',
-              border: activeCharId === char.id ? '1px solid var(--on-forest)' : '1px solid var(--forest-line)',
-              cursor: 'pointer', fontFamily: 'inherit', fontWeight: activeCharId === char.id ? 600 : 500,
+            <button key={char.id} onClick={() => commands.selectCharacter(char.id)} style={{
+              padding: '3px 9px', borderRadius: 3, fontSize: chatThemeFontSize(11), background: activeCharacterId === char.id ? 'var(--on-forest)' : 'transparent', color: activeCharacterId === char.id ? 'var(--forest)' : 'var(--on-forest-2)', border: activeCharacterId === char.id ? '1px solid var(--on-forest)' : '1px solid var(--forest-line)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: activeCharacterId === char.id ? 600 : 500,
               transition: 'all 0.15s',
             }}>{char.label || char.id}</button>
           ))}
           <div style={{ flex: 1 }} />
-          <button
-            onClick={() => fetchList(activeCharId)}
-            title="刷新"
-            style={{
-              width: 22, height: 22, borderRadius: 3,
-              background: 'transparent', border: '1px solid var(--forest-line)',
-              color: 'var(--on-forest-2)', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: chatThemeFontSize(12), fontFamily: 'inherit',
-            }}
-          >↻</button>
+          <button onClick={commands.refresh} title="刷新" style={{ width: 22, height: 22, borderRadius: 3, background: 'transparent', border: '1px solid var(--forest-line)', color: 'var(--on-forest-2)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: chatThemeFontSize(12), fontFamily: 'inherit' }}>↻</button>
         </div>
         <div className="mono" style={{ fontSize: chatThemeFontSize(9.5), color: 'var(--on-forest-2)', letterSpacing: 1.2, marginTop: 6 }}>
-          {filtered.length} ENTRIES · {activeCharId.toUpperCase() || 'ALL'}
+          {entries.length} ENTRIES · {activeCharacterId.toUpperCase() || 'ALL'}
         </div>
-      </div>
+        </div>
+      </DesignAwareRegion>
 
-      {/* list */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
-        {filtered.length === 0 ? (
+      <DesignAwareRegion id="chat.sidebar.diary.entries">
+        <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
+        {entries.length === 0 ? (
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             height: '100%', padding: 24,
@@ -295,11 +220,12 @@ export function SubDiary() {
             </div>
           </div>
         ) : (
-          filtered.map(item => (
-            <DiaryListEntry key={item.date} item={item} onClick={() => openEntry(item)} />
+          entries.map(item => (
+            <DiaryListEntry key={item.date} item={item} onClick={() => { void commands.openEntry(item.date); }} />
           ))
         )}
-      </div>
+        </div>
+      </DesignAwareRegion>
     </div>
   );
 }

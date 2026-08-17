@@ -27,7 +27,12 @@ export function createSessionMetricsStore(clock: () => number = Date.now): Sessi
   let typing = false;
   let loading = false;
   const listeners = new Set<() => void>();
+  let ticker: ReturnType<typeof setInterval> | null = null;
   const notify = () => listeners.forEach(listener => listener());
+  const stopTicker = () => {
+    if (ticker !== null) clearInterval(ticker);
+    ticker = null;
+  };
   const get = (): ChatSessionMetrics => ({
     startedAt,
     elapsedMs: Math.max(0, clock() - startedAt),
@@ -39,7 +44,14 @@ export function createSessionMetricsStore(clock: () => number = Date.now): Sessi
   });
   return {
     get,
-    subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
+    subscribe(listener) {
+      listeners.add(listener);
+      if (listeners.size === 1) ticker = setInterval(notify, 1_000);
+      return () => {
+        listeners.delete(listener);
+        if (listeners.size === 0) stopTicker();
+      };
+    },
     markHistoryLoaded(count) { historyEntryCount = Math.max(0, Math.floor(count)); notify(); },
     recordEntry() { sessionEntryCount += 1; notify(); },
     recordTurn() { turnCount += 1; notify(); },

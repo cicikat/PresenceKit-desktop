@@ -75,6 +75,7 @@ Token 由后端 `POST /auth/tokens` 签发；scope 表、profile 表、管理操
 - 通过三个 controller hook 管理外观/布局、桌宠和导航 UI 状态；Sidebar 的当前 tab 全局持久化，展开/收起状态按布局持久化，首次使用仍服从 layout manifest 的默认显隐。
 - 通过 `src/shared/layout/registry.ts` 的声明式 LayoutHost 排布 Ribbon、Sidebar 和主内容区；偏好「界面」中的布局预览器可立即切换已发现的布局。布局 mod 还能用受控 `mainLayout` 模板重排 ChatPanel 内的标题、消息流、输入框；它不能替换或执行区域组件。
 - `DesignModHost` 是独立的可信自由合成路线：`public/design-mods/`（debug）或 `resource_dir/design-mods/`（release）中的单文件 ESM 通过固定 viewport 的 underlay/components/overlay 三层运行。真实 Ribbon、Chat header/transcript/composer 和四个 Sidebar capability 由 React portal 挂到 Mod 创建的容器，ChatPanel 的消息、输入、WS/history/TTS owner 不复制。恢复默认只撤销舞台，不改变原调用链。
+- ChatWindow 创建一份 `SidebarPresenters`，由 `src/shared/design-mod/presenters/` 统一承载 Status、Flow、Garden、Diary 的快照、命令、共享状态轮询和消费者生命周期。官方 Sidebar 与可信 Design Mod 都消费这份 presenter；Mod 可声明整块 capability 或其子视觉区域，但注册表拒绝父子 ownership 同时挂载。官方 renderer 保留 `data-*` 语义钩子和 Status 的动态 CSS variables，诊断会记录 presenter consumer/timer/lastUpdated。
 - Design Mod 只覆盖 Chat Webview 内部，不承诺跨出 Tauri 原生窗口；高频 session、pointer、viewport、native-window motion 和 geometry 走 `src/shared/design-mod/` 外部 store，Activity/Toy/Room/Dream 覆盖时暂停 rAF。作者契约见 `docs/design-mods.md`。
 - 使用 `src/shared/chatAppearance.ts` 保存 Chat 聊天字号、主题字号和字体包；Sidebar 宽度仅通过界面分隔条拖拽调整。
 - 偏好面板的「角色与对话」页通过 `getPromptAssets()` / `patchPromptAssets()` 管理 Reality Prompt Assets：角色卡单选、世界书多选和破限多选。可用选项来自后端，客户端不展示文件路径。

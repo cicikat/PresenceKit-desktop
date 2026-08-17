@@ -18,5 +18,11 @@
 .design-fixture-flow { right: 24px; top: 18px; width: 230px; height: 208px; clip-path: polygon(0 8%, 92% 0, 100% 88%, 8% 100%); transform: perspective(720px) matrix3d(0.98,0.04,0,0, -0.04,0.98,0,0, 0,0,1,0, 0,0,0,1); }
 .design-fixture-garden { right: 24px; top: 242px; width: 230px; height: 208px; clip-path: polygon(8% 0, 100% 10%, 92% 100%, 0 90%); transform: perspective(720px) matrix3d(0.97,-0.05,0,0, 0.05,0.97,0,0, 0,0,1,0, 0,0,0,1); }
 .design-fixture-diary { right: 24px; bottom: 126px; width: 230px; height: 96px; }
-.design-fixture-status { right: 24px; bottom: 18px; width: 230px; height: 96px; }
+.design-fixture-status-presenter { position: absolute; right: 42px; bottom: 26px; width: 194px; height: 78px; padding: 10px 12px; box-sizing: border-box; color: var(--on-forest); background: color-mix(in oklch, var(--forest) 72%, transparent); border: 1px dashed color-mix(in oklch, var(--accent) 72%, transparent); border-radius: 42% 58% 48% 52%; transform: rotate(-2deg); pointer-events: auto; }
+.design-fixture-status-heading { position: relative; z-index: 1; font: 600 12px var(--font-serif); }
+.design-fixture-status-ring { position: absolute; right: 16px; top: 14px; width: 28px; height: 28px; border-radius: 50%; background: oklch(0.72 0.18 var(--fixture-hue)); box-shadow: 0 0 calc(8px + var(--fixture-aura) * .12px) oklch(0.72 0.18 var(--fixture-hue) / .7); }
+.design-fixture-status-telemetry { position: relative; z-index: 1; margin-top: 11px; font: 9px var(--font-mono); color: var(--on-forest-2); letter-spacing: .6px; }
+.design-fixture-status-timeline { position: absolute; left: 12px; right: 12px; bottom: 8px; height: 15px; display: flex; align-items: flex-end; gap: 2px; opacity: .72; }
+.design-fixture-status-timeline i { flex: 1; min-width: 2px; display: block; border-radius: 1px; }
+.design-fixture-status-retry { position: absolute; right: 10px; bottom: 5px; z-index: 2; border: 0; background: transparent; color: var(--accent); cursor: pointer; font: 9px var(--font-mono); }
 .design-fixture-decoration { width: 5px; height: 5px; border-radius: 1px; background: var(--accent); position: absolute; pointer-events: none; }

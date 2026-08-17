@@ -1,4 +1,3 @@
-import { createPortal } from 'react-dom';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useI18n } from '../../../shared/i18n';
 import { getCurrentThemeId, getDayNight, subscribe as subscribeTheme } from '../../../shared/theme/registry';
@@ -23,11 +22,14 @@ import {
 } from '../../../shared/design-mod/runtime';
 import { ComponentAttachmentRegistry } from '../../../shared/design-mod/components';
 import { publishDesignModDiagnostics } from '../../../shared/design-mod/diagnostics';
-import { clearDesignMounts, setDesignMount, setDesignRuntimeActive, subscribeDesignMounts, useDesignMounts } from '../../../shared/design-mod/mounts';
+import { clearDesignMounts, setDesignMount, setDesignRuntimeActive, subscribeDesignMounts } from '../../../shared/design-mod/mounts';
+import type { SidebarPresenters } from '../../../shared/design-mod/presenters';
+import { DesignAwareRegion } from '../../../shared/design-mod/regions';
 import type { DesignModDiagnostic, DesignModRecord, DesignSurface } from '../../../shared/design-mod/types';
 
 interface DesignModHostProps {
   engine: any;
+  presenters: SidebarPresenters;
   toolStatus: any;
   isCovered: boolean;
   dreamActive: boolean;
@@ -41,12 +43,6 @@ interface DesignModHostProps {
   renderSidebar: (tab: 'flow' | 'garden' | 'diary' | 'status') => ReactNode;
   renderChat: ReactNode;
   children?: ReactNode;
-}
-
-export function DesignAwareRegion({ id, children, fallback = true }: { id: DesignComponentId; children: ReactNode; fallback?: boolean }) {
-  const { mounts } = useDesignMounts();
-  const target = mounts[id];
-  return target ? createPortal(children, target, `design-${id}`) : fallback ? <>{children}</> : null;
 }
 
 function useViewportSignals(isCovered: boolean, paused: boolean) {
@@ -66,7 +62,7 @@ function useViewportSignals(isCovered: boolean, paused: boolean) {
   }, [isCovered, paused]);
 }
 
-export function DesignModHost({ engine, toolStatus, isCovered, dreamActive, navigation, commands, renderSidebar, renderChat, children }: DesignModHostProps) {
+export function DesignModHost({ engine, presenters, toolStatus, isCovered, dreamActive, navigation, commands, renderSidebar, renderChat, children }: DesignModHostProps) {
   const { t } = useI18n();
   const [selectedId, setSelectedId] = useState(getSelectedDesignModId);
   const [diagnostic, setDiagnostic] = useState<DesignModDiagnostic>(formatDiagnostic('idle', 'builtin-default'));
@@ -88,6 +84,11 @@ export function DesignModHost({ engine, toolStatus, isCovered, dreamActive, navi
   const navigationListenersRef = useRef(new Set<() => void>());
   const runtimePaused = isCovered || dreamActive || document.hidden;
   useViewportSignals(isCovered, runtimePaused);
+
+  useEffect(() => {
+    presenters.setPaused(runtimePaused);
+    return () => presenters.setPaused(true);
+  }, [presenters, runtimePaused]);
 
   useEffect(() => {
     navigationSnapshotRef.current = navigation;
@@ -209,6 +210,26 @@ export function DesignModHost({ engine, toolStatus, isCovered, dreamActive, navi
         },
         list: () => attachmentsRef.current.list(),
       };
+      const presenterApi = (presenter: SidebarPresenters[keyof Pick<SidebarPresenters, 'status' | 'flow' | 'garden' | 'diary'>], name: string) => ({
+        schemaVersion: presenter.schemaVersion,
+        get: () => presenter.get(),
+        subscribe: (listener: () => void) => {
+          const unsubscribe = presenter.subscribe(listener);
+          let active = true;
+          const remove = ledgerRef.current.add(() => { if (active) { active = false; unsubscribe(); } });
+          return () => { if (!active) return; active = false; unsubscribe(); remove(); };
+        },
+        commands: presenter.commands,
+        acquire: (consumerId: string) => {
+          const release = presenter.acquire(`mod:${pkg.manifest.id}:${name}:${consumerId}`);
+          let active = true;
+          const remove = ledgerRef.current.add(() => { if (active) { active = false; release(); } });
+          return () => { if (!active) return; active = false; release(); remove(); };
+        },
+        getDiagnostics: () => presenter.getDiagnostics(),
+        subscribeDiagnostics: (listener: () => void) => presenter.subscribeDiagnostics(listener),
+        setPaused: (paused: boolean) => presenter.setPaused(paused),
+      });
       const signals = {
         state: { get: () => engine.get(), subscribe: engine.subscribe.bind(engine) },
         chat: { get: chatSessionMetrics.get, subscribe: chatSessionMetrics.subscribe },
@@ -233,6 +254,12 @@ export function DesignModHost({ engine, toolStatus, isCovered, dreamActive, navi
         root: layerRef.current,
         layers: { underlay, components: componentLayer, overlay },
         components: componentApi,
+        presenters: {
+          status: presenterApi(presenters.status, 'status'),
+          flow: presenterApi(presenters.flow, 'flow'),
+          garden: presenterApi(presenters.garden, 'garden'),
+          diary: presenterApi(presenters.diary, 'diary'),
+        },
         geometry: {
           get: (id: DesignComponentId) => { geometryRef.current.flush(); return geometryRef.current.get(id); },
           observe: (id: DesignComponentId, listener: (value: unknown) => void) => geometryRef.current.observe(id, listener as never),
@@ -261,7 +288,7 @@ export function DesignModHost({ engine, toolStatus, isCovered, dreamActive, navi
       const next = formatDiagnostic('error', t('designMod.fallback'), error);
       setDiagnostic(next); publishDesignModDiagnostics({ diagnostic: next });
     }
-  }, [cleanupRuntime, engine, navigation, records, t, commands]);
+  }, [cleanupRuntime, engine, navigation, presenters, records, t, commands]);
 
   const mountedRef = useRef(true);
   useEffect(() => () => { mountedRef.current = false; cleanupRuntime(); clearDesignMounts(); }, [cleanupRuntime]);
@@ -305,6 +332,12 @@ export function DesignModHost({ engine, toolStatus, isCovered, dreamActive, navi
   useEffect(() => {
     publishDesignModDiagnostics({ diagnostic, attached, fps, activeSubscriptions: ledgerRef.current.size() });
   }, [attached, diagnostic, fps]);
+
+  useEffect(() => {
+    const publishPresenterDiagnostics = () => publishDesignModDiagnostics({ presenters: presenters.getDiagnostics() });
+    publishPresenterDiagnostics();
+    return presenters.subscribeDiagnostics(publishPresenterDiagnostics);
+  }, [presenters]);
 
   const layers = (
     <div ref={layerRef} className="design-mod-host" data-design-mod={selectedId} data-trusted-design-mod="true" data-surface="main" style={{ display: active ? undefined : 'none' }}>
