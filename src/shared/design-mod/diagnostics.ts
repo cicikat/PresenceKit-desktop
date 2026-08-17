@@ -3,6 +3,7 @@ import type { ViewportSnapshot } from './signals';
 import { formatDiagnostic } from './runtime';
 import type { DesignModHostPhase } from './hostLayout';
 import type { DesignModDiagnostic, DesignModManifest, DesignModRecord, DesignSurface } from './types';
+import type { DesignSatelliteDiagnostic } from './satellite';
 
 export interface DesignModHostDiagnostic {
   phase: DesignModHostPhase;
@@ -27,6 +28,7 @@ export interface DesignModDiagnostics {
   fps: number;
   surface: DesignSurface;
   presenters: Record<string, PresenterDiagnostic>;
+  surfaces: DesignSatelliteDiagnostic[];
   host: DesignModHostDiagnostic;
 }
 
@@ -47,6 +49,7 @@ let latestDiagnostics: DesignModDiagnostics = {
   fps: 0,
   surface: 'main',
   presenters: {},
+  surfaces: [],
   host: {
     phase: 'builtin-default',
     defaultShellVisible: true,

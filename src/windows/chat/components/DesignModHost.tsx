@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useI18n } from '../../../shared/i18n';
 import { getCurrentThemeId, getDayNight, subscribe as subscribeTheme } from '../../../shared/theme/registry';
 import { chatSessionMetrics } from '../../../shared/design-mod/metrics';
@@ -25,6 +26,7 @@ import type { SidebarPresenters } from '../../../shared/design-mod/presenters';
 import { DesignAwareRegion } from '../../../shared/design-mod/regions';
 import { getDesignModHostLayoutState, type DesignModHostPhase } from '../../../shared/design-mod/hostLayout';
 import type { DesignModDiagnostic, DesignModRecord, DesignSurface } from '../../../shared/design-mod/types';
+import { DesignSatelliteBridge, cropSatellitePresenterSnapshot, type DesignSatelliteBounds, type DesignSatelliteCommand, type DesignSatelliteDiagnostic } from '../../../shared/design-mod/satellite';
 
 interface DesignModHostProps {
   engine: any;
@@ -116,6 +118,7 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
   const [diagnostic, setDiagnostic] = useState<DesignModDiagnostic>(formatDiagnostic('idle', 'builtin-default'));
   const [records, setRecords] = useState<DesignModRecord[]>([]);
   const [attached, setAttached] = useState<DesignComponentId[]>([]);
+  const [surfaceDiagnostics, setSurfaceDiagnostics] = useState<DesignSatelliteDiagnostic[]>([]);
   const [active, setActive] = useState(false);
   const [fps, setFps] = useState(0);
   const [recoveryOpen, setRecoveryOpen] = useState(false);
@@ -129,6 +132,7 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
   const overlayRef = useRef<HTMLDivElement>(null);
   const styleRef = useRef<HTMLStyleElement | null>(null);
   const blobRevokeRef = useRef<(() => void) | null>(null);
+  const satelliteBridgeRef = useRef<DesignSatelliteBridge | null>(null);
   const navigationSnapshotRef = useRef(navigation);
   const navigationListenersRef = useRef(new Set<() => void>());
   const mountedRef = useRef(true);
@@ -147,8 +151,19 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
 
   useEffect(() => {
     presenters.setPaused(runtimePaused);
+    void satelliteBridgeRef.current?.api.setVisible(!runtimePaused).catch(error => console.warn('[design-satellite] 可见性同步失败:', error));
     return () => presenters.setPaused(true);
   }, [presenters, runtimePaused]);
+
+  useEffect(() => {
+    const syncSatelliteVisibility = () => {
+      void satelliteBridgeRef.current?.api.setVisible(!document.hidden && !isCovered && !dreamActive)
+        .catch(error => console.warn('[design-satellite] 页面可见性同步失败:', error));
+    };
+    document.addEventListener('visibilitychange', syncSatelliteVisibility);
+    syncSatelliteVisibility();
+    return () => document.removeEventListener('visibilitychange', syncSatelliteVisibility);
+  }, [isCovered, dreamActive]);
 
   useEffect(() => {
     navigationSnapshotRef.current = navigation;
@@ -193,6 +208,9 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
   }, []);
 
   const cleanupRuntime = useCallback(() => {
+    void satelliteBridgeRef.current?.api.destroy().catch(error => console.warn('[design-satellite] 销毁失败:', error));
+    satelliteBridgeRef.current = null;
+    setSurfaceDiagnostics([]);
     lifecycleRef.current.dispose();
     ledgerRef.current.clear();
     attachmentsRef.current.clear();
@@ -261,6 +279,80 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
       const underlay = underlayRef.current;
       const overlay = overlayRef.current;
       if (!componentLayer || !underlay || !overlay) throw new Error('设计舞台尚未就绪');
+      const satelliteBridge = pkg.nativeSurfacePackages.length > 0
+        ? new DesignSatelliteBridge(
+          pkg.manifest.id,
+          requestId,
+          pkg.nativeSurfacePackages,
+          async (surfaceId, sequence) => {
+            const currentWindow = getCurrentWindow();
+            const [position, size, dpi, visible, focused, maximized] = await Promise.all([
+              currentWindow.outerPosition().catch(() => ({ x: 0, y: 0 })),
+              currentWindow.outerSize().catch(() => ({ width: Math.round(window.innerWidth * (window.devicePixelRatio || 1)), height: Math.round(window.innerHeight * (window.devicePixelRatio || 1)) })),
+              currentWindow.scaleFactor().catch(() => window.devicePixelRatio || 1),
+              currentWindow.isVisible().catch(() => !document.hidden),
+              currentWindow.isFocused().catch(() => document.hasFocus()),
+              currentWindow.isMaximized().catch(() => false),
+            ]);
+            geometryRef.current.flush();
+            const mainBounds: DesignSatelliteBounds = { x: position.x, y: position.y, width: size.width, height: size.height, dpi };
+            const anchors = Object.fromEntries(attachmentsRef.current.list().map(id => {
+              const geometry = geometryRef.current.get(id);
+              if (!geometry) return [id, { x: 0, y: 0, width: 0, height: 0, visible: false }];
+              return [id, {
+                x: mainBounds.x + Math.round(geometry.rect.left * dpi),
+                y: mainBounds.y + Math.round(geometry.rect.top * dpi),
+                width: Math.round(geometry.rect.width * dpi),
+                height: Math.round(geometry.rect.height * dpi),
+                visible: geometry.visible,
+              }];
+            }));
+            return {
+              schemaVersion: 1 as const,
+              sequence,
+              generation: requestId,
+              modId: pkg.manifest.id,
+              surfaceId,
+              updatedAt: Date.now(),
+              main: { bounds: mainBounds, visible, focused, maximized },
+              window: { visible, focused, covered: isCovered, paused: runtimePaused },
+              pointer: pointerStore.get(),
+              theme: { id: getCurrentThemeId(), ...getDayNight() },
+              state: cropSatellitePresenterSnapshot(engine.get()),
+              chat: cropSatellitePresenterSnapshot(chatSessionMetrics.get()),
+              navigation: cropSatellitePresenterSnapshot(navigationSnapshotRef.current),
+              presenters: { status: cropSatellitePresenterSnapshot(presenters.status.get()), flow: cropSatellitePresenterSnapshot(presenters.flow.get()) },
+              anchors,
+            };
+          },
+          async (command: DesignSatelliteCommand) => {
+            const params = command.params && typeof command.params === 'object' ? command.params as Record<string, unknown> : {};
+            switch (command.command) {
+              case 'closeSidebar': commands.closeSidebar(); break;
+              case 'setSidebarTab': commands.setSidebarTab(String(params.tab ?? 'flow')); break;
+              case 'openPreferences': commands.openPrefs(); break;
+              case 'restoreDefaultDesign': commands.restoreDefault(); break;
+              case 'retryMood': presenters.status.commands.retryMood(); break;
+              case 'retryActivity': presenters.status.commands.retryActivity(); break;
+              case 'retrySensor': presenters.status.commands.retrySensor(); break;
+              case 'refreshFlow': presenters.flow.commands.refresh(); break;
+              case 'refreshGarden': presenters.garden.commands.refresh(); break;
+              case 'refreshDiary': presenters.diary.commands.refresh(); break;
+              case 'selectDiaryCharacter': presenters.diary.commands.selectCharacter(String(params.characterId ?? '')); break;
+              case 'openDiaryEntry': await presenters.diary.commands.openEntry(String(params.entryId ?? '')); break;
+              default: throw new Error(`未注册的设计卫星命令: ${command.command}`);
+            }
+          },
+        )
+        : null;
+      satelliteBridgeRef.current = satelliteBridge;
+      if (satelliteBridge) {
+        const unsubscribe = satelliteBridge.api.subscribe(() => setSurfaceDiagnostics([...satelliteBridge.api.get()]));
+        ledgerRef.current.add(unsubscribe);
+        await satelliteBridge.start();
+        setSurfaceDiagnostics([...satelliteBridge.api.get()]);
+        await satelliteBridge.api.setVisible(!runtimePaused);
+      }
       const geometryCleanups = new Map<DesignComponentId, () => void>();
       const componentApi = {
         attach: (id: DesignComponentId, mount: HTMLElement) => {
@@ -345,6 +437,13 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
           openPreferences: commands.openPrefs,
           restoreDefaultDesign: commands.restoreDefault,
         },
+        surfaces: satelliteBridge?.api ?? {
+          get: () => [],
+          subscribe: () => () => {},
+          setVisible: async () => {},
+          updateBounds: async () => {},
+          destroy: async () => {},
+        },
         assets: { url: (path: string) => designModReadApi.assetUrl(pkg.assetRootId, `assets/${path.replace(/^assets\//, '')}`, url => ledgerRef.current.add(() => URL.revokeObjectURL(url))) },
         diagnostics: { add: (message: string) => setDiagnostic(formatDiagnostic('active', message)) },
       };
@@ -415,8 +514,8 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
   }, [runtimePaused]);
 
   useEffect(() => {
-    publishDesignModDiagnostics({ diagnostic, attached, fps, activeSubscriptions: ledgerRef.current.size() });
-  }, [attached, diagnostic, fps]);
+    publishDesignModDiagnostics({ diagnostic, attached, fps, activeSubscriptions: ledgerRef.current.size(), surfaces: surfaceDiagnostics });
+  }, [attached, diagnostic, fps, surfaceDiagnostics]);
 
   useEffect(() => {
     const publishHostDiagnostics = () => {

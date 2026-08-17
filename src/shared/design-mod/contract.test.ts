@@ -18,6 +18,17 @@ describe('trusted design Mod contract', () => {
     expect(validateDesignModManifest({ ...valid, style: 'https://example.invalid/style.css' })).toContain('style 必须是同包内的 .css 路径');
   });
 
+  it('keeps schema v1 compatible and validates native surface paths and pointer modes', () => {
+    expect(validateDesignModManifest({ ...valid, schemaVersion: 2, nativeSurfaces: [
+      { id: 'halo', kind: 'halo', entry: 'surfaces/halo.js', style: 'surfaces/halo.css', pointerMode: 'passthrough', zOrder: 'owned', size: { width: 480, height: 480 }, margin: 240 },
+      { id: 'island', kind: 'island', entry: 'surfaces/island.js', pointerMode: 'interactive', zOrder: 'owned', size: { width: 220, height: 160 }, anchor: 'main.right' },
+    ] })).toEqual([]);
+    expect(validateDesignModManifest({ ...valid, schemaVersion: 1 })).toEqual([]);
+    expect(validateDesignModManifest({ ...valid, schemaVersion: 2, nativeSurfaces: [
+      { id: '../escape', kind: 'island', entry: '../island.js', pointerMode: 'hybrid', zOrder: 'owned', size: { width: 0, height: 1 }, anchor: 'main.right' },
+    ] }).join(';')).toContain('nativeSurfaces[0]');
+  });
+
   it('keeps theme and layout validation independent and atomic', () => {
     const errors = validateDesignModPackage({ ...valid, theme: 'theme/theme.json', layout: 'layout/layout.json' }, {
       theme: { id: 'sample', name: 'Sample', tokens: {} },

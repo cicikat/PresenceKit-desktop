@@ -65,6 +65,12 @@ export function DesignModSettings() {
               .replace('{subscriptions}', String(runtime.activeSubscriptions))
               .replace('{fps}', String(runtime.fps))}
           </div>
+          <div className="mono" style={{ display: 'grid', gap: 3, fontSize: 9.5, color: 'var(--ink-4)', letterSpacing: 0.7 }}>
+            <span>{t('designMod.surfaces').replace('{count}', String(runtime.surfaces.length))}</span>
+            {runtime.surfaces.map(surface => (
+              <span key={surface.id}>{surface.id} · {surface.pointerMode} · {surface.bounds.width}×{surface.bounds.height} · {surface.ready ? t('designMod.surfaceReady') : t('designMod.surfacePending')}</span>
+            ))}
+          </div>
         </div>
       </PrefRow>
     </>

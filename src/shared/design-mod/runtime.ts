@@ -8,7 +8,7 @@ import { validateTheme } from '../theme/loader';
 import { ComponentAttachmentRegistry } from './components';
 import { createDesignModHostLedger, DesignModLifecycle, type ActivationContext } from './lifecycle';
 import { DESIGN_MOD_DEFAULT_ID, validateDesignModManifest, validateDesignModPackage, type DesignComponentId } from './contract';
-import type { DesignModDiagnostic, DesignModManifest, DesignModPackage, DesignModRecord } from './types';
+import type { DesignModDiagnostic, DesignModManifest, DesignModPackage, DesignModRecord, NativeSurfacePackage } from './types';
 
 export const DESIGN_MOD_PREF = 'chat.designMod';
 
@@ -129,9 +129,21 @@ export async function loadDesignModPackage(record: DesignModRecord, readApi: Des
     const errors = validateLayout(layout);
     if (errors.length) throw new Error(`layout 校验失败: ${errors.join('；')}`);
   }
+  const nativeSurfacePackages: NativeSurfacePackage[] = [];
+  for (const surface of manifest.nativeSurfaces ?? []) {
+    const surfaceEntrySource = await readApi.read(manifest.id, surface.entry);
+    if (/^\s*import\s+|\bimport\s*\(/m.test(surfaceEntrySource)) {
+      throw new Error(`native surface ${surface.id} 的 entry.js 必须是已打包单文件 ESM`);
+    }
+    nativeSurfacePackages.push({
+      ...surface,
+      entrySource: surfaceEntrySource,
+      styleText: surface.style ? await readApi.read(manifest.id, surface.style) : null,
+    });
+  }
   const errors = validateDesignModPackage(manifest, { expectedId: manifest.id, theme, layout });
   if (errors.length) throw new Error(errors.join('；'));
-  return { ...record, entrySource, styleText: manifest.style ? await readApi.read(manifest.id, manifest.style) : null, theme, themeCss, layout, layoutCss, assetRootId: manifest.id };
+  return { ...record, entrySource, styleText: manifest.style ? await readApi.read(manifest.id, manifest.style) : null, theme, themeCss, layout, layoutCss, assetRootId: manifest.id, nativeSurfacePackages };
 }
 
 export function applyDesignModPackage(pkg: DesignModPackage): void {

@@ -7,7 +7,8 @@ import { initUIPrefs } from "./shared/uiPreferences";
 import { initI18n, t } from "./shared/i18n";
 
 const windowView = new URLSearchParams(window.location.search).get("window");
-const isMainWindow = windowView !== "pet" && windowView !== "presence-nag" && windowView !== "diary-detail";
+const isSatelliteWindow = windowView === "design-satellite";
+const isMainWindow = !isSatelliteWindow && windowView !== "pet" && windowView !== "presence-nag" && windowView !== "diary-detail";
 
 const ChatWindow = lazy(() => import("./windows/chat/ChatWindow").then(module => ({ default: module.ChatWindow })));
 const ActivityWindow = lazy(() => import("./windows/activity").then(module => ({ default: module.ActivityWindow })));
@@ -16,6 +17,7 @@ const RoomWindow = lazy(() => import("./windows/room").then(module => ({ default
 const PetWindow = lazy(() => import("./windows/pet/PetWindow").then(module => ({ default: module.PetWindow })));
 const PresenceNagWindow = lazy(() => import("./windows/presence-nag/PresenceNagWindow").then(module => ({ default: module.PresenceNagWindow })));
 const DiaryDetailWindow = lazy(() => import("./windows/diary-detail/DiaryDetailWindow").then(module => ({ default: module.DiaryDetailWindow })));
+const DesignSatelliteWindow = lazy(() => import("./windows/design-satellite/DesignSatelliteWindow").then(module => ({ default: module.DesignSatelliteWindow })));
 const OnboardingGate = lazy(() => import("./features/onboarding/OnboardingGate").then(module => ({ default: module.OnboardingGate })));
 
 function LoadingView() {
@@ -70,6 +72,7 @@ function RoleRoot() {
   if (windowView === "pet") return <PetWindow />;
   if (windowView === "presence-nag") return <PresenceNagWindow />;
   if (windowView === "diary-detail") return <DiaryDetailWindow />;
+  if (windowView === "design-satellite") return <DesignSatelliteWindow />;
   return (
     <OnboardingGate>
       <AppRoot />
