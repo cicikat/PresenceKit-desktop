@@ -291,7 +291,18 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
   }, [cleanupRuntime, engine, navigation, presenters, records, t, commands]);
 
   const mountedRef = useRef(true);
-  useEffect(() => () => { mountedRef.current = false; cleanupRuntime(); clearDesignMounts(); }, [cleanupRuntime]);
+  useEffect(() => {
+    // React StrictMode runs effect cleanup/setup once during development. The
+    // cleanup must not leave the async activation path permanently marked as
+    // unmounted, otherwise portal mounts move into the hidden layer while the
+    // host never switches to active.
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      cleanupRuntime();
+      clearDesignMounts();
+    };
+  }, [cleanupRuntime]);
   const activateRef = useRef(activate);
   useEffect(() => { activateRef.current = activate; }, [activate]);
   useEffect(() => {
