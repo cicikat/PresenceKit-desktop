@@ -1,8 +1,13 @@
 # cc-tasks/55 - Sidebar Presenter 与内部视觉 Region 自由化
 
-> 状态：待实施。前置依赖：先关闭 `docs/known-issues.md` 中“可信设计 Mod 真实窗口 fixture 验收”，
-> 并将 cc-tasks/54 的当前实现形成独立提交。本单不制作最终视觉，只把现有 Sidebar 的数据、动作与
-> 固定渲染解耦，使设计 Mod 能稳定地重新设计内部结构。
+> 状态：部分完成（实现已提交；真实窗口 fixture 验收仍为 `open`）。前置依赖中的 54 号实现已独立
+> 提交，但真实窗口验收尚未具备可核验的完成证据，因此不能把本单标成完整验收。本单不制作最终视觉，
+> 只把现有 Sidebar 的数据、动作与固定渲染解耦，使设计 Mod 能稳定地重新设计内部结构。
+
+> 实现提交：`5cd516f feat(design-mod): unify sidebar presenters and visual regions`。静态与纯逻辑验证：
+> `npx.cmd tsc --noEmit`、`npm.cmd test -- --run`（35 files / 167 tests）、`npm.cmd run build`、
+> `git diff --check` 均通过。待补：真实 Tauri 窗口中的 fixture、宽窄窗口/拖动/resize/原生移动、20 次
+> 切换和 release `resource_dir/design-mods` 验证；详见 `docs/known-issues.md`。
 
 ## 0. 目标
 
