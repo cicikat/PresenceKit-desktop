@@ -140,8 +140,10 @@ ChatWindow → `DesignModHost` → default shell → `LayoutHost` → layout slo
 逐帧 dirty-set 批处理。矩形不等于透视后的四边形，homography、连线和碰撞体由 Mod 自己计算。
 
 `host.commands` 只复用宿主动作：收起 Sidebar、切 tab、打开偏好和恢复默认设计。业务 HTTP 仍只能走
-现有 shared API → Tauri command → Presence 链。`host.assets.url(path)` 解析当前 design-mod 的 `assets/`
-资源；Tauri 模式通过本地读取命令生成 Blob URL，开发浏览器模式使用同包静态 URL。
+现有 shared API → Tauri command → Presence 链。`host.assets.url(path)` 只接受当前包 `assets/` 下的相对路径，
+并始终返回可加载 URL：Tauri 模式经 `read_design_mod_asset` 的 MIME/base64 生成 Blob URL，宿主 disposer
+负责回收；开发浏览器模式返回同包静态 URL。`host.assets.url()` 不返回资源正文，`host` 的文本 `read()`
+只用于 UTF-8 manifest/style/entry。
 
 ### Native satellite surfaces
 
@@ -156,16 +158,28 @@ display factor；负坐标、多显示器和 DPI 变化由 Rust 主窗口 move/r
 唯一 WS/HTTP/history/TTS/StateEngine/presenter owner；surface 只接收裁剪 snapshot，按钮通过白名单 command
 bridge 回主窗口并等待 correlation ack。
 
-快照含 `generation`、单调 `sequence`、主窗口屏幕 bounds/DPI、visible/focused/maximized、pointer、theme、
+bridge 初始 JS 状态与 Rust 新建窗口都为 hidden。`start()` 成功后会无条件同步一次 `visible`，宿主未暂停时
+立即 show 并启动单一 snapshot rAF loop；重复 show 不创建第二个 loop，hide/pause 会取消 rAF，resume 可幂等恢复。
+ready、首次 snapshot、visible 和 FPS 都进入 diagnostics。快照含 `generation`、单调 `sequence`、主窗口屏幕 bounds/DPI、visible/focused/maximized、pointer、theme、
 裁剪后的 StateEngine/chat/status/flow presenter 和 screen-space anchors。卫星 ready 后主窗口回放当前 generation
 的最新快照；卫星丢弃旧 generation/sequence。`DesignModSettings` 诊断显示每个 surface 的 bounds、pointer mode、
 ready、FPS、snapshot/command sequence 和最近错误。
 
 ## 生命周期和恢复
 
-每次启用都会生成新的 `AbortSignal` 和 activation generation。切换、刷新、窗口卸载或 activate 抛错时，
-宿主按顺序 abort、调用 disposer、清空 component/geometry/subscription ledger、停止宿主 rAF、移除 style 和
-Blob URL。旧异步 activate 不能污染新一代 Mod。
+每次启用都会生成新的 activation generation。切换、刷新、窗口卸载或 activate 抛错时，宿主按顺序调用
+disposer、清空 component/geometry/subscription ledger、停止宿主 rAF、移除 style 和 Blob URL。satellite
+异步 run 在每个 await 点检查 generation/disposed；listener、style、entry/asset Blob URL 与 pending command
+timer 由同一个幂等 disposer 管理，资源即使在卸载后才创建也会立即释放。旧异步 activate 不能污染新一代 Mod。
+
+### `requires` 与能力状态
+
+surface 的 `requires` 是能力名，不是装饰性标签。当前最小集合为 `platform`、`transparent-window`、
+`native-satellite-v1`、`interactive`、`passthrough`、`presenter-snapshot`、`navigation-snapshot`；
+为兼容现有 fixture，`navigation` / `presenters` 分别映射到后两个 snapshot 能力。Rust 返回平台报告：
+Windows 为 `supported`，macOS/Linux 为 `experimental`（尚无真人窗口验收），其他平台为 `unavailable`。
+未知能力、缺失能力或平台不满足时，选择器禁用该 Mod，diagnostics 给出 surface 与 reason；宿主不会先创建
+部分 satellite 再静默回退。未声明 `nativeSurfaces` 的 v1 Mod 不参与能力判定，继续走单 WebView 兼容路径。
 
 偏好键是 `chat.designMod`。选择、刷新和恢复默认入口在「偏好 → 界面」；恢复默认会重新应用用户原先的
 theme/layout 选择。Host diagnostics 额外记录 `builtin-default` / loading / active / error-fallback、

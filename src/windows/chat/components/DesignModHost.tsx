@@ -237,7 +237,7 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
     const isCurrentRequest = () => mountedRef.current && activationRequestRef.current === requestId;
     if (requestedId === 'builtin-default') {
       setDiagnostic(formatDiagnostic('idle', t('designMod.default')));
-      publishDesignModDiagnostics({ manifest: null, diagnostic: formatDiagnostic('idle', 'builtin-default'), attached: [] });
+      publishDesignModDiagnostics({ manifest: null, diagnostic: formatDiagnostic('idle', 'builtin-default'), attached: [], nativeCapabilities: [] });
       return;
     }
     const record = records.find(candidate => candidate.manifest.id === requestedId);
@@ -247,7 +247,7 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
       return;
     }
     const phase = formatDiagnostic('loading', t('designMod.loading'));
-    setDiagnostic(phase); publishDesignModDiagnostics({ manifest: record.manifest, diagnostic: phase });
+    setDiagnostic(phase); publishDesignModDiagnostics({ manifest: record.manifest, diagnostic: phase, nativeCapabilities: record.nativeSurfaceAvailability ?? [] });
     try {
       const pkg = await loadDesignModPackage(record);
       if (!isCurrentRequest()) return;
@@ -344,6 +344,7 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
               default: throw new Error(`未注册的设计卫星命令: ${command.command}`);
             }
           },
+          !runtimePaused,
         )
         : null;
       satelliteBridgeRef.current = satelliteBridge;

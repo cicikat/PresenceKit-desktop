@@ -1,5 +1,6 @@
 import type { LayoutManifest } from '../layout/types';
 import type { ThemeManifest } from '../theme/types';
+import type { SurfaceCapabilityResult } from './capabilities';
 
 export const DESIGN_MOD_SCHEMA_VERSION = 2 as const;
 export const DESIGN_MOD_LEGACY_SCHEMA_VERSION = 1 as const;
@@ -64,6 +65,7 @@ export interface DesignModRecord {
   themeCss?: string | null;
   layout?: LayoutManifest;
   layoutCss?: string | null;
+  nativeSurfaceAvailability?: SurfaceCapabilityResult[];
 }
 
 export interface DesignModDiagnostic {

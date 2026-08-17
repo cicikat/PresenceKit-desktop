@@ -3144,6 +3144,7 @@ pub fn run() {
             design_satellite::destroy_design_satellites,
             design_satellite::design_satellite_ready,
             design_satellite::design_satellite_command,
+            design_satellite::get_design_satellite_capabilities,
             client_config::load_public_client_config,
             client_config::get_token_status,
             client_config::test_backend_auth,

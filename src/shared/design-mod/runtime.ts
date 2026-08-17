@@ -6,6 +6,8 @@ import { applyDesignLayout, restoreConfiguredLayout } from '../layout/registry';
 import { validateLayout } from '../layout/loader';
 import { validateTheme } from '../theme/loader';
 import { ComponentAttachmentRegistry } from './components';
+import { createObjectUrlFromBase64 } from './disposer';
+import { evaluateNativeSurfacePackages, type NativeCapabilityReport } from './capabilities';
 import { createDesignModHostLedger, DesignModLifecycle, type ActivationContext } from './lifecycle';
 import { DESIGN_MOD_DEFAULT_ID, validateDesignModManifest, validateDesignModPackage, type DesignComponentId } from './contract';
 import type { DesignModDiagnostic, DesignModManifest, DesignModPackage, DesignModRecord, NativeSurfacePackage } from './types';
@@ -13,6 +15,17 @@ import type { DesignModDiagnostic, DesignModManifest, DesignModPackage, DesignMo
 export const DESIGN_MOD_PREF = 'chat.designMod';
 
 interface DesignModAssetResponse { mime: string; base64: string; }
+
+async function getNativeCapabilityReport(): Promise<NativeCapabilityReport> {
+  try {
+    return await invoke<NativeCapabilityReport>('get_design_satellite_capabilities');
+  } catch {
+    const navigatorPlatform = typeof navigator === 'undefined' ? '' : navigator.platform;
+    const platform = /win/i.test(navigatorPlatform) ? 'windows' : /mac/i.test(navigatorPlatform) ? 'macos' : /linux/i.test(navigatorPlatform) ? 'linux' : 'unknown';
+    const capabilities = ['platform', 'transparent-window', 'native-satellite-v1', 'interactive', 'passthrough', 'presenter-snapshot', 'navigation-snapshot'] as const;
+    return { platform, status: platform === 'windows' ? 'supported' : platform === 'macos' || platform === 'linux' ? 'experimental' : 'unavailable', capabilities, reason: platform === 'windows' ? undefined : '真实窗口验收未完成' };
+  }
+}
 
 export interface DesignModReadApi {
   read(id: string, file: string): Promise<string>;
@@ -38,10 +51,7 @@ export const designModReadApi: DesignModReadApi = {
   async assetUrl(id, file, onRevoke) {
     try {
       const response = await invoke<DesignModAssetResponse>('read_design_mod_asset', { id, file });
-      const binary = Uint8Array.from(atob(response.base64), character => character.charCodeAt(0));
-      const url = URL.createObjectURL(new Blob([binary], { type: response.mime || 'application/octet-stream' }));
-      onRevoke(url);
-      return url;
+      return createObjectUrlFromBase64(response, onRevoke);
     } catch (error) {
       if (!import.meta.env.DEV) throw error;
       return `/design-mods/${encodeURIComponent(id)}/${file}`;
@@ -62,6 +72,7 @@ export async function listDesignMods(refresh = false): Promise<DesignModRecord[]
       entry: 'builtin',
     },
   }];
+  const capabilityReport = await getNativeCapabilityReport();
   try {
     const manifests = await invoke<unknown[]>('list_design_mods');
     for (const value of manifests) {
@@ -70,7 +81,8 @@ export async function listDesignMods(refresh = false): Promise<DesignModRecord[]
         console.warn('[design-mod] 忽略非法 manifest:', errors);
         continue;
       }
-      records.push({ manifest: value as DesignModManifest, source: 'design-mod' });
+      const manifest = value as DesignModManifest;
+      records.push({ manifest, source: 'design-mod', nativeSurfaceAvailability: evaluateNativeSurfacePackages(manifest.nativeSurfaces ?? [], capabilityReport) });
     }
   } catch (error) {
     if (import.meta.env.DEV) {
@@ -79,7 +91,10 @@ export async function listDesignMods(refresh = false): Promise<DesignModRecord[]
         if (response.ok) {
           const values = await response.json() as unknown[];
           for (const value of values) {
-            if (validateDesignModManifest(value).length === 0) records.push({ manifest: value as DesignModManifest, source: 'design-mod' });
+            if (validateDesignModManifest(value).length === 0) {
+              const manifest = value as DesignModManifest;
+              records.push({ manifest, source: 'design-mod', nativeSurfaceAvailability: evaluateNativeSurfacePackages(manifest.nativeSurfaces ?? [], capabilityReport) });
+            }
           }
         }
       } catch {
@@ -101,6 +116,8 @@ export function setSelectedDesignModId(id: string): void { setUIPref(DESIGN_MOD_
 export async function loadDesignModPackage(record: DesignModRecord, readApi: DesignModReadApi = designModReadApi): Promise<DesignModPackage> {
   if (record.source === 'builtin') throw new Error('builtin-default 不需要加载运行时代码');
   const { manifest } = record;
+  const unavailable = record.nativeSurfaceAvailability?.filter(result => !result.supported) ?? [];
+  if (unavailable.length > 0) throw new Error(unavailable.map(result => `${result.surfaceId}: ${result.reasons.join('、')}`).join('；'));
   const entrySource = await readApi.read(manifest.id, manifest.entry);
   if (/^\s*import\s+|\bimport\s*\(/m.test(entrySource)) {
     throw new Error('entry.js 必须是已打包单文件 ESM，不能包含运行时裸 import');

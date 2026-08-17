@@ -131,10 +131,12 @@ export class DesignSatelliteBridge {
   private fpsStartedAt = 0;
   private fpsFrames = 0;
   private publishing = false;
+  private starting: Promise<void> | null = null;
+  private started = false;
   private unlistenReady: UnlistenFn | null = null;
   private unlistenCommand: UnlistenFn | null = null;
   private destroyed = false;
-  private visible = true;
+  private visible = false;
 
   readonly api: DesignSatelliteHostApi = {
     get: () => [...this.diagnostics.values()],
@@ -150,23 +152,40 @@ export class DesignSatelliteBridge {
     private readonly surfaces: readonly NativeSurfacePackage[],
     private readonly snapshotFactory: (surfaceId: string, sequence: number) => DesignSatelliteSnapshot | Promise<DesignSatelliteSnapshot>,
     private readonly dispatch: (command: DesignSatelliteCommand) => void | Promise<void>,
-  ) {}
+    initiallyVisible = false,
+  ) { this.visible = initiallyVisible; }
 
   async start(): Promise<void> {
-    if (!this.surfaces.length) return;
-    this.unlistenReady = await listen<RawEventPayload>('design-satellite-ready', event => {
-      void this.onReady(event.payload);
-    });
-    this.unlistenCommand = await listen<RawEventPayload>('design-satellite-command', event => {
-      void this.onCommand(event.payload);
-    });
-    const descriptors = await invoke<DesignSatelliteDescriptor[]>('ensure_design_satellites', {
-      modId: this.modId,
-      generation: this.generation,
-      surfaceSpecs: this.surfaces.map(({ entrySource: _entrySource, styleText: _styleText, ...surface }) => surface),
-    });
-    this.replaceDiagnostics(descriptors);
-    await this.publish();
+    if (!this.surfaces.length || this.destroyed) return;
+    if (this.starting) return this.starting;
+    this.starting = (async () => {
+      const ready = await listen<RawEventPayload>('design-satellite-ready', event => { void this.onReady(event.payload); });
+      if (this.destroyed) { ready(); return; }
+      this.unlistenReady = ready;
+      const command = await listen<RawEventPayload>('design-satellite-command', event => { void this.onCommand(event.payload); });
+      if (this.destroyed) { command(); return; }
+      this.unlistenCommand = command;
+      const descriptors = await invoke<DesignSatelliteDescriptor[]>('ensure_design_satellites', {
+        modId: this.modId,
+        generation: this.generation,
+        surfaceSpecs: this.surfaces.map(({ entrySource: _entrySource, styleText: _styleText, ...surface }) => surface),
+      });
+      if (this.destroyed) {
+        await invoke('destroy_design_satellites', { generation: this.generation }).catch(() => {});
+        return;
+      }
+      this.replaceDiagnostics(descriptors);
+      // Rust creates windows hidden. Always synchronize the native state once,
+      // even when the JS visibility value did not change.
+      await invoke('set_design_satellites_visible', { generation: this.generation, visible: this.visible });
+      if (this.destroyed) return;
+      this.started = true;
+      this.diagnostics.forEach(diagnostic => { diagnostic.visible = this.visible; });
+      await this.publish();
+      if (this.visible) this.scheduleFrame();
+      this.listeners.forEach(listener => listener());
+    })();
+    try { await this.starting; } finally { this.starting = null; }
   }
 
   private replaceDiagnostics(descriptors: DesignSatelliteDescriptor[]): void {
@@ -197,6 +216,7 @@ export class DesignSatelliteBridge {
     if (diagnostic) diagnostic.ready = true;
     this.listeners.forEach(listener => listener());
     const snapshot = this.latestBySurface.get(surfaceId) ?? await this.snapshotFactory(surfaceId, this.sequence);
+    if (this.destroyed) return;
     await emitTo(label, DESIGN_SATELLITE_SNAPSHOT_EVENT, snapshot);
   }
 
@@ -234,6 +254,7 @@ export class DesignSatelliteBridge {
     try {
       for (const surface of this.surfaces) {
         const snapshot = await this.snapshotFactory(surface.id, sequence);
+        if (this.destroyed) return;
         if (snapshot.generation !== this.generation) continue;
         this.latestBySurface.set(surface.id, snapshot);
         const label = this.readyLabels.get(surface.id);
@@ -269,8 +290,14 @@ export class DesignSatelliteBridge {
   }
 
   private async setVisible(visible: boolean): Promise<void> {
-    if (this.destroyed || this.visible === visible) return;
+    if (this.destroyed) return;
+    if (!this.started) { this.visible = visible; return; }
+    if (this.visible === visible) {
+      if (visible) this.scheduleFrame();
+      return;
+    }
     await invoke('set_design_satellites_visible', { generation: this.generation, visible });
+    if (this.destroyed) return;
     this.visible = visible;
     if (visible) this.scheduleFrame();
     else if (this.frame !== null) { cancelAnimationFrame(this.frame); this.frame = null; }
@@ -289,6 +316,7 @@ export class DesignSatelliteBridge {
     this.destroyed = true;
     if (this.frame !== null) cancelAnimationFrame(this.frame);
     this.frame = null;
+    this.started = false;
     this.unlistenReady?.();
     this.unlistenCommand?.();
     this.unlistenReady = null;

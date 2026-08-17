@@ -45,7 +45,13 @@ export function DesignModSettings() {
             style={{ ...prefSelectStyle, width: '100%' }}
           >
             {records.length === 0 && <option value="builtin-default">{t('designMod.noMods')}</option>}
-            {records.map(record => <option key={record.manifest.id} value={record.manifest.id}>{record.manifest.name}</option>)}
+            {records.map(record => {
+              const blocked = record.nativeSurfaceAvailability?.filter(surface => !surface.supported) ?? [];
+              const experimental = record.nativeSurfaceAvailability?.some(surface => surface.status === 'experimental');
+              return <option key={record.manifest.id} value={record.manifest.id} disabled={blocked.length > 0}>
+                {record.manifest.name}{blocked.length > 0 ? ` · ${t('designMod.unavailable')}` : experimental ? ` · ${t('designMod.experimental')}` : ''}
+              </option>;
+            })}
           </select>
           <div style={{ display: 'flex', gap: 6 }}>
             <button type="button" onClick={() => void refresh()} disabled={refreshing} style={prefActionButtonStyle}>
@@ -70,6 +76,12 @@ export function DesignModSettings() {
             {runtime.surfaces.map(surface => (
               <span key={surface.id}>{surface.id} · {surface.pointerMode} · {surface.bounds.width}×{surface.bounds.height} · {surface.ready ? t('designMod.surfaceReady') : t('designMod.surfacePending')}</span>
             ))}
+            {(() => {
+              const capabilities = records.find(record => record.manifest.id === selected)?.nativeSurfaceAvailability ?? [];
+              const noted = capabilities.filter(surface => surface.status !== 'supported');
+              if (!noted.length) return null;
+              return <span style={{ color: noted.some(surface => !surface.supported) ? 'var(--danger)' : 'var(--ink-4)' }}>{t('designMod.capabilityReason').replace('{reason}', noted.map(surface => `${surface.surfaceId}: ${surface.status} ${surface.reasons.join('、')}`).join('；'))}</span>;
+            })()}
           </div>
         </div>
       </PrefRow>

@@ -805,6 +805,7 @@ Authorization: Bearer <admin_token>
 | `destroy_design_satellites(generation)` | 主 WebView → Rust | 幂等销毁当前 generation 的全部 surface；旧 generation 请求不影响新 Mod |
 | `design_satellite_ready(generation, surface_id, label)` | satellite WebView → Rust → 主 WebView | 校验安全 label 与当前注册表后通知主窗口回放最新 snapshot |
 | `design_satellite_command(generation, surface_id, command, params, correlation_id, label)` | satellite WebView → Rust → 主 WebView | 只转发已注册 surface 的白名单桥接消息；主窗口 dispatch 后以 correlation ack 回传，surface 不直接触达业务 API |
+| `get_design_satellite_capabilities()` | 前端 → Rust | 返回当前平台的 native satellite 能力集合与 `supported` / `experimental` / `unavailable` 状态；选择器和宿主 diagnostics 共用，不触达后端 |
 | `dream_get_settings()` | 前端 → Rust → 后端 | GET `/dream/settings`；读取 Dream 上下文、`display.physiological_arousal` 与后端管理的 Scenario injection mode |
 | `dream_update_settings(..., jailbreak_preset, display)` | 前端 → Rust → 后端 | PATCH `/dream/settings`；桌面命令透传现有 Dream 字段；`scenario_injection_mode` 由后端管理面保存，当前不在客户端设置命令中暴露 |
 | `dream_group_enter/chat/exit(group_id, ...)` | 前端 → Rust → 后端 | POST `/group/{id}/dream/enter|send|exit`；群梦 send 返回 `{round_id,status}`，角色回复走 WS |

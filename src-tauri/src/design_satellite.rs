@@ -12,6 +12,26 @@ pub const COMMAND_EVENT: &str = "design-satellite-command";
 pub const MAIN_WINDOW_LABEL: &str = "main";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct NativeSatelliteCapabilities {
+    pub platform: String,
+    pub status: String,
+    pub capabilities: Vec<String>,
+    pub reason: Option<String>,
+}
+
+pub fn capabilities_for_platform(platform: &str) -> NativeSatelliteCapabilities {
+    let capabilities = vec![
+        "platform", "transparent-window", "native-satellite-v1", "interactive",
+        "passthrough", "presenter-snapshot", "navigation-snapshot",
+    ].into_iter().map(String::from).collect();
+    match platform {
+        "windows" => NativeSatelliteCapabilities { platform: platform.into(), status: "supported".into(), capabilities, reason: None },
+        "macos" | "linux" => NativeSatelliteCapabilities { platform: platform.into(), status: "experimental".into(), capabilities, reason: Some("真实窗口验收未完成".into()) },
+        _ => NativeSatelliteCapabilities { platform: platform.into(), status: "unavailable".into(), capabilities: Vec::new(), reason: Some("平台未实现 native satellite".into()) },
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct NativeSurfaceSize {
     pub width: f64,
     pub height: f64,
@@ -124,6 +144,11 @@ pub struct DesignSatelliteState {
     coordinator: Mutex<Coordinator>,
 }
 
+#[tauri::command]
+pub fn get_design_satellite_capabilities() -> NativeSatelliteCapabilities {
+    capabilities_for_platform(std::env::consts::OS)
+}
+
 fn is_safe_segment(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 80
@@ -203,6 +228,11 @@ fn validate_spec(spec: &NativeSurfaceSpec) -> Result<(), String> {
     if let Some(offset) = &spec.offset {
         if !offset.x.is_finite() || !offset.y.is_finite() {
             return Err("surface offset 必须是有限数值".to_string());
+        }
+    }
+    for required in &spec.requires {
+        if !matches!(required.as_str(), "platform" | "transparent-window" | "native-satellite-v1" | "interactive" | "passthrough" | "presenter-snapshot" | "navigation-snapshot" | "navigation" | "presenters") {
+            return Err(format!("surface capability 不支持: {required}"));
         }
     }
     if let Some(margin) = &spec.margin {
@@ -738,5 +768,21 @@ mod tests {
         invalid = island("main.top");
         invalid.kind = "halo".into();
         assert!(validate_spec(&invalid).is_err());
+    }
+
+    #[test]
+    fn reports_platform_capability_status_without_cross_platform_claims() {
+        assert_eq!(capabilities_for_platform("windows").status, "supported");
+        assert_eq!(capabilities_for_platform("linux").status, "experimental");
+        assert_eq!(capabilities_for_platform("freebsd").status, "unavailable");
+    }
+
+    #[test]
+    fn validates_declared_capability_names() {
+        let mut spec = island("main.top");
+        spec.requires = vec!["navigation".into(), "made-up".into()];
+        assert!(validate_spec(&spec).is_err());
+        spec.requires = vec!["navigation".into(), "presenters".into()];
+        assert!(validate_spec(&spec).is_ok());
     }
 }

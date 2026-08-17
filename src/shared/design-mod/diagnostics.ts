@@ -4,6 +4,7 @@ import { formatDiagnostic } from './runtime';
 import type { DesignModHostPhase } from './hostLayout';
 import type { DesignModDiagnostic, DesignModManifest, DesignModRecord, DesignSurface } from './types';
 import type { DesignSatelliteDiagnostic } from './satellite';
+import type { SurfaceCapabilityResult } from './capabilities';
 
 export interface DesignModHostDiagnostic {
   phase: DesignModHostPhase;
@@ -29,6 +30,7 @@ export interface DesignModDiagnostics {
   surface: DesignSurface;
   presenters: Record<string, PresenterDiagnostic>;
   surfaces: DesignSatelliteDiagnostic[];
+  nativeCapabilities: SurfaceCapabilityResult[];
   host: DesignModHostDiagnostic;
 }
 
@@ -50,6 +52,7 @@ let latestDiagnostics: DesignModDiagnostics = {
   surface: 'main',
   presenters: {},
   surfaces: [],
+  nativeCapabilities: [],
   host: {
     phase: 'builtin-default',
     defaultShellVisible: true,
