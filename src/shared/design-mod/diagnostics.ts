@@ -1,6 +1,22 @@
 import type { DesignComponentId } from './contract';
+import type { ViewportSnapshot } from './signals';
 import { formatDiagnostic } from './runtime';
+import type { DesignModHostPhase } from './hostLayout';
 import type { DesignModDiagnostic, DesignModManifest, DesignModRecord, DesignSurface } from './types';
+
+export interface DesignModHostDiagnostic {
+  phase: DesignModHostPhase;
+  defaultShellVisible: boolean;
+  modLayerVisible: boolean;
+  attached: DesignComponentId[];
+  viewport: Pick<ViewportSnapshot, 'width' | 'height' | 'devicePixelRatio'>;
+  recoveryEntry: {
+    visible: boolean;
+    open: boolean;
+    canOpenPreferences: boolean;
+    canRestoreDefault: boolean;
+  };
+}
 
 export interface DesignModDiagnostics {
   manifest: DesignModManifest | null;
@@ -11,6 +27,7 @@ export interface DesignModDiagnostics {
   fps: number;
   surface: DesignSurface;
   presenters: Record<string, PresenterDiagnostic>;
+  host: DesignModHostDiagnostic;
 }
 
 export interface PresenterDiagnostic {
@@ -30,6 +47,19 @@ let latestDiagnostics: DesignModDiagnostics = {
   fps: 0,
   surface: 'main',
   presenters: {},
+  host: {
+    phase: 'builtin-default',
+    defaultShellVisible: true,
+    modLayerVisible: false,
+    attached: [],
+    viewport: { width: 0, height: 0, devicePixelRatio: 1 },
+    recoveryEntry: {
+      visible: true,
+      open: false,
+      canOpenPreferences: true,
+      canRestoreDefault: true,
+    },
+  },
 };
 const listeners = new Set<() => void>();
 

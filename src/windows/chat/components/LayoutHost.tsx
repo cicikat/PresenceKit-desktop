@@ -16,7 +16,7 @@ export function LayoutHost({ manifest, slots, sidebarSize }: LayoutHostProps) {
   return (
     <div
       className="chat-ui__layout"
-      style={{ height: '100%', display: 'flex', minHeight: 0, minWidth: 0, flexDirection: manifest.direction }}
+      style={{ width: '100%', height: '100%', display: 'flex', flex: '1 1 auto', minHeight: 0, minWidth: 0, flexDirection: manifest.direction }}
     >
       {orderedSlots.map(slotId => {
         const slot = manifest.slots[slotId];
@@ -29,6 +29,7 @@ export function LayoutHost({ manifest, slots, sidebarSize }: LayoutHostProps) {
               order: slot.order,
               flex: size ? `0 0 ${size + (slotId === 'sidebar' ? 5 : 0)}px` : '0 0 auto',
               width: size ? size + (slotId === 'sidebar' ? 5 : 0) : undefined,
+              height: '100%',
               minHeight: 0,
               minWidth: 0,
               display: slotId === 'sidebar' ? 'flex' : undefined,

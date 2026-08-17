@@ -13,11 +13,9 @@ import {
   formatDiagnostic,
   getSelectedDesignModId,
   importDesignMod,
-  invalidateDesignModCache,
   listDesignMods,
   loadDesignModPackage,
   restoreDefaultDesign,
-  setSelectedDesignModId,
   type ActivationContext,
 } from '../../../shared/design-mod/runtime';
 import { ComponentAttachmentRegistry } from '../../../shared/design-mod/components';
@@ -25,6 +23,7 @@ import { publishDesignModDiagnostics } from '../../../shared/design-mod/diagnost
 import { clearDesignMounts, setDesignMount, setDesignRuntimeActive, subscribeDesignMounts } from '../../../shared/design-mod/mounts';
 import type { SidebarPresenters } from '../../../shared/design-mod/presenters';
 import { DesignAwareRegion } from '../../../shared/design-mod/regions';
+import { getDesignModHostLayoutState, type DesignModHostPhase } from '../../../shared/design-mod/hostLayout';
 import type { DesignModDiagnostic, DesignModRecord, DesignSurface } from '../../../shared/design-mod/types';
 
 interface DesignModHostProps {
@@ -62,6 +61,55 @@ function useViewportSignals(isCovered: boolean, paused: boolean) {
   }, [isCovered, paused]);
 }
 
+function DesignModRecoveryOverlay({
+  diagnostic,
+  phase,
+  open,
+  onToggle,
+  onOpenPreferences,
+  onRestoreDefault,
+  t,
+}: {
+  diagnostic: DesignModDiagnostic;
+  phase: DesignModHostPhase;
+  open: boolean;
+  onToggle: () => void;
+  onOpenPreferences: () => void;
+  onRestoreDefault: () => void;
+  t: (key: any) => string;
+}) {
+  const status = t('designMod.hostRecoveryHint').replace('{status}', diagnostic.message);
+  return (
+    <div className="design-mod-system-overlay" data-design-mod-system-overlay="true">
+      <div className="design-mod-recovery" data-design-mod-needs-recovery={phase === 'builtin-default' ? 'false' : 'true'}>
+        {open && (
+          <div className="design-mod-recovery__panel" role="dialog" aria-label={t('designMod.hostMenu')}>
+            <div className="design-mod-recovery__status">{status}</div>
+            <div className="design-mod-recovery__actions">
+              <button type="button" className="design-mod-recovery__action" onClick={onOpenPreferences}>
+                {t('designMod.hostOpenPreferences')}
+              </button>
+              <button type="button" className="design-mod-recovery__action" onClick={onRestoreDefault}>
+                {t('designMod.hostRestoreDefault')}
+              </button>
+            </div>
+          </div>
+        )}
+        <button
+          type="button"
+          className="design-mod-recovery__trigger"
+          aria-label={t('designMod.hostMenu')}
+          aria-expanded={open}
+          title={t('designMod.hostMenu')}
+          onClick={onToggle}
+        >
+          {open ? '×' : '⋯'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function DesignModHost({ engine, presenters, toolStatus, isCovered, dreamActive, navigation, commands, renderSidebar, renderChat, children }: DesignModHostProps) {
   const { t } = useI18n();
   const [selectedId, setSelectedId] = useState(getSelectedDesignModId);
@@ -70,6 +118,7 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
   const [attached, setAttached] = useState<DesignComponentId[]>([]);
   const [active, setActive] = useState(false);
   const [fps, setFps] = useState(0);
+  const [recoveryOpen, setRecoveryOpen] = useState(false);
   const lifecycleRef = useRef(new DesignModLifecycle());
   const ledgerRef = useRef(createDesignModHostLedger());
   const attachmentsRef = useRef(new ComponentAttachmentRegistry());
@@ -82,8 +131,19 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
   const blobRevokeRef = useRef<(() => void) | null>(null);
   const navigationSnapshotRef = useRef(navigation);
   const navigationListenersRef = useRef(new Set<() => void>());
+  const mountedRef = useRef(true);
+  const activationRequestRef = useRef(0);
   const runtimePaused = isCovered || dreamActive || document.hidden;
   useViewportSignals(isCovered, runtimePaused);
+
+  const hostPhase: DesignModHostPhase = selectedId === 'builtin-default'
+    ? 'builtin-default'
+    : active
+      ? 'active'
+      : diagnostic.phase === 'error'
+        ? 'error'
+        : diagnostic.phase === 'activating' ? 'activating' : 'loading';
+  const hostLayout = getDesignModHostLayoutState(hostPhase);
 
   useEffect(() => {
     presenters.setPaused(runtimePaused);
@@ -151,8 +211,11 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
   }, []);
 
   const activate = useCallback(async (requestedId: string) => {
+    const requestId = activationRequestRef.current + 1;
+    activationRequestRef.current = requestId;
     cleanupRuntime();
     setSelectedId(requestedId);
+    const isCurrentRequest = () => mountedRef.current && activationRequestRef.current === requestId;
     if (requestedId === 'builtin-default') {
       setDiagnostic(formatDiagnostic('idle', t('designMod.default')));
       publishDesignModDiagnostics({ manifest: null, diagnostic: formatDiagnostic('idle', 'builtin-default'), attached: [] });
@@ -168,6 +231,7 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
     setDiagnostic(phase); publishDesignModDiagnostics({ manifest: record.manifest, diagnostic: phase });
     try {
       const pkg = await loadDesignModPackage(record);
+      if (!isCurrentRequest()) return;
       applyDesignModPackage(pkg);
       if (pkg.styleText) {
         const style = document.createElement('style');
@@ -177,8 +241,18 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
         styleRef.current = style;
       }
       const imported = importDesignMod(pkg.entrySource);
+      let module: { activate?: unknown };
+      try {
+        module = await imported.modulePromise;
+      } catch (error) {
+        imported.revoke();
+        throw error;
+      }
+      if (!isCurrentRequest()) {
+        imported.revoke();
+        return;
+      }
       blobRevokeRef.current = imported.revoke;
-      const module = await imported.modulePromise;
       if (typeof module.activate !== 'function') throw new Error('entry.js 必须导出 activate(host)');
       const phaseActivating = formatDiagnostic('activating', t('designMod.activating'));
       setDiagnostic(phaseActivating); publishDesignModDiagnostics({ diagnostic: phaseActivating });
@@ -269,7 +343,7 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
           closeSidebar: commands.closeSidebar,
           setSidebarTab: commands.setSidebarTab,
           openPreferences: commands.openPrefs,
-          restoreDefaultDesign: () => { setSelectedDesignModId('builtin-default'); commands.restoreDefault(); void activate('builtin-default'); },
+          restoreDefaultDesign: commands.restoreDefault,
         },
         assets: { url: (path: string) => designModReadApi.assetUrl(pkg.assetRootId, `assets/${path.replace(/^assets\//, '')}`, url => ledgerRef.current.add(() => URL.revokeObjectURL(url))) },
         diagnostics: { add: (message: string) => setDiagnostic(formatDiagnostic('active', message)) },
@@ -279,18 +353,18 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
         setDiagnostic(next); publishDesignModDiagnostics({ diagnostic: next });
       });
       if (!ok) throw new Error('设计 Mod activate 未完成');
-      if (mountedRef.current) {
+      if (isCurrentRequest()) {
         const next = formatDiagnostic('active', t('designMod.active'));
         setDiagnostic(next); setActive(true); setDesignRuntimeActive(true); publishDesignModDiagnostics({ diagnostic: next, attached: attachmentsRef.current.list() });
       }
     } catch (error) {
+      if (!isCurrentRequest()) return;
       cleanupRuntime();
       const next = formatDiagnostic('error', t('designMod.fallback'), error);
       setDiagnostic(next); publishDesignModDiagnostics({ diagnostic: next });
     }
   }, [cleanupRuntime, engine, navigation, presenters, records, t, commands]);
 
-  const mountedRef = useRef(true);
   useEffect(() => {
     // React StrictMode runs effect cleanup/setup once during development. The
     // cleanup must not leave the async activation path permanently marked as
@@ -345,13 +419,41 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
   }, [attached, diagnostic, fps]);
 
   useEffect(() => {
+    const publishHostDiagnostics = () => {
+      const viewport = viewportStore.get();
+      publishDesignModDiagnostics({
+        host: {
+          phase: hostPhase,
+          defaultShellVisible: hostLayout.defaultShellVisible,
+          modLayerVisible: hostLayout.modLayerVisible,
+          attached,
+          viewport: {
+            width: viewport.width,
+            height: viewport.height,
+            devicePixelRatio: viewport.devicePixelRatio,
+          },
+          recoveryEntry: {
+            visible: true,
+            open: recoveryOpen,
+            canOpenPreferences: true,
+            canRestoreDefault: true,
+          },
+        },
+      });
+    };
+    publishHostDiagnostics();
+    const unsubscribe = viewportStore.subscribe(publishHostDiagnostics);
+    return () => { unsubscribe(); };
+  }, [attached, hostLayout.defaultShellVisible, hostLayout.modLayerVisible, hostPhase, recoveryOpen]);
+
+  useEffect(() => {
     const publishPresenterDiagnostics = () => publishDesignModDiagnostics({ presenters: presenters.getDiagnostics() });
     publishPresenterDiagnostics();
     return presenters.subscribeDiagnostics(publishPresenterDiagnostics);
   }, [presenters]);
 
   const layers = (
-    <div ref={layerRef} className="design-mod-host" data-design-mod={selectedId} data-trusted-design-mod="true" data-surface="main" style={{ display: active ? undefined : 'none' }}>
+    <div ref={layerRef} className="design-mod-host" data-design-mod={selectedId} data-trusted-design-mod="true" data-surface="main" data-design-mod-layer-visible={hostLayout.modLayerVisible ? 'true' : 'false'} style={{ display: hostLayout.modLayerVisible ? undefined : 'none' }}>
       <div ref={underlayRef} className="design-mod-layer design-mod-underlay" />
       <div ref={componentLayerRef} className="design-mod-layer design-mod-components" />
       <div ref={overlayRef} className="design-mod-layer design-mod-overlay" />
@@ -361,15 +463,29 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
 
   // The normal layout stays mounted so ChatPanel keeps its history, draft and WS owner.
   // DesignAwareRegion portals its already-created React nodes into Mod-owned mounts.
-  return <>
-    <div data-design-mod-default-shell={!active} style={active ? { position: 'absolute', inset: 0, opacity: 0, pointerEvents: 'none' } : undefined}>{renderChat}</div>
+  return <div
+    className="design-mod-host-root"
+    data-design-mod-host-phase={hostPhase}
+    data-design-mod-default-shell-visible={hostLayout.defaultShellVisible ? 'true' : 'false'}
+    data-design-mod-layer-visible={hostLayout.modLayerVisible ? 'true' : 'false'}
+  >
+    <div className="design-mod-default-shell" data-design-mod-default-shell={hostLayout.defaultShellVisible ? 'visible' : 'hidden'}>{renderChat}</div>
     {layers}
-    {active && <>
+    {hostLayout.modLayerVisible && <>
       {(['flow', 'garden', 'diary', 'status'] as const).map(tab => (
         <DesignAwareRegion key={tab} id={`chat.sidebar.${tab}`} fallback={false}>
           <div className="design-mod-sidebar-capability">{renderSidebar(tab)}</div>
         </DesignAwareRegion>
       ))}
     </>}
-  </>;
+    <DesignModRecoveryOverlay
+      diagnostic={diagnostic}
+      phase={hostPhase}
+      open={recoveryOpen}
+      onToggle={() => setRecoveryOpen(value => !value)}
+      onOpenPreferences={commands.openPrefs}
+      onRestoreDefault={commands.restoreDefault}
+      t={t}
+    />
+  </div>;
 }

@@ -27,7 +27,7 @@ function HeartIcon({ size = 18 }: { size?: number }) {
 function RibBtn({ icon, label, active, onClick, customIcon }: any) {
   const [hover, setHover] = useState(false);
   return (
-    <div style={{ position: 'relative' }}
+    <div style={{ position: 'relative', flexShrink: 0 }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}>
       <button aria-label={label} onClick={onClick} style={{
@@ -36,7 +36,7 @@ function RibBtn({ icon, label, active, onClick, customIcon }: any) {
         color: active ? 'var(--forest)' : 'var(--on-forest-2)',
         border: 'none', cursor: 'pointer',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        position: 'relative',
+        position: 'relative', flexShrink: 0,
         transition: 'background 0.15s, color 0.15s',
       }}>
         {customIcon ?? <Icon name={icon} size={18} strokeWidth={1.6} />}
@@ -80,70 +80,73 @@ export function Ribbon({
   useEffect(() => subscribeTheme(() => setDayNightActive(getDayNight().active)), []);
 
   return (
-    <div style={{
+    <div className="chat-ribbon" style={{
       width: 52, flexShrink: 0, height: '100%',
       background: 'var(--forest)',
       borderRight: '1px solid var(--forest-1)',
       display: 'flex', flexDirection: 'column',
-      alignItems: 'center', padding: '12px 0', gap: 4,
+      alignItems: 'center', padding: '12px 0',
       zIndex: 10, position: 'relative',
     }}>
-      {/* logo + 连接状态角标 */}
-      <div style={{ position: 'relative', marginBottom: 6 }}>
-        <div style={{
-          width: 32, height: 32, borderRadius: 'var(--radius-md)',
-          background: 'var(--on-forest)', color: 'var(--forest)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
-          <Icon name="logo" size={18} strokeWidth={1.8} />
+      <div className="chat-ribbon__scroll">
+        {/* logo + 连接状态角标 */}
+        <div style={{ position: 'relative', marginBottom: 6, flexShrink: 0 }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: 'var(--radius-md)',
+            background: 'var(--on-forest)', color: 'var(--forest)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Icon name="logo" size={18} strokeWidth={1.8} />
+          </div>
+          {(connState === 'connecting' || connState === 'disconnected' || connState === 'auth-failed') && (
+            <div
+              title={
+                connState === 'connecting'
+                  ? '连接中'
+                  : connState === 'auth-failed'
+                    ? 'WebSocket 认证被拒：token 无效或缺少 ws.desktop scope'
+                    : '已断开，正在重连'
+              }
+              style={{
+                position: 'absolute', bottom: -2, right: -2,
+                width: 8, height: 8, borderRadius: '50%',
+                background: connState === 'connecting' ? 'var(--status-connecting)' : 'var(--status-error)',
+                border: '1.5px solid var(--forest)',
+              }}
+            />
+          )}
         </div>
-        {(connState === 'connecting' || connState === 'disconnected' || connState === 'auth-failed') && (
-          <div
-            title={
-              connState === 'connecting'
-                ? '连接中'
-                : connState === 'auth-failed'
-                  ? 'WebSocket 认证被拒：token 无效或缺少 ws.desktop scope'
-                  : '已断开，正在重连'
-            }
-            style={{
-              position: 'absolute', bottom: -2, right: -2,
-              width: 8, height: 8, borderRadius: '50%',
-              background: connState === 'connecting' ? 'var(--status-connecting)' : 'var(--status-error)',
-              border: '1.5px solid var(--forest)',
-            }}
-          />
+        <Sep />
+        <RibBtn icon="pulse"  label="动向"
+          active={sidebarOpen && sidebarTab === 'flow'}
+          onClick={() => { if (sidebarOpen && sidebarTab === 'flow') onCloseSidebar(); else onSidebarTab('flow'); }} />
+        <RibBtn icon="diary"  label="日记"
+          active={sidebarOpen && sidebarTab === 'diary'}
+          onClick={() => { if (sidebarOpen && sidebarTab === 'diary') onCloseSidebar(); else onSidebarTab('diary'); }} />
+        <RibBtn icon="mood"   label="状态"
+          active={sidebarOpen && sidebarTab === 'status'}
+          onClick={() => { if (sidebarOpen && sidebarTab === 'status') onCloseSidebar(); else onSidebarTab('status'); }} />
+        <RibBtn icon="flower" label="花园"
+          active={sidebarOpen && sidebarTab === 'garden'}
+          onClick={() => { if (sidebarOpen && sidebarTab === 'garden') onCloseSidebar(); else onSidebarTab('garden'); }} />
+        <Sep />
+        <DreamEntryButton active={dreamWindowOpen} onToggle={onDreamToggle} />
+        <RibBtn icon="grid2" label="一起做事" onClick={onActivityOpen} />
+        {playModeEnabled && (
+          <RibBtn label="玩耍模式" customIcon={<HeartIcon />} onClick={onToyOpen} />
         )}
+        <RibBtn icon="chat"  label="群聊"    onClick={onGroupOpen} />
+        <RibBtn icon="pet" label="桌宠" active={petVisible} onClick={onPetToggle} />
       </div>
-      <Sep />
-      <RibBtn icon="pulse"  label="动向"
-        active={sidebarOpen && sidebarTab === 'flow'}
-        onClick={() => { if (sidebarOpen && sidebarTab === 'flow') onCloseSidebar(); else onSidebarTab('flow'); }} />
-      <RibBtn icon="diary"  label="日记"
-        active={sidebarOpen && sidebarTab === 'diary'}
-        onClick={() => { if (sidebarOpen && sidebarTab === 'diary') onCloseSidebar(); else onSidebarTab('diary'); }} />
-      <RibBtn icon="mood"   label="状态"
-        active={sidebarOpen && sidebarTab === 'status'}
-        onClick={() => { if (sidebarOpen && sidebarTab === 'status') onCloseSidebar(); else onSidebarTab('status'); }} />
-      <RibBtn icon="flower" label="花园"
-        active={sidebarOpen && sidebarTab === 'garden'}
-        onClick={() => { if (sidebarOpen && sidebarTab === 'garden') onCloseSidebar(); else onSidebarTab('garden'); }} />
-      <Sep />
-      <DreamEntryButton active={dreamWindowOpen} onToggle={onDreamToggle} />
-      <RibBtn icon="grid2" label="一起做事" onClick={onActivityOpen} />
-      {playModeEnabled && (
-        <RibBtn label="玩耍模式" customIcon={<HeartIcon />} onClick={onToyOpen} />
-      )}
-      <RibBtn icon="chat"  label="群聊"    onClick={onGroupOpen} />
-      <RibBtn icon="pet" label="桌宠" active={petVisible} onClick={onPetToggle} />
-      <div style={{ flex: 1 }} />
-      <RibBtn icon="settings" label="偏好" onClick={onOpenPrefs} />
-      <RibBtn icon="spec"     label="帮助" onClick={onOpenSpec} />
-      <Sep />
-      <RibBtn
-        icon={dayNightActive === 'night' ? 'mood' : 'sparkle'}
-        label={dayNightActive === 'night' ? '日间' : '夜间'}
-        onClick={() => toggleDayNight().catch(console.warn)} />
+      <div className="chat-ribbon__footer">
+        <RibBtn icon="settings" label="偏好" onClick={onOpenPrefs} />
+        <RibBtn icon="spec"     label="帮助" onClick={onOpenSpec} />
+        <Sep />
+        <RibBtn
+          icon={dayNightActive === 'night' ? 'mood' : 'sparkle'}
+          label={dayNightActive === 'night' ? '日间' : '夜间'}
+          onClick={() => toggleDayNight().catch(console.warn)} />
+      </div>
     </div>
   );
 }

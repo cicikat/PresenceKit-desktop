@@ -134,6 +134,43 @@ button { font-family: inherit; }
 input, textarea { font-family: inherit; }
 #root { position: relative; z-index: 1; height: 100vh; width: 100vw; }
 
+.chat-ui {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+}
+
+.design-mod-host-root {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.design-mod-default-shell {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.design-mod-default-shell[data-design-mod-default-shell="hidden"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .serif  { font-family: var(--font-serif); }
 .mono   { font-family: var(--font-mono); }
 .smcaps {
@@ -145,6 +182,31 @@ input, textarea { font-family: inherit; }
 }
 .chat-ui .smcaps { font-size: calc(10.5px * var(--chat-theme-font-scale, 1)); }
 .hairline { height: 1px; background: var(--paper-edge); }
+
+.chat-ribbon__scroll {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: visible;
+  scrollbar-width: thin;
+}
+
+.chat-ribbon__footer {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  padding-top: 4px;
+}
 
 /* ── 聊天背景图 ── */
 .chat-ui__background {
@@ -221,6 +283,8 @@ input, textarea { font-family: inherit; }
 .design-mod-host {
   position: fixed;
   inset: 0;
+  width: 100%;
+  height: 100%;
   z-index: 40;
   pointer-events: none;
   overflow: visible;
@@ -231,6 +295,10 @@ input, textarea { font-family: inherit; }
 .design-mod-layer {
   position: fixed;
   inset: 0;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
   overflow: visible;
   transform-style: preserve-3d;
   pointer-events: none;
@@ -245,7 +313,92 @@ input, textarea { font-family: inherit; }
 }
 .design-mod-sidebar-capability {
   height: 100%;
+  min-height: 0;
   min-width: 0;
   overflow: hidden;
   pointer-events: auto;
+}
+
+/* Host-owned recovery controls sit above the trusted Mod viewport. The layer
+ * is click-through except for the compact control, so normal Chat/Mod input
+ * remains unaffected. */
+.design-mod-system-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 12px;
+  pointer-events: none;
+}
+
+.design-mod-recovery {
+  position: relative;
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+  pointer-events: auto;
+}
+
+.design-mod-recovery__trigger,
+.design-mod-recovery__action {
+  border: 1px solid color-mix(in oklch, var(--forest-line) 78%, transparent);
+  color: var(--on-forest);
+  background: color-mix(in oklch, var(--forest) 92%, transparent);
+  box-shadow: 0 8px 24px color-mix(in oklch, var(--ink) 18%, transparent);
+  cursor: pointer;
+  font: 500 11px var(--font-mono);
+}
+
+.design-mod-recovery__trigger {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  opacity: .74;
+}
+
+.design-mod-recovery__trigger:hover,
+.design-mod-recovery__trigger:focus-visible,
+.design-mod-recovery__action:hover,
+.design-mod-recovery__action:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.design-mod-recovery[data-design-mod-needs-recovery="true"] .design-mod-recovery__trigger {
+  border-color: var(--accent);
+  opacity: 1;
+}
+
+.design-mod-recovery__panel {
+  width: min(236px, calc(100vw - 24px));
+  padding: 10px;
+  display: grid;
+  gap: 7px;
+  border: 1px solid var(--forest-line);
+  border-radius: var(--radius-md);
+  color: var(--on-forest);
+  background: color-mix(in oklch, var(--forest) 96%, transparent);
+  box-shadow: 0 14px 36px color-mix(in oklch, var(--ink) 24%, transparent);
+}
+
+.design-mod-recovery__status {
+  min-width: 0;
+  color: var(--on-forest-2);
+  font: 10px/1.4 var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.design-mod-recovery__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.design-mod-recovery__action {
+  min-height: 28px;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
 }

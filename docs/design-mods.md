@@ -2,7 +2,7 @@
 
 可信设计 Mod 是 Chat 窗口内的本地设计运行时。它与主题 Mod、布局 Mod 分开校验，但可以在一个包里
 可选地携带 `theme` 和 `layout`。第一版只允许一个运行时 Mod，按“可信本地代码”执行；没有 iframe
-沙箱、签名、网络权限或自动下载。设计错误会恢复 `builtin-default`，偏好面板始终由宿主保留。
+沙箱、签名、网络权限或自动下载。设计错误会恢复 `builtin-default`，偏好面板和恢复默认入口始终由宿主保留。
 
 ## 包格式
 
@@ -103,6 +103,14 @@ session elapsed ticker 和 native window motion 在无事件后都会 settle，m
 `underlay`、`components`、`overlay` 三层，均为固定 viewport 坐标系；共同祖先不设置裁剪或 flatten 3D
 的 transform。根层默认不接管指针，Mod 自己创建的 mount 或 `[data-design-interactive="true"]` 节点才接管。
 
+ChatWindow → `DesignModHost` → default shell → `LayoutHost` → layout slot → Ribbon/Sidebar/Main
+保持明确的 viewport 尺寸链：宿主根、default shell、LayoutHost、slot 和 ChatPanel 子项必须提供
+`width/height: 100%`、`min-width/min-height: 0`。active Mod 只改变 default shell 与 Mod layer 的
+可见性/事件接管，不得改变这份尺寸语义；加载中、激活失败或 fallback 时标准布局继续可见。
+
+宿主另有一个 click-through 的 system overlay，层级高于 Mod 舞台，提供打开 Preferences 和恢复
+`builtin-default` 的轻量入口。它不是强制系统栏，不遮挡正常聊天或 Mod 交互；Mod 不得成为唯一恢复路径。
+
 `host.signals` 提供同步读取 + 订阅：
 
 - `state`：StateEngine 的 mood / activity / focus / presence 镜像。
@@ -127,10 +135,15 @@ session elapsed ticker 和 native window motion 在无事件后都会 settle，m
 Blob URL。旧异步 activate 不能污染新一代 Mod。
 
 偏好键是 `chat.designMod`。选择、刷新和恢复默认入口在「偏好 → 界面」；恢复默认会重新应用用户原先的
-theme/layout 选择。Activity、Toy、Room 覆盖 Chat 时会暂停高频设计循环，返回后恢复。
+theme/layout 选择。Host diagnostics 额外记录 `builtin-default` / loading / active / error-fallback、
+default shell 与 Mod layer 可见性、component attachment、viewport 尺寸和恢复入口状态，用于区分
+未挂载、被裁切、被推出 viewport 和层被隐藏。Activity、Toy、Room 覆盖 Chat 时会暂停高频设计循环，
+返回后恢复。
 
 仓库附带 `public/design-mods/freeform-capability-fixture/`，只用于验收基础设施：它挂载 flow/garden/diary
 官方能力，同时故意不挂载 `chat.sidebar.status`，改用 `host.presenters.status` 自绘一个非矩形
 Status renderer，覆盖 telemetry、timeline、错误重试和切换/清理路径。fixture 还保留
-clip-path / perspective / matrix3d、SVG 连接几何、session 驱动装饰、内部拖拽与原生窗口运动信号。
+clip-path / perspective / matrix3d、SVG 连接几何、session 驱动装饰、内部拖拽与原生窗口运动信号；
+Ribbon 由 viewport 的 top/bottom 约束决定高度，非关键项可滚动，底部偏好/帮助/日夜控制不随窗口
+高度或异步内容被推出可视区。
 它不是产品视觉方案。

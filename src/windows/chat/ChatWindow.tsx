@@ -210,7 +210,7 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen, isCovered = 
           {appearanceController.appearance.backgroundKind === 'video' && appearanceController.appearance.backgroundVideoPath && (
             <VideoBg src={appearanceController.appearance.backgroundVideoPath} blur={appearanceController.appearance.backgroundBlur} paused={visualPaused} />
           )}
-          <div style={{ height: '100%', minWidth: 0 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, minWidth: 0 }}>
             {navigation.groupView === null ? (
               <ChatPanel key={charSwitchKey} engine={engine} chatRectRef={chatRectRef} headerVisible={appearanceController.chatHeaderVisible} chatFontSize={appearanceController.appearance.chatFontSize} dreamActive={navigation.dreamWindowOpen} characterAvatarDataUrl={characterAvatarDataUrl} mainLayout={appearanceController.activeLayout.manifest.mainLayout} onOpenRoom={onRoomOpen} onOpenPrefs={() => navigation.setPrefsOpen(true)} />
             ) : navigation.groupView === 'list' ? (
