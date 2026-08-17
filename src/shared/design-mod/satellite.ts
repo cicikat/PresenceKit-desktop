@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { emitTo, listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { NativeSurfacePackage, NativeSurfaceManifest } from './types';
+import { createSnapshotBatch, createSnapshotGate, type SnapshotBudget } from './snapshotTransport';
 
 export const DESIGN_SATELLITE_SNAPSHOT_EVENT = 'design-satellite-snapshot';
 export const DESIGN_SATELLITE_ACK_EVENT = 'design-satellite-command-ack';
@@ -85,6 +86,15 @@ export interface DesignSatelliteHostApi {
   setVisible(visible: boolean): Promise<void>;
   updateBounds(bounds: Array<{ id: string; bounds: DesignSatelliteBounds }>): Promise<void>;
   destroy(): Promise<void>;
+  getMetrics(): DesignSatelliteMetrics;
+}
+
+export interface DesignSatelliteMetrics {
+  sampled: number;
+  sent: number;
+  dropped: number;
+  payloadBytes: number;
+  lastSequence: number;
 }
 
 interface RawEventPayload extends Record<string, unknown> {
@@ -137,6 +147,9 @@ export class DesignSatelliteBridge {
   private unlistenCommand: UnlistenFn | null = null;
   private destroyed = false;
   private visible = false;
+  private readonly gate;
+  private readonly metrics: DesignSatelliteMetrics = { sampled: 0, sent: 0, dropped: 0, payloadBytes: 0, lastSequence: 0 };
+  private lastDiagnosticNotifyAt = 0;
 
   readonly api: DesignSatelliteHostApi = {
     get: () => [...this.diagnostics.values()],
@@ -144,6 +157,7 @@ export class DesignSatelliteBridge {
     setVisible: visible => this.setVisible(visible),
     updateBounds: bounds => this.updateBounds(bounds),
     destroy: () => this.destroy(),
+    getMetrics: () => ({ ...this.metrics }),
   };
 
   constructor(
@@ -153,7 +167,8 @@ export class DesignSatelliteBridge {
     private readonly snapshotFactory: (surfaceId: string, sequence: number) => DesignSatelliteSnapshot | Promise<DesignSatelliteSnapshot>,
     private readonly dispatch: (command: DesignSatelliteCommand) => void | Promise<void>,
     initiallyVisible = false,
-  ) { this.visible = initiallyVisible; }
+    budget: SnapshotBudget = { foregroundHz: 20, backgroundHz: 0 },
+  ) { this.visible = initiallyVisible; this.gate = createSnapshotGate(budget); }
 
   async start(): Promise<void> {
     if (!this.surfaces.length || this.destroyed) return;
@@ -249,19 +264,29 @@ export class DesignSatelliteBridge {
 
   private async publish(): Promise<void> {
     if (this.destroyed || this.publishing) return;
+    if (this.started && (!this.visible || !this.gate.shouldPublish(performance.now(), true))) return;
+    if (!this.started) this.gate.shouldPublish(performance.now(), true);
     this.publishing = true;
     const sequence = ++this.sequence;
     try {
-      for (const surface of this.surfaces) {
-        const snapshot = await this.snapshotFactory(surface.id, sequence);
-        if (this.destroyed) return;
-        if (snapshot.generation !== this.generation) continue;
-        this.latestBySurface.set(surface.id, snapshot);
-        const label = this.readyLabels.get(surface.id);
-        if (label) await emitTo(label, DESIGN_SATELLITE_SNAPSHOT_EVENT, snapshot);
-        const diagnostic = this.diagnostics.get(surface.id);
+      this.metrics.sampled += 1;
+      const frames = await Promise.all(this.surfaces.map(surface => this.snapshotFactory(surface.id, sequence)));
+      if (this.destroyed) return;
+      const batch = createSnapshotBatch(sequence, frames);
+      this.metrics.payloadBytes += batch.payloadBytes;
+      this.metrics.lastSequence = sequence;
+      this.metrics.dropped += Math.max(0, frames.length - batch.frames.length);
+      await Promise.all(batch.frames.map(async snapshot => {
+        if (snapshot.generation !== this.generation) return;
+        this.latestBySurface.set(snapshot.surfaceId, snapshot);
+        const label = this.readyLabels.get(snapshot.surfaceId);
+        if (label) {
+          await emitTo(label, DESIGN_SATELLITE_SNAPSHOT_EVENT, snapshot);
+          this.metrics.sent += 1;
+        }
+        const diagnostic = this.diagnostics.get(snapshot.surfaceId);
         if (diagnostic) diagnostic.lastSnapshotSequence = sequence;
-      }
+      }));
       this.fpsFrames += 1;
       const now = performance.now();
       if (!this.fpsStartedAt) this.fpsStartedAt = now;
@@ -271,10 +296,17 @@ export class DesignSatelliteBridge {
         this.fpsStartedAt = now;
         this.fpsFrames = 0;
       }
-      this.listeners.forEach(listener => listener());
+      this.notifyDiagnostics();
     } finally {
       this.publishing = false;
     }
+  }
+
+  private notifyDiagnostics(force = false): void {
+    const now = performance.now();
+    if (!force && now - this.lastDiagnosticNotifyAt < 1000) return;
+    this.lastDiagnosticNotifyAt = now;
+    this.listeners.forEach(listener => listener());
   }
 
   private scheduleFrame(): void {

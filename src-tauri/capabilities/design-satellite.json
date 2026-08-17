@@ -4,6 +4,7 @@
   "description": "Capability for trusted Design Mod halo and island satellite windows",
   "windows": ["design-satellite-*"] ,
   "permissions": [
+    "core:default",
     "core:event:allow-listen",
     "core:event:allow-unlisten"
   ]

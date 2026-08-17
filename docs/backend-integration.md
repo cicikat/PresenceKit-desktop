@@ -799,7 +799,7 @@ Authorization: Bearer <admin_token>
 | `list_design_mods()` | 前端 → Rust | debug 只扫描 `public/design-mods/*/mod.json`；release 只扫描 `resource_dir/design-mods/*/mod.json`；与文本和资源读取共用同一 design-mod 根，缺失当前模式目录时报错，不跨模式 fallback |
 | `read_design_mod_file(id, file)` | 前端 → Rust | 读取当前 design-mod 包内的 UTF-8 manifest/entry/style/theme/layout 文本；只允许安全相对路径，canonical 校验拒绝绝对路径、穿越和 symlink 逃逸，单文件上限 10MB |
 | `read_design_mod_asset(id, file)` | 前端 → Rust | 读取当前 design-mod `assets/` 下的图片、字体、纹理、shader 或二进制资源，返回 MIME + base64 供前端生成 Blob URL；与 `read_design_mod_file()` 共用根和路径校验，单文件上限 10MB |
-| `ensure_design_satellites(mod_id, generation, surface_specs)` | 主 WebView → Rust | 按 v2 manifest 校验并幂等创建当前 Mod 的透明 Halo/紧凑 Island；窗口 URL 固定为 `window=design-satellite`，使用主窗口 parent/owner，物理屏幕 px 布局，不访问后端 |
+| `ensure_design_satellites(mod_id, generation, surface_specs)` | 主 WebView → Rust | 异步 command；按 v2 manifest 校验并幂等创建当前 Mod 的透明 Halo/紧凑 Island，避免 Windows WebView2 在同步 command 中创建 WebView 的 deadlock；窗口 URL 固定为 `window=design-satellite`，使用主窗口 owner，物理屏幕 px 布局，不访问后端 |
 | `update_design_satellite_bounds(generation, bounds)` | 主 WebView → Rust | 更新已注册 surface 的物理屏幕 bounds；旧 generation 或未注册 id 拒绝，主窗口 move/resize/scale 事件仍由 Rust 重新计算为权威布局 |
 | `set_design_satellites_visible(generation, visible)` | 主 WebView → Rust | 按 generation 成组 show/hide；主窗口隐藏、覆盖、最小化、Mod 切换和退出时不留下任务栏残留 |
 | `destroy_design_satellites(generation)` | 主 WebView → Rust | 幂等销毁当前 generation 的全部 surface；旧 generation 请求不影响新 Mod |
@@ -1056,6 +1056,22 @@ are never modified or removed.
 `sync_diary` are the only client IPC surface for this feature. HTTP uses the
 existing Rust `reqwest` no-proxy client. `SubDiary` remains the read-only
 character-inner-diary view; sync is exposed separately in Preferences.
+
+## Runtime diagnostics and window ownership (Brief 60)
+
+No backend endpoint, queue or Presence setting is added. Local diagnostics are
+disabled by default and retain frame/long-task, Tauri command timing, heap and
+satellite sample/send/drop/payload counters only in the desktop process.
+Pausing a surface changes transport cadence only and preserves WS/HTTP message
+semantics, acknowledgements, TTLs and StateEngine ownership.
+
+## Client-visible regression closure (Brief 61)
+
+No backend contract is changed. `getPetWindowState` reads the existing native
+window label and `setPetWindowVisible` continues to use the existing
+ensure/show/destroy commands through the coordinator. Token onboarding adds no
+IPC command; its timeout and cancellation boundary is local to the React
+gate.
 
 ## Brief 194: native admin-panel bridge
 

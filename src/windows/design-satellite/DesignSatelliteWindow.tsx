@@ -140,8 +140,8 @@ export function DesignSatelliteWindow() {
         setSnapshot(next);
       });
       resources.add(stopSnapshot);
-      if (invalidated) return;
-      const stopAck = await listen<DesignSatelliteCommandAck>(DESIGN_SATELLITE_ACK_EVENT, event => {
+      if (invalidated()) return;
+      void listen<DesignSatelliteCommandAck>(DESIGN_SATELLITE_ACK_EVENT, event => {
         const ack = event.payload;
         const item = pending.get(ack.correlationId);
         if (!item || ack.generation !== GENERATION || ack.surfaceId !== SURFACE_ID) return;
@@ -150,16 +150,19 @@ export function DesignSatelliteWindow() {
         item.settle();
         item.remove();
         item.resolve(ack);
+      }).then(stopAck => {
+        if (invalidated()) stopAck();
+        else resources.add(stopAck);
+      }).catch(nextError => {
+        if (!invalidated()) setError(nextError instanceof Error ? nextError.message : String(nextError));
       });
-      resources.add(stopAck);
-      if (invalidated) return;
 
       const manifest = JSON.parse(await readDesignFile('mod.json')) as { nativeSurfaces?: SurfaceManifest[] };
-      if (invalidated) return;
+      if (invalidated()) return;
       const surface = manifest.nativeSurfaces?.find(candidate => candidate.id === SURFACE_ID);
       if (!surface || !isSafePath(surface.entry, '.js') || (surface.style !== undefined && !isSafePath(surface.style, '.css'))) throw new Error('设计卫星 manifest 不包含安全资源');
       const styleText = surface.style ? await readDesignFile(surface.style) : '';
-      if (invalidated) return;
+      if (invalidated()) return;
       if (styleText) {
         const style = document.createElement('style');
         style.dataset.designSatelliteStyle = SURFACE_ID;
@@ -168,12 +171,12 @@ export function DesignSatelliteWindow() {
         resources.add(() => style.remove());
       }
       const entrySource = await readDesignFile(surface.entry);
-      if (invalidated) return;
+      if (invalidated()) return;
       if (/^\s*import\s+|\bimport\s*\(/m.test(entrySource)) throw new Error('设计卫星 entry.js 不得包含裸 import');
       const entryUrl = URL.createObjectURL(new Blob([entrySource], { type: 'text/javascript' }));
       resources.add(() => URL.revokeObjectURL(entryUrl));
       const module = await import(/* @vite-ignore */ entryUrl) as SurfaceEntryModule;
-      if (invalidated) return;
+      if (invalidated()) return;
       if (typeof module.activate !== 'function') throw new Error('设计卫星 entry.js 必须导出 activate(host)');
       if (!rootRef.current || !underlayRef.current || !componentRef.current || !overlayRef.current) throw new Error('设计卫星舞台尚未就绪');
       const host = {
@@ -196,10 +199,10 @@ export function DesignSatelliteWindow() {
         } },
       };
       const cleanup = await module.activate(host);
-      if (invalidated) { if (typeof cleanup === 'function') cleanup(); return; }
+      if (invalidated()) { if (typeof cleanup === 'function') cleanup(); return; }
       if (typeof cleanup === 'function') disposeEntry = cleanup;
       await invoke('design_satellite_ready', { generation: GENERATION, surfaceId: SURFACE_ID, label: getCurrentWindow().label });
-      if (invalidated) return;
+      if (invalidated()) return;
     };
     void run().catch(nextError => {
       if (!disposed) setError(nextError instanceof Error ? nextError.message : String(nextError));

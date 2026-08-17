@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { classifyHttpError } from './httpError';
+import { runtimeDiagnostics } from '../runtimeDiagnostics';
 
 // 全局"本地 token 失效"信号：任意经 invokeGated() 的请求收到 401，就置位。401 永远不会
 // 自己重试变好（后端语义），因此这里不做重试，只广播一次状态，由 App 根组件的引导页门禁
@@ -27,7 +28,7 @@ export function onAuthInvalidChange(listener: (invalid: boolean) => void): () =>
 // 做重试 —— 一次性动作（发消息等）交给调用方展示错误，轮询交给 backoffPoll.ts 的调度器处理。
 export async function invokeGated<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   try {
-    const result = await invoke<T>(cmd, args);
+    const result = await runtimeDiagnostics.measureCommand(cmd, () => invoke<T>(cmd, args));
     return result;
   } catch (err) {
     const classified = classifyHttpError(err);

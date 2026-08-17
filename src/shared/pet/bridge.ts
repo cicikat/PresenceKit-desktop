@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { DEFAULT_PET_SNAPSHOT, type PetSnapshot } from './types';
 import type { NarrativeSegment, StickerPayload } from '../api/types';
+import { createWindowCoordinator } from '../windowCoordinator';
 
 export const PET_WINDOW_LABEL = 'pet';
 const PET_SNAPSHOT_EVENT = 'pet://snapshot';
@@ -13,6 +14,11 @@ const PET_TURN_EVENT = 'pet://turn';
 export interface PetPrefsPatch {
   model3dZoom?: number;
   live2dZoom?: number;
+}
+
+export interface PetWindowState {
+  exists: boolean;
+  visible: boolean;
 }
 
 // Raw, un-summarized forward of the main window's WS turn events — see cc-tasks/14 §D.
@@ -26,6 +32,20 @@ export type PetTurnEvent =
   | { kind: 'message_stream_end'; msg_id: string };
 
 let currentSnapshot: PetSnapshot = DEFAULT_PET_SNAPSHOT;
+
+const petWindowCoordinator = createWindowCoordinator({
+  open: async () => { await invoke('ensure_pet_window'); },
+  show: async label => {
+    const window = await WebviewWindow.getByLabel(label);
+    if (!window) throw new Error('pet window open failed');
+    await window.show();
+  },
+  hide: async label => {
+    const window = await WebviewWindow.getByLabel(label);
+    if (window) await window.hide();
+  },
+  destroy: async () => { await invoke('destroy_pet_window'); },
+});
 
 function sendCurrentSnapshot() {
   return emitTo(PET_WINDOW_LABEL, PET_SNAPSHOT_EVENT, currentSnapshot)
@@ -59,15 +79,24 @@ export async function listenPetSnapshots(
 }
 
 export async function setPetWindowVisible(visible: boolean) {
-  if (visible) await invoke('ensure_pet_window');
-  const petWindow = await WebviewWindow.getByLabel(PET_WINDOW_LABEL);
-  if (!petWindow) throw new Error('pet window 创建失败');
   if (visible) {
-    await petWindow.show();
+    await petWindowCoordinator.open(PET_WINDOW_LABEL);
+    await petWindowCoordinator.show(PET_WINDOW_LABEL);
     await sendCurrentSnapshot();
   } else {
-    await invoke('destroy_pet_window');
+    const current = await getPetWindowState();
+    if (current.exists) {
+      await petWindowCoordinator.open(PET_WINDOW_LABEL);
+      await petWindowCoordinator.destroy(PET_WINDOW_LABEL);
+    }
   }
+  return getPetWindowState();
+}
+
+export async function getPetWindowState(): Promise<PetWindowState> {
+  const window = await WebviewWindow.getByLabel(PET_WINDOW_LABEL);
+  if (!window) return { exists: false, visible: false };
+  return { exists: true, visible: await window.isVisible().catch(() => false) };
 }
 
 export function emitPetPrefs(patch: PetPrefsPatch) {

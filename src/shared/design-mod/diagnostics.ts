@@ -3,8 +3,9 @@ import type { ViewportSnapshot } from './signals';
 import { formatDiagnostic } from './runtime';
 import type { DesignModHostPhase } from './hostLayout';
 import type { DesignModDiagnostic, DesignModManifest, DesignModRecord, DesignSurface } from './types';
-import type { DesignSatelliteDiagnostic } from './satellite';
+import type { DesignSatelliteDiagnostic, DesignSatelliteMetrics } from './satellite';
 import type { SurfaceCapabilityResult } from './capabilities';
+import type { RuntimeDiagnosticsSnapshot } from '../runtimeDiagnostics';
 
 export interface DesignModHostDiagnostic {
   phase: DesignModHostPhase;
@@ -30,8 +31,10 @@ export interface DesignModDiagnostics {
   surface: DesignSurface;
   presenters: Record<string, PresenterDiagnostic>;
   surfaces: DesignSatelliteDiagnostic[];
+  snapshotMetrics?: DesignSatelliteMetrics;
   nativeCapabilities: SurfaceCapabilityResult[];
   host: DesignModHostDiagnostic;
+  runtime?: RuntimeDiagnosticsSnapshot;
 }
 
 export interface PresenterDiagnostic {

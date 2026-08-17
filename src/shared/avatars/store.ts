@@ -74,28 +74,23 @@ class AvatarStore {
     try {
       const json = await invoke<string>('read_avatars_json');
       const data: AvatarsJson = JSON.parse(json);
-      if (data.her?.path) {
-        try {
-          const dataUrl = await invoke<string>('load_avatar', { path: data.her.path });
-          this.config.her = { path: data.her.path, dataUrl };
-        } catch {}
-      }
-      if (data.you?.path) {
-        try {
-          const dataUrl = await invoke<string>('load_avatar', { path: data.you.path });
-          this.config.you = { path: data.you.path, dataUrl, visible: data.you.visible ?? false };
-        } catch {}
-      }
-      await this.loadDreamBackground('day', data.dream_background_day?.path);
-      await this.loadDreamBackground('night', data.dream_background_night?.path ?? data.dream_background?.path);
-      if (data.chat_background?.path) {
-        try {
-          const dataUrl = await invoke<string>('load_avatar', { path: data.chat_background.path });
-          this.config.chatBackground = { path: data.chat_background.path, dataUrl };
-        } catch {}
-      }
+      const herPath = data.her?.path ?? null;
+      const youPath = data.you?.path ?? null;
+      const visible = data.you?.visible ?? false;
+      // The first useful avatar is emitted as soon as it is ready; backgrounds are
+      // intentionally lower priority and never delay the preferences/chat header.
+      const loadRole = async (path: string | null) => path ? invoke<string>('load_avatar', { path }).catch(() => null) : null;
+      const [her, you] = await Promise.all([loadRole(herPath), loadRole(youPath)]);
+      if (her && herPath) this.config.her = { path: herPath, dataUrl: her };
+      if (you && youPath) this.config.you = { path: youPath, dataUrl: you, visible };
+      if (her || you) this.emit();
+      void Promise.all([
+        this.loadDreamBackground('day', data.dream_background_day?.path),
+        this.loadDreamBackground('night', data.dream_background_night?.path ?? data.dream_background?.path),
+        this.loadChatBackground(data.chat_background?.path),
+      ]).then(() => this.emit());
     } catch {}
-    this.emit();
+    if (!this.config.her.dataUrl && !this.config.you.dataUrl) this.emit();
   }
 
   private async loadDreamBackground(tone: DreamBackgroundTone, path?: string): Promise<void> {
@@ -103,6 +98,14 @@ class AvatarStore {
     try {
       const dataUrl = await invoke<string>('load_avatar', { path });
       this.config.dreamBackgrounds[tone] = { path, dataUrl };
+    } catch {}
+  }
+
+  private async loadChatBackground(path?: string): Promise<void> {
+    if (!path) return;
+    try {
+      const dataUrl = await invoke<string>('load_avatar', { path });
+      this.config.chatBackground = { path, dataUrl };
     } catch {}
   }
 

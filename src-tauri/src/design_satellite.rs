@@ -378,6 +378,9 @@ fn sync_bounds_locked(app: &AppHandle, coordinator: &mut Coordinator) -> Result<
     let main = main_bounds(app)?;
     for surface in coordinator.surfaces.values_mut() {
         let bounds = calculate_bounds(&surface.spec, &main);
+        if bounds == surface.bounds {
+            continue;
+        }
         let window = app
             .get_webview_window(&surface.label)
             .ok_or_else(|| format!("surface window 丢失: {}", surface.label))?;
@@ -455,7 +458,7 @@ fn ensure_locked(
             .resizable(false)
             .visible(false);
         builder = builder
-            .parent(
+            .owner(
                 &app.get_webview_window(MAIN_WINDOW_LABEL)
                     .ok_or_else(|| "main window 不存在".to_string())?,
             )
@@ -518,7 +521,7 @@ fn current_surface<'a>(
 }
 
 #[tauri::command]
-pub fn ensure_design_satellites(
+pub async fn ensure_design_satellites(
     app: AppHandle,
     state: State<'_, DesignSatelliteState>,
     mod_id: String,
@@ -548,6 +551,9 @@ pub fn update_design_satellite_bounds(
     }
     for update in bounds {
         let surface = current_surface(&mut coordinator, generation, &update.id)?;
+        if surface.bounds == update.bounds {
+            continue;
+        }
         surface.bounds = update.bounds.clone();
         if let Some(window) = app.get_webview_window(&surface.label) {
             apply_bounds(&window, &surface.bounds)?;

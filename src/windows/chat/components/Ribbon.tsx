@@ -3,13 +3,15 @@
  * Phase 2d.0: 删除 book（对话信息）按钮、sparkle（控制台）按钮，规范→帮助
  * ============================================================ */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Icon } from './UIKit';
 import { wsClient } from '../../../shared/api/ws';
 import type { ConnectionState } from '../../../shared/api/types';
 import { DreamEntryButton } from '../../../features/dream';
 import { chatThemeFontSize } from '../../../shared/chatAppearance';
 import { getDayNight, subscribe as subscribeTheme, toggleDayNight } from '../../../shared/theme/registry';
+import { useI18n } from '../../../shared/i18n';
 
 function Sep() {
   return <div style={{ width: 24, height: 1, background: 'var(--forest-line)', margin: '6px 0' }} />;
@@ -26,11 +28,18 @@ function HeartIcon({ size = 18 }: { size?: number }) {
 
 function RibBtn({ icon, label, active, onClick, customIcon }: any) {
   const [hover, setHover] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [tooltipPosition, setTooltipPosition] = useState({ left: 0, top: 0 });
+  const showTooltip = () => {
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (rect) setTooltipPosition({ left: Math.min(window.innerWidth - 8, rect.right + 8), top: Math.max(8, Math.min(window.innerHeight - 8, rect.top + rect.height / 2)) });
+    setHover(true);
+  };
   return (
     <div style={{ position: 'relative', flexShrink: 0 }}
-      onMouseEnter={() => setHover(true)}
+      onMouseEnter={showTooltip}
       onMouseLeave={() => setHover(false)}>
-      <button aria-label={label} onClick={onClick} style={{
+      <button ref={buttonRef} aria-label={label} onClick={onClick} style={{
         width: 38, height: 38, borderRadius: 'var(--radius-md)',
         background: active ? 'var(--on-forest)' : 'transparent',
         color: active ? 'var(--forest)' : 'var(--on-forest-2)',
@@ -48,9 +57,9 @@ function RibBtn({ icon, label, active, onClick, customIcon }: any) {
           }} />
         )}
       </button>
-      {hover && (
+      {hover && typeof document !== 'undefined' && createPortal(
         <div className="mono" style={{
-          position: 'absolute', left: 46, top: '50%', transform: 'translateY(-50%)',
+          position: 'fixed', left: tooltipPosition.left, top: tooltipPosition.top, transform: 'translateY(-50%)',
           padding: '3px 8px',
           background: 'var(--ink)', color: 'var(--paper)',
           borderRadius: 'var(--radius-sm)',
@@ -58,8 +67,7 @@ function RibBtn({ icon, label, active, onClick, customIcon }: any) {
           whiteSpace: 'nowrap', pointerEvents: 'none',
           zIndex: 200,
           boxShadow: '0 4px 12px var(--shadow-rgb-mix)',
-        }}>{label}</div>
-      )}
+        }}>{label}</div>, document.body)}
     </div>
   );
 }
@@ -67,6 +75,7 @@ function RibBtn({ icon, label, active, onClick, customIcon }: any) {
 export function Ribbon({
   sidebarOpen, sidebarTab, onSidebarTab, onCloseSidebar,
   petVisible, onPetToggle,
+  petBusy, petError, onPetRetry,
   onOpenSpec, onOpenPrefs,
   dreamWindowOpen, onDreamToggle,
   onActivityOpen,
@@ -74,6 +83,7 @@ export function Ribbon({
   playModeEnabled,
   onGroupOpen,
 }: any) {
+  const { t } = useI18n();
   const [connState, setConnState] = useState<ConnectionState>(wsClient.getState());
   const [dayNightActive, setDayNightActive] = useState<'day' | 'night'>(() => getDayNight().active);
   useEffect(() => wsClient.on('state', setConnState), []);
@@ -136,7 +146,7 @@ export function Ribbon({
           <RibBtn label="玩耍模式" customIcon={<HeartIcon />} onClick={onToyOpen} />
         )}
         <RibBtn icon="chat"  label="群聊"    onClick={onGroupOpen} />
-        <RibBtn icon="pet" label="桌宠" active={petVisible} onClick={onPetToggle} />
+        <RibBtn icon="pet" label={petError ? t('pet.retry') : t('pet.toggle')} active={petVisible} onClick={petError ? onPetRetry : onPetToggle} customIcon={petBusy ? <span aria-hidden="true">...</span> : undefined} />
       </div>
       <div className="chat-ribbon__footer">
         <RibBtn icon="settings" label="偏好" onClick={onOpenPrefs} />

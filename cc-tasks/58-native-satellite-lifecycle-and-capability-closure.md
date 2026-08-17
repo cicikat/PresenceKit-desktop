@@ -1,6 +1,6 @@
 # 58：Native Satellite 生命周期、资源与能力闭环修复
 
-> 状态：部分完成。代码层已实施并通过静态/纯逻辑验证；前置：cc-tasks/54、55、56、57 的代码已存在，但真实 Windows 窗口验收仍保持 open。
+> 状态：partial/open。代码层已实施并通过静态/纯逻辑验证；2026-08-17 已完成 Windows debug fixture 的单显示器生命周期验收，但 release、100%/125% DPI、双屏与 20 次切换仍保持 open。
 > 本单先修复代码层阻断，再把可验证的状态交给真实窗口验收；不在本单扩展新的视觉组件或物理效果。
 
 ## 1. 背景
@@ -119,3 +119,6 @@ surface 数量预算、性能采样和作者工具，不把基础生命周期问
 - 已增加 native capability report 与 `requires` 评估；选择器禁用 unavailable Mod，diagnostics 展示 experimental/partial reason。
 - 已通过 `npm test`、`npx.cmd tsc --noEmit`、`npm.cmd run build`、`cargo test`、`cargo check` 和 `git diff --check`。
 - Windows `freeform-capability-fixture` 真实窗口、DPI/多屏、20 次切换和 release 资源验收尚未执行，继续保持 `open`。
+- 补充 2026-08-17 debug 实窗：三个 surface 均 page-load、activate 与 ready；Halo 透明穿透、Island owned
+  interactivity、move/resize/minimize/restore/close 联动均已验证。实现同时修复了同步 `ensure_design_satellites`
+  在 Windows WebView2 下死锁、satellite `invalidated` 函数对象被当作布尔值，以及 satellite 路由误执行主窗初始化的问题。

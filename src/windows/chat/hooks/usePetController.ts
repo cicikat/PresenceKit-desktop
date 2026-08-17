@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { StateEngine } from '../../../shared/state/store';
-import { emitPetPrefs, emitPetTurn, publishPetSnapshot, setPetWindowVisible, startPetSnapshotResponder } from '../../../shared/pet/bridge';
+import { emitPetPrefs, emitPetTurn, getPetWindowState, publishPetSnapshot, setPetWindowVisible, startPetSnapshotResponder } from '../../../shared/pet/bridge';
 import { loadPetMouseSettings, savePetMouseSettings, subscribePetMouseSettings, type PetMouseSettings } from '../../../shared/pet/mouseSettings';
 import { loadPetVisualStyle, savePetVisualStyle, subscribePetVisualStyle, type PetVisualStyle } from '../../../shared/pet/petVisualStyle';
 import { loadPetRoamSettings, savePetRoamSettings, subscribePetRoamSettings } from '../../../shared/pet/petRoamSettings';
@@ -11,6 +11,10 @@ import { wsClient } from '../../../shared/api/ws';
 
 export function usePetController(engine: StateEngine, onToyOpen?: () => void) {
   const [petVisible, setPetVisible] = useState(false);
+  const [petBusy, setPetBusy] = useState(false);
+  const [petError, setPetError] = useState<string | null>(null);
+  const petOperationRef = useRef<Promise<void> | null>(null);
+  const petGenerationRef = useRef(0);
   const [petMouseSettings, setPetMouseSettings] = useState<PetMouseSettings>(() => loadPetMouseSettings());
   const [petVisualStyle, setPetVisualStyle] = useState<PetVisualStyle>(() => loadPetVisualStyle());
   const [model3dZoom, setModel3dZoom] = useState(() => getUIPref('pet.model3d.zoom', 1));
@@ -23,6 +27,21 @@ export function usePetController(engine: StateEngine, onToyOpen?: () => void) {
   useEffect(() => subscribePetVisualStyle(setPetVisualStyle), []);
   useEffect(() => subscribePetRoamSettings(settings => setPetRoamEnabled(settings.enabled)), []);
   useEffect(() => subscribePetRippleSettings(settings => setPetRippleEnabled(settings.enabled)), []);
+
+  useEffect(() => {
+    let active = true;
+    const sync = async () => {
+      try {
+        const status = await getPetWindowState();
+        if (active) setPetVisible(status.visible);
+      } catch {
+        if (active) setPetVisible(false);
+      }
+    };
+    void sync();
+    const timer = window.setInterval(() => void sync(), 2_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, []);
 
   useEffect(() => {
     const publishEngineSnapshot = () => {
@@ -57,16 +76,32 @@ export function usePetController(engine: StateEngine, onToyOpen?: () => void) {
     if (isPlayModeEnabled()) onToyOpen?.();
   }), [onToyOpen]);
 
-  const togglePet = useCallback(async () => {
-    const next = !petVisible;
-    try {
-      await setPetWindowVisible(next);
-      setPetVisible(next);
-      engine.setMode(next ? 'companion' : 'chat-only');
-    } catch (error) {
-      console.warn('[pet] window 显隐失败:', error);
-    }
-  }, [engine, petVisible]);
+  const setPetVisibility = useCallback((next: boolean) => {
+    if (petOperationRef.current) return petOperationRef.current;
+    const generation = ++petGenerationRef.current;
+    setPetBusy(true);
+    setPetError(null);
+    const operation = (async () => {
+      try {
+        const status = await setPetWindowVisible(next);
+        if (generation !== petGenerationRef.current) return;
+        setPetVisible(status.visible);
+        engine.setMode(status.visible ? 'companion' : 'chat-only');
+      } catch (error) {
+        if (generation !== petGenerationRef.current) return;
+        setPetVisible(false);
+        setPetError(error instanceof Error ? error.message : String(error));
+      } finally {
+        if (generation === petGenerationRef.current) setPetBusy(false);
+        petOperationRef.current = null;
+      }
+    })();
+    petOperationRef.current = operation;
+    return operation;
+  }, [engine]);
+
+  const togglePet = useCallback(() => setPetVisibility(!petVisible), [petVisible, setPetVisibility]);
+  const retryPet = useCallback(() => setPetVisibility(true), [setPetVisibility]);
 
   const updatePetMouseSettings = useCallback((patch: Partial<PetMouseSettings>) => {
     setPetMouseSettings(savePetMouseSettings(patch));
@@ -100,8 +135,8 @@ export function usePetController(engine: StateEngine, onToyOpen?: () => void) {
   const togglePetRipple = useCallback(() => savePetRippleSettings({ enabled: !petRippleEnabled }), [petRippleEnabled]);
 
   return {
-    petVisible, petMouseSettings, petVisualStyle, model3dZoom, live2dZoom, playModeEnabled,
+    petVisible, petBusy, petError, petMouseSettings, petVisualStyle, model3dZoom, live2dZoom, playModeEnabled,
     petRoamEnabled, petRippleEnabled, togglePet, updatePetMouseSettings, updatePetVisualStyle,
-    updateModel3dZoom, updateLive2dZoom, togglePlayMode, togglePetRoam, togglePetRipple,
+    updateModel3dZoom, updateLive2dZoom, togglePlayMode, togglePetRoam, togglePetRipple, retryPet,
   };
 }

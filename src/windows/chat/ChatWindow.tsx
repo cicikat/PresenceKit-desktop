@@ -182,6 +182,9 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen, isCovered = 
               onCloseSidebar={appearanceController.closeSidebar}
               petVisible={petController.petVisible}
               onPetToggle={petController.togglePet}
+              petBusy={petController.petBusy}
+              petError={petController.petError}
+              onPetRetry={petController.retryPet}
               onOpenSpec={() => navigation.setSpecOpen(true)}
               onOpenPrefs={() => navigation.setPrefsOpen(true)}
               dreamWindowOpen={navigation.dreamWindowOpen}

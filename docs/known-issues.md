@@ -1,5 +1,8 @@
 # docs/known-issues.md — 已知问题与技术债
 
+- **运行时性能基线与真实窗口验收（工单 60）** — `partial/open`。快照采样、合帧、20Hz 预算、暂停/恢复、诊断节流、头像优先加载、prompt-assets 去重和窗口协调器已接入并通过纯逻辑测试；2026-08-17 已在 Windows debug/175% DPI 验证 fixture 三个 surface 的创建、跟随和暂停销毁，但尚未完成 release resource_dir 的进程私有字节、frame p95、click-to-ack、100%/125% DPI、双屏和 20 次切换实测，记录模板见 `docs/brief-60-runtime-baseline.md`。
+- **客户端可见回归与窗口生命周期（工单 61）** — `partial/open`。Ribbon tooltip、桌宠 native 状态回填/重试、Onboarding 检查超时和 Mod payload generation 隔离已通过自动化检查；真实 Windows 窄窗口、DPI、桌宠连续开关、Activity 失败恢复和 20 次切换仍需实窗验收。
+
 > 修复前请先对照代码确认问题仍存在；修复后在本文件改状态或移到已修复区。
 
 ---
@@ -15,7 +18,7 @@
 - **ChatPanel 对账 timer 竞态测试** — `post-v0.1`；下一步把 timer orchestration 抽为纯控制器，用 vitest 假时钟覆盖 WS 先到、timer 先到和 fallback 命中。
 - **Dream 期间 Reality park / 退梦 flush 端到端验收** — `open`。当前 `ChatPanel` 已保持挂载，Dream 使用 overlay，静态前置条件已满足；仍需在真实后端连接下于入梦期间注入 Reality `channel_message` + `message_segments`，确认 Dream UI 不显示、退梦只 flush 一次且分段不重复。
 - **macOS 客户端首轮真人冒烟** — `open`。Release CI 已配置产出 Universal `.dmg`，但 Windows 开发机无法验证透明置顶桌宠、多窗口、Live2D/WebGL 与实际 Gatekeeper 流程。首个 macOS 包须标注 experimental，并至少确认启动、连接本机后端和聊天收发。macOS sensor 当前固定降级为不可用（`sensor_not_supported_on_macos`），不申请 Accessibility 权限也不上传空数据。
-- **可信设计 Mod / native satellite 真实窗口 fixture 验收** — `open`。54/55/56/57/58 的默认高度链、宿主恢复入口、manifest v1/v2、Rust surface 生命周期、能力判定、DPI/负坐标纯逻辑测试和 presenter 生命周期已通过，代码层“Ribbon 底部控件消失”、首次 hidden 不显示、资源 URL 与异步 disposer 问题已关闭；仍需在真实 Windows 窗口选择 `freeform-capability-fixture`，确认 Halo 透明 click-through、owned z-order、右/顶部 island 点击/滚动/ack、主窗口移动/resize/maximize/minimize/restore/close、100/125 DPI、双屏负坐标、20 次 Mod 切换与 release `resource_dir/design-mods`。macOS/Linux surface 仅记录为 experimental，尚无真人验收，不能以逻辑测试替代。
+- **可信设计 Mod / native satellite 真实窗口 fixture 验收** — `partial/open`。54/55/56/57/58 的默认高度链、宿主恢复入口、manifest v1/v2、Rust surface 生命周期、能力判定、DPI/负坐标纯逻辑测试和 presenter 生命周期已通过；2026-08-17 在 Windows debug/175% DPI 实测 Halo 透明 click-through、三个 owned surface、move/resize/minimize/restore/close，并修复同步 WebView 创建 deadlock 与 satellite 初始化提前退出。仍需右/顶部 island 的视觉点击/ack、100%/125% DPI、双屏负坐标、20 次 Mod 切换与 release `resource_dir/design-mods`。macOS/Linux surface 仅记录为 experimental，尚无真人验收，不能以逻辑测试替代。
 
 本轮已关闭：TTS 合成播放（后端合成端点、Tauri bridge、聊天/桌宠语音条、场景自动播放与跨窗口顺序播放均已接通）；Panes 历史 TS 条目、backend-integration L213、ChatPanel 三处内联 `15000`、Tauri 模板名、Header 偏好死按钮、system 消息气泡、SubFlow 跨角色单桶。system 样式经现有代码核对已先于本工单修好；关闭证据保留在下方历史快照和 Git 历史。
 

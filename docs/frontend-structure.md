@@ -702,6 +702,32 @@ Tauri 命令：
 ## 设置页运行时控制（2026-07-13）
 
 设置页沿用现有 PreferencesPanel：模型分类挂载 ModelRoutingSettingsPage、CharacterModelRoutingSettingsPage、ThinkingSettingsPage 与 OutputSegmentEnforceSettingsPage；能力与权限分类挂载 DesktopTtsSettingsPage、ToolLoopSettingsPage、VisualPerceptionSettingsPage 与电脑操作安全设置。视觉观察设置通过 Tauri command 控制本地开关与采样间隔；Rust sampler 在每次截图前都调用后端预检，稳定画面只做内存哈希比对，不上传。段落兜底页只负责 `output.segment_enforce.enabled` 热开关及有效阈值只读展示。助手非流式消息在桌面 TTS 开启时使用 VoiceMessageBar；语音按点击懒生成，可播放/暂停并展开文字。自动播放会立即并行请求各条音频，但主 Webview 持有跨窗口播放租约，聊天和桌宠均按消息入队顺序逐条输出，避免重叠。
+## Runtime performance boundary (Brief 60)
+
+Native satellite surfaces use one shared 20 Hz main-window snapshot per tick.
+On Windows, `ensure_design_satellites` is asynchronous because WebView2 can
+deadlock when a synchronous command creates a WebView. Satellite routes skip
+main-window preference/theme/voice bootstrap, and their async cleanup guards
+must call `invalidated()` rather than test the function object. A 175% DPI
+debug fixture run verified three owned surfaces, ready replay, move/resize and
+minimize/restore/close; release, multi-DPI and multi-monitor coverage remains
+partial.
+Per-surface frames are batched, stale/oversized frames are dropped, and
+diagnostics are throttled to one-second updates. Hidden, covered, dream,
+activity, toy, room and minimized states stop the rAF/IPC path and resume with
+one current snapshot. Avatar HER/YOU loads emit as soon as a usable result is
+available; backgrounds continue at low priority. Prompt-assets requests are
+shared within a WebView and invalidated after mutation.
+
+## Client-visible regression closure (Brief 61)
+
+Ribbon tooltip overlays are portaled to `document.body` and clamped to the
+viewport, while `.chat-ribbon__scroll` is vertical-only. `usePetController`
+hydrates visibility from the native `pet` window, polls for external close,
+deduplicates toggles and exposes retry state. `OnboardingGate` uses the
+cancellable `checkTokenStatus` boundary (8 seconds by default) and renders a
+retryable connection error instead of blocking the app forever.
+
 ## Diary sync settings (Brief 171)
 
 `src/windows/chat/components/DiarySyncSettingsPage.tsx` is mounted in the

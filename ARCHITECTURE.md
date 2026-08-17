@@ -1,5 +1,33 @@
 # ARCHITECTURE.md — PresenceKit-desktop 架构总览
 
+## Runtime performance boundary (work order 60)
+
+`DesignSatelliteBridge` owns one shared 20 Hz snapshot budget. It batches all
+surfaces, drops oversized frames, and publishes diagnostics at a one-second
+cadence so snapshot traffic cannot re-render the ChatWindow tree. Geometry is
+cached and invalidated by native motion/viewport changes; hidden, covered,
+dream, activity, toy, room and minimized states stop the satellite loop.
+`runtimeDiagnostics` is local-only and disabled by default. Window lifecycle
+coordination owns open/show/hide/destroy state and retryable errors; WS, HTTP,
+StateEngine and presenters remain main-window owners.
+
+Windows WebView2 requires `ensure_design_satellites` to be an async command:
+synchronous window creation can deadlock the invoking WebView. Satellites are
+owned top-level windows rather than parented child windows so physical bounds
+can extend outside the main window. Their lightweight route skips main-window
+preferences/theme/voice bootstrap and only owns renderer resources and the
+cross-window bridge.
+
+## Client-visible regression closure (work order 61)
+
+Ribbon tooltips render through a document-body portal with viewport clamping;
+the ribbon scroll column owns only vertical overflow, so tooltip content cannot
+create a horizontal scrollbar or hide adjacent controls. Pet visibility is
+read back from the native window, toggle requests are deduplicated, failures
+are retained as retryable UI state, and the main window remains the sole WS/HTTP
+owner. Onboarding token checks are cancellable and time-bounded; a timeout is a
+recoverable error rather than an indefinitely mounted checking screen.
+
 ## Chat 偏好与 controller（2026-07-30）
 
 `PreferencesPanel` 保持 modal 形式，按作用域分为「常规、模型、能力与权限、界面、角色与对话、桌宠与互动、高级」。Chat 和 Activity 的日间 / 夜间入口继续复用 `ThemePicker` 与同一 theme registry，分别读写 `chat.theme.day` / `chat.theme.night`。电脑操作安全 / 危险模式是全局能力，只在 Chat「能力与权限」中展示；Activity 仅保留外观与活动调试偏好。

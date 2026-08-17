@@ -27,6 +27,8 @@ import { DesignAwareRegion } from '../../../shared/design-mod/regions';
 import { getDesignModHostLayoutState, type DesignModHostPhase } from '../../../shared/design-mod/hostLayout';
 import type { DesignModDiagnostic, DesignModRecord, DesignSurface } from '../../../shared/design-mod/types';
 import { DesignSatelliteBridge, cropSatellitePresenterSnapshot, type DesignSatelliteBounds, type DesignSatelliteCommand, type DesignSatelliteDiagnostic } from '../../../shared/design-mod/satellite';
+import { runtimeDiagnostics } from '../../../shared/runtimeDiagnostics';
+import { canReuseSatellitePayload } from '../../../shared/design-mod/satellitePayload';
 
 interface DesignModHostProps {
   engine: any;
@@ -45,6 +47,15 @@ interface DesignModHostProps {
   renderSidebar: (tab: 'flow' | 'garden' | 'diary' | 'status') => ReactNode;
   renderChat: ReactNode;
   children?: ReactNode;
+}
+
+interface NativeMainSnapshot {
+  position: { x: number; y: number };
+  size: { width: number; height: number };
+  dpi: number;
+  visible: boolean;
+  focused: boolean;
+  maximized: boolean;
 }
 
 function useViewportSignals(isCovered: boolean, paused: boolean) {
@@ -136,6 +147,9 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
   const satelliteBridgeRef = useRef<DesignSatelliteBridge | null>(null);
   const navigationSnapshotRef = useRef(navigation);
   const navigationListenersRef = useRef(new Set<() => void>());
+  const nativeSnapshotRef = useRef<NativeMainSnapshot | null>(null);
+  const nativeSnapshotInFlightRef = useRef<Promise<NativeMainSnapshot> | null>(null);
+  const satellitePayloadRef = useRef<{ generation: number; modId: string; sequence: number; state: unknown; chat: unknown; navigation: unknown; presenters: { status: unknown; flow: unknown } } | null>(null);
   const mountedRef = useRef(true);
   const activationRequestRef = useRef(0);
   const runtimePaused = isCovered || dreamActive || document.hidden;
@@ -188,6 +202,13 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
   }, []);
 
   useEffect(() => {
+    const invalidate = () => { nativeSnapshotRef.current = null; };
+    const unsubscribe = nativeMotionStore.subscribe(invalidate);
+    window.addEventListener('resize', invalidate);
+    return () => { unsubscribe(); window.removeEventListener('resize', invalidate); };
+  }, []);
+
+  useEffect(() => {
     let mounted = true;
     void listDesignMods().then(values => { if (mounted) { setRecords(values); publishDesignModDiagnostics({ available: values }); } }).catch(() => {});
     return () => { mounted = false; };
@@ -211,6 +232,7 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
   const cleanupRuntime = useCallback(() => {
     void satelliteBridgeRef.current?.api.destroy().catch(error => console.warn('[design-satellite] 销毁失败:', error));
     satelliteBridgeRef.current = null;
+    satellitePayloadRef.current = null;
     setSurfaceDiagnostics([]);
     lifecycleRef.current.dispose();
     ledgerRef.current.clear();
@@ -287,24 +309,47 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
           pkg.nativeSurfacePackages,
           async (surfaceId, sequence) => {
             const currentWindow = getCurrentWindow();
-            const [position, size, dpi, visible, focused, maximized] = await Promise.all([
-              currentWindow.outerPosition().catch(() => ({ x: 0, y: 0 })),
-              currentWindow.outerSize().catch(() => ({ width: Math.round(window.innerWidth * (window.devicePixelRatio || 1)), height: Math.round(window.innerHeight * (window.devicePixelRatio || 1)) })),
-              currentWindow.scaleFactor().catch(() => window.devicePixelRatio || 1),
-              currentWindow.isVisible().catch(() => !document.hidden),
-              currentWindow.isFocused().catch(() => document.hasFocus()),
-              currentWindow.isMaximized().catch(() => false),
-            ]);
+            if (!nativeSnapshotRef.current && !nativeSnapshotInFlightRef.current) {
+              nativeSnapshotInFlightRef.current = Promise.all([
+                currentWindow.outerPosition().catch(() => ({ x: 0, y: 0 })),
+                currentWindow.outerSize().catch(() => ({ width: Math.round(window.innerWidth * (window.devicePixelRatio || 1)), height: Math.round(window.innerHeight * (window.devicePixelRatio || 1)) })),
+                currentWindow.scaleFactor().catch(() => window.devicePixelRatio || 1),
+                currentWindow.isVisible().catch(() => !document.hidden),
+                currentWindow.isFocused().catch(() => document.hasFocus()),
+                currentWindow.isMaximized().catch(() => false),
+              ]).then(([position, size, dpi, visible, focused, maximized]) => {
+                const snapshot = { position, size, dpi, visible, focused, maximized };
+                nativeSnapshotRef.current = snapshot;
+                return snapshot;
+              }).finally(() => { nativeSnapshotInFlightRef.current = null; });
+            }
+            const native = nativeSnapshotRef.current ?? await nativeSnapshotInFlightRef.current!;
+            const payloadKey = { generation: requestId, modId: pkg.manifest.id, sequence };
+            if (!canReuseSatellitePayload(satellitePayloadRef.current, payloadKey)) {
+              satellitePayloadRef.current = {
+                generation: requestId,
+                modId: pkg.manifest.id,
+                sequence,
+                state: cropSatellitePresenterSnapshot(engine.get()),
+                chat: cropSatellitePresenterSnapshot(chatSessionMetrics.get()),
+                navigation: cropSatellitePresenterSnapshot(navigationSnapshotRef.current),
+                presenters: {
+                  status: cropSatellitePresenterSnapshot(presenters.status.get()),
+                  flow: cropSatellitePresenterSnapshot(presenters.flow.get()),
+                },
+              };
+            }
+            const payload = satellitePayloadRef.current;
             geometryRef.current.flush();
-            const mainBounds: DesignSatelliteBounds = { x: position.x, y: position.y, width: size.width, height: size.height, dpi };
+            const mainBounds: DesignSatelliteBounds = { x: native.position.x, y: native.position.y, width: native.size.width, height: native.size.height, dpi: native.dpi };
             const anchors = Object.fromEntries(attachmentsRef.current.list().map(id => {
               const geometry = geometryRef.current.get(id);
               if (!geometry) return [id, { x: 0, y: 0, width: 0, height: 0, visible: false }];
               return [id, {
-                x: mainBounds.x + Math.round(geometry.rect.left * dpi),
-                y: mainBounds.y + Math.round(geometry.rect.top * dpi),
-                width: Math.round(geometry.rect.width * dpi),
-                height: Math.round(geometry.rect.height * dpi),
+                x: mainBounds.x + Math.round(geometry.rect.left * native.dpi),
+                y: mainBounds.y + Math.round(geometry.rect.top * native.dpi),
+                width: Math.round(geometry.rect.width * native.dpi),
+                height: Math.round(geometry.rect.height * native.dpi),
                 visible: geometry.visible,
               }];
             }));
@@ -315,14 +360,14 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
               modId: pkg.manifest.id,
               surfaceId,
               updatedAt: Date.now(),
-              main: { bounds: mainBounds, visible, focused, maximized },
-              window: { visible, focused, covered: isCovered, paused: runtimePaused },
+              main: { bounds: mainBounds, visible: native.visible, focused: native.focused, maximized: native.maximized },
+              window: { visible: native.visible, focused: native.focused, covered: isCovered, paused: runtimePaused },
               pointer: pointerStore.get(),
               theme: { id: getCurrentThemeId(), ...getDayNight() },
-              state: cropSatellitePresenterSnapshot(engine.get()),
-              chat: cropSatellitePresenterSnapshot(chatSessionMetrics.get()),
-              navigation: cropSatellitePresenterSnapshot(navigationSnapshotRef.current),
-              presenters: { status: cropSatellitePresenterSnapshot(presenters.status.get()), flow: cropSatellitePresenterSnapshot(presenters.flow.get()) },
+              state: payload.state,
+              chat: payload.chat,
+              navigation: payload.navigation,
+              presenters: payload.presenters,
               anchors,
             };
           },
@@ -499,12 +544,15 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
   }, [records.length]);
 
   useEffect(() => {
-    if (runtimePaused) return;
+    if (runtimePaused || selectedId === 'builtin-default' || !satelliteBridgeRef.current) return;
     let frame = 0;
     let frames = 0;
     let startedAt = performance.now();
+    let previousFrameAt = startedAt;
     const tick = (now: number) => {
       frames += 1;
+      runtimeDiagnostics.recordFrame(now - previousFrameAt);
+      previousFrameAt = now;
       geometryRef.current.flush();
       if (now - startedAt >= 1000) { setFps(Math.round(frames * 1000 / (now - startedAt))); frames = 0; startedAt = now; }
       frame = requestAnimationFrame(tick);
@@ -513,10 +561,10 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
     const abort = new AbortController();
     void listenNativeWindowMotion(abort.signal).catch(() => {});
     return () => { cancelAnimationFrame(frame); abort.abort(); };
-  }, [runtimePaused]);
+  }, [runtimePaused, selectedId, active]);
 
   useEffect(() => {
-    publishDesignModDiagnostics({ diagnostic, attached, fps, activeSubscriptions: ledgerRef.current.size(), surfaces: surfaceDiagnostics });
+    publishDesignModDiagnostics({ diagnostic, attached, fps, activeSubscriptions: ledgerRef.current.size(), surfaces: surfaceDiagnostics, snapshotMetrics: satelliteBridgeRef.current?.api.getMetrics(), runtime: runtimeDiagnostics.snapshot() });
   }, [attached, diagnostic, fps, surfaceDiagnostics]);
 
   useEffect(() => {

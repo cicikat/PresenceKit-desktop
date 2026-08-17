@@ -167,6 +167,21 @@ ready、FPS、snapshot/command sequence 和最近错误。
 
 ## 生命周期和恢复
 
+### Runtime snapshot budget (Brief 60)
+
+The transport uses a 20 Hz foreground budget, a zero-rate background budget,
+one shared sampler for main-window state, and one batched emit per tick. It
+records sampled/sent/dropped/payload bytes and retains the newest frame per
+surface. Surface consumers must tolerate stale-frame drops and must not create
+their own geometry or animation loop. Lifecycle pause/resume is controlled by
+host visibility and emits one recovery snapshot after resume.
+
+### Generation-safe payload cache (Brief 61)
+
+The host cache key includes `generation`, `modId` and `sequence`. Cleanup clears
+the cache before activation of a new Mod, so sequence `1` from a replacement
+Mod cannot reuse a payload produced by the previous Mod.
+
 每次启用都会生成新的 activation generation。切换、刷新、窗口卸载或 activate 抛错时，宿主按顺序调用
 disposer、清空 component/geometry/subscription ledger、停止宿主 rAF、移除 style 和 Blob URL。satellite
 异步 run 在每个 await 点检查 generation/disposed；listener、style、entry/asset Blob URL 与 pending command
@@ -178,6 +193,13 @@ surface 的 `requires` 是能力名，不是装饰性标签。当前最小集合
 `native-satellite-v1`、`interactive`、`passthrough`、`presenter-snapshot`、`navigation-snapshot`；
 为兼容现有 fixture，`navigation` / `presenters` 分别映射到后两个 snapshot 能力。Rust 返回平台报告：
 Windows 为 `supported`，macOS/Linux 为 `experimental`（尚无真人窗口验收），其他平台为 `unavailable`。
+The Windows satellite ensure command is asynchronous to avoid the documented
+WebView2 synchronous-command creation deadlock. Satellite renderer bootstrap
+does not run main-window preference/theme/voice owners; it only mounts the
+transparent renderer and bridge resources. The 2026-08-17 debug run validated
+three owned fixture surfaces at 175% DPI, including pointer passthrough and
+move/resize/minimize/restore/close. Release, 100%/125% DPI and multi-monitor
+acceptance remain open.
 未知能力、缺失能力或平台不满足时，选择器禁用该 Mod，diagnostics 给出 surface 与 reason；宿主不会先创建
 部分 satellite 再静默回退。未声明 `nativeSurfaces` 的 v1 Mod 不参与能力判定，继续走单 WebView 兼容路径。
 

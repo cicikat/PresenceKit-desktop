@@ -103,9 +103,22 @@ export function validateUploadFile(filePath: string, fileSize: number): UploadEr
   return null;
 }
 
-export async function getPromptAssets(): Promise<PromptAssetsResponse> {
-  const response = await invokeGated<unknown>('get_prompt_assets');
-  return normalizePromptAssets(response);
+let promptAssetsCache: PromptAssetsResponse | null = null;
+let promptAssetsInFlight: Promise<PromptAssetsResponse> | null = null;
+
+/** Shared within a WebView; concurrent consumers (ChatWindow/presenter/settings)
+ * reuse one request. Mutations below invalidate the cache explicitly. */
+export function getPromptAssets(options: { force?: boolean } = {}): Promise<PromptAssetsResponse> {
+  if (!options.force && promptAssetsCache) return Promise.resolve(promptAssetsCache);
+  if (promptAssetsInFlight) return promptAssetsInFlight;
+  promptAssetsInFlight = invokeGated<unknown>('get_prompt_assets')
+    .then(response => { promptAssetsCache = normalizePromptAssets(response); return promptAssetsCache; })
+    .finally(() => { promptAssetsInFlight = null; });
+  return promptAssetsInFlight;
+}
+
+export function invalidatePromptAssetsCache(): void {
+  promptAssetsCache = null;
 }
 
 export async function getCharacterAvatar(charId: string): Promise<string | null> {
@@ -139,6 +152,7 @@ export async function patchPromptAssets(patch: PromptAssetsPatch): Promise<Promp
     enabledJailbreaks: patch.enabled_jailbreaks ?? null,
   });
   const raw = isRecord(response) ? response : {};
+  invalidatePromptAssetsCache();
   return {
     message: typeof raw.message === 'string' ? raw.message : '',
     active: normalizeActivePromptAssets(raw.active),

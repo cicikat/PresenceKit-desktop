@@ -80,12 +80,14 @@ function RoleRoot() {
   );
 }
 
-await initUIPrefs();
 initI18n();
-initTheme().catch(error => console.warn("[theme] 初始化失败:", error));
-import("./shared/voice/crossWindowPlayback")
-  .then(module => module.initCrossWindowAudioPlayback())
-  .catch(error => console.warn("[voice] 初始化失败:", error));
+if (!isSatelliteWindow) {
+  await initUIPrefs();
+  initTheme().catch(error => console.warn("[theme] 初始化失败:", error));
+  import("./shared/voice/crossWindowPlayback")
+    .then(module => module.initCrossWindowAudioPlayback())
+    .catch(error => console.warn("[voice] 初始化失败:", error));
+}
 if (isMainWindow) {
   import("./shared/avatars/store")
     .then(module => module.avatarStore.init())
