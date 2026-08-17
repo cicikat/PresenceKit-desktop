@@ -94,7 +94,7 @@ src/windows/chat/
 - 负责偏好面板内的头像上传/裁剪入口。
 - 世界页角色卡头像同样复用 `AvatarCropper`，选择 PNG / JPEG / WebP 后先裁剪为 256 × 256 PNG，再通过角色头像后端接口上传。
 - Chat 偏好浮层使用顶部横栏分类：常规、模型、能力与权限、界面、角色与对话、桌宠与互动、高级。`OutputSegmentEnforceSettingsPage` 位于模型分类，通过 Tauri IPC 热切换生成后段落兜底，只展示开关和有效阈值，不展示 Prompt 检视数据；`VisualPerceptionSettingsPage` 位于能力与权限，是本地 opt-in 与采样间隔控制面，展示最近结果、推送时间和失败计数。界面提供主题、信息栏、布局预览器、聊天字号、主题字号、动态字体包、背景、颜色和头像设置。角色与对话通过 `PromptAssetsSettings` 读取和保存 Reality Prompt Assets，提供角色卡单选、Reality 世界书多选和 Reality 破限多选；桌宠与互动承载视频通话和 Coplay。
-- `LayoutHost` 读取 `src/shared/layout/registry.ts` 的当前 manifest，排布 `ribbon`、`sidebar`、`main` 三个既有 slot：方向、顺序、Ribbon/Sidebar 宽度与 Sidebar 默认显隐均由声明式布局决定；slot 内组件仍由 ChatWindow 创建。V2 `mainLayout` 只重排 ChatPanel 内稳定的标题、消息流、输入框区域（`stack` / `workbench` / `hud`），窄于 760px 自动回退纵向 `stack`，不会重挂载 ChatPanel。ChatPanel 为主题 CSS 暴露只读装饰锚点 `data-chat-region="header|transcript|composer"` 和 `data-main-layout`；它们不能改变区域组件或 Grid 结构。背景层及 Dream、Pane、帮助、偏好、Yandere 等应用级 overlay 不属于 slot，继续由 ChatWindow 顶层管理。
+- `LayoutHost` 读取 `src/shared/layout/registry.ts` 的当前 manifest，排布 `ribbon`、`sidebar`、`main` 三个既有 slot：方向、顺序、Ribbon/Sidebar 宽度与 Sidebar 默认显隐均由声明式布局决定；slot 内组件仍由 ChatWindow 创建。V2 `mainLayout` 只重排 ChatPanel 内稳定的标题、消息流、输入框区域（`stack` / `workbench` / `hud`），窄于 760px 自动回退纵向 `stack`，不会重挂载 ChatPanel。磁盘布局由 Tauri `list_layouts` / `read_layout_css` 提供，debug 只读 `public/layouts/`，release 只读 `resource_dir/layouts/`；列表和 CSS 使用同一资源根。ChatPanel 为主题 CSS 暴露只读装饰锚点 `data-chat-region="header|transcript|composer"` 和 `data-main-layout`；它们不能改变区域组件或 Grid 结构。背景层及 Dream、Pane、帮助、偏好、Yandere 等应用级 overlay 不属于 slot，继续由 ChatWindow 顶层管理。
 
 关键状态：
 
@@ -654,7 +654,7 @@ Tauri 命令：
 - `contract.ts` 是核心、游戏、字体和 Dream token 的单一契约来源。
 - `builtinThemes.ts` 保存内置 `paper` / `dark` 数据。
 - `loader.ts` 通过 `document.documentElement.style.setProperty()` 运行期注入主题。
-- `registry.ts` 合并内置主题与 Tauri `list_themes` 扫描到的 `public/themes/*/theme.json`，校验必需 token、持久化 `chat.theme` 并通知订阅者；磁盘主题的可选 CSS 经 Tauri `read_theme_css` 读取，前端继续用 `inspectThemeCss()` 安检。
+- `registry.ts` 合并内置主题与 Tauri `list_themes` 扫描到的磁盘主题，校验必需 token、持久化 `chat.theme` 并通知订阅者；debug 只读 `public/themes/`，release 只读 `resource_dir/themes/`，磁盘主题的可选 CSS 经同一资源根的 Tauri `read_theme_css` 读取，前端继续用 `inspectThemeCss()` 安检。
 - `ThemePicker.tsx` 由 Chat 和 Activity 偏好页共用，提供「刷新主题」入口，清空 registry cache 后重新扫描用户刚放入的磁盘 mod。
 - `globals.css` 只保留 paper FOUC 兜底和结构性样式。
 

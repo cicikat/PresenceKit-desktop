@@ -307,48 +307,131 @@ fn list_dream_fonts(app: tauri::AppHandle) -> Result<serde_json::Value, String> 
     list_dream_fonts_in_dir(&font_dir)
 }
 
-fn themes_dev_dir() -> Result<PathBuf, String> {
-    Ok(PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .ok_or_else(|| "无法定位项目根目录".to_string())?
-        .join("public")
-        .join("themes"))
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ModBuildMode {
+    Debug,
+    Release,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ModResourceKind {
+    Themes,
+    Layouts,
+}
+
+impl ModResourceKind {
+    fn directory_name(self) -> &'static str {
+        match self {
+            Self::Themes => "themes",
+            Self::Layouts => "layouts",
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Themes => "主题",
+            Self::Layouts => "布局",
+        }
+    }
+}
+
+impl ModBuildMode {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Debug => "debug",
+            Self::Release => "release",
+        }
+    }
+
+    fn root_label(self) -> &'static str {
+        match self {
+            Self::Debug => "public",
+            Self::Release => "resource_dir",
+        }
+    }
+}
+
+/// Selects the only allowed mod root for a build mode without inspecting the filesystem.
+/// Keeping this decision independent from Tauri makes the debug/release boundary testable
+/// even when a previous build has left stale resources under `target/`.
+fn select_mod_resource_root(
+    mode: ModBuildMode,
+    project_root: Option<&Path>,
+    resource_dir: Option<&Path>,
+    kind: ModResourceKind,
+) -> Result<PathBuf, String> {
+    let base = match mode {
+        ModBuildMode::Debug => project_root,
+        ModBuildMode::Release => resource_dir,
+    }
+    .ok_or_else(|| {
+        format!(
+            "无法定位{}目录：{} 模式缺少 {} 路径",
+            kind.label(),
+            mode.label(),
+            mode.root_label()
+        )
+    })?;
+
+    Ok(match mode {
+        ModBuildMode::Debug => base.join("public").join(kind.directory_name()),
+        ModBuildMode::Release => base.join(kind.directory_name()),
+    })
+}
+
+fn resolve_mod_resource_dir(
+    mode: ModBuildMode,
+    project_root: Option<&Path>,
+    resource_dir: Option<&Path>,
+    kind: ModResourceKind,
+) -> Result<PathBuf, String> {
+    let candidate = select_mod_resource_root(mode, project_root, resource_dir, kind)?;
+    if candidate.is_dir() {
+        return Ok(candidate);
+    }
+
+    Err(format!(
+        "无法定位{}目录：{} 模式只允许读取 {}，目录不存在: {}",
+        kind.label(),
+        mode.label(),
+        mode.root_label(),
+        candidate.display()
+    ))
+}
+
+fn mod_resource_dir(_app: &tauri::AppHandle, kind: ModResourceKind) -> Result<PathBuf, String> {
+    #[cfg(debug_assertions)]
+    {
+        let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .ok_or_else(|| "无法定位项目根目录".to_string())?
+            .to_path_buf();
+        return resolve_mod_resource_dir(
+            ModBuildMode::Debug,
+            Some(&project_root),
+            None,
+            kind,
+        );
+    }
+
+    #[cfg(not(debug_assertions))]
+    {
+        let resource_dir = _app
+            .path()
+            .resource_dir()
+            .map_err(|error| format!("无法定位运行期资源目录: {error}"))?;
+        resolve_mod_resource_dir(
+            ModBuildMode::Release,
+            None,
+            Some(&resource_dir),
+            kind,
+        )
+    }
 }
 
 fn themes_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let mut checked = Vec::new();
-
-    match app.path().resource_dir() {
-        Ok(resource_dir) => {
-            let theme_dir = resource_dir.join("themes");
-            if theme_dir.is_dir() {
-                return Ok(theme_dir);
-            }
-            checked.push(theme_dir);
-        }
-        Err(error) => eprintln!("[themes] 无法定位运行期资源目录: {error}"),
-    }
-
-    if cfg!(debug_assertions) {
-        let dev_dir = themes_dev_dir()?;
-        if dev_dir.is_dir() {
-            eprintln!(
-                "[themes] 运行期主题资源不可用，使用开发环境 fallback: {}",
-                dev_dir.display()
-            );
-            return Ok(dev_dir);
-        }
-        checked.push(dev_dir);
-    }
-
-    let checked_paths = checked
-        .iter()
-        .map(|path| path.display().to_string())
-        .collect::<Vec<_>>()
-        .join(", ");
-    let message = format!("无法定位主题目录，已检查: {checked_paths}");
-    eprintln!("[themes] {message}");
-    Err(message)
+    mod_resource_dir(app, ModResourceKind::Themes)
 }
 
 fn list_themes_in_dir(theme_dir: &Path) -> Result<serde_json::Value, String> {
@@ -427,38 +510,8 @@ fn read_theme_css(app: tauri::AppHandle, id: String, file: String) -> Result<Str
     read_theme_css_in_dir(&themes_dir(&app)?, &id, &file)
 }
 
-fn layouts_dev_dir() -> Result<PathBuf, String> {
-    Ok(PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .ok_or_else(|| "无法定位项目根目录".to_string())?
-        .join("public")
-        .join("layouts"))
-}
-
 fn layouts_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let mut checked = Vec::new();
-    match app.path().resource_dir() {
-        Ok(resource_dir) => {
-            let layout_dir = resource_dir.join("layouts");
-            if layout_dir.is_dir() {
-                return Ok(layout_dir);
-            }
-            checked.push(layout_dir);
-        }
-        Err(error) => eprintln!("[layouts] 无法定位运行期资源目录: {error}"),
-    }
-    if cfg!(debug_assertions) {
-        let dev_dir = layouts_dev_dir()?;
-        if dev_dir.is_dir() {
-            eprintln!("[layouts] 运行期布局资源不可用，使用开发环境 fallback: {}", dev_dir.display());
-            return Ok(dev_dir);
-        }
-        checked.push(dev_dir);
-    }
-    let checked_paths = checked.iter().map(|path| path.display().to_string()).collect::<Vec<_>>().join(", ");
-    let message = format!("无法定位布局目录，已检查: {checked_paths}");
-    eprintln!("[layouts] {message}");
-    Err(message)
+    mod_resource_dir(app, ModResourceKind::Layouts)
 }
 
 fn list_layouts_in_dir(layout_dir: &Path) -> Result<serde_json::Value, String> {
@@ -3324,6 +3377,178 @@ mod dream_font_tests {
                 },
             ])
         );
+    }
+}
+
+#[cfg(test)]
+mod mod_resource_root_tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    struct TempModRoots {
+        base: PathBuf,
+        project_root: PathBuf,
+        resource_dir: PathBuf,
+    }
+
+    impl TempModRoots {
+        fn new() -> Self {
+            let unique = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let base = std::env::temp_dir().join(format!(
+                "emerald-mod-resource-root-test-{}-{unique}",
+                std::process::id()
+            ));
+            Self {
+                project_root: base.join("project"),
+                resource_dir: base.join("resource"),
+                base,
+            }
+        }
+    }
+
+    impl Drop for TempModRoots {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.base);
+        }
+    }
+
+    fn write_theme(root: &Path, id: &str, css: &str) {
+        let directory = root.join("themes").join(id);
+        fs::create_dir_all(&directory).unwrap();
+        fs::write(
+            directory.join("theme.json"),
+            format!(r#"{{"id":"{id}","name":"{id}"}}"#),
+        )
+        .unwrap();
+        fs::write(directory.join("theme.css"), css).unwrap();
+    }
+
+    fn write_layout(root: &Path, id: &str, css: &str) {
+        let directory = root.join("layouts").join(id);
+        fs::create_dir_all(&directory).unwrap();
+        fs::write(
+            directory.join("layout.json"),
+            format!(r#"{{"id":"{id}","name":"{id}"}}"#),
+        )
+        .unwrap();
+        fs::write(directory.join("layout.css"), css).unwrap();
+    }
+
+    #[test]
+    fn debug_uses_public_roots_even_when_resource_dir_contains_stale_mods() {
+        let roots = TempModRoots::new();
+        let public_root = roots.project_root.join("public");
+        write_theme(&public_root, "current-theme", "public theme");
+        write_theme(&roots.resource_dir, "stale-theme", "resource theme");
+        write_layout(&public_root, "current-layout", "public layout");
+        write_layout(&roots.resource_dir, "stale-layout", "resource layout");
+
+        let theme_dir = resolve_mod_resource_dir(
+            ModBuildMode::Debug,
+            Some(&roots.project_root),
+            Some(&roots.resource_dir),
+            ModResourceKind::Themes,
+        )
+        .unwrap();
+        assert_eq!(theme_dir, public_root.join("themes"));
+        assert_eq!(
+            list_themes_in_dir(&theme_dir).unwrap(),
+            serde_json::json!([{"id":"current-theme","name":"current-theme"}])
+        );
+        assert_eq!(
+            read_theme_css_in_dir(&theme_dir, "current-theme", "theme.css").unwrap(),
+            "public theme"
+        );
+
+        let layout_dir = resolve_mod_resource_dir(
+            ModBuildMode::Debug,
+            Some(&roots.project_root),
+            Some(&roots.resource_dir),
+            ModResourceKind::Layouts,
+        )
+        .unwrap();
+        assert_eq!(layout_dir, public_root.join("layouts"));
+        assert_eq!(
+            list_layouts_in_dir(&layout_dir).unwrap(),
+            serde_json::json!([{"id":"current-layout","name":"current-layout"}])
+        );
+        assert_eq!(
+            read_layout_css_in_dir(&layout_dir, "current-layout", "layout.css").unwrap(),
+            "public layout"
+        );
+    }
+
+    #[test]
+    fn release_uses_resource_roots_even_when_public_roots_exist() {
+        let roots = TempModRoots::new();
+        let public_root = roots.project_root.join("public");
+        write_theme(&public_root, "stale-theme", "public theme");
+        write_theme(&roots.resource_dir, "packaged-theme", "resource theme");
+        write_layout(&public_root, "stale-layout", "public layout");
+        write_layout(&roots.resource_dir, "packaged-layout", "resource layout");
+
+        let theme_dir = resolve_mod_resource_dir(
+            ModBuildMode::Release,
+            Some(&roots.project_root),
+            Some(&roots.resource_dir),
+            ModResourceKind::Themes,
+        )
+        .unwrap();
+        assert_eq!(theme_dir, roots.resource_dir.join("themes"));
+        assert_eq!(
+            list_themes_in_dir(&theme_dir).unwrap(),
+            serde_json::json!([{"id":"packaged-theme","name":"packaged-theme"}])
+        );
+        assert_eq!(
+            read_theme_css_in_dir(&theme_dir, "packaged-theme", "theme.css").unwrap(),
+            "resource theme"
+        );
+
+        let layout_dir = resolve_mod_resource_dir(
+            ModBuildMode::Release,
+            Some(&roots.project_root),
+            Some(&roots.resource_dir),
+            ModResourceKind::Layouts,
+        )
+        .unwrap();
+        assert_eq!(layout_dir, roots.resource_dir.join("layouts"));
+        assert_eq!(
+            list_layouts_in_dir(&layout_dir).unwrap(),
+            serde_json::json!([{"id":"packaged-layout","name":"packaged-layout"}])
+        );
+        assert_eq!(
+            read_layout_css_in_dir(&layout_dir, "packaged-layout", "layout.css").unwrap(),
+            "resource layout"
+        );
+    }
+
+    #[test]
+    fn missing_active_root_errors_without_cross_mode_fallback() {
+        let roots = TempModRoots::new();
+        fs::create_dir_all(roots.resource_dir.join("themes")).unwrap();
+        let debug_error = resolve_mod_resource_dir(
+            ModBuildMode::Debug,
+            Some(&roots.project_root),
+            Some(&roots.resource_dir),
+            ModResourceKind::Themes,
+        )
+        .unwrap_err();
+        assert!(debug_error.contains("public"), "{debug_error}");
+        assert!(debug_error.contains("不存在"), "{debug_error}");
+
+        fs::create_dir_all(roots.project_root.join("public/layouts")).unwrap();
+        let release_error = resolve_mod_resource_dir(
+            ModBuildMode::Release,
+            Some(&roots.project_root),
+            Some(&roots.resource_dir),
+            ModResourceKind::Layouts,
+        )
+        .unwrap_err();
+        assert!(release_error.contains("resource_dir"), "{release_error}");
+        assert!(release_error.contains("不存在"), "{release_error}");
     }
 }
 

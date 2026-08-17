@@ -73,7 +73,7 @@ Rust/Tauri HTTP client 统一显式禁用代理并设置超时：普通请求 15
 | `src/shared/api/ws.ts` | `wsClient.connect()`、通过 Tauri commands / events 完成 legacy WS 收发 |
 | `src/shared/state/toolStatusOverlay.ts` | 内存态 `tool_status` 队列；仅覆盖动向 NOW，不写 StateEngine、timeline 或本地偏好 |
 | `src-tauri/src/ws_bridge.rs` | 原生 WS 连接、Bearer header、URL 清洗与前端事件桥接 |
-| `src-tauri/src/lib.rs` | `send_chat`、`load_history`、`load_garden_state`、`load_diary_list`、`load_diary_entry`、`get_prompt_assets`、`patch_prompt_assets`、头像 / Dream 背景文件 commands、Dream 字体目录扫描、主题 Mod manifest 扫描 |
+| `src-tauri/src/lib.rs` | `send_chat`、`load_history`、`load_garden_state`、`load_diary_list`、`load_diary_entry`、`get_prompt_assets`、`patch_prompt_assets`、头像 / Dream 背景文件 commands、Dream 字体目录扫描、主题 / 布局 Mod manifest 与 CSS 扫描 |
 | `src/windows/chat/components/ChatPanel.tsx` | 启动历史、发送消息、订阅 WS 主动消息 |
 | `src/windows/chat/components/Ribbon.tsx` | 读取 WS 连接状态 |
 | `src/windows/chat/components/SubGarden.tsx` | 读取并展示花园状态 |
@@ -790,8 +790,10 @@ Authorization: Bearer <admin_token>
 | `read_avatars_json()` | 前端 → Rust | 读取头像和 Dream 日间 / 夜间背景配置；旧 `dream_background` 字段由前端兼容为夜间背景 |
 | `write_avatars_json(json)` | 前端 → Rust | 写头像和 Dream 日间 / 夜间背景配置 |
 | `list_dream_fonts()` | 前端 → Rust | packaged 优先扫描 `resource_dir/fonts`，debug/dev 回退源码 `public/fonts/`；目录不可用时报明确错误 |
-| `list_themes()` | 前端 → Rust | packaged 优先扫描 `resource_dir/themes/*/theme.json`，debug/dev 回退源码 `public/themes/`；原样返回 manifest，由前端校验 token 契约 |
-| `read_theme_css(id, file)` | 前端 → Rust | 读取 `themes/<id>/<file>` 的磁盘 mod CSS；仅允许单级 id、同目录 `.css` 文件，并经 canonical 路径校验拒绝绝对路径、穿越和 symlink 逃逸；CSS 文本仍由前端 `inspectThemeCss()` 安检 |
+| `list_themes()` | 前端 → Rust | debug / `npm run tauri dev` 只扫描 `public/themes/*/theme.json`；release / 安装包只扫描 `resource_dir/themes/*/theme.json`；原样返回 manifest，由前端校验 token 契约；缺失当前模式目录时报错，不跨模式 fallback |
+| `read_theme_css(id, file)` | 前端 → Rust | 与 `list_themes()` 共用同一主题根；读取 `themes/<id>/<file>` 的磁盘 mod CSS；仅允许单级 id、同目录 `.css` 文件，并经 canonical 路径校验拒绝绝对路径、穿越和 symlink 逃逸；CSS 文本仍由前端 `inspectThemeCss()` 安检 |
+| `list_layouts()` | 前端 → Rust | debug / `npm run tauri dev` 只扫描 `public/layouts/*/layout.json`；release / 安装包只扫描 `resource_dir/layouts/*/layout.json`；原样返回 manifest；缺失当前模式目录时报错，不跨模式 fallback |
+| `read_layout_css(id, file)` | 前端 → Rust | 与 `list_layouts()` 共用同一布局根；读取 `layouts/<id>/<file>` 的磁盘 mod CSS；仅允许单级 id、同目录 `.css` 文件，并经 canonical 路径校验拒绝绝对路径、穿越和 symlink 逃逸；CSS 文本仍由前端 `inspectThemeCss()` 安检 |
 | `dream_get_settings()` | 前端 → Rust → 后端 | GET `/dream/settings`；读取 Dream 上下文、`display.physiological_arousal` 与后端管理的 Scenario injection mode |
 | `dream_update_settings(..., jailbreak_preset, display)` | 前端 → Rust → 后端 | PATCH `/dream/settings`；桌面命令透传现有 Dream 字段；`scenario_injection_mode` 由后端管理面保存，当前不在客户端设置命令中暴露 |
 | `dream_group_enter/chat/exit(group_id, ...)` | 前端 → Rust → 后端 | POST `/group/{id}/dream/enter|send|exit`；群梦 send 返回 `{round_id,status}`，角色回复走 WS |

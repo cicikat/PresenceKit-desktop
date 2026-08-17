@@ -18,8 +18,8 @@
                      ┌──────────── 三个主题来源 ────────────┐
                      │                                      │
   builtinThemes.ts   │  磁盘 mod 目录                        │  用户预设(★)
-  (paper / dark)     │  dev:  public/themes/<id>/           │  localStorage
-        │            │  安装版: <安装目录>/resources/themes/  │  (ChatColorPage 内置编辑器)
+  (paper / dark)     │  debug:  public/themes/<id>/         │  localStorage
+        │            │  release: resource_dir/themes/<id>/ │  (ChatColorPage 内置编辑器)
         │            │  经 Tauri IPC `list_themes` 读取      │        │
         └──────┬─────┴──────────────┬───────────────────────┴────────┘
                ▼                    ▼
@@ -33,7 +33,7 @@
         loader.ts::applyTheme()  → documentElement 内联 style 写入全部 token
         loader.ts::applyThemeCss() → <style data-theme-css> 注入自定义 CSS
                │
-               ▼        （运行时可能盖写 token 的两层，mod 作者必知）
+              ▼        （运行时可能盖写 token 的两层，mod 作者必知）
         moodReactive.ts  → 情绪反应色：偏移 --accent/--forest 等（可开关）
         dreamAppearance.ts → Dream 偏好 RGB 配色/背景：盖写 --dt-*（仅 Dream 窗口）
 ```
@@ -109,14 +109,27 @@ Chat 偏好浮层 → 外观 → 颜色编辑（`ChatColorPage`）。从 paper/d
 **B. 标准路径：token-only 磁盘 mod（推荐）**
 1. 抄一份 `public/themes/sakura-pink/theme.json`（它就是 token-only mod 的活样板）；
 2. 改 `id`（=文件夹名）、`name`、`base`、tokens；
-3. 放进主题目录：开发跑 `npm run tauri dev` 放 `public/themes/`；安装版放
-   `<安装目录>/resources/themes/`；
+3. 放进主题目录：开发跑 `npm run tauri dev` 放 `public/themes/`；release 安装包资源位于
+   `resource_dir/themes/`；
 4. 重开应用（或主题列表刷新入口），ThemePicker 里出现即成功。被拒看控制台 `[theme]` 日志。
 
 **C. 进阶：带 theme.css 的 mod**
 CSS 与 token 同目录，能写选择器级样式（如给气泡加纹理）。必须过 §6 安检。磁盘 mod 的
-CSS 由 Tauri `read_theme_css` 从主题目录内读取，安装版与 dev 均可用；新放入目录的 mod 点击
-ThemePicker 的「刷新主题」即可重新扫描，无需重启。
+CSS 由 Tauri `read_theme_css` 从当前构建模式唯一资源根读取：debug 只读 `public/themes/`，
+release 只读 `resource_dir/themes/`；新放入目录的 mod 点击 ThemePicker 的「刷新主题」即可
+重新扫描，无需重启。
+
+### 资源根边界
+
+主题资源根按构建模式互斥选择：
+
+| 运行模式 | 唯一读取根 |
+|---|---|
+| debug / `npm run tauri dev` | `public/themes/` |
+| release / 安装包 | `resource_dir/themes/` |
+
+`list_themes` 与 `read_theme_css` 使用同一根；当前根缺失时明确报错，不读取另一模式的目录。
+`src-tauri/target/**` 与 `dist/**` 都是可重建产物，不是 mod 维护入口，也不会影响主题列表或 CSS。
 
 **agent 施工提示**：改 token 契约（增删组/改必填面）只动 `contract.ts` 并同步本文档 §3
 与全部内置主题/样例；改加载链路先读 `registry.ts`（合并/校验/日夜槽）再动。

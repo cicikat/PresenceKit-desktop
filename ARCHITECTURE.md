@@ -198,7 +198,8 @@ Tauri Rust 在 `src-tauri/src/lib.rs`：
 - `src-tauri/src/actions.rs`：执行基础 desktop action，并负责单实例 `presence_nag` 窗口显示与 `presence_nag_close_all` 强制全关。
 - `save_avatar` / `load_avatar` / `read_avatars_json` / `write_avatars_json`：本地头像和 Dream 背景持久化。
 - `list_dream_fonts`：打包后优先扫描 `resource_dir/fonts`，debug/dev 模式回退源码 `public/fonts/`；目录不可用时返回明确错误。
-- `list_themes`：扫描 `resource_dir/themes/*/theme.json`，debug/dev 模式回退源码 `public/themes/`；前端注册中心负责契约校验和内置主题合并。
+- `list_themes` / `read_theme_css`：debug / `npm run tauri dev` 只读源码 `public/themes/`，release / 安装包只读 `resource_dir/themes/`；两个 command 共用同一主题根解析器，前端注册中心负责契约校验和内置主题合并。`target/**` 与 `dist/**` 不参与扫描。
+- `list_layouts` / `read_layout_css`：debug / `npm run tauri dev` 只读源码 `public/layouts/`，release / 安装包只读 `resource_dir/layouts/`；两个 command 共用同一布局根解析器。缺失当前模式目录时明确报错，不跨模式 fallback。
 - sensor `title_sanitizer` 采用保守默认：Browser 仅返回域名，Editor 仅返回安全 basename，Chat / Other / 未知及文件查看类应用不返回 `title_hint`。
 - 视觉观察的默认 5 分钟是本地采样/比对周期，不是上传周期；预检失败、后端关闭、锁屏/无桌面会话或画面不变时均不上传。
 
@@ -345,6 +346,7 @@ Dream 背景按 `day` / `night` 分开记录。旧版单字段 `dream_background
 | `src/shared/i18n/` | `zh-CN` / `en-US` 语言包、持久化语言选择与 React 订阅 API |
 | `src/shared/theme/globals.css` | 全局主题变量 |
 | `src/shared/theme/contract.ts` / `registry.ts` | 主题 Mod token 契约、内置与磁盘主题注册、运行期注入；磁盘 CSS 经 Tauri `read_theme_css` 读取并在前端安检 |
+| `src/shared/layout/registry.ts` | 布局 Mod manifest 合并、校验与运行期 CSS 注入；磁盘资源经 Tauri `list_layouts` / `read_layout_css` 读取 |
 | `src-tauri/src/lib.rs` | Tauri command 和 Rust HTTP 桥 |
 | `src-tauri/src/sensor/` | sensor 感知模块，嵌入 Tauri Rust 进程；Windows 视觉观察仅内存采样、比对与变化上传 |
 

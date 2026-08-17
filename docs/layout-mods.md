@@ -16,11 +16,14 @@ builtinLayouts.ts ─┐
                            ChatPanel → header / transcript / composer
 ```
 
-开发时扫描 `public/layouts/<id>/layout.json`；安装版扫描
-`<安装目录>/resources/layouts/<id>/layout.json`。同 id 的磁盘 mod 覆盖内置项。ChatWindow
+debug / `npm run tauri dev` 只扫描 `public/layouts/<id>/layout.json`；release / 安装包只扫描
+`resource_dir/layouts/<id>/layout.json`。同 id 的磁盘 mod 覆盖内置项。ChatWindow
 仍然创建 Ribbon、Sidebar 和聊天主内容；LayoutHost 只读取 manifest 来摆放它们。V2 的
 `mainLayout` 再在 ChatPanel 内部重排已登记的标题、消息流和输入框，三者始终由同一个
 ChatPanel 实例持有，因此切换布局不会重建聊天会话状态。
+
+`list_layouts` 与 `read_layout_css` 使用同一布局根。当前模式的目录缺失时明确报错，不跨模式
+fallback；`src-tauri/target/**` 与 `dist/**` 是可重建产物，不是布局 mod 维护入口。
 
 ## 2. 契约
 
@@ -43,9 +46,9 @@ public/layouts/sidebar-right/
 └── layout.css
 ```
 
-`public/layouts/sidebar-right/` 是可直接运行的开发样例，也是开发版唯一会扫描的位置。仓库根的
-`Mods/` 不是运行时目录，不保留重复副本；给安装版分发时，直接复制 `layouts/<id>/` 到安装目录的
-`resources/layouts/<id>/`。
+`public/layouts/sidebar-right/` 是可直接运行的 debug 开发样例，也是 debug 唯一会扫描的位置。仓库根的
+`Mods/` 不是运行时目录，不保留重复副本；给 release 安装包分发时，直接把 `layouts/<id>/` 打包到
+`resource_dir/layouts/<id>/`。
 
 ```json
 {
@@ -66,7 +69,7 @@ public/layouts/sidebar-right/
 
 ## 4. 安装方式
 
-开发环境把目录放到 `public/layouts/`；安装版放到 `resources/layouts/`，然后重新启动客户端。
+debug 开发环境把目录放到 `public/layouts/`；release 安装包资源位于 `resource_dir/layouts/`，然后重新启动客户端。
 在「偏好 → 外观 → 布局预览（实验）」可立即选择已发现的布局；选择会保存到 `chat.layout`，缺失或
 非法 id 会回退 `obsidian-default`。这个入口是预览器，不是可视化编辑器。
 
