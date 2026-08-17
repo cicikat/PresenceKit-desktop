@@ -1,5 +1,15 @@
 # docs/known-issues.md — 已知问题与技术债
 
+- **Design Mod freeform primitives and edge ornaments (work order 63)** — `partial/open`.
+  Component composition, scene/edge APIs, bounded canvas ornaments, presenter
+  selector isolation and lifecycle cleanup are covered by pure tests. Windows
+  fixture acceptance remains open: verify five primitives at page edges/top,
+  page and component ornaments through resize/tab switches, 100%/125%/175% DPI,
+  negative multi-monitor coordinates, drag/window-motion interaction, and 20
+  Mod/builtin switches. Native outer-window ornaments remain optional/open. This
+  is desktop-local only; no backend or mobile settings, API, IPC, WS, queue,
+  trace, or cross-repository contract was added.
+
 - **Design Mod visual bleed and lifecycle closure (work order 62)** — `partial/open`.
   Contract, transform ownership, active-character diary scope, avatar revision,
   and awaited native teardown are covered by TypeScript/Rust tests. Windows real

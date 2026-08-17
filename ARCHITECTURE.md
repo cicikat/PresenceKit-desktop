@@ -42,6 +42,20 @@ active-character avatar revision, and discard late reads. Restoring the default
 design awaits the main-owner satellite teardown acknowledgement before React
 portals, style tags and blob URLs are removed.
 
+## Design Mod freeform primitives and edge ornaments (work order 63)
+
+Host API v2 makes sidebar composition explicit per capability: a Mod selects an
+`official-renderer`, independent `subregions`, or `presenter-only` data path.
+The semantic primitives include Status mood/activity/timeline, Flow now/timeline,
+Garden visual/summary/controls, and Diary identity/entries. The old
+`chat.sidebar.diary.characters` name remains a schema-v2 compatibility alias;
+new renderers use `diary.identity` and do not reintroduce character management.
+`host.scene` owns one on-demand frame scheduler and composes every node through
+`TransformController`; `host.edges` exposes versioned, DPI-aware page/component
+edges for local, bounded ornaments. These APIs only consume existing desktop
+presenters and signals: no new backend, mobile, IPC, WS, or persistent state
+contract is introduced.
+
 ## Chat 偏好与 controller（2026-07-30）
 
 `PreferencesPanel` 保持 modal 形式，按作用域分为「常规、模型、能力与权限、界面、角色与对话、桌宠与互动、高级」。Chat 和 Activity 的日间 / 夜间入口继续复用 `ThemePicker` 与同一 theme registry，分别读写 `chat.theme.day` / `chat.theme.night`。电脑操作安全 / 危险模式是全局能力，只在 Chat「能力与权限」中展示；Activity 仅保留外观与活动调试偏好。

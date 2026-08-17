@@ -22,9 +22,14 @@ export const DESIGN_COMPONENT_IDS = [
   'chat.sidebar.garden.summary',
   'chat.sidebar.garden.controls',
   'chat.sidebar.diary',
+  'chat.sidebar.diary.identity',
+  /** @deprecated Schema v2 alias retained for installed Mod compatibility. */
   'chat.sidebar.diary.characters',
   'chat.sidebar.diary.entries',
   'chat.sidebar.status',
+  'chat.sidebar.status.mood',
+  'chat.sidebar.status.activity',
+  'chat.sidebar.status.timeline',
 ] as const;
 
 export type DesignComponentId = typeof DESIGN_COMPONENT_IDS[number];
@@ -50,9 +55,13 @@ export const DESIGN_COMPONENTS: readonly DesignComponentDescriptor[] = [
   { id: 'chat.sidebar.garden.summary', parentId: 'chat.sidebar.garden', singleton: true, defaultSize: { width: 280, height: 72 }, minSize: { width: 180, height: 48 }, suspendPolicy: 'pause-when-covered' },
   { id: 'chat.sidebar.garden.controls', parentId: 'chat.sidebar.garden', singleton: true, defaultSize: { width: 280, height: 48 }, minSize: { width: 180, height: 40 }, suspendPolicy: 'pause-when-covered' },
   { id: 'chat.sidebar.diary', singleton: true, defaultSize: { width: 280, height: 360 }, minSize: { width: 180, height: 120 }, suspendPolicy: 'pause-when-covered' },
+  { id: 'chat.sidebar.diary.identity', parentId: 'chat.sidebar.diary', singleton: true, defaultSize: { width: 280, height: 64 }, minSize: { width: 180, height: 48 }, suspendPolicy: 'pause-when-covered' },
   { id: 'chat.sidebar.diary.characters', parentId: 'chat.sidebar.diary', singleton: true, defaultSize: { width: 280, height: 64 }, minSize: { width: 180, height: 48 }, suspendPolicy: 'pause-when-covered' },
   { id: 'chat.sidebar.diary.entries', parentId: 'chat.sidebar.diary', singleton: true, defaultSize: { width: 280, height: 296 }, minSize: { width: 180, height: 96 }, suspendPolicy: 'pause-when-covered' },
   { id: 'chat.sidebar.status', singleton: true, defaultSize: { width: 280, height: 360 }, minSize: { width: 180, height: 120 }, suspendPolicy: 'pause-when-covered' },
+  { id: 'chat.sidebar.status.mood', parentId: 'chat.sidebar.status', singleton: true, defaultSize: { width: 280, height: 96 }, minSize: { width: 180, height: 48 }, suspendPolicy: 'pause-when-covered' },
+  { id: 'chat.sidebar.status.activity', parentId: 'chat.sidebar.status', singleton: true, defaultSize: { width: 280, height: 96 }, minSize: { width: 180, height: 48 }, suspendPolicy: 'pause-when-covered' },
+  { id: 'chat.sidebar.status.timeline', parentId: 'chat.sidebar.status', singleton: true, defaultSize: { width: 280, height: 168 }, minSize: { width: 180, height: 64 }, suspendPolicy: 'pause-when-covered' },
 ];
 
 export function isDesignComponentOwnershipConflict(first: DesignComponentId, second: DesignComponentId): boolean {

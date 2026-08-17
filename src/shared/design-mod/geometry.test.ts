@@ -19,6 +19,15 @@ describe('geometry snapshots', () => {
     expect(registry.get('chat.header')?.version).toBe(1);
   });
 
+  it('does not republish unchanged geometry', () => {
+    const registry = new GeometryRegistry();
+    const mount = { getBoundingClientRect: () => ({ x: 0, y: 0, width: 10, height: 10, top: 0, right: 10, bottom: 10, left: 0 }) } as unknown as HTMLElement;
+    registry.register('chat.header', mount); registry.flush();
+    let calls = 0; registry.observe('chat.header', () => { calls += 1; });
+    registry.markDirty('chat.header'); registry.flush();
+    expect(calls).toBe(1);
+  });
+
   it('invalidates all mounted components for scroll and resize', () => {
     const registry = new GeometryRegistry();
     const mount = { getBoundingClientRect: () => ({ x: 0, y: 0, width: 10, height: 10, top: 0, right: 10, bottom: 10, left: 0 }) } as unknown as HTMLElement;

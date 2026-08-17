@@ -6,6 +6,7 @@ import { MOOD_HUE, MOOD_LABEL_EN } from './UIKit';
 import { chatThemeFontSize } from '../../../shared/chatAppearance';
 import { usePresenterSnapshot } from '../../../shared/design-mod/presenters/react';
 import type { StatusPresenter } from '../../../shared/design-mod/presenters/types';
+import { DesignAwareRegion } from '../../../shared/design-mod/regions';
 
 type StatusStyle = CSSProperties & Record<`--status-${string}`, string | number>;
 
@@ -35,13 +36,13 @@ export function SubStatus({ presenter }: { presenter: StatusPresenter }) {
         <button onClick={() => { if (moodError) presenter.commands.retryMood(); if (activityError) presenter.commands.retryActivity(); if (sensorError) presenter.commands.retrySensor(); }} style={{ fontSize: chatThemeFontSize(10), padding: '2px 8px', borderRadius: 'var(--radius-xs)', cursor: 'pointer', background: 'transparent', border: '1px solid var(--forest-line)', color: 'var(--on-forest-2)', fontFamily: 'inherit' }}>重试</button>
       </div>}
 
-      <div data-status-region="mood" style={{ padding: '14px 16px 16px', background: 'radial-gradient(ellipse at var(--status-glow-x) var(--status-glow-y), oklch(0.42 0.14 var(--status-mood-hue) / calc(var(--status-aura) / 100 * 0.55 + 0.06)), transparent 65%), linear-gradient(160deg, var(--forest-1), var(--forest-2))', border: '1px solid oklch(0.50 0.10 var(--status-mood-hue) / 0.30)', borderRadius: 'var(--radius-md)', marginBottom: 10, position: 'relative', overflow: 'hidden', transition: 'background 3s ease, border-color 3s ease' }}>
+      <DesignAwareRegion id="chat.sidebar.status.mood"><div data-status-region="mood" style={{ padding: '14px 16px 16px', background: 'radial-gradient(ellipse at var(--status-glow-x) var(--status-glow-y), oklch(0.42 0.14 var(--status-mood-hue) / calc(var(--status-aura) / 100 * 0.55 + 0.06)), transparent 65%), linear-gradient(160deg, var(--forest-1), var(--forest-2))', border: '1px solid oklch(0.50 0.10 var(--status-mood-hue) / 0.30)', borderRadius: 'var(--radius-md)', marginBottom: 10, position: 'relative', overflow: 'hidden', transition: 'background 3s ease, border-color 3s ease' }}>
         <div className="mono" style={{ fontSize: chatThemeFontSize(9.5), color: 'var(--on-forest-2)', letterSpacing: 1.4, marginBottom: 6 }}>MOOD</div>
         <div className="serif" style={{ fontSize: chatThemeFontSize(26), fontWeight: 600, color: 'var(--on-forest)', letterSpacing: -0.3, lineHeight: 1.1 }}>{mood.id}</div>
         <div className="mono" style={{ fontSize: chatThemeFontSize(10.5), color: 'oklch(0.85 0.10 var(--status-mood-hue))', letterSpacing: 1.3, marginTop: 5 }}>{MOOD_LABEL_EN[mood.id] ?? mood.label}</div>
         <span data-status-element="mood-indicator" style={{ position: 'absolute', right: 14, top: 14, width: 'var(--status-indicator-size)', height: 'var(--status-indicator-size)', borderRadius: '50%', background: 'oklch(0.82 0.18 var(--status-mood-hue))', boxShadow: '0 0 10px oklch(0.82 0.18 var(--status-mood-hue) / 0.65)', animation: 'statusPulse 3s ease-in-out infinite' }} />
         <span data-status-element="mood-glow" aria-hidden="true" />
-      </div>
+      </div></DesignAwareRegion>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
         <div data-status-region="activity"><ForestCard label="ACTIVITY"><div className="serif" style={{ fontSize: chatThemeFontSize(14), color: 'var(--on-forest)', fontWeight: 600, lineHeight: 1.3 }}>{activity?.text ?? '——'}</div>{activity?.arc && <div className="mono" style={{ fontSize: chatThemeFontSize(9), color: 'var(--on-forest-2)', letterSpacing: 1.2, marginTop: 3 }}>{activity.arc.toUpperCase()}</div>}</ForestCard></div>

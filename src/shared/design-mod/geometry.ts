@@ -8,11 +8,17 @@ export function geometryFromRect(rect: Pick<DOMRect, 'x' | 'y' | 'width' | 'heig
   return { rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height, top: rect.top, right: rect.right, bottom: rect.bottom, left: rect.left }, visible, version };
 }
 
+function hasSameGeometry(first: GeometrySnapshot | undefined, second: Omit<GeometrySnapshot, 'version'>): boolean {
+  if (!first || first.visible !== second.visible) return false;
+  return Object.keys(first.rect).every(key => first.rect[key as keyof GeometrySnapshot['rect']] === second.rect[key as keyof GeometrySnapshot['rect']]);
+}
+
 export class GeometryRegistry {
   private readonly mounts = new Map<string, HTMLElement>();
   private readonly snapshots = new Map<string, GeometrySnapshot>();
   private readonly dirty = new Set<string>();
   private readonly listeners = new Map<string, Set<(snapshot: GeometrySnapshot) => void>>();
+  private readonly dirtyListeners = new Set<() => void>();
   private readonly observers = new Map<string, ResizeObserver>();
   private version = 0;
 
@@ -35,9 +41,18 @@ export class GeometryRegistry {
     };
   }
 
-  markDirty(id: string): void { if (this.mounts.has(id)) this.dirty.add(id); }
+  markDirty(id: string): void {
+    if (!this.mounts.has(id)) return;
+    this.dirty.add(id);
+    this.dirtyListeners.forEach(listener => listener());
+  }
 
-  markAllDirty(): void { this.mounts.forEach((_mount, id) => this.dirty.add(id)); }
+  markAllDirty(): void {
+    this.mounts.forEach((_mount, id) => this.dirty.add(id));
+    this.dirtyListeners.forEach(listener => listener());
+  }
+
+  subscribeDirty(listener: () => void): () => void { this.dirtyListeners.add(listener); return () => this.dirtyListeners.delete(listener); }
 
   flush(): string[] {
     const changed = [...this.dirty];
@@ -46,7 +61,10 @@ export class GeometryRegistry {
       const mount = this.mounts.get(id);
       if (!mount) continue;
       const rect = mount.getBoundingClientRect();
-      const snapshot = geometryFromRect(rect, rect.width > 0 && rect.height > 0, ++this.version);
+      const next = geometryFromRect(rect, rect.width > 0 && rect.height > 0);
+      const current = this.snapshots.get(id);
+      if (hasSameGeometry(current, next)) continue;
+      const snapshot = { ...next, version: ++this.version };
       this.snapshots.set(id, snapshot);
       this.listeners.get(id)?.forEach(listener => listener(snapshot));
     }

@@ -7,7 +7,7 @@ describe('design component registry', () => {
     const mount = {} as HTMLElement;
     registry.attach('chat.sidebar.garden', mount);
     expect(() => registry.attach('chat.sidebar.garden', {} as HTMLElement)).toThrow('singleton');
-    expect(() => registry.attach('chat.unknown', mount)).toThrow('未知设计组件');
+    expect(() => registry.attach('chat.unknown', mount)).toThrow('Unknown design component');
     expect(registry.detach('chat.sidebar.garden')).toBe(true);
     expect(registry.list()).toEqual([]);
   });
@@ -15,9 +15,32 @@ describe('design component registry', () => {
   it('rejects parent and child region ownership conflicts', () => {
     const registry = new ComponentAttachmentRegistry();
     registry.attach('chat.sidebar.flow', {} as HTMLElement);
-    expect(() => registry.attach('chat.sidebar.flow.now', {} as HTMLElement)).toThrow('所有权冲突');
+    expect(() => registry.attach('chat.sidebar.flow.now', {} as HTMLElement)).toThrow('ownership conflict');
     registry.clear();
     registry.attach('chat.sidebar.diary.entries', {} as HTMLElement);
-    expect(() => registry.attach('chat.sidebar.diary', {} as HTMLElement)).toThrow('所有权冲突');
+    expect(() => registry.attach('chat.sidebar.diary', {} as HTMLElement)).toThrow('ownership conflict');
+  });
+
+  it('allows independent subregions after selecting subregions mode', () => {
+    const registry = new ComponentAttachmentRegistry();
+    registry.setComposition('flow', 'subregions');
+    expect(() => registry.attach('chat.sidebar.flow', {} as HTMLElement)).toThrow('subregions');
+    registry.attach('chat.sidebar.flow.now', {} as HTMLElement);
+    registry.attach('chat.sidebar.flow.timeline', {} as HTMLElement);
+    expect(registry.list()).toEqual(['chat.sidebar.flow.now', 'chat.sidebar.flow.timeline']);
+  });
+
+  it('makes presenter-only capability attachment-free', () => {
+    const registry = new ComponentAttachmentRegistry();
+    registry.setComposition('status', 'presenter-only');
+    expect(() => registry.attach('chat.sidebar.status.mood', {} as HTMLElement)).toThrow('presenter-only');
+    expect(registry.getComposition('status')).toBe('presenter-only');
+  });
+
+  it('keeps official-renderer ownership at the capability parent', () => {
+    const registry = new ComponentAttachmentRegistry();
+    registry.setComposition('garden', 'official-renderer');
+    registry.attach('chat.sidebar.garden', {} as HTMLElement);
+    expect(() => registry.attach('chat.sidebar.garden.visual', {} as HTMLElement)).toThrow('official-renderer');
   });
 });

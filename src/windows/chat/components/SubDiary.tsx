@@ -191,7 +191,7 @@ export function SubDiary({ presenter }: { presenter: DiaryPresenter }) {
 
   return (
     <div data-sidebar-capability="diary" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <DesignAwareRegion id="chat.sidebar.diary.characters">
+      <DesignAwareRegion id="chat.sidebar.diary.identity">
         <div style={{ padding: '10px 14px 6px', borderBottom: '1px solid var(--forest-line)' }}>
         <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
           <div className="serif" style={{ fontSize: chatThemeFontSize(13), color: 'var(--on-forest)', fontWeight: 600, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

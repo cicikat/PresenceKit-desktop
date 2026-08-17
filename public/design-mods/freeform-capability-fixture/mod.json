@@ -3,7 +3,7 @@
   "id": "freeform-capability-fixture",
   "name": "自由合成能力样架",
   "author": "PresenceKit",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "entry": "entry.js",
   "style": "style.css",
   "nativeSurfaces": [

@@ -145,6 +145,39 @@ ChatWindow → `DesignModHost` → default shell → `LayoutHost` → layout slo
 负责回收；开发浏览器模式返回同包静态 URL。`host.assets.url()` 不返回资源正文，`host` 的文本 `read()`
 只用于 UTF-8 manifest/style/entry。
 
+### Freeform primitives and edge ornaments (Host API v2)
+
+For each sidebar capability, call `host.components.setComposition(capability,
+mode)` before attaching renderer portals. `official-renderer` permits only the
+parent capability id, `subregions` permits independent semantic child ids, and
+`presenter-only` permits no official portal. Existing unconfigured Mods keep
+the v1 compatibility behavior; new Mods must declare their intended strategy.
+
+The frozen semantic primitive ids are:
+
+| Capability | Child primitives |
+|---|---|
+| status | `chat.sidebar.status.mood`, `chat.sidebar.status.activity`, `chat.sidebar.status.timeline` |
+| flow | `chat.sidebar.flow.now`, `chat.sidebar.flow.timeline` |
+| garden | `chat.sidebar.garden.visual`, `chat.sidebar.garden.summary`, `chat.sidebar.garden.controls` |
+| diary | `chat.sidebar.diary.identity`, `chat.sidebar.diary.entries` |
+
+`chat.sidebar.diary.characters` remains accepted as a schema-v2 compatibility
+alias. New packages must migrate to `diary.identity`; it is restricted to the
+active character and does not restore preference-level character management.
+
+`host.presenters.*.select(selector, listener, equal?)` narrows a subscription
+to the selected immutable value. `host.scene.create(element, options)` owns
+placement, transform composition, pointer capture and disposal through one
+on-demand scheduler. Scene anchors support relative viewport, component and
+custom path positions. Do not independently write `left`, `top` or `transform`.
+
+`host.edges.get(target)` and `host.edges.observeEdge(target, listener)` expose
+read-only page or component rects, directed edges, normals, corners, visibility,
+DPR and geometry version. Equal geometry is deduplicated; hidden/covered host
+state pauses delivery. Ornament growth must remain local to the Mod session and
+bounded; the fixture demonstrates page and component edge canvas ornaments.
+
 ### Native satellite surfaces
 
 只有主窗口可以通过 `DesignSatelliteBridge` 请求 surface 生命周期；Mod 本身拿到的 `host.surfaces` 是只读

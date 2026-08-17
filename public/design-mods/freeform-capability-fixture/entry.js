@@ -1,172 +1,95 @@
 export function activate(host) {
-  const mounts = new Map();
   const cleanups = [];
-  const drag = new Map();
-  const idToClass = {
-    'chat.ribbon': 'design-fixture-ribbon',
-    'chat.header': 'design-fixture-header',
-    'chat.transcript': 'design-fixture-transcript',
-    'chat.composer': 'design-fixture-composer',
-    'chat.sidebar.flow': 'design-fixture-flow',
-    'chat.sidebar.garden': 'design-fixture-garden',
-    'chat.sidebar.diary': 'design-fixture-diary',
-  };
-  const attach = (id) => {
-    const mount = document.createElement('div');
-    mount.className = 'design-fixture-mount ' + idToClass[id];
-    mount.dataset.designComponent = id;
-    const shell = document.createElement('div');
-    shell.className = 'design-fixture-visual-shell';
+  const nodes = new Map();
+  const edgeState = new Map();
+  const growth = { value: 0, cap: 96, disposed: false };
+
+  ['flow', 'garden', 'diary'].forEach(capability => host.components.setComposition(capability, 'subregions'));
+  host.components.setComposition('status', 'presenter-only');
+
+  const mountPrimitive = (id, className, options) => {
+    const node = document.createElement('section');
+    node.className = `fixture-node ${className}`;
+    node.dataset.designPrimitive = id;
     const content = document.createElement('div');
-    content.className = 'design-fixture-content-mask';
-    shell.appendChild(content);
-    mount.appendChild(shell);
-    host.layers.components.appendChild(mount);
+    content.className = 'fixture-node__content';
+    node.appendChild(content);
+    const scene = host.scene.create(node, { sourcePrimitive: id, pointerMode: 'auto', ...options });
     host.components.attach(id, content);
-    mounts.set(id, mount);
-    const controller = host.transforms.create();
-    mount.__designTransform = controller;
-    const commit = () => {
-      controller.commit(mount);
-      host.geometry.flush();
-    };
-    commit();
-    const down = (event) => {
+    const pointer = { x: 0, y: 0, drag: null };
+    const down = event => {
       if (event.target.closest?.('button,input,textarea,select')) return;
-      controller.beginDrag();
-      drag.set(id, { x: event.clientX, y: event.clientY, offset: { ...controller.get().dragOffset } });
-      mount.setPointerCapture?.(event.pointerId);
+      pointer.drag = { x: event.clientX, y: event.clientY, offset: { ...scene.transform.get().dragOffset } };
+      scene.capturePointer(event.pointerId); scene.beginDrag();
     };
-    const move = (event) => {
-      const state = drag.get(id);
-      if (!state) return;
-      controller.moveDrag({ x: state.offset.x + event.clientX - state.x, y: state.offset.y + event.clientY - state.y });
-      commit();
+    const move = event => {
+      if (!pointer.drag) return;
+      scene.moveDrag({ x: pointer.drag.offset.x + event.clientX - pointer.drag.x, y: pointer.drag.offset.y + event.clientY - pointer.drag.y });
     };
-    const up = () => { drag.delete(id); controller.endDrag(); };
-    mount.addEventListener('pointerdown', down);
-    mount.addEventListener('pointermove', move);
-    mount.addEventListener('pointerup', up);
-    mount.addEventListener('pointercancel', up);
+    const up = () => { pointer.drag = null; scene.endDrag(); };
+    node.addEventListener('pointerdown', down); node.addEventListener('pointermove', move);
+    node.addEventListener('pointerup', up); node.addEventListener('pointercancel', up);
+    nodes.set(id, scene);
     cleanups.push(() => {
-      mount.removeEventListener('pointerdown', down);
-      mount.removeEventListener('pointermove', move);
-      mount.removeEventListener('pointerup', up);
-      mount.removeEventListener('pointercancel', up);
-      host.components.detach(id);
-      controller.dispose();
-      mount.remove();
+      node.removeEventListener('pointerdown', down); node.removeEventListener('pointermove', move);
+      node.removeEventListener('pointerup', up); node.removeEventListener('pointercancel', up);
+      host.components.detach(id); scene.dispose(); nodes.delete(id);
     });
   };
-  ['chat.ribbon', 'chat.header', 'chat.transcript', 'chat.composer', 'chat.sidebar.flow', 'chat.sidebar.garden', 'chat.sidebar.diary'].forEach(attach);
 
-  // Status deliberately does not attach chat.sidebar.status. It exercises the
-  // shared presenter directly so the official renderer can be absent.
-  const statusRoot = document.createElement('section');
-  statusRoot.className = 'design-fixture-status-presenter';
-  statusRoot.dataset.fixturePresenter = 'status';
-  host.layers.components.appendChild(statusRoot);
+  mountPrimitive('chat.sidebar.flow.now', 'fixture-flow-now', { id: 'flow-now', layer: 'components', anchor: { kind: 'viewport', x: .16, y: .09 }, basePosition: { x: -90, y: 0 }, size: { width: 180, height: 118 }, visualTransform: 'perspective(720px) rotateY(-5deg)', zIndex: 4 });
+  mountPrimitive('chat.sidebar.garden.summary', 'fixture-garden-summary', { id: 'garden-summary', layer: 'components', anchor: { kind: 'viewport', x: .5, y: .08 }, basePosition: { x: -95, y: 0 }, size: { width: 190, height: 86 }, visualTransform: 'rotate(-2deg)', zIndex: 4 });
+  mountPrimitive('chat.sidebar.diary.identity', 'fixture-diary-identity', { id: 'diary-identity', layer: 'components', anchor: { kind: 'viewport', x: .82, y: .1 }, basePosition: { x: -90, y: 0 }, size: { width: 180, height: 72 }, visualTransform: 'perspective(680px) rotateY(6deg)', zIndex: 4 });
+  mountPrimitive('chat.sidebar.flow.timeline', 'fixture-flow-timeline', { id: 'flow-timeline', layer: 'components', anchor: { kind: 'viewport', x: .04, y: .54 }, basePosition: { x: 0, y: -90 }, size: { width: 176, height: 180 }, zIndex: 3 });
+  mountPrimitive('chat.sidebar.garden.visual', 'fixture-garden-visual', { id: 'garden-visual', layer: 'components', anchor: { kind: 'viewport', x: .95, y: .55 }, basePosition: { x: -188, y: -112 }, size: { width: 188, height: 224 }, visualTransform: 'perspective(760px) rotateX(3deg) rotateY(-4deg)', zIndex: 3 });
+  mountPrimitive('chat.sidebar.diary.entries', 'fixture-diary-entries', { id: 'diary-entries', layer: 'components', anchor: { kind: 'viewport', x: .52, y: .92 }, basePosition: { x: -130, y: -92 }, size: { width: 260, height: 184 }, zIndex: 3 });
+
+  const status = document.createElement('section');
+  status.className = 'fixture-status'; status.dataset.fixturePresenter = 'status.mood';
+  const statusScene = host.scene.create(status, { id: 'status-mood', sourcePrimitive: 'chat.sidebar.status.mood', layer: 'components', anchor: { kind: 'viewport', x: .5, y: .18 }, basePosition: { x: -74, y: 0 }, size: { width: 148, height: 62 }, visualTransform: 'rotate(1deg)', zIndex: 5 });
   const renderStatus = () => {
     const snapshot = host.presenters.status.get();
-    statusRoot.replaceChildren();
-    const heading = document.createElement('div');
-    heading.className = 'design-fixture-status-heading';
-    heading.textContent = `${snapshot.mood.label} · ${snapshot.presence.id}`;
-    const ring = document.createElement('div');
-    ring.className = 'design-fixture-status-ring';
-    ring.style.setProperty('--fixture-hue', String(snapshot.mood.hue));
-    ring.style.setProperty('--fixture-aura', String(snapshot.telemetry.moodAura));
-    ring.dataset.statusElement = 'mood-indicator';
-    const timeline = document.createElement('div');
-    timeline.className = 'design-fixture-status-timeline';
-    snapshot.timeline.slice(-24).forEach(entry => {
-      const bar = document.createElement('i');
-      bar.style.height = `${Math.max(12, entry.aura)}%`;
-      bar.style.background = `oklch(0.72 0.18 ${entry.hue})`;
-      timeline.appendChild(bar);
-    });
-    statusRoot.append(heading, ring, timeline);
-    if (snapshot.errors.mood || snapshot.errors.activity || snapshot.errors.sensor) {
-      const retry = document.createElement('button');
-      retry.className = 'design-fixture-status-retry';
-      retry.textContent = 'retry';
-      retry.onclick = () => { snapshot.errors.mood && host.presenters.status.commands.retryMood(); snapshot.errors.activity && host.presenters.status.commands.retryActivity(); snapshot.errors.sensor && host.presenters.status.commands.retrySensor(); };
-      statusRoot.appendChild(retry);
+    status.replaceChildren();
+    const label = document.createElement('span'); label.className = 'fixture-status__label'; label.textContent = snapshot.mood.label;
+    const ring = document.createElement('i'); ring.className = 'fixture-status__ring'; ring.style.setProperty('--fixture-hue', String(snapshot.mood.hue)); ring.style.setProperty('--fixture-aura', String(snapshot.telemetry.moodAura));
+    status.append(label, ring);
+  };
+  cleanups.push(host.presenters.status.acquire('fixture.status-mood'));
+  cleanups.push(host.presenters.status.subscribe(renderStatus));
+  cleanups.push(() => statusScene.dispose()); renderStatus();
+
+  const canvas = document.createElement('canvas');
+  canvas.className = 'fixture-edge-ornaments'; host.layers.overlay.appendChild(canvas);
+  const draw = () => {
+    const page = edgeState.get('page'); const flow = edgeState.get('chat.sidebar.flow.now');
+    const viewport = host.signals.viewport.get(); const dpi = viewport.devicePixelRatio || 1;
+    canvas.width = Math.max(1, Math.round(viewport.width * dpi)); canvas.height = Math.max(1, Math.round(viewport.height * dpi));
+    canvas.style.width = `${viewport.width}px`; canvas.style.height = `${viewport.height}px`;
+    const context = canvas.getContext('2d'); if (!context) return;
+    context.scale(dpi, dpi); context.clearRect(0, 0, viewport.width, viewport.height);
+    growth.value = Math.min(growth.cap, Math.max(growth.value, Math.floor(host.signals.chat.get().elapsedMs / 3000)));
+    if (page?.visible) {
+      context.fillStyle = 'color-mix(in oklch, var(--accent) 78%, transparent)';
+      for (let i = 0; i < growth.value; i += 1) context.fillRect(14 + (i * 13) % Math.max(16, viewport.width - 28), 8 + Math.floor(i / Math.max(1, Math.floor(viewport.width / 13))) * 5, 3, 3);
+    }
+    if (flow?.visible) {
+      context.fillStyle = 'color-mix(in oklch, var(--forest) 88%, transparent)';
+      const edge = flow.edges.left;
+      for (let i = 0; i < Math.min(18, growth.value); i += 1) {
+        const ratio = (i + 1) / 19; const x = edge.start.x + (edge.end.x - edge.start.x) * ratio;
+        const y = edge.start.y + (edge.end.y - edge.start.y) * ratio;
+        context.fillRect(x - 5, y - 2, 4, 4);
+      }
     }
   };
-  cleanups.push(host.presenters.status.acquire('fixture.status'));
-  cleanups.push(host.presenters.status.subscribe(renderStatus));
-  renderStatus();
-  cleanups.push(() => statusRoot.remove());
-
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('viewBox', `0 0 ${Math.max(1, innerWidth)} ${Math.max(1, innerHeight)}`);
-  svg.setAttribute('preserveAspectRatio', 'none');
-  svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none;';
-  host.layers.overlay.appendChild(svg);
-  const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  line.setAttribute('fill', 'none');
-  line.setAttribute('stroke', 'var(--accent)');
-  line.setAttribute('stroke-width', '2');
-  line.setAttribute('stroke-dasharray', '7 8');
-  svg.appendChild(line);
-  cleanups.push(() => svg.remove());
-
-  const decorationRoot = document.createElement('div');
-  decorationRoot.style.cssText = 'position:absolute;inset:0;pointer-events:none;';
-  host.layers.overlay.appendChild(decorationRoot);
-  const pixels = [];
-  for (let i = 0; i < 72; i += 1) {
-    const pixel = document.createElement('span');
-    pixel.className = 'design-fixture-decoration';
-    pixel.style.left = `${72 + (i % 12) * 9}px`;
-    pixel.style.top = `${112 + Math.floor(i / 12) * 9}px`;
-    pixel.style.opacity = `${0.25 + (i % 5) * 0.12}`;
-    decorationRoot.appendChild(pixel);
-    pixels.push(pixel);
-  }
-  cleanups.push(() => decorationRoot.remove());
-
-  const center = (id) => {
-    const rect = host.geometry.get(id);
-    return rect ? { x: rect.rect.left + rect.rect.width / 2, y: rect.rect.top + rect.rect.height / 2 } : null;
-  };
-  const updateLine = () => {
-    const a = center('chat.sidebar.flow');
-    const b = center('chat.sidebar.garden');
-    const c = center('chat.sidebar.diary');
-    if (!a || !b || !c) return;
-    line.setAttribute('d', `M ${a.x} ${a.y} C ${a.x + 60} ${a.y + 30}, ${b.x - 40} ${b.y - 30}, ${b.x} ${b.y} S ${c.x - 50} ${c.y - 20}, ${c.x} ${c.y}`);
-  };
-  ['chat.sidebar.flow', 'chat.sidebar.garden', 'chat.sidebar.diary', 'chat.header', 'chat.transcript'].forEach(id => {
-    cleanups.push(host.geometry.observe(id, updateLine));
-  });
-  const resize = () => { svg.setAttribute('viewBox', `0 0 ${Math.max(1, innerWidth)} ${Math.max(1, innerHeight)}`); host.geometry.flush(); updateLine(); };
-  addEventListener('resize', resize);
-  cleanups.push(() => removeEventListener('resize', resize));
-
-  const onSession = () => {
-    const count = Math.min(pixels.length, Math.max(3, Math.floor(host.signals.chat.get().elapsedMs / 12000)));
-    pixels.forEach((pixel, index) => { pixel.style.transform = index < count ? 'scale(1)' : 'scale(.35)'; });
-  };
-  cleanups.push(host.signals.chat.subscribe(onSession));
+  cleanups.push(host.edges.observeEdge('page', edge => { edgeState.set('page', edge); draw(); }));
+  cleanups.push(host.edges.observeEdge('chat.sidebar.flow.now', edge => { edgeState.set('chat.sidebar.flow.now', edge); draw(); }));
+  cleanups.push(host.signals.chat.subscribe(draw));
   cleanups.push(host.signals.nativeWindow.subscribe(() => {
-    const motion = host.signals.nativeWindow.get();
-    mounts.forEach((mount, id) => {
-      if (id !== 'chat.sidebar.flow' && id !== 'chat.sidebar.garden') return;
-      const controller = mount.__designTransform;
-      controller?.setMotionOffset({ x: motion.velocity.x * 0.04, y: motion.velocity.y * 0.04 });
-      controller?.commit(mount);
-    });
+    const velocity = host.signals.nativeWindow.get().velocity;
+    nodes.get('chat.sidebar.garden.visual')?.setMotionOffset({ x: velocity.x * .035, y: velocity.y * .035 });
   }));
-
-  let frame = 0;
-  const animate = () => {
-    updateLine();
-    frame = requestAnimationFrame(animate);
-  };
-  frame = requestAnimationFrame(animate);
-  cleanups.push(() => cancelAnimationFrame(frame));
-  onSession();
+  host.geometry.flush(); draw();
+  cleanups.push(() => { growth.disposed = true; growth.value = 0; canvas.remove(); edgeState.clear(); });
   return () => cleanups.splice(0).reverse().forEach(cleanup => cleanup());
 }

@@ -3,7 +3,9 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useI18n } from '../../../shared/i18n';
 import { getCurrentThemeId, getDayNight, subscribe as subscribeTheme } from '../../../shared/theme/registry';
 import { chatSessionMetrics } from '../../../shared/design-mod/metrics';
-import { GeometryRegistry } from '../../../shared/design-mod/geometry';
+import { GeometryRegistry, geometryFromRect } from '../../../shared/design-mod/geometry';
+import { edgeGeometry, EdgeObserverRegistry } from '../../../shared/design-mod/edge';
+import { SceneScheduler } from '../../../shared/design-mod/scene';
 import { nativeMotionStore, pointerStore, viewportStore, listenNativeWindowMotion } from '../../../shared/design-mod/signals';
 import { DESIGN_COMPONENT_IDS, type DesignComponentId } from '../../../shared/design-mod/contract';
 import {
@@ -19,10 +21,11 @@ import {
   restoreDefaultDesign,
   type ActivationContext,
 } from '../../../shared/design-mod/runtime';
-import { ComponentAttachmentRegistry } from '../../../shared/design-mod/components';
+import { ComponentAttachmentRegistry, type DesignCapability, type DesignCompositionMode } from '../../../shared/design-mod/components';
 import { publishDesignModDiagnostics } from '../../../shared/design-mod/diagnostics';
 import { clearDesignMounts, setDesignMount, setDesignRuntimeActive, subscribeDesignMounts } from '../../../shared/design-mod/mounts';
 import type { SidebarPresenters } from '../../../shared/design-mod/presenters';
+import { selectPresenterSnapshot } from '../../../shared/design-mod/presenters/selector';
 import { DesignAwareRegion } from '../../../shared/design-mod/regions';
 import { getDesignModHostLayoutState, type DesignModHostPhase } from '../../../shared/design-mod/hostLayout';
 import type { DesignModDiagnostic, DesignModRecord, DesignSurface } from '../../../shared/design-mod/types';
@@ -139,6 +142,7 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
   const ledgerRef = useRef(createDesignModHostLedger());
   const attachmentsRef = useRef(new ComponentAttachmentRegistry());
   const geometryRef = useRef(new GeometryRegistry());
+  const edgeObserversRef = useRef<EdgeObserverRegistry | null>(null);
   const layerRef = useRef<HTMLDivElement>(null);
   const underlayRef = useRef<HTMLDivElement>(null);
   const componentLayerRef = useRef<HTMLDivElement>(null);
@@ -167,6 +171,7 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
 
   useEffect(() => {
     presenters.setPaused(runtimePaused);
+    edgeObserversRef.current?.setPaused(runtimePaused);
     void satelliteBridgeRef.current?.api.setVisible(!runtimePaused).catch(error => console.warn('[design-satellite] 可见性同步失败:', error));
     return () => presenters.setPaused(true);
   }, [presenters, runtimePaused]);
@@ -408,13 +413,45 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
         await satelliteBridge.api.setVisible(!runtimePaused);
       }
       const geometryCleanups = new Map<DesignComponentId, () => void>();
+      const edgeObservers = new EdgeObserverRegistry();
+      edgeObservers.setPaused(runtimePaused);
+      edgeObserversRef.current = edgeObservers;
+      let pageVersion = 0;
+      let pageKey = '';
+      const pageEdge = () => {
+        const viewport = viewportStore.get();
+        const nextKey = `${viewport.width}:${viewport.height}:${viewport.visible}`;
+        if (nextKey !== pageKey) { pageKey = nextKey; pageVersion += 1; }
+        return edgeGeometry('page', geometryFromRect({ x: 0, y: 0, top: 0, left: 0, width: viewport.width, height: viewport.height, right: viewport.width, bottom: viewport.height }, viewport.visible, pageVersion), viewport.devicePixelRatio);
+      };
+      const publishGeometry = () => {
+        const changed = geometryRef.current.flush();
+        changed.forEach(id => {
+          const snapshot = geometryRef.current.get(id);
+          if (snapshot) edgeObservers.publish(edgeGeometry(id, snapshot, viewportStore.get().devicePixelRatio));
+        });
+        edgeObservers.publish(pageEdge());
+        scene.schedule();
+        return changed;
+      };
+      const scene = new SceneScheduler({
+        viewport: () => viewportStore.get(),
+        component: id => geometryRef.current.get(id),
+      });
+      ledgerRef.current.add(() => scene.dispose());
+      ledgerRef.current.add(geometryRef.current.subscribeDirty(publishGeometry));
+      ledgerRef.current.add(viewportStore.subscribe(() => { edgeObservers.publish(pageEdge()); scene.schedule(); }));
+      ledgerRef.current.add(() => { if (edgeObserversRef.current === edgeObservers) edgeObserversRef.current = null; });
       const componentApi = {
+        setComposition: (capability: DesignCapability, mode: DesignCompositionMode) => attachmentsRef.current.setComposition(capability, mode),
+        getComposition: (capability: DesignCapability) => attachmentsRef.current.getComposition(capability),
         attach: (id: DesignComponentId, mount: HTMLElement) => {
           const attachment = attachmentsRef.current.attach(id, mount);
           setDesignMount(id, mount);
           const unregisterGeometry = geometryRef.current.register(id, mount);
           const removeGeometryLedger = ledgerRef.current.add(unregisterGeometry);
           geometryCleanups.set(id, () => { unregisterGeometry(); removeGeometryLedger(); });
+          publishGeometry();
           setAttached(attachmentsRef.current.list());
           return attachment;
         },
@@ -424,6 +461,7 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
             geometryCleanups.get(id)?.();
             geometryCleanups.delete(id);
             setDesignMount(id, null);
+            publishGeometry();
             setAttached(attachmentsRef.current.list());
           }
           return didDetach;
@@ -439,6 +477,9 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
           const remove = ledgerRef.current.add(() => { if (active) { active = false; unsubscribe(); } });
           return () => { if (!active) return; active = false; unsubscribe(); remove(); };
         },
+        select: <T,>(selector: (snapshot: any) => T, listener: () => void, equal?: (first: T, second: T) => boolean) => selectPresenterSnapshot(
+          () => presenter.get(), presenter.subscribe.bind(presenter), selector, listener, equal,
+        ),
         commands: presenter.commands,
         acquire: (consumerId: string) => {
           const release = presenter.acquire(`mod:${pkg.manifest.id}:${name}:${consumerId}`);
@@ -466,7 +507,7 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
         nativeWindow: { get: nativeMotionStore.get, subscribe: nativeMotionStore.subscribe },
       };
       const host = {
-        version: 1,
+        version: 2,
         trust: 'trusted-local-code' as const,
         surface,
         manifest: pkg.manifest,
@@ -481,9 +522,27 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
           diary: presenterApi(presenters.diary, 'diary'),
         },
         geometry: {
-          get: (id: DesignComponentId) => { geometryRef.current.flush(); return geometryRef.current.get(id); },
+          get: (id: DesignComponentId) => { publishGeometry(); return geometryRef.current.get(id); },
           observe: (id: DesignComponentId, listener: (value: unknown) => void) => geometryRef.current.observe(id, listener as never),
-          flush: () => geometryRef.current.flush(),
+          flush: publishGeometry,
+        },
+        edges: {
+          get: (target: 'page' | DesignComponentId) => {
+            publishGeometry();
+            return target === 'page' ? pageEdge() : (() => { const snapshot = geometryRef.current.get(target); return snapshot ? edgeGeometry(target, snapshot, viewportStore.get().devicePixelRatio) : null; })();
+          },
+          observeEdge: (target: 'page' | DesignComponentId, listener: (value: unknown) => void) => edgeObservers.observeEdge(target, listener as never),
+        },
+        scene: {
+          create: (element: HTMLElement, options: any) => {
+            const layer = options?.layer === 'underlay' ? underlay : options?.layer === 'components' ? componentLayer : overlay;
+            if (!layer) throw new Error('Scene layer is unavailable');
+            layer.appendChild(element);
+            const node = scene.create(element, options);
+            ledgerRef.current.add(() => node.dispose());
+            return node;
+          },
+          schedule: () => scene.schedule(),
         },
         transforms: {
           create: (basePosition?: { x: number; y: number }, visualTransform?: string) => new TransformController(basePosition, visualTransform),
@@ -630,13 +689,13 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
   >
     <div className="design-mod-default-shell" data-design-mod-default-shell={hostLayout.defaultShellVisible ? 'visible' : 'hidden'}>{renderChat}</div>
     {layers}
-    {hostLayout.modLayerVisible && <>
+    {hostLayout.modLayerVisible && <div style={{ display: 'none' }} aria-hidden="true">
       {(['flow', 'garden', 'diary', 'status'] as const).map(tab => (
-        <DesignAwareRegion key={tab} id={`chat.sidebar.${tab}`} fallback={false}>
+        <DesignAwareRegion key={tab} id={`chat.sidebar.${tab}`}>
           <div className="design-mod-sidebar-capability">{renderSidebar(tab)}</div>
         </DesignAwareRegion>
       ))}
-    </>}
+    </div>}
     <DesignModRecoveryOverlay
       diagnostic={diagnostic}
       phase={hostPhase}
