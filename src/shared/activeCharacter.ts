@@ -15,12 +15,18 @@ const KEY = 'character.active';
 export interface ActiveCharacterInfo {
   id: string;
   name: string;
+  avatarRevision: number;
 }
 
-const DEFAULT_INFO: ActiveCharacterInfo = { id: '', name: '' };
+const DEFAULT_INFO: ActiveCharacterInfo = { id: '', name: '', avatarRevision: 0 };
 
 export function getActiveCharacterInfo(): ActiveCharacterInfo {
-  return getUIPref<ActiveCharacterInfo>(KEY, DEFAULT_INFO);
+  const value = getUIPref<Partial<ActiveCharacterInfo>>(KEY, DEFAULT_INFO);
+  return {
+    id: typeof value.id === 'string' ? value.id : '',
+    name: typeof value.name === 'string' ? value.name : '',
+    avatarRevision: Number.isSafeInteger(value.avatarRevision) && value.avatarRevision! >= 0 ? value.avatarRevision! : 0,
+  };
 }
 
 /** Best-effort display name: label, else raw char_id, else the given fallback. */
@@ -33,6 +39,12 @@ export function setActiveCharacterInfo(info: ActiveCharacterInfo): void {
   setUIPref(KEY, info);
 }
 
+/** Broadcasts a same-character avatar mutation to every WebView. */
+export function notifyCharacterAvatarChanged(charId: string): void {
+  const current = getActiveCharacterInfo();
+  if (current.id === charId) setActiveCharacterInfo({ ...current, avatarRevision: current.avatarRevision + 1 });
+}
+
 export function subscribeActiveCharacter(handler: (info: ActiveCharacterInfo) => void): () => void {
   return onUIPrefChange(key => {
     if (key === KEY) handler(getActiveCharacterInfo());
@@ -42,7 +54,8 @@ export function subscribeActiveCharacter(handler: (info: ActiveCharacterInfo) =>
 function pickInfo(assets: PromptAssetsResponse): ActiveCharacterInfo {
   const id = assets.active.active_character || '';
   const name = assets.characters.find(c => c.id === id)?.label || '';
-  return { id, name };
+  const current = getActiveCharacterInfo();
+  return { id, name, avatarRevision: current.id === id ? current.avatarRevision : 0 };
 }
 
 /** Derive the cache entry from an already-fetched prompt-assets response (avoids a duplicate round-trip). */
@@ -53,7 +66,7 @@ export function updateActiveCharacterFromAssets(assets: PromptAssetsResponse): A
 }
 
 /** Fetch prompt-assets fresh and refresh the cache. Call once from whichever window owns character settings. */
-export async function refreshActiveCharacterInfo(): Promise<ActiveCharacterInfo> {
-  const assets = await getPromptAssets();
+export async function refreshActiveCharacterInfo(force = false): Promise<ActiveCharacterInfo> {
+  const assets = await getPromptAssets({ force });
   return updateActiveCharacterFromAssets(assets);
 }

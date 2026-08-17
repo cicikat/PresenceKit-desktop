@@ -69,6 +69,11 @@ pub struct NativeSurfaceSpec {
     pub z_order: String,
     pub size: NativeSurfaceSize,
     #[serde(default)]
+    pub visual_bleed: Option<NativeSurfaceMargin>,
+    #[serde(default)]
+    pub content_inset: Option<NativeSurfaceMargin>,
+    // Kept for schema v2 packages created before visualBleed existed.
+    #[serde(default)]
     pub margin: Option<NativeSurfaceMargin>,
     #[serde(default)]
     pub anchor: Option<String>,
@@ -95,6 +100,7 @@ pub struct NativeSurfaceDescriptor {
     pub pointer_mode: String,
     pub z_order: String,
     pub bounds: SurfaceBounds,
+    pub content_rect: SurfaceBounds,
     pub ready: bool,
     pub visible: bool,
 }
@@ -128,6 +134,7 @@ struct ActiveSurface {
     spec: NativeSurfaceSpec,
     label: String,
     bounds: SurfaceBounds,
+    content_rect: SurfaceBounds,
     ready: bool,
 }
 
@@ -235,7 +242,8 @@ fn validate_spec(spec: &NativeSurfaceSpec) -> Result<(), String> {
             return Err(format!("surface capability 不支持: {required}"));
         }
     }
-    if let Some(margin) = &spec.margin {
+    for inset in [&spec.visual_bleed, &spec.content_inset, &spec.margin] {
+        let Some(margin) = inset else { continue };
         let values = match margin {
             NativeSurfaceMargin::Uniform(value) => [*value; 4],
             NativeSurfaceMargin::Sides {
@@ -289,7 +297,18 @@ fn margin_values(margin: Option<&NativeSurfaceMargin>, dpi: f64) -> (i32, i32, i
     )
 }
 
-fn calculate_bounds(spec: &NativeSurfaceSpec, main: &SurfaceBounds) -> SurfaceBounds {
+fn inset_bounds(bounds: &SurfaceBounds, inset: Option<&NativeSurfaceMargin>) -> SurfaceBounds {
+    let (top, right, bottom, left) = margin_values(inset, bounds.dpi);
+    SurfaceBounds {
+        x: bounds.x + left,
+        y: bounds.y + top,
+        width: bounds.width.saturating_sub((left + right).max(0) as u32),
+        height: bounds.height.saturating_sub((top + bottom).max(0) as u32),
+        dpi: bounds.dpi,
+    }
+}
+
+fn calculate_layout(spec: &NativeSurfaceSpec, main: &SurfaceBounds) -> (SurfaceBounds, SurfaceBounds) {
     let dpi = main.dpi.max(0.1);
     let offset = spec
         .offset
@@ -299,14 +318,16 @@ fn calculate_bounds(spec: &NativeSurfaceSpec, main: &SurfaceBounds) -> SurfaceBo
     let offset_x = (offset.x * dpi).round() as i32;
     let offset_y = (offset.y * dpi).round() as i32;
     if spec.kind == "halo" {
-        let (top, right, bottom, left) = margin_values(spec.margin.as_ref(), dpi);
-        return SurfaceBounds {
+        let bleed = spec.visual_bleed.as_ref().or(spec.margin.as_ref());
+        let (top, right, bottom, left) = margin_values(bleed, dpi);
+        let bounds = SurfaceBounds {
             x: main.x - left,
             y: main.y - top,
             width: main.width.saturating_add((left + right).max(0) as u32),
             height: main.height.saturating_add((top + bottom).max(0) as u32),
             dpi,
         };
+        return (bounds.clone(), inset_bounds(&bounds, spec.content_inset.as_ref()));
     }
     let width = physical_logical(spec.size.width, dpi);
     let height = physical_logical(spec.size.height, dpi);
@@ -329,13 +350,22 @@ fn calculate_bounds(spec: &NativeSurfaceSpec, main: &SurfaceBounds) -> SurfaceBo
             main.y + (main.height as i32 - height as i32) / 2,
         ),
     };
-    SurfaceBounds {
+    let content_bounds = SurfaceBounds {
         x: x + offset_x,
         y: y + offset_y,
         width,
         height,
         dpi,
-    }
+    };
+    let (top, right, bottom, left) = margin_values(spec.visual_bleed.as_ref(), dpi);
+    let bounds = SurfaceBounds {
+        x: content_bounds.x - left,
+        y: content_bounds.y - top,
+        width: content_bounds.width.saturating_add((left + right).max(0) as u32),
+        height: content_bounds.height.saturating_add((top + bottom).max(0) as u32),
+        dpi,
+    };
+    (bounds.clone(), inset_bounds(&bounds, spec.content_inset.as_ref()))
 }
 
 fn main_bounds(app: &AppHandle) -> Result<SurfaceBounds, String> {
@@ -363,7 +393,8 @@ fn apply_bounds(window: &WebviewWindow, bounds: &SurfaceBounds) -> Result<(), St
         .map_err(|error| error.to_string())
 }
 
-fn close_active(app: &AppHandle, coordinator: &mut Coordinator) {
+fn close_active(app: &AppHandle, coordinator: &mut Coordinator) -> usize {
+    let closed = coordinator.surfaces.len();
     for surface in coordinator.surfaces.values() {
         if let Some(window) = app.get_webview_window(&surface.label) {
             let _ = window.close();
@@ -372,12 +403,14 @@ fn close_active(app: &AppHandle, coordinator: &mut Coordinator) {
     coordinator.surfaces.clear();
     coordinator.mod_id = None;
     coordinator.generation = None;
+    closed
 }
 
 fn sync_bounds_locked(app: &AppHandle, coordinator: &mut Coordinator) -> Result<(), String> {
     let main = main_bounds(app)?;
     for surface in coordinator.surfaces.values_mut() {
-        let bounds = calculate_bounds(&surface.spec, &main);
+        let (bounds, content_rect) = calculate_layout(&surface.spec, &main);
+        surface.content_rect = content_rect;
         if bounds == surface.bounds {
             continue;
         }
@@ -441,7 +474,7 @@ fn ensure_locked(
     let main = main_bounds(app)?;
     for spec in specs {
         let label = surface_label(&mod_id, generation, &spec.id);
-        let bounds = calculate_bounds(&spec, &main);
+        let (bounds, content_rect) = calculate_layout(&spec, &main);
         let url = format!(
             "index.html?window=design-satellite&mod_id={mod_id}&surface={}&generation={generation}",
             spec.id
@@ -477,6 +510,7 @@ fn ensure_locked(
                 spec,
                 label,
                 bounds,
+                content_rect,
                 ready: false,
             },
         );
@@ -498,6 +532,7 @@ fn descriptors(app: &AppHandle, coordinator: &Coordinator) -> Vec<NativeSurfaceD
             pointer_mode: surface.spec.pointer_mode.clone(),
             z_order: surface.spec.z_order.clone(),
             bounds: surface.bounds.clone(),
+            content_rect: surface.content_rect.clone(),
             ready: surface.ready,
             visible: app
                 .get_webview_window(&surface.label)
@@ -602,6 +637,32 @@ pub fn destroy_design_satellites(
         close_active(&app, &mut coordinator);
     }
     Ok(())
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DesignSatelliteTeardownAck {
+    pub closed: usize,
+    pub generation: Option<u64>,
+}
+
+/// Main-window-only reset used by "restore default". It deliberately clears
+/// the registered owner instead of relying on a caller to remember generation.
+#[tauri::command]
+pub fn destroy_current_design_satellites(
+    app: AppHandle,
+    window: WebviewWindow,
+    state: State<'_, DesignSatelliteState>,
+) -> Result<DesignSatelliteTeardownAck, String> {
+    if window.label() != MAIN_WINDOW_LABEL {
+        return Err("only the main window may reset design satellites".to_string());
+    }
+    let mut coordinator = state
+        .coordinator
+        .lock()
+        .map_err(|_| "surface coordinator lock failed".to_string())?;
+    let generation = coordinator.generation;
+    let closed = close_active(&app, &mut coordinator);
+    Ok(DesignSatelliteTeardownAck { closed, generation })
 }
 
 #[tauri::command]
@@ -710,6 +771,8 @@ mod tests {
                 width: 200.0,
                 height: 100.0,
             },
+            visual_bleed: None,
+            content_inset: None,
             margin: None,
             anchor: Some(anchor.into()),
             offset: None,
@@ -741,7 +804,7 @@ mod tests {
             height: 800,
             dpi: 1.25,
         };
-        let right = calculate_bounds(&island("main.right"), &main);
+        let right = calculate_layout(&island("main.right"), &main).0;
         assert_eq!(right.x, -720);
         assert_eq!(right.y, 377);
         let halo = NativeSurfaceSpec {
@@ -755,14 +818,18 @@ mod tests {
                 width: 1.0,
                 height: 1.0,
             },
+            visual_bleed: Some(NativeSurfaceMargin::Uniform(240.0)),
+            content_inset: Some(NativeSurfaceMargin::Uniform(240.0)),
             margin: Some(NativeSurfaceMargin::Uniform(240.0)),
             anchor: None,
             offset: None,
             requires: Vec::new(),
         };
-        let halo_bounds = calculate_bounds(&halo, &main);
+        let halo_bounds = calculate_layout(&halo, &main).0;
         assert_eq!(halo_bounds.x, -2220);
         assert_eq!(halo_bounds.width, 1800);
+        let (_, content_rect) = calculate_layout(&halo, &main);
+        assert_eq!(content_rect, main);
     }
 
     #[test]

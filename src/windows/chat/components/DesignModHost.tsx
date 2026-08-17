@@ -29,6 +29,7 @@ import type { DesignModDiagnostic, DesignModRecord, DesignSurface } from '../../
 import { DesignSatelliteBridge, cropSatellitePresenterSnapshot, type DesignSatelliteBounds, type DesignSatelliteCommand, type DesignSatelliteDiagnostic } from '../../../shared/design-mod/satellite';
 import { runtimeDiagnostics } from '../../../shared/runtimeDiagnostics';
 import { canReuseSatellitePayload } from '../../../shared/design-mod/satellitePayload';
+import { TransformController } from '../../../shared/design-mod/transform';
 
 interface DesignModHostProps {
   engine: any;
@@ -229,10 +230,12 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
     };
   }, []);
 
-  const cleanupRuntime = useCallback(() => {
+  const cleanupRuntime = useCallback(async () => {
+    const satelliteBridge = satelliteBridgeRef.current;
     void satelliteBridgeRef.current?.api.destroy().catch(error => console.warn('[design-satellite] 销毁失败:', error));
     satelliteBridgeRef.current = null;
     satellitePayloadRef.current = null;
+    await satelliteBridge?.api.destroy();
     setSurfaceDiagnostics([]);
     lifecycleRef.current.dispose();
     ledgerRef.current.clear();
@@ -254,7 +257,7 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
   const activate = useCallback(async (requestedId: string) => {
     const requestId = activationRequestRef.current + 1;
     activationRequestRef.current = requestId;
-    cleanupRuntime();
+    await cleanupRuntime();
     setSelectedId(requestedId);
     const isCurrentRequest = () => mountedRef.current && activationRequestRef.current === requestId;
     if (requestedId === 'builtin-default') {
@@ -307,7 +310,7 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
           pkg.manifest.id,
           requestId,
           pkg.nativeSurfacePackages,
-          async (surfaceId, sequence) => {
+          async (surfaceId, sequence, descriptor) => {
             const currentWindow = getCurrentWindow();
             if (!nativeSnapshotRef.current && !nativeSnapshotInFlightRef.current) {
               nativeSnapshotInFlightRef.current = Promise.all([
@@ -359,6 +362,10 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
               generation: requestId,
               modId: pkg.manifest.id,
               surfaceId,
+              surface: {
+                bounds: descriptor?.bounds ?? mainBounds,
+                contentRect: descriptor?.content_rect ?? mainBounds,
+              },
               updatedAt: Date.now(),
               main: { bounds: mainBounds, visible: native.visible, focused: native.focused, maximized: native.maximized },
               window: { visible: native.visible, focused: native.focused, covered: isCovered, paused: runtimePaused },
@@ -478,6 +485,9 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
           observe: (id: DesignComponentId, listener: (value: unknown) => void) => geometryRef.current.observe(id, listener as never),
           flush: () => geometryRef.current.flush(),
         },
+        transforms: {
+          create: (basePosition?: { x: number; y: number }, visualTransform?: string) => new TransformController(basePosition, visualTransform),
+        },
         commands: {
           closeSidebar: commands.closeSidebar,
           setSidebarTab: commands.setSidebarTab,
@@ -505,7 +515,7 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
       }
     } catch (error) {
       if (!isCurrentRequest()) return;
-      cleanupRuntime();
+      await cleanupRuntime();
       const next = formatDiagnostic('error', t('designMod.fallback'), error);
       setDiagnostic(next); publishDesignModDiagnostics({ diagnostic: next });
     }

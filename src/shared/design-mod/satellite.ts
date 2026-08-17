@@ -21,6 +21,7 @@ export interface DesignSatelliteDescriptor {
   pointer_mode: string;
   z_order: string;
   bounds: DesignSatelliteBounds;
+  content_rect: DesignSatelliteBounds;
   ready: boolean;
   visible: boolean;
 }
@@ -31,6 +32,7 @@ export interface DesignSatelliteSnapshot {
   generation: number;
   modId: string;
   surfaceId: string;
+  surface: { bounds: DesignSatelliteBounds; contentRect: DesignSatelliteBounds };
   updatedAt: number;
   main: {
     bounds: DesignSatelliteBounds;
@@ -70,6 +72,7 @@ export interface DesignSatelliteDiagnostic {
   label: string;
   kind: string;
   bounds: DesignSatelliteBounds;
+  contentRect: DesignSatelliteBounds;
   pointerMode: string;
   zOrder: string;
   ready: boolean;
@@ -87,6 +90,11 @@ export interface DesignSatelliteHostApi {
   updateBounds(bounds: Array<{ id: string; bounds: DesignSatelliteBounds }>): Promise<void>;
   destroy(): Promise<void>;
   getMetrics(): DesignSatelliteMetrics;
+}
+
+export interface DesignSatelliteTeardownAck {
+  closed: number;
+  generation: number | null;
 }
 
 export interface DesignSatelliteMetrics {
@@ -146,6 +154,7 @@ export class DesignSatelliteBridge {
   private unlistenReady: UnlistenFn | null = null;
   private unlistenCommand: UnlistenFn | null = null;
   private destroyed = false;
+  private destroyPromise: Promise<void> | null = null;
   private visible = false;
   private readonly gate;
   private readonly metrics: DesignSatelliteMetrics = { sampled: 0, sent: 0, dropped: 0, payloadBytes: 0, lastSequence: 0 };
@@ -164,7 +173,7 @@ export class DesignSatelliteBridge {
     private readonly modId: string,
     private readonly generation: number,
     private readonly surfaces: readonly NativeSurfacePackage[],
-    private readonly snapshotFactory: (surfaceId: string, sequence: number) => DesignSatelliteSnapshot | Promise<DesignSatelliteSnapshot>,
+    private readonly snapshotFactory: (surfaceId: string, sequence: number, descriptor?: DesignSatelliteDescriptor) => DesignSatelliteSnapshot | Promise<DesignSatelliteSnapshot>,
     private readonly dispatch: (command: DesignSatelliteCommand) => void | Promise<void>,
     initiallyVisible = false,
     budget: SnapshotBudget = { foregroundHz: 20, backgroundHz: 0 },
@@ -210,6 +219,7 @@ export class DesignSatelliteBridge {
       label: descriptor.label,
       kind: descriptor.kind,
       bounds: descriptor.bounds,
+      contentRect: descriptor.content_rect,
       pointerMode: descriptor.pointer_mode,
       zOrder: descriptor.z_order,
       ready: descriptor.ready,
@@ -230,7 +240,7 @@ export class DesignSatelliteBridge {
     const diagnostic = this.diagnostics.get(surfaceId);
     if (diagnostic) diagnostic.ready = true;
     this.listeners.forEach(listener => listener());
-    const snapshot = this.latestBySurface.get(surfaceId) ?? await this.snapshotFactory(surfaceId, this.sequence);
+    const snapshot = this.latestBySurface.get(surfaceId) ?? await this.snapshotFactory(surfaceId, this.sequence, this.toDescriptor(surfaceId));
     if (this.destroyed) return;
     await emitTo(label, DESIGN_SATELLITE_SNAPSHOT_EVENT, snapshot);
   }
@@ -270,7 +280,7 @@ export class DesignSatelliteBridge {
     const sequence = ++this.sequence;
     try {
       this.metrics.sampled += 1;
-      const frames = await Promise.all(this.surfaces.map(surface => this.snapshotFactory(surface.id, sequence)));
+      const frames = await Promise.all(this.surfaces.map(surface => this.snapshotFactory(surface.id, sequence, this.toDescriptor(surface.id))));
       if (this.destroyed) return;
       const batch = createSnapshotBatch(sequence, frames);
       this.metrics.payloadBytes += batch.payloadBytes;
@@ -343,7 +353,13 @@ export class DesignSatelliteBridge {
     this.replaceDiagnostics(descriptors);
   }
 
-  private async destroy(): Promise<void> {
+  private destroy(): Promise<void> {
+    if (this.destroyPromise) return this.destroyPromise;
+    this.destroyPromise = this.destroyImpl();
+    return this.destroyPromise;
+  }
+
+  private async destroyImpl(): Promise<void> {
     if (this.destroyed) return;
     this.destroyed = true;
     if (this.frame !== null) cancelAnimationFrame(this.frame);
@@ -353,11 +369,29 @@ export class DesignSatelliteBridge {
     this.unlistenCommand?.();
     this.unlistenReady = null;
     this.unlistenCommand = null;
-    await invoke('destroy_design_satellites', { generation: this.generation }).catch(() => {});
+    await invoke<DesignSatelliteTeardownAck>('destroy_current_design_satellites').catch(async () => {
+      await invoke('destroy_design_satellites', { generation: this.generation });
+    });
     this.diagnostics.clear();
     this.readyLabels.clear();
     this.latestBySurface.clear();
     this.listeners.forEach(listener => listener());
+  }
+
+  private toDescriptor(surfaceId: string): DesignSatelliteDescriptor | undefined {
+    const diagnostic = this.diagnostics.get(surfaceId);
+    if (!diagnostic) return undefined;
+    return {
+      id: diagnostic.id,
+      label: diagnostic.label,
+      kind: diagnostic.kind,
+      pointer_mode: diagnostic.pointerMode,
+      z_order: diagnostic.zOrder,
+      bounds: diagnostic.bounds,
+      content_rect: diagnostic.contentRect,
+      ready: diagnostic.ready,
+      visible: diagnostic.visible,
+    };
   }
 }
 

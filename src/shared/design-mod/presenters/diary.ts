@@ -1,12 +1,13 @@
 import { getPromptAssets, loadDiaryList } from '../../api/backend';
 import type { DiaryListItem, PromptAssetCharacter } from '../../api/types';
-import { getActiveCharacterInfo } from '../../activeCharacter';
+import { getActiveCharacterInfo, subscribeActiveCharacter } from '../../activeCharacter';
 import type { StateEngine } from '../../state/store';
 import { PresenterController } from './base';
 import type { DiaryPresenterCommands, DiaryPresenterSnapshot } from './types';
 
 export class DiaryPresenterController extends PresenterController<DiaryPresenterSnapshot, DiaryPresenterCommands> {
   private run = 0;
+  private unsubscribeActiveCharacter: (() => void) | null = null;
 
   constructor(private readonly engine: StateEngine, private readonly now: () => number = Date.now) {
     const activeCharacterId = getActiveCharacterInfo().id;
@@ -24,15 +25,23 @@ export class DiaryPresenterController extends PresenterController<DiaryPresenter
   protected onStart(): void {
     const run = ++this.run;
     this.timerActive = true;
-    void this.refresh(run);
+    this.unsubscribeActiveCharacter = subscribeActiveCharacter(info => {
+      if (info.id === this.snapshot.activeCharacterId) return;
+      const nextRun = ++this.run;
+      this.setSnapshot({ ...this.snapshot, activeCharacterId: info.id, entries: [], loading: true, error: null, selectedEntryId: null, updatedAt: this.now() });
+      void this.refresh(nextRun, info.id);
+    });
+    void this.refresh(run, getActiveCharacterInfo().id);
   }
 
   protected onStop(): void {
     this.run += 1;
     this.timerActive = false;
+    this.unsubscribeActiveCharacter?.();
+    this.unsubscribeActiveCharacter = null;
   }
 
-  private async refresh(expectedRun = this.run): Promise<void> {
+  private async refresh(expectedRun = this.run, requestedCharacterId = getActiveCharacterInfo().id): Promise<void> {
     this.setSnapshot({ ...this.snapshot, loading: true, error: null, updatedAt: this.now() });
     let characters: PromptAssetCharacter[] = this.snapshot.characters;
     let characterFailure: unknown = null;
@@ -44,7 +53,7 @@ export class DiaryPresenterController extends PresenterController<DiaryPresenter
     } catch (error) {
       characterFailure = error;
     }
-    const activeCharacterId = this.snapshot.activeCharacterId || activeFromAssets || characters[0]?.id || '';
+    const activeCharacterId = requestedCharacterId || activeFromAssets || characters[0]?.id || '';
     let diaryResult: { entries: DiaryListItem[] } | null = null;
     let diaryFailure: unknown = null;
     try {
@@ -52,7 +61,7 @@ export class DiaryPresenterController extends PresenterController<DiaryPresenter
     } catch (error) {
       diaryFailure = error;
     }
-    if (expectedRun !== this.run && expectedRun !== 0) return;
+    if (expectedRun !== this.run) return;
     const entries: DiaryListItem[] = diaryFailure || !diaryResult ? [] : diaryResult.entries;
     const error = characterFailure || diaryFailure;
     const updatedAt = error ? this.snapshot.lastUpdated : this.now();
@@ -71,10 +80,8 @@ export class DiaryPresenterController extends PresenterController<DiaryPresenter
   }
 
   private async selectCharacter(characterId: string): Promise<void> {
-    if (!characterId || characterId === this.snapshot.activeCharacterId) return;
-    this.setSnapshot({ ...this.snapshot, activeCharacterId: characterId, entries: [], loading: true, error: null, selectedEntryId: null, updatedAt: this.now() });
-    const run = ++this.run;
-    await this.refresh(run);
+    // Deprecated Mod command. Official diary UI is always the active character.
+    void characterId;
   }
 
   private async openEntry(entryId: string): Promise<void> {

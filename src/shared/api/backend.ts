@@ -129,10 +129,12 @@ export async function uploadCharacterAvatar(charId: string, file: File): Promise
   const buffer = await file.arrayBuffer();
   const data = Array.from(new Uint8Array(buffer));
   await invokeGated('upload_character_avatar', { charId, data, contentType: file.type });
+  invalidatePromptAssetsCache();
 }
 
 export async function deleteCharacterAvatar(charId: string): Promise<void> {
   await invokeGated('delete_character_avatar', { charId });
+  invalidatePromptAssetsCache();
 }
 
 export async function loadHiddenStateDebug(): Promise<HiddenStateDebugResponse> {

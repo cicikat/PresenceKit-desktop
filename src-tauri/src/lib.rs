@@ -3142,6 +3142,7 @@ pub fn run() {
             design_satellite::update_design_satellite_bounds,
             design_satellite::set_design_satellites_visible,
             design_satellite::destroy_design_satellites,
+            design_satellite::destroy_current_design_satellites,
             design_satellite::design_satellite_ready,
             design_satellite::design_satellite_command,
             design_satellite::get_design_satellite_capabilities,

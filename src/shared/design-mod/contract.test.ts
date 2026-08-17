@@ -29,6 +29,15 @@ describe('trusted design Mod contract', () => {
     ] }).join(';')).toContain('nativeSurfaces[0]');
   });
 
+  it('accepts bounded visual bleed and content insets for native surfaces', () => {
+    expect(validateDesignModManifest({ ...valid, schemaVersion: 2, nativeSurfaces: [
+      { id: 'halo', kind: 'halo', entry: 'surfaces/halo.js', pointerMode: 'passthrough', zOrder: 'owned', size: { width: 1, height: 1 }, visualBleed: { top: 24, right: 32, bottom: 24, left: 32 }, contentInset: 12 },
+    ] })).toEqual([]);
+    expect(validateDesignModManifest({ ...valid, schemaVersion: 2, nativeSurfaces: [
+      { id: 'halo', kind: 'halo', entry: 'surfaces/halo.js', pointerMode: 'passthrough', zOrder: 'owned', size: { width: 1, height: 1 }, visualBleed: -1 },
+    ] }).join(';')).toContain('visualBleed');
+  });
+
   it('keeps theme and layout validation independent and atomic', () => {
     const errors = validateDesignModPackage({ ...valid, theme: 'theme/theme.json', layout: 'layout/layout.json' }, {
       theme: { id: 'sample', name: 'Sample', tokens: {} },

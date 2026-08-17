@@ -4,7 +4,7 @@ import { StateEngine } from '../../shared/state/store';
 import { ToolStatusOverlayController, type ToolStatusOverlayState } from '../../shared/state/toolStatusOverlay';
 import { wsClient } from '../../shared/api/ws';
 import { getDiarySyncStatus, syncDiary } from '../../shared/api/diary-sync';
-import { refreshActiveCharacterInfo, subscribeActiveCharacter } from '../../shared/activeCharacter';
+import { getActiveCharacterInfo, subscribeActiveCharacter, updateActiveCharacterFromAssets } from '../../shared/activeCharacter';
 import { getCharacterAvatar, getPromptAssets } from '../../shared/api/backend';
 import { openAdminPanel } from '../../shared/api/adminBridge';
 import { isPresenceNagEnabled, patchPresenceNagEnabled } from '../../shared/presenceNag';
@@ -64,6 +64,7 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen, isCovered = 
   const [proactiveGapHours, setProactiveGapHours] = useState(0.75);
   const [characterAvatarDataUrl, setCharacterAvatarDataUrl] = useState<string | null>(null);
   const [charSwitchKey, setCharSwitchKey] = useState(0);
+  const avatarRequestRef = useRef(0);
 
   useEffect(() => {
     const unsubscribeState = toolStatusController.subscribe(setToolStatus);
@@ -107,19 +108,24 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen, isCovered = 
   }, [navigation.prefsOpen]);
 
   const loadCharacterAvatar = useCallback(async (charId: string | null) => {
+    const request = avatarRequestRef.current + 1;
+    avatarRequestRef.current = request;
     if (!charId) { setCharacterAvatarDataUrl(null); return; }
     try {
-      setCharacterAvatarDataUrl(await getCharacterAvatar(charId));
+      const avatar = await getCharacterAvatar(charId);
+      if (avatarRequestRef.current === request && getActiveCharacterInfo().id === charId) setCharacterAvatarDataUrl(avatar);
     } catch {
-      setCharacterAvatarDataUrl(null);
+      if (avatarRequestRef.current === request && getActiveCharacterInfo().id === charId) setCharacterAvatarDataUrl(null);
     }
   }, []);
 
   useEffect(() => {
-    void refreshActiveCharacterInfo();
-    getPromptAssets()
-      .then(assets => loadCharacterAvatar(assets.active.active_character || null))
-      .catch(() => {});
+    const unsubscribe = subscribeActiveCharacter(info => { void loadCharacterAvatar(info.id || null); });
+    void getPromptAssets({ force: true })
+      .then(assets => updateActiveCharacterFromAssets(assets))
+      .then(info => loadCharacterAvatar(info.id || null))
+      .catch(() => { void loadCharacterAvatar(getActiveCharacterInfo().id || null); });
+    return unsubscribe;
   }, [loadCharacterAvatar]);
 
   const mouseRef       = useRef({ x: window.innerWidth / 2, y: window.innerHeight / 2 });

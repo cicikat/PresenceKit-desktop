@@ -32,6 +32,13 @@ export interface NativeSurfaceMargin {
   left: number;
 }
 
+export interface NativeSurfaceInsets {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
 export interface NativeSurfaceManifest {
   id: string;
   kind: NativeSurfaceKind;
@@ -40,6 +47,11 @@ export interface NativeSurfaceManifest {
   pointerMode: NativeSurfacePointerMode;
   zOrder: NativeSurfaceZOrder;
   size: NativeSurfaceSize;
+  /** Extra transparent window area reserved for transformed visual output. */
+  visualBleed?: number | NativeSurfaceInsets;
+  /** Inset rectangle reserved for normal content inside the visual window. */
+  contentInset?: number | NativeSurfaceInsets;
+  /** @deprecated Use visualBleed for surface bounds. */
   margin?: number | NativeSurfaceMargin;
   anchor?: NativeSurfaceAnchor;
   offset?: NativeSurfaceOffset;

@@ -92,6 +92,14 @@ function validateNativeSurface(value: unknown, index: number, ids: Set<string>):
   if (surface.pointerMode !== 'passthrough' && surface.pointerMode !== 'interactive') errors.push(`nativeSurfaces[${index}].pointerMode 不受支持`);
   if (surface.zOrder !== 'owned' && surface.zOrder !== 'always-on-top') errors.push(`nativeSurfaces[${index}].zOrder 不受支持`);
   if (!surface.size || !isFinitePositive(surface.size.width) || !isFinitePositive(surface.size.height)) errors.push(`nativeSurfaces[${index}].size 必须是正数尺寸`);
+  for (const key of ['visualBleed', 'contentInset'] as const) {
+    const value = surface[key];
+    if (value === undefined) continue;
+    const valid = isFiniteNonNegative(value) || (typeof value === 'object' && value !== null
+      && isFiniteNonNegative(value.top) && isFiniteNonNegative(value.right)
+      && isFiniteNonNegative(value.bottom) && isFiniteNonNegative(value.left));
+    if (!valid) errors.push(`nativeSurfaces[${index}].${key} 必须是非负数或四边非负数`);
+  }
   if (surface.kind === 'halo' && surface.pointerMode !== 'passthrough') errors.push(`nativeSurfaces[${index}] halo 必须是 passthrough`);
   if (surface.kind === 'halo' && surface.anchor !== undefined) errors.push(`nativeSurfaces[${index}] halo 不应设置 anchor`);
   if (surface.kind === 'island' && typeof surface.anchor !== 'string') errors.push(`nativeSurfaces[${index}] island 必须设置 anchor`);

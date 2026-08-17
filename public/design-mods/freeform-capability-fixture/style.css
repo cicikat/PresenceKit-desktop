@@ -1,27 +1,36 @@
 .design-fixture-mount {
   position: absolute;
   box-sizing: border-box;
-  overflow: hidden;
+  overflow: visible;
+  transform-origin: 0 0;
+}
+.design-fixture-visual-shell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
   border: 1px solid color-mix(in oklch, var(--accent) 48%, transparent);
   border-radius: 14px;
   box-shadow: 0 18px 48px color-mix(in oklch, var(--ink) 18%, transparent);
   transition: box-shadow 160ms ease;
 }
-.design-fixture-mount:hover { box-shadow: 0 22px 58px color-mix(in oklch, var(--accent) 30%, transparent); }
-.design-fixture-mount > [data-chat-region],
-.design-fixture-mount > .chat-panel,
-.design-fixture-mount > .design-mod-sidebar-capability { width: 100%; height: 100%; min-width: 0; min-height: 0; }
-.design-fixture-ribbon { left: 18px; top: 18px; bottom: 18px; width: 58px; min-height: 0; overflow: visible; }
+.design-fixture-visual-shell:hover { box-shadow: 0 22px 58px color-mix(in oklch, var(--accent) 30%, transparent); }
+.design-fixture-content-mask { width: 100%; height: 100%; min-width: 0; min-height: 0; overflow: hidden; border-radius: inherit; }
+.design-fixture-content-mask > [data-chat-region],
+.design-fixture-content-mask > .chat-panel,
+.design-fixture-content-mask > .design-mod-sidebar-capability { width: 100%; height: 100%; min-width: 0; min-height: 0; }
+.design-fixture-ribbon { left: 18px; top: 18px; bottom: 18px; width: 58px; min-height: 0; }
 .design-fixture-header { left: 102px; top: 18px; right: 24px; height: 112px; }
 .design-fixture-transcript { left: 102px; top: 144px; right: 278px; bottom: 126px; }
 .design-fixture-composer { left: 102px; right: 278px; bottom: 18px; height: 96px; }
-.design-fixture-flow { right: 24px; top: 18px; width: 230px; height: 208px; clip-path: polygon(0 8%, 92% 0, 100% 88%, 8% 100%); transform: perspective(720px) matrix3d(0.98,0.04,0,0, -0.04,0.98,0,0, 0,0,1,0, 0,0,0,1); }
-.design-fixture-garden { right: 24px; top: 242px; width: 230px; height: 208px; clip-path: polygon(8% 0, 100% 10%, 92% 100%, 0 90%); transform: perspective(720px) matrix3d(0.97,-0.05,0,0, 0.05,0.97,0,0, 0,0,1,0, 0,0,0,1); }
+.design-fixture-flow { right: 24px; top: 18px; width: 230px; height: 208px; }
+.design-fixture-flow .design-fixture-visual-shell { clip-path: polygon(0 8%, 92% 0, 100% 88%, 8% 100%); transform: perspective(720px) matrix3d(0.98,0.04,0,0, -0.04,0.98,0,0, 0,0,1,0, 0,0,0,1); }
+.design-fixture-garden { right: 24px; top: 242px; width: 230px; height: 208px; }
+.design-fixture-garden .design-fixture-visual-shell { clip-path: polygon(8% 0, 100% 10%, 92% 100%, 0 90%); transform: perspective(720px) matrix3d(0.97,-0.05,0,0, 0.05,0.97,0,0, 0,0,1,0, 0,0,0,1); }
 .design-fixture-diary { right: 24px; bottom: 126px; width: 230px; height: 96px; }
 .design-fixture-status-presenter { position: absolute; right: 42px; bottom: 26px; width: 194px; height: 78px; padding: 10px 12px; box-sizing: border-box; color: var(--on-forest); background: color-mix(in oklch, var(--forest) 72%, transparent); border: 1px dashed color-mix(in oklch, var(--accent) 72%, transparent); border-radius: 42% 58% 48% 52%; transform: rotate(-2deg); pointer-events: auto; }
 .design-fixture-status-heading { position: relative; z-index: 1; font: 600 12px var(--font-serif); }
 .design-fixture-status-ring { position: absolute; right: 16px; top: 14px; width: 28px; height: 28px; border-radius: 50%; background: oklch(0.72 0.18 var(--fixture-hue)); box-shadow: 0 0 calc(8px + var(--fixture-aura) * .12px) oklch(0.72 0.18 var(--fixture-hue) / .7); }
-.design-fixture-status-telemetry { position: relative; z-index: 1; margin-top: 11px; font: 9px var(--font-mono); color: var(--on-forest-2); letter-spacing: .6px; }
 .design-fixture-status-timeline { position: absolute; left: 12px; right: 12px; bottom: 8px; height: 15px; display: flex; align-items: flex-end; gap: 2px; opacity: .72; }
 .design-fixture-status-timeline i { flex: 1; min-width: 2px; display: block; border-radius: 1px; }
 .design-fixture-status-retry { position: absolute; right: 10px; bottom: 5px; z-index: 2; border: 0; background: transparent; color: var(--accent); cursor: pointer; font: 9px var(--font-mono); }

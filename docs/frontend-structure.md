@@ -728,6 +728,23 @@ deduplicates toggles and exposes retry state. `OnboardingGate` uses the
 cancellable `checkTokenStatus` boundary (8 seconds by default) and renders a
 retryable connection error instead of blocking the app forever.
 
+## Design Mod Visual Ownership (Brief 62)
+
+`NativeSurfaceManifest.visualBleed` reserves outer physical-window pixels and
+`contentInset` describes the normal content rectangle within them. The satellite
+snapshot exposes both `surface.bounds` and `surface.contentRect`. A native
+surface is still clipped at its WebView boundary; the larger native bounds are
+there to make that boundary intentional.
+
+Freeform fixture mounts use a placement wrapper, a visual shell and an inner
+content mask. `TransformController` is the only writer of the wrapper's
+transform and combines base, drag, motion and physics offsets. The visual shell
+may apply perspective, clip-path and decoration without changing measured
+geometry. `DiaryPresenter` subscribes to `subscribeActiveCharacter`; the
+official `SubDiary` exposes the active character and refresh action, not a
+character picker. Avatar revision events refresh persistent consumers without
+remounting `ChatPanel`.
+
 ## Diary sync settings (Brief 171)
 
 `src/windows/chat/components/DiarySyncSettingsPage.tsx` is mounted in the

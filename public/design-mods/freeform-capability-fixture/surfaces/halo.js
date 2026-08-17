@@ -19,7 +19,7 @@ export function activate(host) {
     const snapshot = host.snapshot.get();
     if (!snapshot) return;
     const dpi = snapshot.main.bounds.dpi || 1;
-    const origin = { x: snapshot.main.bounds.x - 240 * dpi, y: snapshot.main.bounds.y - 240 * dpi };
+    const origin = { x: snapshot.surface.bounds.x, y: snapshot.surface.bounds.y };
     const center = { x: (snapshot.main.bounds.x + snapshot.main.bounds.width / 2 - origin.x), y: (snapshot.main.bounds.y + snapshot.main.bounds.height / 2 - origin.y) };
     const main = { x: snapshot.main.bounds.x - origin.x, y: snapshot.main.bounds.y - origin.y, width: snapshot.main.bounds.width, height: snapshot.main.bounds.height };
     mainLine.setAttribute('d', `M ${center.x} ${center.y} L ${main.x} ${main.y}`);

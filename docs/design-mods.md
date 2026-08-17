@@ -182,6 +182,21 @@ The host cache key includes `generation`, `modId` and `sequence`. Cleanup clears
 the cache before activation of a new Mod, so sequence `1` from a replacement
 Mod cannot reuse a payload produced by the previous Mod.
 
+### Visual bleed and teardown acknowledgement (Brief 62)
+
+Native manifests can declare finite non-negative `visualBleed` and
+`contentInset` values (a uniform number or four sides). `visualBleed` expands
+the native physical bounds; `contentInset` is returned as the snapshot content
+rect and must be used when a renderer needs the normal component rectangle.
+Do not use a DOM transform to escape the WebView rectangle.
+
+`host.transforms.create()` returns the sole transform owner for a freeform
+placement node. Feed it drag, native motion and optional physics offsets, then
+commit the composed transform. Do not write `left`, `top`, `translate` and
+`transform` independently during a drag. `host.surfaces.destroy()` awaits the
+main-owner `destroy_current_design_satellites` acknowledgement; host cleanup
+waits for it before restoring the built-in layout.
+
 每次启用都会生成新的 activation generation。切换、刷新、窗口卸载或 activate 抛错时，宿主按顺序调用
 disposer、清空 component/geometry/subscription ledger、停止宿主 rAF、移除 style 和 Blob URL。satellite
 异步 run 在每个 await 点检查 generation/disposed；listener、style、entry/asset Blob URL 与 pending command

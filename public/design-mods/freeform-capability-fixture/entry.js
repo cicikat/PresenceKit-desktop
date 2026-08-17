@@ -15,22 +15,35 @@ export function activate(host) {
     const mount = document.createElement('div');
     mount.className = 'design-fixture-mount ' + idToClass[id];
     mount.dataset.designComponent = id;
+    const shell = document.createElement('div');
+    shell.className = 'design-fixture-visual-shell';
+    const content = document.createElement('div');
+    content.className = 'design-fixture-content-mask';
+    shell.appendChild(content);
+    mount.appendChild(shell);
     host.layers.components.appendChild(mount);
-    host.components.attach(id, mount);
+    host.components.attach(id, content);
     mounts.set(id, mount);
+    const controller = host.transforms.create();
+    mount.__designTransform = controller;
+    const commit = () => {
+      controller.commit(mount);
+      host.geometry.flush();
+    };
+    commit();
     const down = (event) => {
-      if (event.target !== mount) return;
-      drag.set(id, { x: event.clientX, y: event.clientY, left: mount.offsetLeft, top: mount.offsetTop });
+      if (event.target.closest?.('button,input,textarea,select')) return;
+      controller.beginDrag();
+      drag.set(id, { x: event.clientX, y: event.clientY, offset: { ...controller.get().dragOffset } });
       mount.setPointerCapture?.(event.pointerId);
     };
     const move = (event) => {
       const state = drag.get(id);
       if (!state) return;
-      mount.style.left = `${state.left + event.clientX - state.x}px`;
-      mount.style.top = `${state.top + event.clientY - state.y}px`;
-      host.geometry.flush();
+      controller.moveDrag({ x: state.offset.x + event.clientX - state.x, y: state.offset.y + event.clientY - state.y });
+      commit();
     };
-    const up = () => drag.delete(id);
+    const up = () => { drag.delete(id); controller.endDrag(); };
     mount.addEventListener('pointerdown', down);
     mount.addEventListener('pointermove', move);
     mount.addEventListener('pointerup', up);
@@ -41,6 +54,7 @@ export function activate(host) {
       mount.removeEventListener('pointerup', up);
       mount.removeEventListener('pointercancel', up);
       host.components.detach(id);
+      controller.dispose();
       mount.remove();
     });
   };
@@ -63,9 +77,6 @@ export function activate(host) {
     ring.style.setProperty('--fixture-hue', String(snapshot.mood.hue));
     ring.style.setProperty('--fixture-aura', String(snapshot.telemetry.moodAura));
     ring.dataset.statusElement = 'mood-indicator';
-    const telemetry = document.createElement('div');
-    telemetry.className = 'design-fixture-status-telemetry';
-    telemetry.textContent = `B ${snapshot.telemetry.breath} · G ${snapshot.telemetry.gazeLock} · R ${snapshot.telemetry.rhythm} · ${snapshot.telemetry.source}`;
     const timeline = document.createElement('div');
     timeline.className = 'design-fixture-status-timeline';
     snapshot.timeline.slice(-24).forEach(entry => {
@@ -74,7 +85,7 @@ export function activate(host) {
       bar.style.background = `oklch(0.72 0.18 ${entry.hue})`;
       timeline.appendChild(bar);
     });
-    statusRoot.append(heading, ring, telemetry, timeline);
+    statusRoot.append(heading, ring, timeline);
     if (snapshot.errors.mood || snapshot.errors.activity || snapshot.errors.sensor) {
       const retry = document.createElement('button');
       retry.className = 'design-fixture-status-retry';
@@ -142,7 +153,10 @@ export function activate(host) {
   cleanups.push(host.signals.nativeWindow.subscribe(() => {
     const motion = host.signals.nativeWindow.get();
     mounts.forEach((mount, id) => {
-      if (id === 'chat.sidebar.flow' || id === 'chat.sidebar.garden') mount.style.translate = `${motion.velocity.x * 0.04}px ${motion.velocity.y * 0.04}px`;
+      if (id !== 'chat.sidebar.flow' && id !== 'chat.sidebar.garden') return;
+      const controller = mount.__designTransform;
+      controller?.setMotionOffset({ x: motion.velocity.x * 0.04, y: motion.velocity.y * 0.04 });
+      controller?.commit(mount);
     });
   }));
 

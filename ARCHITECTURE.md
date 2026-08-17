@@ -28,6 +28,20 @@ are retained as retryable UI state, and the main window remains the sole WS/HTTP
 owner. Onboarding token checks are cancellable and time-bounded; a timeout is a
 recoverable error rather than an indefinitely mounted checking screen.
 
+## Design Mod visual and lifecycle closure (work order 62)
+
+Native surface manifests may reserve `visualBleed` outside their content and a
+separate `contentInset`; Rust applies those values to physical bounds and
+reports both the outer bounds and the content rect in every satellite snapshot.
+The WebView remains a hard physical edge, so effects that need to extend beyond
+it must use a native surface. Freeform component placement now owns only layout
+and geometry, while a single transform controller composes drag, window motion,
+physics and visual transforms once per frame. Official diary consumption follows
+the active character only. Avatar mutations invalidate prompt-assets, emit an
+active-character avatar revision, and discard late reads. Restoring the default
+design awaits the main-owner satellite teardown acknowledgement before React
+portals, style tags and blob URLs are removed.
+
 ## Chat 偏好与 controller（2026-07-30）
 
 `PreferencesPanel` 保持 modal 形式，按作用域分为「常规、模型、能力与权限、界面、角色与对话、桌宠与互动、高级」。Chat 和 Activity 的日间 / 夜间入口继续复用 `ThemePicker` 与同一 theme registry，分别读写 `chat.theme.day` / `chat.theme.night`。电脑操作安全 / 危险模式是全局能力，只在 Chat「能力与权限」中展示；Activity 仅保留外观与活动调试偏好。

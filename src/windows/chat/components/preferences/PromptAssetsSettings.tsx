@@ -1,7 +1,7 @@
 ﻿import { useCallback, useEffect, useRef, useState } from 'react';
 import { getCharacterAvatar, getPromptAssets, patchPromptAssets, deleteCharacterAvatar, uploadCharacterAvatar } from '../../../../shared/api/backend';
 import type { PromptAssetsPatch, PromptAssetsResponse } from '../../../../shared/api/types';
-import { updateActiveCharacterFromAssets } from '../../../../shared/activeCharacter';
+import { notifyCharacterAvatarChanged, updateActiveCharacterFromAssets } from '../../../../shared/activeCharacter';
 import { getLoreEntries, addLoreEntry, updateLoreEntry, deleteLoreEntry, getJailbreakEntries, addJailbreakEntry, updateJailbreakEntry, deleteJailbreakEntry, type JailbreakEntry, type LoreEntry } from '../../../../shared/api/entries';
 import { EntryManager, type EntryManagerCallbacks, type EntryManagerSchema, type ManagedEntry } from '../EntryManager';
 import { AvatarCropper } from '../AvatarCropper';
@@ -205,9 +205,10 @@ export function PromptAssetsSettings({ onCharacterAvatarChange, onCharacterSwitc
     try {
       const file = new File([blob], 'avatar.png', { type: 'image/png' });
       await uploadCharacterAvatar(avatarCropCharId, file);
-      const refreshed = await getPromptAssets();
+      const refreshed = await getPromptAssets({ force: true });
       setAssets(refreshed);
       await loadActiveCharAvatar(refreshed.active.active_character, refreshed.characters);
+      notifyCharacterAvatarChanged(avatarCropCharId);
       closeAvatarCropper();
     } catch (err) {
       setAvatarError(`上传失败：${String(err)}`);
@@ -224,9 +225,10 @@ export function PromptAssetsSettings({ onCharacterAvatarChange, onCharacterSwitc
     setAvatarError(null);
     try {
       await deleteCharacterAvatar(charId);
-      const refreshed = await getPromptAssets();
+      const refreshed = await getPromptAssets({ force: true });
       setAssets(refreshed);
       void loadActiveCharAvatar(charId, refreshed.characters);
+      notifyCharacterAvatarChanged(charId);
     } catch (err) {
       setAvatarError(`移除失败：${String(err)}`);
     } finally {

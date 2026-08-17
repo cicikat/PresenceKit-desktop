@@ -166,6 +166,7 @@ export function SubDiary({ presenter }: { presenter: DiaryPresenter }) {
   const snapshot = usePresenterSnapshot(presenter, 'official.sidebar.diary');
   const { commands } = presenter;
   const { characters, activeCharacterId, entries } = snapshot;
+  const activeCharacter = characters.find(character => character.id === activeCharacterId);
   if (snapshot.loading && entries.length === 0) {
     return (
       <div data-sidebar-capability="diary" style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -192,18 +193,15 @@ export function SubDiary({ presenter }: { presenter: DiaryPresenter }) {
     <div data-sidebar-capability="diary" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <DesignAwareRegion id="chat.sidebar.diary.characters">
         <div style={{ padding: '10px 14px 6px', borderBottom: '1px solid var(--forest-line)' }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, alignItems: 'center' }}>
-          {characters.map(char => (
-            <button key={char.id} onClick={() => commands.selectCharacter(char.id)} style={{
-              padding: '3px 9px', borderRadius: 3, fontSize: chatThemeFontSize(11), background: activeCharacterId === char.id ? 'var(--on-forest)' : 'transparent', color: activeCharacterId === char.id ? 'var(--forest)' : 'var(--on-forest-2)', border: activeCharacterId === char.id ? '1px solid var(--on-forest)' : '1px solid var(--forest-line)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: activeCharacterId === char.id ? 600 : 500,
-              transition: 'all 0.15s',
-            }}>{char.label || char.id}</button>
-          ))}
+        <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+          <div className="serif" style={{ fontSize: chatThemeFontSize(13), color: 'var(--on-forest)', fontWeight: 600, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {activeCharacter?.label || activeCharacterId || '...'}
+          </div>
           <div style={{ flex: 1 }} />
           <button onClick={commands.refresh} title="刷新" style={{ width: 22, height: 22, borderRadius: 3, background: 'transparent', border: '1px solid var(--forest-line)', color: 'var(--on-forest-2)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: chatThemeFontSize(12), fontFamily: 'inherit' }}>↻</button>
         </div>
         <div className="mono" style={{ fontSize: chatThemeFontSize(9.5), color: 'var(--on-forest-2)', letterSpacing: 1.2, marginTop: 6 }}>
-          {entries.length} ENTRIES · {activeCharacterId.toUpperCase() || 'ALL'}
+          {entries.length} ENTRIES
         </div>
         </div>
       </DesignAwareRegion>

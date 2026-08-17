@@ -1087,3 +1087,12 @@ settings page. Reopening reuses the single bridge for the same saved backend;
 changing connection settings, explicit stop, application exit, or 15 minutes of
 listener idleness invalidates the capability and releases the port. This is a
 desktop-only transport convenience, not a new backend authentication boundary.
+
+## Design satellite teardown (Brief 62)
+
+`destroy_current_design_satellites()` is a main-WebView-to-Rust command. It
+atomically clears the registered Design Mod owner and closes every current
+satellite before acknowledging the previous generation and close count. The
+desktop host awaits that acknowledgement before restoring the configured
+theme/layout and removing React portals. It does not call backend HTTP, WS, or
+change a backend/mobile settings contract.

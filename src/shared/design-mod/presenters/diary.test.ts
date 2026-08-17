@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { StateEngine } from '../../state/store';
 import { DiaryPresenterController } from './diary';
+import { setActiveCharacterInfo } from '../../activeCharacter';
 
 vi.mock('../../api/backend', () => ({
   getPromptAssets: vi.fn(),
@@ -9,9 +10,33 @@ vi.mock('../../api/backend', () => ({
 
 describe('diary presenter loading and empty states', () => {
   beforeEach(async () => {
+    vi.stubGlobal('window', new EventTarget());
     const backend = await import('../../api/backend');
     vi.mocked(backend.getPromptAssets).mockReset();
     vi.mocked(backend.loadDiaryList).mockReset();
+    setActiveCharacterInfo({ id: '', name: '', avatarRevision: 0 });
+  });
+
+  it('follows the active character and drops a late previous response', async () => {
+    const backend = await import('../../api/backend');
+    let resolveA!: (value: any) => void;
+    vi.mocked(backend.getPromptAssets).mockResolvedValue({ characters: [{ id: 'a', label: 'A', avatar_url: null }, { id: 'b', label: 'B', avatar_url: null }], lorebooks: [], jailbreaks: [], active: { active_character: 'a', enabled_lorebooks: [], enabled_jailbreaks: [] } } as any);
+    vi.mocked(backend.loadDiaryList).mockImplementation(charId => charId === 'a'
+      ? new Promise(resolve => { resolveA = resolve; })
+      : Promise.resolve({ entries: [{ date: '2026-08-18', title: 'B entry', emotion: null, feeling: '' }], count: 1 }));
+    setActiveCharacterInfo({ id: 'a', name: 'A', avatarRevision: 0 });
+    const presenter = new DiaryPresenterController(new StateEngine());
+    const release = presenter.acquire('test');
+    await Promise.resolve();
+    await Promise.resolve();
+    setActiveCharacterInfo({ id: 'b', name: 'B', avatarRevision: 0 });
+    await Promise.resolve();
+    await Promise.resolve();
+    resolveA({ entries: [{ date: '2026-08-17', title: 'A entry', emotion: null, feeling: '' }], count: 1 });
+    await Promise.resolve();
+    expect(presenter.get()).toMatchObject({ activeCharacterId: 'b', entries: [{ title: 'B entry' }] });
+    release();
+    presenter.dispose();
   });
 
   it('loads characters and lightweight entries without body paths', async () => {
