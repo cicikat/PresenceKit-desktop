@@ -1,0 +1,8 @@
+.design-fixture-island { display: flex; flex-direction: column; gap: 8px; box-sizing: border-box; width: 100%; height: 100%; padding: 14px; color: var(--on-forest, #eefcf3); background: color-mix(in oklch, var(--forest, #153d31) 92%, transparent); border: 1px solid color-mix(in oklch, var(--accent, #8ee6bc) 65%, transparent); border-radius: 18px; box-shadow: 0 14px 44px #07130e88; font: 12px/1.35 var(--font-serif, Georgia); }
+.design-fixture-island__title { color: var(--accent, #8ee6bc); font: 10px var(--font-mono, ui-monospace); letter-spacing: 1.2px; }
+.design-fixture-island__body { min-height: 38px; flex: 1; overflow: hidden; color: var(--on-forest-2, #c8e9d8); }
+.design-fixture-island__actions { display: flex; gap: 6px; }
+.design-fixture-island__actions button { border: 1px solid color-mix(in oklch, var(--accent, #8ee6bc) 48%, transparent); border-radius: 999px; padding: 4px 9px; color: inherit; background: transparent; cursor: pointer; font: 10px var(--font-mono, ui-monospace); }
+.design-fixture-island__actions button:hover { background: color-mix(in oklch, var(--accent, #8ee6bc) 18%, transparent); }
+.design-fixture-island__ack { min-height: 12px; color: color-mix(in oklch, var(--accent, #8ee6bc) 78%, white); font: 9px var(--font-mono, ui-monospace); }
+.design-fixture-island[data-paused="true"] { opacity: .55; }

@@ -1,11 +1,16 @@
 [
   {
-    "schemaVersion": 1,
+    "schemaVersion": 2,
     "id": "freeform-capability-fixture",
     "name": "自由合成能力样架",
     "author": "PresenceKit",
     "version": "1.0.0",
     "entry": "entry.js",
-    "style": "style.css"
+    "style": "style.css",
+    "nativeSurfaces": [
+      { "id": "halo", "kind": "halo", "entry": "surfaces/halo.js", "style": "surfaces/halo.css", "pointerMode": "passthrough", "zOrder": "owned", "margin": 240, "size": { "width": 1, "height": 1 } },
+      { "id": "right-island", "kind": "island", "entry": "surfaces/island.js", "style": "surfaces/island.css", "pointerMode": "interactive", "zOrder": "owned", "anchor": "main.right", "offset": { "x": 18, "y": 0 }, "size": { "width": 236, "height": 164 }, "requires": ["navigation", "presenters"] },
+      { "id": "top-island", "kind": "island", "entry": "surfaces/island.js", "style": "surfaces/island.css", "pointerMode": "interactive", "zOrder": "owned", "anchor": "main.top", "offset": { "x": 0, "y": -18 }, "size": { "width": 236, "height": 136 }, "requires": ["navigation", "presenters"] }
+    ]
   }
 ]

@@ -19,9 +19,24 @@ public/design-mods/<id>/
 └── layout/        # 可选：layout.json 及其 CSS
 ```
 
-`mod.json` 必须包含 `schemaVersion: 1`、`id`、`name`、`author`、`version` 和 `.js` 的 `entry`。
-`id` 必须是单级安全目录名并与目录名一致；`style`、`theme`、`layout` 只能是包内相对路径。
+`mod.json` 兼容 `schemaVersion: 1` 和 `schemaVersion: 2`，必须包含 `id`、`name`、`author`、
+`version` 和 `.js` 的 `entry`。`id` 必须是单级安全目录名并与目录名一致；`style`、`theme`、`layout`
+只能是包内相对路径。v2 可选声明 `nativeSurfaces`；不声明时仍按 v1 的单 WebView 行为运行。
 `entry.js` 不能依赖运行时裸相对 import，依赖应由作者预先打包进单文件。
+
+原生 surface 仍属于同一个 Mod 包，不增加第二个包根：
+
+```text
+├── surfaces/
+│   ├── halo.js            # kind=halo，必须 passthrough
+│   ├── halo.css
+│   └── island.js          # kind=island，可 interactive
+```
+
+每个 surface 声明 `id`、`kind`、`entry`、`size`、`pointerMode`、`zOrder`，halo 还声明 CSS 单位
+`margin`，island 声明 `anchor`（`main.top|right|bottom|left`）和可选 `offset`。surface id、label、资源路径
+都由前端和 Rust 双重校验；禁止 `hybrid`、绝对路径、重复 id 和跨包资源。`always-on-top` 只有在 manifest
+明确声明时才可使用，诊断会显示该 z-order。
 
 内含 theme/layout 在启用前分别复用现有 validator 与 CSS 安检；任一失败都不会应用其中任何一半。
 它们不会被复制到 `public/themes/` 或 `public/layouts/`。独立主题/布局仍使用原有 registry，来源标记
@@ -99,7 +114,7 @@ session elapsed ticker 和 native window motion 在无事件后都会 settle，m
 
 ## 舞台与信号
 
-舞台覆盖当前 Chat Webview viewport，不覆盖 Tauri 原生窗口外的桌面区域。它有独立的
+主 WebView 舞台覆盖当前 Chat viewport；v2 的 native surface 才能在主原生窗口外绘制。它有独立的
 `underlay`、`components`、`overlay` 三层，均为固定 viewport 坐标系；共同祖先不设置裁剪或 flatten 3D
 的 transform。根层默认不接管指针，Mod 自己创建的 mount 或 `[data-design-interactive="true"]` 节点才接管。
 
@@ -128,6 +143,24 @@ ChatWindow → `DesignModHost` → default shell → `LayoutHost` → layout slo
 现有 shared API → Tauri command → Presence 链。`host.assets.url(path)` 解析当前 design-mod 的 `assets/`
 资源；Tauri 模式通过本地读取命令生成 Blob URL，开发浏览器模式使用同包静态 URL。
 
+### Native satellite surfaces
+
+只有主窗口可以通过 `DesignSatelliteBridge` 请求 surface 生命周期；Mod 本身拿到的 `host.surfaces` 是只读
+诊断与可见性/布局请求接口，不能创建 `WebviewWindow`。Rust `DesignSatelliteState` 保持当前
+`mod_id + generation + surface_id` 注册表：切换、加载失败、主窗口隐藏/最小化、关闭和退出都会隐藏或销毁
+整组 surface，旧 generation 的 create/move/ready/command 不会进入当前主窗口。
+
+Halo 使用透明、无装饰、无阴影、跳过任务栏、不可聚焦、全窗 click-through 的 owned window；island 只创建
+manifest 声明的紧凑尺寸，`interactive` 才可接收指针。窗口内部以物理屏幕 px 布局，logical/CSS 尺寸乘当前
+display factor；负坐标、多显示器和 DPI 变化由 Rust 主窗口 move/resize/scale 事件重新计算。主窗口仍是
+唯一 WS/HTTP/history/TTS/StateEngine/presenter owner；surface 只接收裁剪 snapshot，按钮通过白名单 command
+bridge 回主窗口并等待 correlation ack。
+
+快照含 `generation`、单调 `sequence`、主窗口屏幕 bounds/DPI、visible/focused/maximized、pointer、theme、
+裁剪后的 StateEngine/chat/status/flow presenter 和 screen-space anchors。卫星 ready 后主窗口回放当前 generation
+的最新快照；卫星丢弃旧 generation/sequence。`DesignModSettings` 诊断显示每个 surface 的 bounds、pointer mode、
+ready、FPS、snapshot/command sequence 和最近错误。
+
 ## 生命周期和恢复
 
 每次启用都会生成新的 `AbortSignal` 和 activation generation。切换、刷新、窗口卸载或 activate 抛错时，
@@ -146,4 +179,5 @@ Status renderer，覆盖 telemetry、timeline、错误重试和切换/清理路�
 clip-path / perspective / matrix3d、SVG 连接几何、session 驱动装饰、内部拖拽与原生窗口运动信号；
 Ribbon 由 viewport 的 top/bottom 约束决定高度，非关键项可滚动，底部偏好/帮助/日夜控制不随窗口
 高度或异步内容被推出可视区。
-它不是产品视觉方案。
+它还声明一个 passthrough Halo 和右/顶部 interactive islands：Halo 展示主窗口/组件到岛的 screen-space 连线，
+岛消费 Status/Flow presenter 并通过 command bridge 操作 Sidebar/Preferences。它不是产品视觉方案。

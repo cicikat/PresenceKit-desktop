@@ -62,8 +62,8 @@ Token 由后端 `POST /auth/tokens` 签发；scope 表、profile 表、管理操
 
 - 初始化头像 / Dream 背景 store：`avatarStore.init()`。
 - 挂载全局样式：`src/shared/theme/globals.css`。
-- 默认渲染 `<ChatWindow />`；`?window=pet`、`?window=presence-nag` 和 `?window=diary-detail`
-  分别进入独立 Webview view。
+- 默认渲染 `<ChatWindow />`；`?window=pet`、`?window=presence-nag`、`?window=diary-detail` 和
+  `?window=design-satellite` 分别进入对应的独立 Webview view；native satellite 不初始化 Chat 树。
 - 聊天与桌宠的 TTS 音频可并行合成；主 Webview 通过 Tauri window event 持有播放租约队列，保证任一窗口播放结束后才授权下一条音频输出。
 - 在默认主 view 中由 `activeWindow` 在保持 `<ChatWindow />` 挂载的前提下覆盖
   `<ActivityWindow />`、`<ToyWindow />` 或 `<RoomWindow />`，避免卸载 ChatPanel 和 WS 订阅。
@@ -76,7 +76,7 @@ Token 由后端 `POST /auth/tokens` 签发；scope 表、profile 表、管理操
 - 通过 `src/shared/layout/registry.ts` 的声明式 LayoutHost 排布 Ribbon、Sidebar 和主内容区；偏好「界面」中的布局预览器可立即切换已发现的布局。布局 mod 还能用受控 `mainLayout` 模板重排 ChatPanel 内的标题、消息流、输入框；它不能替换或执行区域组件。
 - `DesignModHost` 是独立的可信自由合成路线：`public/design-mods/`（debug）或 `resource_dir/design-mods/`（release）中的单文件 ESM 通过固定 viewport 的 underlay/components/overlay 三层运行。Host 根、default shell、LayoutHost、slot 和 ChatPanel 共享 `width/height: 100%`、`min-width/min-height: 0` 尺寸契约；active 只切换可见性和事件接管，不改变默认树的尺寸语义。真实 Ribbon、Chat header/transcript/composer 和四个 Sidebar capability 由 React portal 挂到 Mod 创建的容器，ChatPanel 的消息、输入、WS/history/TTS owner 不复制。Preferences 与 builtin-default 恢复由高于 Mod 舞台的 system overlay 保底，diagnostics 记录阶段、shell/layer 可见性、挂载、viewport 和恢复入口状态；恢复默认只撤销舞台，不改变原调用链。
 - ChatWindow 创建一份 `SidebarPresenters`，由 `src/shared/design-mod/presenters/` 统一承载 Status、Flow、Garden、Diary 的快照、命令、共享状态轮询和消费者生命周期。官方 Sidebar 与可信 Design Mod 都消费这份 presenter；Mod 可声明整块 capability 或其子视觉区域，但注册表拒绝父子 ownership 同时挂载。官方 renderer 保留 `data-*` 语义钩子和 Status 的动态 CSS variables，诊断会记录 presenter consumer/timer/lastUpdated。
-- Design Mod 只覆盖 Chat Webview 内部，不承诺跨出 Tauri 原生窗口；高频 session、pointer、viewport、native-window motion 和 geometry 走 `src/shared/design-mod/` 外部 store，Activity/Toy/Room/Dream 覆盖时暂停 rAF。作者契约见 `docs/design-mods.md`。
+- Design Mod 的主舞台覆盖 Chat Webview 内部；v2 native satellite 由 Rust coordinator 创建主窗口 owned 的透明 Halo/紧凑 Island，主窗口仍是唯一 WS/HTTP/history/TTS/StateEngine/presenter owner。高频 session、pointer、viewport、native-window motion 和 geometry 走 `src/shared/design-mod/` 外部 store，Activity/Toy/Room/Dream 覆盖或窗口隐藏时暂停 satellite 与 rAF。作者契约见 `docs/design-mods.md`。
 - 使用 `src/shared/chatAppearance.ts` 保存 Chat 聊天字号、主题字号和字体包；Sidebar 宽度仅通过界面分隔条拖拽调整。
 - 偏好面板的「角色与对话」页通过 `getPromptAssets()` / `patchPromptAssets()` 管理 Reality Prompt Assets：角色卡单选、世界书多选和破限多选。可用选项来自后端，客户端不展示文件路径。
 - 把 engine 传给 `ChatPanel`。
