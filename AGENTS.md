@@ -48,6 +48,7 @@ PresenceKit-desktop 是 `PresenceKit` AI 陪伴系统的新桌面客户端，技
 3. 多个独立交付物一次性批量输出，并标明可并行项与前置依赖；每个独立修复验收后应小步 commit。
 4. 代码、脚本和文档不得写盘符绝对路径，统一相对仓库根；`start-dev.bat` 用 `%~dp0`。
 5. 本机密钥仅放在 gitignore 文件（`config/client.local.json`）；提交的仅为 `*.example.*` 占位文件。
+6. 每张施工单完成当前实现与验证后及时独立 commit；若仍有真实窗口、设备或 release 验收未完成，必须在工单和已知问题中保留明确的 open/partial 状态，不得把静态检查冒充完整验收。
 
 ---
 
