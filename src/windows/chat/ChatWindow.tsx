@@ -6,6 +6,7 @@ import { wsClient } from '../../shared/api/ws';
 import { getDiarySyncStatus, syncDiary } from '../../shared/api/diary-sync';
 import { refreshActiveCharacterInfo, subscribeActiveCharacter } from '../../shared/activeCharacter';
 import { getCharacterAvatar, getPromptAssets } from '../../shared/api/backend';
+import { openAdminPanel } from '../../shared/api/adminBridge';
 import { isPresenceNagEnabled, patchPresenceNagEnabled } from '../../shared/presenceNag';
 import { getProactiveGapHours, patchProactiveGapHours } from '../../shared/proactiveGap';
 import { YandereOverlay } from './components/YandereOverlay';
@@ -161,7 +162,12 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen, isCovered = 
             closeSidebar: appearanceController.closeSidebar,
             setSidebarTab: appearanceController.onSidebarTab,
             openPrefs: () => navigation.setPrefsOpen(true),
-              restoreDefault: () => { setSelectedDesignModId('builtin-default'); navigation.setPrefsOpen(true); },
+            openAdminPanel: () => {
+              void openAdminPanel().catch(error => {
+                console.error('打开管理面板失败', error);
+              });
+            },
+            restoreDefault: () => { setSelectedDesignModId('builtin-default'); navigation.setPrefsOpen(true); },
           }}
           renderSidebar={tab => <SidebarCapability presenters={presenters} sidebarRectRef={sidebarRectRef} tab={tab} />}
           renderChat={

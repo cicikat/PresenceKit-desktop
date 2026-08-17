@@ -2,7 +2,7 @@
 
 可信设计 Mod 是 Chat 窗口内的本地设计运行时。它与主题 Mod、布局 Mod 分开校验，但可以在一个包里
 可选地携带 `theme` 和 `layout`。第一版只允许一个运行时 Mod，按“可信本地代码”执行；没有 iframe
-沙箱、签名、网络权限或自动下载。设计错误会恢复 `builtin-default`，偏好面板和恢复默认入口始终由宿主保留。
+沙箱、签名、网络权限或自动下载。设计错误会恢复 `builtin-default`；偏好面板和管理面板入口始终由宿主保留，默认设计恢复仍位于偏好中的 Design Mod 设置。
 
 ## 包格式
 
@@ -123,8 +123,8 @@ ChatWindow → `DesignModHost` → default shell → `LayoutHost` → layout slo
 `width/height: 100%`、`min-width/min-height: 0`。active Mod 只改变 default shell 与 Mod layer 的
 可见性/事件接管，不得改变这份尺寸语义；加载中、激活失败或 fallback 时标准布局继续可见。
 
-宿主另有一个 click-through 的 system overlay，层级高于 Mod 舞台，提供打开 Preferences 和恢复
-`builtin-default` 的轻量入口。它不是强制系统栏，不遮挡正常聊天或 Mod 交互；Mod 不得成为唯一恢复路径。
+宿主另有一个 click-through 的 system overlay，层级高于 Mod 舞台，提供打开 Preferences 和管理面板的轻量入口。
+它不是强制系统栏，不遮挡正常聊天或 Mod 交互；Mod 不得成为唯一的设置入口。
 
 `host.signals` 提供同步读取 + 订阅：
 

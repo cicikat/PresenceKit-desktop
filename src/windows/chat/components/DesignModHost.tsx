@@ -39,6 +39,7 @@ interface DesignModHostProps {
     closeSidebar: () => void;
     setSidebarTab: (tab: string) => void;
     openPrefs: () => void;
+    openAdminPanel: () => void;
     restoreDefault: () => void;
   };
   renderSidebar: (tab: 'flow' | 'garden' | 'diary' | 'status') => ReactNode;
@@ -69,7 +70,7 @@ function DesignModRecoveryOverlay({
   open,
   onToggle,
   onOpenPreferences,
-  onRestoreDefault,
+  onOpenAdminPanel,
   t,
 }: {
   diagnostic: DesignModDiagnostic;
@@ -77,7 +78,7 @@ function DesignModRecoveryOverlay({
   open: boolean;
   onToggle: () => void;
   onOpenPreferences: () => void;
-  onRestoreDefault: () => void;
+  onOpenAdminPanel: () => void;
   t: (key: any) => string;
 }) {
   const status = t('designMod.hostRecoveryHint').replace('{status}', diagnostic.message);
@@ -91,8 +92,8 @@ function DesignModRecoveryOverlay({
               <button type="button" className="design-mod-recovery__action" onClick={onOpenPreferences}>
                 {t('designMod.hostOpenPreferences')}
               </button>
-              <button type="button" className="design-mod-recovery__action" onClick={onRestoreDefault}>
-                {t('designMod.hostRestoreDefault')}
+              <button type="button" className="design-mod-recovery__action" onClick={onOpenAdminPanel}>
+                {t('designMod.hostOpenAdminPanel')}
               </button>
             </div>
           </div>
@@ -583,7 +584,7 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
       open={recoveryOpen}
       onToggle={() => setRecoveryOpen(value => !value)}
       onOpenPreferences={commands.openPrefs}
-      onRestoreDefault={commands.restoreDefault}
+      onOpenAdminPanel={commands.openAdminPanel}
       t={t}
     />
   </div>;
