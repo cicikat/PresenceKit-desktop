@@ -391,6 +391,19 @@ Timeline：`uiPreferences` 按激活角色分桶持久化（key `subflow_timelin
 | presence | engine 现有值（默认 active）；sensor 可用时仅参与 4 个信号派生，不写入 engine | — |
 | focus | ChatPanel 输入驱动，SubStatus 不动 | — |
 
+Status renderer ownership：`SubStatus` 通过三个 `DesignAwareRegion` 提供稳定子区边界。
+`mood` 拥有 mood 卡和 `data-status-element` glow/indicator；`activity` 拥有 activity 与
+presence 两张卡；`timeline` 拥有 telemetry 四条 signal bar 与近 2 分钟 mood 轨迹。根级
+错误 / 重试条只归父 `chat.sidebar.status`，不是独立 primitive。`official-renderer` 挂父级，
+`subregions` 挂三个子级，`presenter-only` 不挂官方 portal；注册表保证这三种 ownership
+不会同时渲染。
+
+`--status-*` 变量由 `statusRendererContract.ts` 从同一份 `StatusPresenter` snapshot
+生成，并写入 root 及每个官方子区 mount。portal 脱离父 root 后不依赖 document/global CSS
+继承；Mod 自绘必须从 `host.presenters.status` 读取 hue、aura、breath 等值。子区未 attach
+时的官方 DOM 只存在于 active Mod 的 hidden fallback tree，fixture 会一次挂载三个 Status
+子区，因此验收时 activity/timeline 不应残留在 hidden tree。
+
 持续可感知信号公式（均为前端 derived，0-100）：
 
 | 信号 | 来源 | CSS transition |
@@ -751,11 +764,12 @@ remounting `ChatPanel`.
 Host API v2 adds explicit sidebar composition (`official-renderer`, `subregions`,
 or `presenter-only`), semantic Status/Flow/Garden/Diary primitives, a single
 scene scheduler over `TransformController`, and DPI-aware page/component edge
-observations for capped local ornaments. The Status child ids are present in the
-contract, but the built-in renderer currently portals only `mood`; `activity` and
-`timeline` remain open under work order 65. The host keeps the default shell
-intact for builtin-default; the fixture uses separate primitive portals rather
-than moving complete Flow/Garden/Diary panels. See `docs/brief-63-freeform-primitives.md`.
+  observations for capped local ornaments. The built-in renderer portals Status
+  `mood`, `activity`, and `timeline` independently; `activity` owns presence and
+  `timeline` owns telemetry. The host keeps the default shell intact for
+  builtin-default; the fixture uses separate primitive portals rather than moving
+  complete Flow/Garden/Diary panels and now attaches all three Status child ids.
+  See `docs/brief-63-freeform-primitives.md`.
 
 ## Diary sync settings (Brief 171)
 

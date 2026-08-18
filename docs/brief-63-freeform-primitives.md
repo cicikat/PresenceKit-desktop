@@ -19,9 +19,11 @@ directed edges, normals, corners, visibility and DPR. Hidden or covered host
 state pauses edge delivery; `OrnamentGrowth` is session-local and capped.
 
 The `freeform-capability-fixture` declares Flow/Garden/Diary `subregions` and
-Status `presenter-only`, places six official subregions as scene nodes, draws a
-Status mood node from its presenter, and uses one bounded canvas for page and
-Flow-edge ornaments. It is an API fixture, not product art.
+Status `subregions`, places all nine official child subregions as scene nodes,
+and uses one bounded canvas for page and Flow-edge ornaments. Status
+`presenter-only` remains the no-attachment mode: a Mod must draw all Status
+content from `host.presenters.status` rather than copying official DOM. It is an
+API fixture, not product art.
 
 No backend setting, mobile setting, HTTP route, Tauri command, WS message,
 queue, trace, or cross-repository interface was added. Real Windows visual,

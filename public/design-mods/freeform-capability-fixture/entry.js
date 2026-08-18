@@ -5,7 +5,7 @@ export function activate(host) {
   const growth = { value: 0, cap: 96, disposed: false };
 
   ['flow', 'garden', 'diary'].forEach(capability => host.components.setComposition(capability, 'subregions'));
-  host.components.setComposition('status', 'presenter-only');
+  host.components.setComposition('status', 'subregions');
 
   const mountPrimitive = (id, className, options) => {
     const node = document.createElement('section');
@@ -43,20 +43,9 @@ export function activate(host) {
   mountPrimitive('chat.sidebar.flow.timeline', 'fixture-flow-timeline', { id: 'flow-timeline', layer: 'components', anchor: { kind: 'viewport', x: .04, y: .54 }, basePosition: { x: 0, y: -90 }, size: { width: 176, height: 180 }, zIndex: 3 });
   mountPrimitive('chat.sidebar.garden.visual', 'fixture-garden-visual', { id: 'garden-visual', layer: 'components', anchor: { kind: 'viewport', x: .95, y: .55 }, basePosition: { x: -188, y: -112 }, size: { width: 188, height: 224 }, visualTransform: 'perspective(760px) rotateX(3deg) rotateY(-4deg)', zIndex: 3 });
   mountPrimitive('chat.sidebar.diary.entries', 'fixture-diary-entries', { id: 'diary-entries', layer: 'components', anchor: { kind: 'viewport', x: .52, y: .92 }, basePosition: { x: -130, y: -92 }, size: { width: 260, height: 184 }, zIndex: 3 });
-
-  const status = document.createElement('section');
-  status.className = 'fixture-status'; status.dataset.fixturePresenter = 'status.mood';
-  const statusScene = host.scene.create(status, { id: 'status-mood', sourcePrimitive: 'chat.sidebar.status.mood', layer: 'components', anchor: { kind: 'viewport', x: .5, y: .18 }, basePosition: { x: -74, y: 0 }, size: { width: 148, height: 62 }, visualTransform: 'rotate(1deg)', zIndex: 5 });
-  const renderStatus = () => {
-    const snapshot = host.presenters.status.get();
-    status.replaceChildren();
-    const label = document.createElement('span'); label.className = 'fixture-status__label'; label.textContent = snapshot.mood.label;
-    const ring = document.createElement('i'); ring.className = 'fixture-status__ring'; ring.style.setProperty('--fixture-hue', String(snapshot.mood.hue)); ring.style.setProperty('--fixture-aura', String(snapshot.telemetry.moodAura));
-    status.append(label, ring);
-  };
-  cleanups.push(host.presenters.status.acquire('fixture.status-mood'));
-  cleanups.push(host.presenters.status.subscribe(renderStatus));
-  cleanups.push(() => statusScene.dispose()); renderStatus();
+  mountPrimitive('chat.sidebar.status.mood', 'fixture-status-mood', { id: 'status-mood', layer: 'components', anchor: { kind: 'viewport', x: .5, y: .18 }, basePosition: { x: -104, y: 0 }, size: { width: 208, height: 112 }, visualTransform: 'rotate(1deg)', zIndex: 5 });
+  mountPrimitive('chat.sidebar.status.activity', 'fixture-status-activity', { id: 'status-activity', layer: 'components', anchor: { kind: 'viewport', x: .08, y: .82 }, basePosition: { x: 0, y: -54 }, size: { width: 264, height: 108 }, visualTransform: 'rotate(-1deg)', zIndex: 5 });
+  mountPrimitive('chat.sidebar.status.timeline', 'fixture-status-timeline', { id: 'status-timeline', layer: 'components', anchor: { kind: 'viewport', x: .92, y: .82 }, basePosition: { x: -264, y: -82 }, size: { width: 264, height: 164 }, visualTransform: 'rotate(1deg)', zIndex: 5 });
 
   const canvas = document.createElement('canvas');
   canvas.className = 'fixture-edge-ornaments'; host.layers.overlay.appendChild(canvas);

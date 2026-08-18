@@ -43,4 +43,22 @@ describe('design component registry', () => {
     registry.attach('chat.sidebar.garden', {} as HTMLElement);
     expect(() => registry.attach('chat.sidebar.garden.visual', {} as HTMLElement)).toThrow('official-renderer');
   });
+
+  it('keeps Status parent, subregions, and presenter-only modes mutually exclusive', () => {
+    const registry = new ComponentAttachmentRegistry();
+    registry.setComposition('status', 'official-renderer');
+    registry.attach('chat.sidebar.status', {} as HTMLElement);
+    expect(() => registry.attach('chat.sidebar.status.mood', {} as HTMLElement)).toThrow('official-renderer');
+
+    registry.clear();
+    registry.setComposition('status', 'subregions');
+    registry.attach('chat.sidebar.status.mood', {} as HTMLElement);
+    registry.attach('chat.sidebar.status.activity', {} as HTMLElement);
+    registry.attach('chat.sidebar.status.timeline', {} as HTMLElement);
+    expect(() => registry.attach('chat.sidebar.status', {} as HTMLElement)).toThrow('subregions');
+
+    registry.clear();
+    registry.setComposition('status', 'presenter-only');
+    expect(() => registry.attach('chat.sidebar.status.timeline', {} as HTMLElement)).toThrow('presenter-only');
+  });
 });

@@ -170,18 +170,33 @@ host.components.setComposition('status', 'presenter-only');
 `chat.sidebar.diary.characters` 只是旧 schema v2 兼容别名，新 Mod 禁止使用。Diary 只表示当前激活角色；
 角色管理属于 Preferences。
 
-Status 的三个子 id 已进入 v2 contract/registry，但当前内置官方 renderer 只把 `mood` 接入
-`DesignAwareRegion`；`activity` / `timeline` 的官方 portal 仍在工单 65。需要这两个区域时，
-暂用 `presenter-only` 并消费 `host.presenters.status`，不要把 attach 成功误认为已有官方内容。
+Status 的三个子 id 已进入 v2 contract/registry，内置官方 renderer 现在为三者都提供
+`DesignAwareRegion` portal。官方 DOM 归属固定为：`mood` 只包含 mood 卡和
+`mood-glow` / `mood-indicator`；`activity` 包含 activity 与 presence；`timeline` 包含
+telemetry 与 mood timeline。根级错误 / 重试条属于父 `chat.sidebar.status`，不属于任何
+子区。子区未 attach 时只在官方 React fallback 中保留；active Mod 的默认 shell 会隐藏，
+所以 `subregions` Mod 应 attach 或自绘所有需要显示的子区。
 
 ### Status renderer hooks
 
 官方 `SubStatus` 提供 `data-status-element="mood-glow|mood-indicator"`，以及
 `--status-mood-hue`、`--status-aura`、`--status-breath`、`--status-gaze-lock`、
 `--status-rhythm`、`--status-indicator-size`、`--status-glow-x`、`--status-glow-y`。
-这些变量当前以 inline style 写在官方 Status root 上，作用域仅为该 root 的后代 DOM，不是
-全局 CSS token；通过 `DesignAwareRegion` portal 到 Mod mount 的节点不会自动继承它们。自定义
-renderer 应从 `host.presenters.status` 读取值并自行设置样式，不要依赖其他节点上的变量或 hooks。
+这些变量由官方 renderer 以 inline style 同时写在 Status root 和每个官方子区的 portal 根上。
+它们是 mount-local scoped hooks，不是全局 CSS token；自定义 renderer 仍应从
+`host.presenters.status.get()` 读取 `mood.hue`、`telemetry.moodAura`、`telemetry.breath` 等
+值并自行设置样式，不要依赖其他节点上的变量或 hooks。可直接使用与官方 renderer 相同的
+`src/shared/design-mod/statusRendererContract.ts` 纯映射规则，但不得复制 StateEngine 或
+sensor 真值。
+
+三种 composition 的固定行为：
+
+- `official-renderer`：只 attach `chat.sidebar.status`，官方父 renderer portal 整块 Status。
+- `subregions`：只 attach `.mood`、`.activity`、`.timeline`，每个 mount 只得到对应边界。
+- `presenter-only`：不 attach Status id，Mod 从 `host.presenters.status` 自绘完整内容和错误态。
+
+注册表拒绝父子同时 ownership；切换时旧 portal 先由 disposer 清理，避免默认布局、Mod layer
+和快速切换产生重复 renderer。
 
 ### Presenters
 

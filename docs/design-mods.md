@@ -111,19 +111,31 @@ session elapsed ticker 和 native window motion 在无事件后都会 settle，m
 | garden | `chat.sidebar.garden.visual`、`chat.sidebar.garden.summary`、`chat.sidebar.garden.controls` |
 | diary | `chat.sidebar.diary.identity`、`chat.sidebar.diary.entries`（`.characters` 仅旧包兼容） |
 
-上表是 v2 contract/registry 的可挂载目录，不等于每个官方 React renderer 都已经接通。
-当前内置 `SubStatus` 只将 `mood` 放入 `DesignAwareRegion`；`activity` 与 `timeline` 的
-contract 和 ownership 校验已经存在，但官方 portal 出口仍待工单 65 补齐。需要这两个区域时，
-在该工单完成前应使用 `presenter-only` 自绘，不能假设 attach 后会出现官方内容。
+上表是 v2 contract/registry 的可挂载目录。工单 65 起，内置 `SubStatus` 的三个 Status
+子区均有正式 `DesignAwareRegion` 出口，边界固定如下：
 
-官方 renderer 会保留 `data-sidebar-capability` 与 `data-<capability>-region` 语义钩子。Status 额外
-提供 `data-status-element="mood-glow|mood-indicator"` 和 `--status-mood-hue`、
+| 子区 | 官方 DOM | 未单独开放时的归属 |
+|---|---|---|
+| `mood` | `data-status-region="mood"`、`mood-glow`、`mood-indicator` | mood 子区 |
+| `activity` | `data-status-region="activity"` 与 `data-status-region="presence"` | activity 子区 |
+| `timeline` | `data-status-region="telemetry"` 与 `data-status-region="timeline"` | timeline 子区 |
+
+根级错误 / 重试条不属于任何子区，只由父 `chat.sidebar.status` 的官方 renderer 负责。
+因此，`subregions` 或 `presenter-only` 的 Mod 需要从 `host.presenters.status` 读取
+`errors` 并自行决定错误呈现；它不会从 hidden fallback tree 得到一份重复的官方错误条。
+
+官方 renderer 会保留 `data-sidebar-capability` 与 `data-<capability>-region` 语义钩子。Status
+额外提供 `data-status-element="mood-glow|mood-indicator"` 和 `--status-mood-hue`、
 `--status-aura`、`--status-breath`、`--status-gaze-lock`、`--status-rhythm`、
-`--status-indicator-size`、`--status-glow-x`、`--status-glow-y` CSS variables。当前这些变量
-由 `SubStatus` inline 写在官方 Status root 上，只保证该 root 的后代 DOM 可继承，不能当作
-document/global token 使用；portal 到 Mod mount 后不会自动继承这份 root 作用域。Mod 应从
-`host.presenters.status` 读取稳定值并自行设置变量，不能从其他节点“顺手读取”这些 hooks。
-挂载父能力时由官方 renderer 承担整块 fallback；只挂已接通的子区域时只替换对应视觉区域。
+`--status-indicator-size`、`--status-glow-x`、`--status-glow-y` CSS variables。
+`SubStatus` 将完整变量集同时写在 Status root 和每个三块官方子区的 portal 根上；因此官方
+子区脱离 root 继承树后仍有明确的 mount-local 来源。Mod 自绘 renderer 仍应从
+`host.presenters.status` 读取稳定值并自行设置变量，不能从其他节点“顺手读取” hooks。
+
+composition 行为固定为：`official-renderer` 只能挂父 id，由父 portal 承担整块官方内容；
+`subregions` 只能挂三个子 id，每个挂载只替换对应子区，fixture 会同时挂载三块以避免
+官方 fallback 留在 hidden tree；`presenter-only` 不挂官方 id，由 Mod 完全从 presenter 自绘。
+注册表拒绝父子混挂，切换和卸载时 portal 只保留当前 ownership，因此不会重复渲染。
 
 ## 舞台与信号
 
@@ -277,7 +289,9 @@ default shell 与 Mod layer 可见性、component attachment、viewport 尺寸�
 返回后恢复。
 
 仓库附带 `public/design-mods/freeform-capability-fixture/`，只用于验收基础设施：它将 flow/garden/diary
-声明为 `subregions`，把六个官方子区域拆成独立 Scene node；Status 使用 `presenter-only` 自绘 mood 节点。
+声明为 `subregions`，把六个官方子区域拆成独立 Scene node；Status 也声明为 `subregions`，
+把 `mood`、`activity`、`timeline` 三个官方子区分别挂到独立 Scene node。需要验证
+`presenter-only` 时应移除 Status attach 并保留 presenter 自绘，不应把官方 DOM 复制进 Mod。
 fixture 还演示 viewport/component edge Canvas 装饰、perspective、统一拖拽 transform 与原生窗口运动信号；
 它不代表产品最终视觉。
 它还声明一个 passthrough Halo 和右/顶部 interactive islands：Halo 展示主窗口/组件到岛的 screen-space 连线，

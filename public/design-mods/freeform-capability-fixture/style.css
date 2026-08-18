@@ -1,13 +1,11 @@
 .fixture-node { box-sizing: border-box; overflow: visible; transform-origin: 0 0; border: 1px solid color-mix(in oklch, var(--accent) 46%, transparent); border-radius: 8px; background: color-mix(in oklch, var(--paper) 86%, transparent); box-shadow: 0 16px 36px color-mix(in oklch, var(--ink) 18%, transparent); }
 .fixture-node__content { width: 100%; height: 100%; min-width: 0; min-height: 0; overflow: hidden; border-radius: inherit; }
-.fixture-node__content > [data-chat-region], .fixture-node__content > .design-mod-sidebar-capability { width: 100%; height: 100%; min-width: 0; min-height: 0; }
+.fixture-node__content > [data-chat-region], .fixture-node__content > .design-mod-sidebar-capability, .fixture-node__content > [data-status-subregion] { width: 100%; height: 100%; min-width: 0; min-height: 0; }
 .fixture-flow-now { clip-path: polygon(0 8%, 96% 0, 100% 92%, 6% 100%); }
 .fixture-garden-summary { border-color: color-mix(in oklch, var(--forest) 60%, transparent); }
 .fixture-diary-identity { clip-path: polygon(4% 0, 100% 10%, 96% 100%, 0 90%); }
 .fixture-flow-timeline { border-left-width: 3px; }
 .fixture-garden-visual { clip-path: polygon(8% 0, 100% 7%, 92% 100%, 0 92%); }
 .fixture-diary-entries { border-bottom-width: 3px; }
-.fixture-status { box-sizing: border-box; padding: 10px 14px; color: var(--on-forest); background: color-mix(in oklch, var(--forest) 76%, transparent); border: 1px solid color-mix(in oklch, var(--accent) 70%, transparent); border-radius: 8px; box-shadow: 0 10px 26px color-mix(in oklch, var(--forest) 30%, transparent); }
-.fixture-status__label { display: block; max-width: 104px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 12px var(--font-serif); }
-.fixture-status__ring { position: absolute; right: 13px; top: 16px; width: 28px; height: 28px; border-radius: 50%; background: oklch(.72 .18 var(--fixture-hue)); box-shadow: 0 0 calc(8px + var(--fixture-aura) * .12px) oklch(.72 .18 var(--fixture-hue) / .7); }
+.fixture-status-mood, .fixture-status-activity, .fixture-status-timeline { border-color: color-mix(in oklch, var(--forest) 66%, var(--accent)); }
 .fixture-edge-ornaments { position: absolute; inset: 0; pointer-events: none; }

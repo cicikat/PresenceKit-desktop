@@ -1,7 +1,8 @@
 # 65：Status 子区域官方 renderer 与 hook 作用域
 
-> 状态：open。v2 contract/registry 已声明三个 Status 子区域，但官方 renderer 和 CSS hook
-> 的 portal 作用域尚未闭环；本单不把契约登记当成视觉验收完成。
+> 状态：partial/open。Status 三个官方 portal、mount-local CSS hook contract、纯逻辑回归和
+> fixture 已完成；Windows debug 实窗、宽窄窗口和 100%/125%/175% DPI 验收仍未完成，本单不把
+> 静态检查冒充视觉验收。
 
 ## 1. 证据
 
@@ -46,3 +47,14 @@
 - 不实现新的 Status 数据字段、传感器算法、后端设置或移动端消费。
 - 不要求 native satellite；贴边/漂浮错觉继续使用主 WebView 的 underlay/components/overlay、
   `host.scene` 与 `host.edges`。真实越窗能力仍受 native satellite 平台状态限制。
+
+## 5. 本轮落地
+
+- `SubStatus` 现在将 `mood`、`activity + presence`、`telemetry + timeline` 分别挂到三个
+  `DesignAwareRegion`；根级错误 / 重试条继续归父 Status renderer。
+- `statusRendererContract.ts` 冻结子区归属、三种 composition 的 attachment/fallback 规则，
+  并从 `StatusPresenterSnapshot` 直接生成每个官方 mount 使用的 `--status-*` 变量。
+- fixture 改为同时 attach 三个 Status 子区；`presenter-only` 仍要求 Mod 完全消费
+  `host.presenters.status`，不复制官方 DOM。
+- `npm test`（50 files / 210 tests）、`npx.cmd tsc --noEmit`、`npm.cmd run build`、fixture
+  `node --check` 和命名检查已通过；真实 Windows 窗口验收保持 `partial/open`。
