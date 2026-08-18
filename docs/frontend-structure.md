@@ -403,6 +403,8 @@ presence 两张卡；`timeline` 拥有 telemetry 四条 signal bar 与近 2 分�
 继承；Mod 自绘必须从 `host.presenters.status` 读取 hue、aura、breath 等值。子区未 attach
 时的官方 DOM 只存在于 active Mod 的 hidden fallback tree，fixture 会一次挂载三个 Status
 子区，因此验收时 activity/timeline 不应残留在 hidden tree。
+Host 只为实际 attach 了父级或子区 renderer 的 capability 创建 hidden source tree；
+`presenter-only` 不创建官方 `SubStatus`，不会额外 acquire presenter 或启动 sensor/timeline timer。
 
 持续可感知信号公式（均为前端 derived，0-100）：
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ComponentAttachmentRegistry } from './components';
+import { ComponentAttachmentRegistry, hasCapabilityAttachment } from './components';
 
 describe('design component registry', () => {
   it('rejects unknown and duplicate singleton attachments', () => {
@@ -60,5 +60,12 @@ describe('design component registry', () => {
     registry.clear();
     registry.setComposition('status', 'presenter-only');
     expect(() => registry.attach('chat.sidebar.status.timeline', {} as HTMLElement)).toThrow('presenter-only');
+  });
+
+  it('only requires an official source tree for attached capabilities', () => {
+    expect(hasCapabilityAttachment([], 'status')).toBe(false);
+    expect(hasCapabilityAttachment(['chat.sidebar.status.mood'], 'status')).toBe(true);
+    expect(hasCapabilityAttachment(['chat.sidebar.flow.now'], 'status')).toBe(false);
+    expect(hasCapabilityAttachment(['chat.sidebar.status'], 'status')).toBe(true);
   });
 });

@@ -185,9 +185,9 @@ telemetry 与 mood timeline。根级错误 / 重试条属于父 `chat.sidebar.st
 这些变量由官方 renderer 以 inline style 同时写在 Status root 和每个官方子区的 portal 根上。
 它们是 mount-local scoped hooks，不是全局 CSS token；自定义 renderer 仍应从
 `host.presenters.status.get()` 读取 `mood.hue`、`telemetry.moodAura`、`telemetry.breath` 等
-值并自行设置样式，不要依赖其他节点上的变量或 hooks。可直接使用与官方 renderer 相同的
-`src/shared/design-mod/statusRendererContract.ts` 纯映射规则，但不得复制 StateEngine 或
-sensor 真值。
+值并自行设置样式，不要依赖其他节点上的变量或 hooks。作者可以参考官方 renderer 的纯映射
+规则，但 `src/shared/design-mod/statusRendererContract.ts` 是仓库内部实现，不是 Mod 的公开
+import API；entry 必须把需要的逻辑预先打包进自己的单文件，且不得复制 StateEngine 或 sensor 真值。
 
 三种 composition 的固定行为：
 

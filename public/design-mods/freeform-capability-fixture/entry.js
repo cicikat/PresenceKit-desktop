@@ -45,7 +45,7 @@ export function activate(host) {
   mountPrimitive('chat.sidebar.diary.entries', 'fixture-diary-entries', { id: 'diary-entries', layer: 'components', anchor: { kind: 'viewport', x: .52, y: .92 }, basePosition: { x: -130, y: -92 }, size: { width: 260, height: 184 }, zIndex: 3 });
   mountPrimitive('chat.sidebar.status.mood', 'fixture-status-mood', { id: 'status-mood', layer: 'components', anchor: { kind: 'viewport', x: .5, y: .18 }, basePosition: { x: -104, y: 0 }, size: { width: 208, height: 112 }, visualTransform: 'rotate(1deg)', zIndex: 5 });
   mountPrimitive('chat.sidebar.status.activity', 'fixture-status-activity', { id: 'status-activity', layer: 'components', anchor: { kind: 'viewport', x: .08, y: .82 }, basePosition: { x: 0, y: -54 }, size: { width: 264, height: 108 }, visualTransform: 'rotate(-1deg)', zIndex: 5 });
-  mountPrimitive('chat.sidebar.status.timeline', 'fixture-status-timeline', { id: 'status-timeline', layer: 'components', anchor: { kind: 'viewport', x: .92, y: .82 }, basePosition: { x: -264, y: -82 }, size: { width: 264, height: 164 }, visualTransform: 'rotate(1deg)', zIndex: 5 });
+  mountPrimitive('chat.sidebar.status.timeline', 'fixture-status-timeline', { id: 'status-timeline', layer: 'components', anchor: { kind: 'viewport', x: .92, y: .82 }, basePosition: { x: -264, y: -82 }, size: { width: 264, height: 220 }, visualTransform: 'rotate(1deg)', zIndex: 5 });
 
   const canvas = document.createElement('canvas');
   canvas.className = 'fixture-edge-ornaments'; host.layers.overlay.appendChild(canvas);

@@ -11,13 +11,13 @@
   `chat.sidebar.status.timeline`。
 - `ComponentAttachmentRegistry`、`DesignModHost` 和 `setComposition('status', ...)`
   已能校验并接受这些 id。
-- `src/windows/chat/components/SubStatus.tsx` 目前只有 `mood` 使用
-  `DesignAwareRegion`；`activity`、`presence`、`telemetry`、`timeline` 仍是父 renderer
-  内的普通 DOM。活动/轨迹子区被 Mod attach 后，官方内容不会出现在 Mod mount。
-- `SubStatus` 的 `--status-*` 变量以 inline style 写在 Status root。mood portal 目标位于
-  Design Mod layer，脱离该 root 的 CSS 继承树；这些变量不是全局 token。
-- `public/design-mods/freeform-capability-fixture/entry.js` 当前把 Status 设为
-  `presenter-only`，因此不能证明官方 Status 子区 portal。
+- `src/windows/chat/components/SubStatus.tsx` 现在将 `mood`、`activity + presence`、
+  `telemetry + timeline` 分别放入三个 `DesignAwareRegion`；每个官方子区 mount 都复制
+  一份 mount-local `--status-*` style。
+- active Mod 的隐藏源树只为实际 attach 了父/子 renderer 的 capability 创建；
+  `presenter-only` 不再启动隐藏 `SubStatus` 的 presenter acquire、sensor 或 timeline timer。
+- `public/design-mods/freeform-capability-fixture/entry.js` 现在同时 attach 三个 Status 子区，
+  并将 timeline 容器扩大到能容纳 telemetry 与轨迹内容的高度。
 
 ## 2. 目标
 

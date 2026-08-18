@@ -19,6 +19,11 @@ function isCapabilityParent(id: DesignComponentId, capability: DesignCapability)
   return id === `chat.sidebar.${capability}`;
 }
 
+export function hasCapabilityAttachment(attachments: readonly DesignComponentId[], capability: DesignCapability): boolean {
+  const prefix = `chat.sidebar.${capability}`;
+  return attachments.some(id => id === prefix || id.startsWith(`${prefix}.`));
+}
+
 /** Tracks portal ownership and an optional explicit renderer composition plan. */
 export class ComponentAttachmentRegistry {
   private readonly descriptors = new Map(DESIGN_COMPONENTS.map(descriptor => [descriptor.id, descriptor]));

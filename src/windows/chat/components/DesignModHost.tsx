@@ -21,7 +21,7 @@ import {
   restoreDefaultDesign,
   type ActivationContext,
 } from '../../../shared/design-mod/runtime';
-import { ComponentAttachmentRegistry, type DesignCapability, type DesignCompositionMode } from '../../../shared/design-mod/components';
+import { ComponentAttachmentRegistry, hasCapabilityAttachment, type DesignCapability, type DesignCompositionMode } from '../../../shared/design-mod/components';
 import { publishDesignModDiagnostics } from '../../../shared/design-mod/diagnostics';
 import { clearDesignMounts, setDesignMount, setDesignRuntimeActive, subscribeDesignMounts } from '../../../shared/design-mod/mounts';
 import type { SidebarPresenters } from '../../../shared/design-mod/presenters';
@@ -690,11 +690,11 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
     <div className="design-mod-default-shell" data-design-mod-default-shell={hostLayout.defaultShellVisible ? 'visible' : 'hidden'}>{renderChat}</div>
     {layers}
     {hostLayout.modLayerVisible && <div style={{ display: 'none' }} aria-hidden="true">
-      {(['flow', 'garden', 'diary', 'status'] as const).map(tab => (
+      {(['flow', 'garden', 'diary', 'status'] as const).map(tab => hasCapabilityAttachment(attached, tab) ? (
         <DesignAwareRegion key={tab} id={`chat.sidebar.${tab}`}>
           <div className="design-mod-sidebar-capability">{renderSidebar(tab)}</div>
         </DesignAwareRegion>
-      ))}
+      ) : null)}
     </div>}
     <DesignModRecoveryOverlay
       diagnostic={diagnostic}
