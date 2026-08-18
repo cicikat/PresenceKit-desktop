@@ -1,5 +1,8 @@
 # 可信设计 Mod
 
+> 创建或修改 Mod 请先读 `docs/design-mod-authoring.md`。本文记录宿主实现、运行时边界和历史兼容；
+> 作者可用 API、manifest 字段、最小示例和验收清单以作者说明书为准。
+
 可信设计 Mod 是 Chat 窗口内的本地设计运行时。它与主题 Mod、布局 Mod 分开校验，但可以在一个包里
 可选地携带 `theme` 和 `layout`。第一版只允许一个运行时 Mod，按“可信本地代码”执行；没有 iframe
 沙箱、签名、网络权限或自动下载。设计错误会恢复 `builtin-default`；偏好面板和管理面板入口始终由宿主保留，默认设计恢复仍位于偏好中的 Design Mod 设置。
@@ -33,8 +36,9 @@ public/design-mods/<id>/
 │   └── island.js          # kind=island，可 interactive
 ```
 
-每个 surface 声明 `id`、`kind`、`entry`、`size`、`pointerMode`、`zOrder`，halo 还声明 CSS 单位
-`margin`，island 声明 `anchor`（`main.top|right|bottom|left`）和可选 `offset`。surface id、label、资源路径
+每个 surface 声明 `id`、`kind`、`entry`、`size`、`pointerMode`、`zOrder`；需要视觉外伸时声明
+`visualBleed`，island 声明 `anchor`（`main.top|right|bottom|left`）和可选 `offset`。旧 `margin` 仅为
+外扩兼容别名。surface id、label、资源路径
 都由前端和 Rust 双重校验；禁止 `hybrid`、绝对路径、重复 id 和跨包资源。`always-on-top` 只有在 manifest
 明确声明时才可使用，诊断会显示该 z-order。
 
@@ -91,7 +95,7 @@ Sidebar 的四个能力由 `src/shared/design-mod/presenters/` 统一提供 pres
 | `status` | `mood`、`activity`、`presence`、`telemetry`、60 格带 `sampledAt` 的 timeline、三类错误 | `retryMood` / `retryActivity` / `retrySensor` |
 | `flow` | NOW narrative、mood/focus/presence、tool overlay、按角色隔离的 8 小时 timeline | `refresh` |
 | `garden` | 后端 garden slots、stage/progress、loading/error/lastUpdated | `refresh` |
-| `diary` | characters、active character、entries 元数据、loading/error/selection | `refresh` / `selectCharacter` / `openEntry` |
+| `diary` | active character、entries 元数据、loading/error/selection | `refresh` / `openEntry`；`selectCharacter` 仅旧包兼容 |
 
 所有 presenter 都实现 `get()`、`subscribe()`、`acquire(consumerId)` 和诊断读取。共享状态轮询以
 最短活动 cadence 合并，ChatWindow 的后台 owner 与 Sidebar/Mod consumer 共用同一计时器；覆盖或
@@ -104,7 +108,7 @@ session elapsed ticker 和 native window motion 在无事件后都会 settle，m
 |---|---|
 | flow | `chat.sidebar.flow.now`、`chat.sidebar.flow.timeline` |
 | garden | `chat.sidebar.garden.visual`、`chat.sidebar.garden.summary`、`chat.sidebar.garden.controls` |
-| diary | `chat.sidebar.diary.characters`、`chat.sidebar.diary.entries` |
+| diary | `chat.sidebar.diary.identity`、`chat.sidebar.diary.entries`（`.characters` 仅旧包兼容） |
 
 官方 renderer 会保留 `data-sidebar-capability` 与 `data-<capability>-region` 语义钩子。Status 额外
 提供 `data-status-element="mood-glow|mood-indicator"` 和 `--status-mood-hue`、
@@ -260,11 +264,9 @@ default shell 与 Mod layer 可见性、component attachment、viewport 尺寸�
 未挂载、被裁切、被推出 viewport 和层被隐藏。Activity、Toy、Room 覆盖 Chat 时会暂停高频设计循环，
 返回后恢复。
 
-仓库附带 `public/design-mods/freeform-capability-fixture/`，只用于验收基础设施：它挂载 flow/garden/diary
-官方能力，同时故意不挂载 `chat.sidebar.status`，改用 `host.presenters.status` 自绘一个非矩形
-Status renderer，覆盖 telemetry、timeline、错误重试和切换/清理路径。fixture 还保留
-clip-path / perspective / matrix3d、SVG 连接几何、session 驱动装饰、内部拖拽与原生窗口运动信号；
-Ribbon 由 viewport 的 top/bottom 约束决定高度，非关键项可滚动，底部偏好/帮助/日夜控制不随窗口
-高度或异步内容被推出可视区。
+仓库附带 `public/design-mods/freeform-capability-fixture/`，只用于验收基础设施：它将 flow/garden/diary
+声明为 `subregions`，把六个官方子区域拆成独立 Scene node；Status 使用 `presenter-only` 自绘 mood 节点。
+fixture 还演示 viewport/component edge Canvas 装饰、perspective、统一拖拽 transform 与原生窗口运动信号；
+它不代表产品最终视觉。
 它还声明一个 passthrough Halo 和右/顶部 interactive islands：Halo 展示主窗口/组件到岛的 screen-space 连线，
 岛消费 Status/Flow presenter 并通过 command bridge 操作 Sidebar/Preferences。它不是产品视觉方案。
