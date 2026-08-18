@@ -95,6 +95,11 @@ public/design-mods/<id>/
 | `requires` | 能力门控；未知或不可用能力会阻止整个 Mod 激活 |
 
 `contentRect` 永远不含 `visualBleed`。DOM 无法越过主 WebView 物理边界；需要越窗时必须声明 native surface。
+若只是做贴边、悬浮或“像要越界”的视觉错觉，请使用主 WebView 的
+`host.layers.underlay/components/overlay`、`host.scene` 和 `host.edges`，不需要声明 native
+surface。Native satellite 的平台状态由宿主报告：Windows 为 `supported`，macOS/Linux 为
+`experimental`（尚无真人窗口验收），其他平台为 `unavailable`；不要把真实越窗效果当成跨平台
+默认能力。
 
 ## 4. 主窗口入口与生命周期
 
@@ -164,6 +169,19 @@ host.components.setComposition('status', 'presenter-only');
 
 `chat.sidebar.diary.characters` 只是旧 schema v2 兼容别名，新 Mod 禁止使用。Diary 只表示当前激活角色；
 角色管理属于 Preferences。
+
+Status 的三个子 id 已进入 v2 contract/registry，但当前内置官方 renderer 只把 `mood` 接入
+`DesignAwareRegion`；`activity` / `timeline` 的官方 portal 仍在工单 65。需要这两个区域时，
+暂用 `presenter-only` 并消费 `host.presenters.status`，不要把 attach 成功误认为已有官方内容。
+
+### Status renderer hooks
+
+官方 `SubStatus` 提供 `data-status-element="mood-glow|mood-indicator"`，以及
+`--status-mood-hue`、`--status-aura`、`--status-breath`、`--status-gaze-lock`、
+`--status-rhythm`、`--status-indicator-size`、`--status-glow-x`、`--status-glow-y`。
+这些变量当前以 inline style 写在官方 Status root 上，作用域仅为该 root 的后代 DOM，不是
+全局 CSS token；通过 `DesignAwareRegion` portal 到 Mod mount 的节点不会自动继承它们。自定义
+renderer 应从 `host.presenters.status` 读取值并自行设置样式，不要依赖其他节点上的变量或 hooks。
 
 ### Presenters
 

@@ -11,7 +11,11 @@
 - `chat.sidebar.garden.visual` / `summary` / `controls`
 - `chat.sidebar.diary.characters` / `entries`
 
-但当前 fixture 仍挂载 `chat.sidebar.flow/garden/diary` 三个父级，因此表现为“把整页换位置”。Status 只有整页 component id，Garden/Diary 虽有 presenter snapshot，fixture 也没有证明 Mod 能以数据 primitive 自绘。组件 attachment registry 又禁止父子区域同时占用，缺少清晰的 composition mode、边缘路径和统一节点 transform API。
+但当时的 fixture 仍挂载 `chat.sidebar.flow/garden/diary` 三个父级，因此表现为“把整页换位置”。
+当前 Status 的 mood/activity/timeline 已进入 v2 contract/registry，但内置 `SubStatus` 只把 mood
+接入官方 portal；activity/timeline 仍缺官方 renderer 出口，详见工单 65。Garden/Diary 虽有
+presenter snapshot，fixture 也没有证明 Mod 能以数据 primitive 自绘。组件 attachment registry
+又禁止父子区域同时占用，缺少清晰的 composition mode、边缘路径和统一节点 transform API。
 
 目标不是继续堆更多固定页面组件，而是让 Mod 能选择：复用官方 renderer、只挂一个官方子区域、或消费稳定 presenter 数据完全自绘。
 

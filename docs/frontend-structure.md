@@ -751,9 +751,11 @@ remounting `ChatPanel`.
 Host API v2 adds explicit sidebar composition (`official-renderer`, `subregions`,
 or `presenter-only`), semantic Status/Flow/Garden/Diary primitives, a single
 scene scheduler over `TransformController`, and DPI-aware page/component edge
-observations for capped local ornaments. The host keeps the default shell intact
-for builtin-default; the fixture uses separate primitive portals rather than
-moving complete Flow/Garden/Diary panels. See `docs/brief-63-freeform-primitives.md`.
+observations for capped local ornaments. The Status child ids are present in the
+contract, but the built-in renderer currently portals only `mood`; `activity` and
+`timeline` remain open under work order 65. The host keeps the default shell
+intact for builtin-default; the fixture uses separate primitive portals rather
+than moving complete Flow/Garden/Diary panels. See `docs/brief-63-freeform-primitives.md`.
 
 ## Diary sync settings (Brief 171)
 

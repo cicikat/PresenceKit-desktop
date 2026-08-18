@@ -106,21 +106,33 @@ session elapsed ticker 和 native window motion 在无事件后都会 settle，m
 
 | 能力 | 可挂载子区域 |
 |---|---|
+| status | `chat.sidebar.status.mood`、`chat.sidebar.status.activity`、`chat.sidebar.status.timeline` |
 | flow | `chat.sidebar.flow.now`、`chat.sidebar.flow.timeline` |
 | garden | `chat.sidebar.garden.visual`、`chat.sidebar.garden.summary`、`chat.sidebar.garden.controls` |
 | diary | `chat.sidebar.diary.identity`、`chat.sidebar.diary.entries`（`.characters` 仅旧包兼容） |
 
+上表是 v2 contract/registry 的可挂载目录，不等于每个官方 React renderer 都已经接通。
+当前内置 `SubStatus` 只将 `mood` 放入 `DesignAwareRegion`；`activity` 与 `timeline` 的
+contract 和 ownership 校验已经存在，但官方 portal 出口仍待工单 65 补齐。需要这两个区域时，
+在该工单完成前应使用 `presenter-only` 自绘，不能假设 attach 后会出现官方内容。
+
 官方 renderer 会保留 `data-sidebar-capability` 与 `data-<capability>-region` 语义钩子。Status 额外
 提供 `data-status-element="mood-glow|mood-indicator"` 和 `--status-mood-hue`、
 `--status-aura`、`--status-breath`、`--status-gaze-lock`、`--status-rhythm`、
-`--status-indicator-size`、`--status-glow-x`、`--status-glow-y` CSS variables。挂载父能力时由
-官方 renderer 承担整块 fallback；只挂子区域时只替换对应视觉区域。
+`--status-indicator-size`、`--status-glow-x`、`--status-glow-y` CSS variables。当前这些变量
+由 `SubStatus` inline 写在官方 Status root 上，只保证该 root 的后代 DOM 可继承，不能当作
+document/global token 使用；portal 到 Mod mount 后不会自动继承这份 root 作用域。Mod 应从
+`host.presenters.status` 读取稳定值并自行设置变量，不能从其他节点“顺手读取”这些 hooks。
+挂载父能力时由官方 renderer 承担整块 fallback；只挂已接通的子区域时只替换对应视觉区域。
 
 ## 舞台与信号
 
 主 WebView 舞台覆盖当前 Chat viewport；v2 的 native surface 才能在主原生窗口外绘制。它有独立的
 `underlay`、`components`、`overlay` 三层，均为固定 viewport 坐标系；共同祖先不设置裁剪或 flatten 3D
 的 transform。根层默认不接管指针，Mod 自己创建的 mount 或 `[data-design-interactive="true"]` 节点才接管。
+如果目标只是“贴着边缘、看起来要飘出去”的视觉效果，应优先在这三层内使用 `host.scene` 与
+`host.edges`；这条 WebView 路径不依赖 native satellite，跨平台约束更小。只有确实要越过
+Tauri 主窗口物理边界时才声明 Halo/Island native surface。
 
 ChatWindow → `DesignModHost` → default shell → `LayoutHost` → layout slot → Ribbon/Sidebar/Main
 保持明确的 viewport 尺寸链：宿主根、default shell、LayoutHost、slot 和 ChatPanel 子项必须提供
