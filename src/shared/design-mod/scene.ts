@@ -32,7 +32,13 @@ export class SceneNode {
   private disposed = false;
   private capturedPointerId: number | null = null;
 
-  constructor(private readonly element: HTMLElement, options: SceneNodeOptions, private readonly source: SceneGeometrySource, private readonly request: () => void) {
+  constructor(
+    private readonly element: HTMLElement,
+    options: SceneNodeOptions,
+    private readonly source: SceneGeometrySource,
+    private readonly request: () => void,
+    private readonly unregister: () => void,
+  ) {
     this.options = { ...options };
     this.transform = new TransformController(options.basePosition, options.visualTransform);
     element.style.position = 'absolute';
@@ -42,18 +48,23 @@ export class SceneNode {
   }
 
   update(options: Partial<Omit<SceneNodeOptions, 'id' | 'layer'>>): void {
+    if (this.disposed) return;
     this.options = { ...this.options, ...options };
     if (options.visualTransform !== undefined) this.transform.setVisualTransform(options.visualTransform);
     if (options.basePosition !== undefined) this.transform.setBasePosition(options.basePosition);
     this.applyStatic(); this.request();
   }
 
-  setMotionOffset(offset: TransformPoint): void { this.transform.setMotionOffset(offset); this.request(); }
-  setPhysicsOffset(offset: TransformPoint): void { this.transform.setPhysicsOffset(offset); this.request(); }
-  beginDrag(): void { this.transform.beginDrag(); this.request(); }
-  moveDrag(offset: TransformPoint): void { this.transform.moveDrag(offset); this.request(); }
-  endDrag(): void { this.transform.endDrag(); this.request(); }
-  capturePointer(pointerId: number): void { this.element.setPointerCapture?.(pointerId); this.capturedPointerId = pointerId; }
+  setMotionOffset(offset: TransformPoint): void { if (!this.disposed) { this.transform.setMotionOffset(offset); this.request(); } }
+  setPhysicsOffset(offset: TransformPoint): void { if (!this.disposed) { this.transform.setPhysicsOffset(offset); this.request(); } }
+  beginDrag(): void { if (!this.disposed) { this.transform.beginDrag(); this.request(); } }
+  moveDrag(offset: TransformPoint): void { if (!this.disposed) { this.transform.moveDrag(offset); this.request(); } }
+  endDrag(): void { if (!this.disposed) { this.transform.endDrag(); this.request(); } }
+  capturePointer(pointerId: number): void {
+    if (this.disposed) return;
+    this.element.setPointerCapture?.(pointerId);
+    this.capturedPointerId = pointerId;
+  }
 
   commit(): void {
     if (this.disposed) return;
@@ -70,6 +81,7 @@ export class SceneNode {
     this.capturedPointerId = null;
     this.transform.dispose();
     this.element.remove();
+    this.unregister();
   }
 
   private resolveAnchor(): EdgePoint {
@@ -105,8 +117,12 @@ export class SceneScheduler {
   constructor(private readonly source: SceneGeometrySource) {}
 
   create(element: HTMLElement, options: SceneNodeOptions): SceneNode {
+    if (this.disposed) throw new Error('Scene scheduler is disposed');
     if (this.nodes.has(options.id)) throw new Error(`Scene node already exists: ${options.id}`);
-    const node = new SceneNode(element, options, this.source, () => this.schedule());
+    let node: SceneNode;
+    node = new SceneNode(element, options, this.source, () => this.schedule(), () => {
+      if (this.nodes.get(options.id) === node) this.nodes.delete(options.id);
+    });
     this.nodes.set(options.id, node); this.schedule();
     return node;
   }

@@ -56,6 +56,17 @@ edges for local, bounded ornaments. These APIs only consume existing desktop
 presenters and signals: no new backend, mobile, IPC, WS, or persistent state
 contract is introduced.
 
+## Design Mod lifecycle and content rect fix (work order 64)
+
+`SceneNode.dispose()` unregisters through its owning `SceneScheduler`, making
+same-id rebuilds valid while preserving idempotent cleanup of DOM, transforms,
+pointer capture and the shared frame. A disposed scheduler rejects new nodes.
+Native surface layout computes unexpanded content bounds first, applies
+`visualBleed` only to physical window bounds, and applies `contentInset` only
+inward to the content rectangle reported in satellite snapshots. Work orders
+62 and 63 remain `partial/open` pending real Windows multi-DPI/multi-monitor
+fixture acceptance; this repair adds no backend or mobile contract.
+
 ## Chat 偏好与 controller（2026-07-30）
 
 `PreferencesPanel` 保持 modal 形式，按作用域分为「常规、模型、能力与权限、界面、角色与对话、桌宠与互动、高级」。Chat 和 Activity 的日间 / 夜间入口继续复用 `ThemePicker` 与同一 theme registry，分别读写 `chat.theme.day` / `chat.theme.night`。电脑操作安全 / 危险模式是全局能力，只在 Chat「能力与权限」中展示；Activity 仅保留外观与活动调试偏好。

@@ -47,9 +47,9 @@ export interface NativeSurfaceManifest {
   pointerMode: NativeSurfacePointerMode;
   zOrder: NativeSurfaceZOrder;
   size: NativeSurfaceSize;
-  /** Extra transparent window area reserved for transformed visual output. */
+  /** Extra transparent window area, outside the unexpanded content bounds. */
   visualBleed?: number | NativeSurfaceInsets;
-  /** Inset rectangle reserved for normal content inside the visual window. */
+  /** Inward inset applied to the unexpanded content bounds for snapshot contentRect. */
   contentInset?: number | NativeSurfaceInsets;
   /** @deprecated Use visualBleed for surface bounds. */
   margin?: number | NativeSurfaceMargin;

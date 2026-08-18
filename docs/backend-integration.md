@@ -1096,3 +1096,12 @@ satellite before acknowledging the previous generation and close count. The
 desktop host awaits that acknowledgement before restoring the configured
 theme/layout and removing React portals. It does not call backend HTTP, WS, or
 change a backend/mobile settings contract.
+
+## Design satellite content rect (Brief 64)
+
+Native surface layout is desktop-local Rust geometry. The calculation first
+establishes the unexpanded content bounds, expands only the physical `bounds`
+with `visualBleed` (or legacy `margin` for compatibility), then applies
+`contentInset` inward to produce `content_rect`. Satellite snapshots therefore
+expose an outer window rectangle and a content rectangle that never includes
+visual bleed. No HTTP, WebSocket, queue, or mobile contract is added.

@@ -19,6 +19,13 @@
   local/UI repair only; it adds no backend setting, mobile setting, HTTP route,
   WS message, queue, trace, or cross-repository contract.
 
+- **Design Mod lifecycle and content rect fix (work order 64)** — `partial/open`.
+  Scene-node unregister/rebuild and content-rect geometry regression tests are
+  covered by TypeScript/Rust tests. Real Windows acceptance remains open for
+  transparent Halo pixels, unequal bleed/inset at 100%/125%/175% DPI, negative
+  multi-monitor coordinates, and repeated Mod/builtin teardown. This remains a
+  desktop-local repair with no backend, mobile, HTTP, WebSocket, or IPC contract.
+
 - **运行时性能基线与真实窗口验收（工单 60）** — `partial/open`。快照采样、合帧、20Hz 预算、暂停/恢复、诊断节流、头像优先加载、prompt-assets 去重和窗口协调器已接入并通过纯逻辑测试；2026-08-17 已在 Windows debug/175% DPI 验证 fixture 三个 surface 的创建、跟随和暂停销毁，但尚未完成 release resource_dir 的进程私有字节、frame p95、click-to-ack、100%/125% DPI、双屏和 20 次切换实测，记录模板见 `docs/brief-60-runtime-baseline.md`。
 - **客户端可见回归与窗口生命周期（工单 61）** — `partial/open`。Ribbon tooltip、桌宠 native 状态回填/重试、Onboarding 检查超时和 Mod payload generation 隔离已通过自动化检查；真实 Windows 窄窗口、DPI、桌宠连续开关、Activity 失败恢复和 20 次切换仍需实窗验收。
 

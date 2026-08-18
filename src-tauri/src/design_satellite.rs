@@ -327,7 +327,8 @@ fn calculate_layout(spec: &NativeSurfaceSpec, main: &SurfaceBounds) -> (SurfaceB
             height: main.height.saturating_add((top + bottom).max(0) as u32),
             dpi,
         };
-        return (bounds.clone(), inset_bounds(&bounds, spec.content_inset.as_ref()));
+        let content_rect = inset_bounds(main, spec.content_inset.as_ref());
+        return (bounds, content_rect);
     }
     let width = physical_logical(spec.size.width, dpi);
     let height = physical_logical(spec.size.height, dpi);
@@ -365,7 +366,8 @@ fn calculate_layout(spec: &NativeSurfaceSpec, main: &SurfaceBounds) -> (SurfaceB
         height: content_bounds.height.saturating_add((top + bottom).max(0) as u32),
         dpi,
     };
-    (bounds.clone(), inset_bounds(&bounds, spec.content_inset.as_ref()))
+    let content_rect = inset_bounds(&content_bounds, spec.content_inset.as_ref());
+    (bounds, content_rect)
 }
 
 fn main_bounds(app: &AppHandle) -> Result<SurfaceBounds, String> {
@@ -819,7 +821,7 @@ mod tests {
                 height: 1.0,
             },
             visual_bleed: Some(NativeSurfaceMargin::Uniform(240.0)),
-            content_inset: Some(NativeSurfaceMargin::Uniform(240.0)),
+            content_inset: None,
             margin: Some(NativeSurfaceMargin::Uniform(240.0)),
             anchor: None,
             offset: None,
@@ -830,6 +832,35 @@ mod tests {
         assert_eq!(halo_bounds.width, 1800);
         let (_, content_rect) = calculate_layout(&halo, &main);
         assert_eq!(content_rect, main);
+    }
+
+    #[test]
+    fn keeps_content_rect_independent_from_visual_bleed() {
+        let main = SurfaceBounds { x: -1200, y: 80, width: 1600, height: 900, dpi: 1.75 };
+        let mut surface = island("main.left");
+        surface.size = NativeSurfaceSize { width: 200.0, height: 100.0 };
+        surface.visual_bleed = Some(NativeSurfaceMargin::Sides { top: 12.0, right: 24.0, bottom: 36.0, left: 48.0 });
+        surface.content_inset = Some(NativeSurfaceMargin::Sides { top: 8.0, right: 10.0, bottom: 6.0, left: 4.0 });
+
+        let (bounds, content_rect) = calculate_layout(&surface, &main);
+        assert_eq!(bounds, SurfaceBounds { x: -1634, y: 421, width: 476, height: 259, dpi: 1.75 });
+        assert_eq!(content_rect, SurfaceBounds { x: -1543, y: 456, width: 325, height: 150, dpi: 1.75 });
+    }
+
+    #[test]
+    fn applies_content_inset_to_halo_content_not_outer_bleed_bounds() {
+        let main = SurfaceBounds { x: -1920, y: 40, width: 1200, height: 800, dpi: 1.25 };
+        let mut halo = island("main.right");
+        halo.id = "halo".into();
+        halo.kind = "halo".into();
+        halo.pointer_mode = "passthrough".into();
+        halo.anchor = None;
+        halo.visual_bleed = Some(NativeSurfaceMargin::Uniform(240.0));
+        halo.content_inset = Some(NativeSurfaceMargin::Sides { top: 20.0, right: 40.0, bottom: 60.0, left: 80.0 });
+
+        let (bounds, content_rect) = calculate_layout(&halo, &main);
+        assert_eq!(bounds, SurfaceBounds { x: -2220, y: -260, width: 1800, height: 1400, dpi: 1.25 });
+        assert_eq!(content_rect, SurfaceBounds { x: -1820, y: 65, width: 1050, height: 700, dpi: 1.25 });
     }
 
     #[test]

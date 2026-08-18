@@ -730,11 +730,12 @@ retryable connection error instead of blocking the app forever.
 
 ## Design Mod Visual Ownership (Brief 62)
 
-`NativeSurfaceManifest.visualBleed` reserves outer physical-window pixels and
-`contentInset` describes the normal content rectangle within them. The satellite
-snapshot exposes both `surface.bounds` and `surface.contentRect`. A native
-surface is still clipped at its WebView boundary; the larger native bounds are
-there to make that boundary intentional.
+`NativeSurfaceManifest.visualBleed` reserves outer physical-window pixels around
+the unexpanded content bounds. `contentInset` is applied inward to those
+unexpanded bounds, so the satellite snapshot's `surface.contentRect` never
+contains visual bleed. The snapshot exposes both `surface.bounds` and
+`surface.contentRect`; a native surface is still clipped at its WebView
+boundary, and the larger native bounds make that boundary intentional.
 
 Freeform fixture mounts use a placement wrapper, a visual shell and an inner
 content mask. `TransformController` is the only writer of the wrapper's

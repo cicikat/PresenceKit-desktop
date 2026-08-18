@@ -15,7 +15,6 @@
       "pointerMode": "passthrough",
       "zOrder": "owned",
       "visualBleed": 240,
-      "contentInset": 240,
       "size": { "width": 1, "height": 1 }
     },
     {

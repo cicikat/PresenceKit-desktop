@@ -218,9 +218,12 @@ Mod cannot reuse a payload produced by the previous Mod.
 ### Visual bleed and teardown acknowledgement (Brief 62)
 
 Native manifests can declare finite non-negative `visualBleed` and
-`contentInset` values (a uniform number or four sides). `visualBleed` expands
-the native physical bounds; `contentInset` is returned as the snapshot content
-rect and must be used when a renderer needs the normal component rectangle.
+`contentInset` values (a uniform number or four sides). Layout first computes
+the unexpanded content bounds. `visualBleed` expands those bounds into the
+native physical window; `contentInset` then shrinks the unexpanded content
+bounds inward and is returned as the snapshot `contentRect`. Thus
+`contentRect` never includes visual bleed, even when the two values differ.
+The deprecated `margin` field remains an outer-bleed compatibility alias only.
 Do not use a DOM transform to escape the WebView rectangle.
 
 `host.transforms.create()` returns the sole transform owner for a freeform
