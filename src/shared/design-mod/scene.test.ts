@@ -47,6 +47,7 @@ describe('scene nodes', () => {
       const element = { style: {}, remove: vi.fn() } as unknown as HTMLElement;
       const node = scheduler.create(element, { id: 'once', layer: 'overlay', anchor: { kind: 'viewport', x: 0, y: 0 } });
       node.dispose();
+      expect(cancel).toHaveBeenCalledTimes(1);
       const scheduledBefore = request.mock.calls.length;
       node.setMotionOffset({ x: 2, y: 3 });
       expect(request).toHaveBeenCalledTimes(scheduledBefore);

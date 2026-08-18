@@ -121,7 +121,12 @@ export class SceneScheduler {
     if (this.nodes.has(options.id)) throw new Error(`Scene node already exists: ${options.id}`);
     let node: SceneNode;
     node = new SceneNode(element, options, this.source, () => this.schedule(), () => {
-      if (this.nodes.get(options.id) === node) this.nodes.delete(options.id);
+      if (this.nodes.get(options.id) !== node) return;
+      this.nodes.delete(options.id);
+      if (this.nodes.size === 0 && this.frame !== null) {
+        cancelAnimationFrame(this.frame);
+        this.frame = null;
+      }
     });
     this.nodes.set(options.id, node); this.schedule();
     return node;

@@ -74,6 +74,7 @@
 ## 7. 实施记录（2026-08-18）
 
 - 已修复 Scene node disposer 未向 scheduler 注销的问题；重复销毁、pointer capture 清理、同 id 重建、多节点独立销毁和 scheduler 销毁后拒绝创建均有回归覆盖。
+- 最后一个 Scene node 单独销毁时会立即取消 scheduler 的待提交 rAF，不保留空帧；测试直接锁定 node disposer 的取消时机。
 - 已修复 Rust `content_rect` 从外扩 bounds 推导的问题；普通 Island 和 Halo 都先计算未扩张内容区域，`visualBleed` 只扩张 `bounds`，`contentInset` 仅向内缩进内容区域。
 - 已通过 `npm.cmd test -- --run`（49 files / 206 tests）、`npx.cmd tsc --noEmit`、`npm.cmd run build`、`cargo test`（89 tests）、`cargo check` 和 `git diff --check`。
 - 未完成：Windows 实窗的 100%/125%/175% DPI、双屏负坐标、普通 Island/Halo 的不等 bleed/inset，以及 Mod/builtin 连续切换验收；状态保持 `partial/open`。
