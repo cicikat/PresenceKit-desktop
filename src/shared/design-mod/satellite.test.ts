@@ -10,6 +10,7 @@ const snapshot = (sequence: number, generation = 4): DesignSatelliteSnapshot => 
   surface: { bounds: { x: -1920, y: 0, width: 1000, height: 800, dpi: 1.25 }, contentRect: { x: -1920, y: 0, width: 1000, height: 800, dpi: 1.25 } },
   updatedAt: sequence,
   main: { bounds: { x: -1920, y: 0, width: 1000, height: 800, dpi: 1.25 }, visible: true, focused: true, maximized: false },
+  nativeWindow: { x: -1920, y: 0, delta: { x: 0, y: 0 }, velocity: { x: 0, y: 0 }, moving: false, updatedAt: sequence },
   window: { visible: true, focused: true, covered: false, paused: false },
   pointer: { x: 0, y: 0, buttons: 0, dragging: false, updatedAt: sequence },
   theme: {},

@@ -12,5 +12,20 @@
       { "id": "right-island", "kind": "island", "entry": "surfaces/island.js", "style": "surfaces/island.css", "pointerMode": "interactive", "zOrder": "owned", "anchor": "main.right", "offset": { "x": 18, "y": 0 }, "size": { "width": 236, "height": 164 }, "requires": ["navigation", "presenters"] },
       { "id": "top-island", "kind": "island", "entry": "surfaces/island.js", "style": "surfaces/island.css", "pointerMode": "interactive", "zOrder": "owned", "anchor": "main.top", "offset": { "x": 0, "y": -18 }, "size": { "width": 236, "height": 136 }, "requires": ["navigation", "presenters"] }
     ]
+  },
+  {
+    "schemaVersion": 2,
+    "id": "koke-niwa",
+    "name": "苔庭",
+    "author": "PresenceKit",
+    "version": "0.1.0",
+    "entry": "entry.js",
+    "style": "style.css",
+    "theme": "theme/theme.json",
+    "layout": "layout/layout.json",
+    "nativeSurfaces": [
+      { "id": "halo", "kind": "halo", "entry": "surfaces/halo.js", "style": "surfaces/halo.css", "pointerMode": "passthrough", "zOrder": "owned", "visualBleed": 240, "size": { "width": 1, "height": 1 }, "requires": ["platform", "transparent-window", "native-satellite-v1", "passthrough", "presenter-snapshot"] },
+      { "id": "wind-bell", "kind": "island", "entry": "surfaces/island.js", "style": "surfaces/island.css", "pointerMode": "interactive", "zOrder": "owned", "anchor": "main.right", "offset": { "x": 18, "y": 0 }, "size": { "width": 96, "height": 160 }, "requires": ["platform", "transparent-window", "native-satellite-v1", "interactive", "navigation-snapshot", "presenter-snapshot"] }
+    ]
   }
 ]

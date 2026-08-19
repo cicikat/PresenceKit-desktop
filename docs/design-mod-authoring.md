@@ -296,8 +296,8 @@ export function activate(host) {
 
 Satellite Host 提供 `surfaceId`、`generation`、三层 DOM、`snapshot.get/subscribe`、
 `commands.request(name, params?)` 和异步 `assets.url(path)`。snapshot 最多 20 Hz，含 sequence/generation、
-surface bounds/contentRect、主窗口状态、pointer、theme、裁剪后的 state/chat/navigation、Status/Flow presenter
-及 screen-space anchors。必须丢弃对高频逐帧 IPC 的假设；本地动画在 surface 内完成。
+surface bounds/contentRect、主窗口状态、pointer、`nativeWindow` 的位置/位移/速度、theme、裁剪后的
+state/chat/navigation、Status/Flow presenter 及 screen-space anchors。必须丢弃对高频逐帧 IPC 的假设；本地动画在 surface 内完成。
 
 命令白名单：`closeSidebar`、`setSidebarTab {tab}`、`openPreferences`、`restoreDefaultDesign`、
 `retryMood`、`retryActivity`、`retrySensor`、`refreshFlow`、`refreshGarden`、`refreshDiary`、

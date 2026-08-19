@@ -1,5 +1,13 @@
 # docs/known-issues.md — 已知问题与技术债
 
+- **苔庭 Design Mod（工单 66）** — `partial/open`。
+  M1-M4 包结构、theme/layout、十个 Scene 节点、四组 subregions、presenter 错误木牌、DPR 像素植物、
+  bounded edge 苔藓、Halo 与风铃 Island 已落地；manifest/入口语法、Design Mod 相关纯测试和 TypeScript
+  检查通过。仍需 Windows 真实窗口验收：宽/窄窗口、100%/125%/175% DPI、双屏负坐标、拖窗同框、
+  hide/restore、Mod A→苔庭→builtin ×20、Halo click-through、Island command ack，以及 release
+  `resource_dir/design-mods` 读取。和纸纹理目前使用 CSS 纤维 underlay，`assets/washi.png` 位图待可用图像
+  生成工具后补入；本 Mod 未新增 backend/mobile/API/WS/StateEngine 契约。
+
 - **Design Mod freeform primitives and edge ornaments (work order 63)** — `partial/open`.
   Component composition, scene/edge APIs, bounded canvas ornaments, presenter
   selector isolation and lifecycle cleanup are covered by pure tests. Windows

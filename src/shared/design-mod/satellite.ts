@@ -40,6 +40,14 @@ export interface DesignSatelliteSnapshot {
     focused: boolean;
     maximized: boolean;
   };
+  nativeWindow: {
+    x: number;
+    y: number;
+    delta: { x: number; y: number };
+    velocity: { x: number; y: number };
+    moving: boolean;
+    updatedAt: number;
+  };
   window: { visible: boolean; focused: boolean; covered: boolean; paused: boolean };
   pointer: { x: number; y: number; buttons: number; dragging: boolean; updatedAt: number };
   theme: Record<string, unknown>;

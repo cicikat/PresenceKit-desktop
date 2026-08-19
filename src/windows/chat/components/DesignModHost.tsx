@@ -373,6 +373,7 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
               },
               updatedAt: Date.now(),
               main: { bounds: mainBounds, visible: native.visible, focused: native.focused, maximized: native.maximized },
+              nativeWindow: nativeMotionStore.get(),
               window: { visible: native.visible, focused: native.focused, covered: isCovered, paused: runtimePaused },
               pointer: pointerStore.get(),
               theme: { id: getCurrentThemeId(), ...getDayNight() },

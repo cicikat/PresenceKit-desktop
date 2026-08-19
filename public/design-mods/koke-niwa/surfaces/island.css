@@ -1,0 +1,11 @@
+html, body, #root { width: 100%; height: 100%; margin: 0; overflow: visible; background: transparent !important; }
+.koke-island-root { position: relative; width: 100%; height: 100%; color: #e8e4d0; pointer-events: auto; }
+.koke-bell-art { position: absolute; left: 22px; top: 4px; width: 52px; height: 82px; image-rendering: pixelated; transform-origin: 50% 0; transition: transform 100ms linear; }
+.koke-bell-canvas { width: 100%; height: 100%; image-rendering: pixelated; }
+.koke-bell-strip { position: absolute; left: 40px; top: 88px; width: 24px; height: 58px; padding: 0; border: 1px solid #f2c46d; border-radius: 1px; color: #f2c46d; background: #1d3320e8; cursor: pointer; font: 16px/1 ui-monospace, monospace; box-shadow: 3px 4px 0 #0b140d99; }
+.koke-bell-actions { position: absolute; right: 2px; top: 3px; display: flex; gap: 3px; }
+.koke-bell-action { width: 18px; height: 18px; padding: 0; border: 1px solid #6fa352; border-radius: 1px; color: #e8e4d0; background: #1d3320ee; cursor: pointer; font: 11px/15px ui-monospace, monospace; }
+.koke-bell-strip:hover, .koke-bell-strip:focus-visible, .koke-bell-action:hover, .koke-bell-action:focus-visible { color: #1d3320; background: #f2c46d; outline: none; }
+.koke-island-root[data-paused="true"] { opacity: .58; }
+.koke-island-root[data-ack="true"] .koke-bell-strip { box-shadow: 0 0 12px #f2c46d99, 3px 4px 0 #0b140d99; }
+.koke-island-root[data-ack="error"] .koke-bell-strip { border-color: #d46b55; color: #d46b55; }
