@@ -211,12 +211,51 @@ export function activate(host) {
   edgeCanvas.className = 'koke-edge-ornaments';
   host.layers.overlay.appendChild(edgeCanvas);
 
-  ['flow', 'garden', 'diary', 'status'].forEach(capability => host.components.setComposition(capability, 'subregions'));
+  ['flow', 'garden', 'diary', 'status'].forEach(capability => host.components.setComposition(capability, 'official-renderer'));
   ['status', 'flow', 'garden', 'diary'].forEach(name => cleanups.push(host.presenters[name].acquire(`koke-niwa-${name}`)));
+
+  // The chat shell is intentionally a single owned surface. Decorative nodes
+  // below remain available as a visual fallback, but are hidden by the theme.
+  const chatShell = document.createElement('section');
+  chatShell.className = 'koke-chat-shell';
+  const chatHeader = document.createElement('div');
+  chatHeader.className = 'koke-chat-shell__header';
+  const chatTranscript = document.createElement('div');
+  chatTranscript.className = 'koke-chat-shell__transcript';
+  const chatComposer = document.createElement('div');
+  chatComposer.className = 'koke-chat-shell__composer';
+  chatShell.append(chatHeader, chatTranscript, chatComposer);
+  host.layers.components.appendChild(chatShell);
+  host.components.attach('chat.header', chatHeader);
+  host.components.attach('chat.transcript', chatTranscript);
+  host.components.attach('chat.composer', chatComposer);
+  cleanups.push(() => {
+    host.components.detach('chat.header');
+    host.components.detach('chat.transcript');
+    host.components.detach('chat.composer');
+    chatShell.remove();
+  });
+
+  const auxiliary = document.createElement('aside');
+  auxiliary.className = 'koke-auxiliary-shell';
+  const auxTabs = document.createElement('div');
+  auxTabs.className = 'koke-auxiliary-shell__tabs';
+  const auxBody = document.createElement('div');
+  auxBody.className = 'koke-auxiliary-shell__body';
+  auxiliary.append(auxTabs, auxBody);
+  host.layers.components.appendChild(auxiliary);
+  ['flow', 'garden', 'diary', 'status'].forEach(capability => {
+    const region = document.createElement('div');
+    region.className = `koke-auxiliary-shell__region koke-auxiliary-shell__region--${capability}`;
+    auxBody.appendChild(region);
+    host.components.attach(`chat.sidebar.${capability}`, region);
+    cleanups.push(() => host.components.detach(`chat.sidebar.${capability}`));
+  });
+  cleanups.push(() => auxiliary.remove());
 
   const addNode = (sourcePrimitive, className, options, artFactory) => {
     const node = document.createElement('section');
-    node.className = `koke-node ${className}`;
+    node.className = `koke-node koke-node--ornament ${className}`;
     node.dataset.designPrimitive = sourcePrimitive;
     const content = document.createElement('div');
     content.className = 'koke-node__content';
@@ -227,7 +266,8 @@ export function activate(host) {
       if (art) node.appendChild(art);
     }
     const scene = host.scene.create(node, { sourcePrimitive, pointerMode: 'auto', ...options });
-    host.components.attach(sourcePrimitive, content);
+    // Ornament nodes are visual-only; the official sidebar renderer owns the
+    // capability mounts in the auxiliary shell above.
     cleanups.push(setupDrag(node, scene));
     const record = { node, content, scene, art };
     nodes.set(sourcePrimitive, record);

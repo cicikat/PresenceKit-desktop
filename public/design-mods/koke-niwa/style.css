@@ -1,5 +1,5 @@
 html[data-theme="koke-niwa"] body {
-  background: var(--paper);
+  background: transparent;
 }
 
 .koke-niwa-stage {
@@ -9,8 +9,35 @@ html[data-theme="koke-niwa"] body {
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  background: var(--paper);
+  background: transparent;
 }
+
+/* Integrated shell: only these surfaces receive paper, border and shadow. */
+.koke-chat-shell,
+.koke-auxiliary-shell {
+  position: absolute;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in oklch, var(--forest-3) 48%, var(--paper-edge));
+  border-radius: var(--radius-sm);
+  background: color-mix(in oklch, var(--paper-2) 94%, transparent);
+  box-shadow: 0 8px 24px color-mix(in oklch, var(--shadow-rgb-mix) 26%, transparent);
+  z-index: 10;
+}
+.koke-chat-shell { inset: 18px 300px 18px 70px; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+.koke-chat-shell__header,
+.koke-chat-shell__transcript,
+.koke-chat-shell__composer { min-width: 0; min-height: 0; overflow: auto; }
+.koke-chat-shell__header { border-bottom: 1px solid var(--paper-edge); }
+.koke-chat-shell__composer { border-top: 1px solid var(--paper-edge); }
+.koke-auxiliary-shell { top: 18px; right: 18px; bottom: 18px; width: 264px; display: flex; flex-direction: column; }
+.koke-auxiliary-shell__tabs { flex: 0 0 34px; border-bottom: 1px solid var(--paper-edge); }
+.koke-auxiliary-shell__body { flex: 1; min-height: 0; overflow: auto; padding: 10px; }
+.koke-auxiliary-shell__region { min-height: 120px; margin-bottom: 10px; }
+.koke-node--ornament { display: none; }
+.koke-edge-ornaments { opacity: .18; z-index: 1; }
 
 .koke-washi-underlay {
   position: absolute;
@@ -327,6 +354,12 @@ html[data-theme="koke-niwa"] body {
 
 .koke-niwa-stage[data-compact="true"] .koke-node__content {
   inset: 8px;
+}
+@media (max-width: 900px) {
+  .koke-chat-shell { inset: 12px 12px 164px 58px; }
+  .koke-auxiliary-shell { left: 58px; right: 12px; top: auto; bottom: 12px; width: auto; height: 140px; }
+  .koke-auxiliary-shell__body { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; overflow-x: auto; }
+  .koke-auxiliary-shell__region { min-width: 180px; margin: 0; }
 }
 
 @keyframes koke-lantern-breath {
