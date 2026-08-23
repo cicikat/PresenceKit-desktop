@@ -8,6 +8,6 @@
   "slots": {
     "ribbon": { "order": 0, "size": 52 },
     "main": { "order": 1, "size": 1 },
-    "sidebar": { "order": 2, "size": 264, "hidden": false }
+    "sidebar": { "order": 2, "size": 314, "hidden": false }
   }
 }
