@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { dreamRpgState, dreamRpgTranscript, dreamRpgTurn } from '../../../shared/api/dream';
+import { dreamRpgState, dreamRpgTranscript, dreamRpgTurn, dreamRpgCorrection } from '../../../shared/api/dream';
 import type { RpgState, RpgTranscriptEntry } from '../../../shared/api/dream-types';
 
 export function RpgDreamPanel({ disabled = false }: { disabled?: boolean }) {
@@ -9,6 +9,7 @@ export function RpgDreamPanel({ disabled = false }: { disabled?: boolean }) {
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [correction, setCorrection] = useState(false);
 
   const reload = useCallback(async () => {
     try {
@@ -22,7 +23,12 @@ export function RpgDreamPanel({ disabled = false }: { disabled?: boolean }) {
     const text = input.trim(); if (!text || busy || disabled) return;
     setBusy(true); setError(null);
     try {
-      const response = await dreamRpgTurn({ lane, content: text, request_id: crypto.randomUUID(), scene_revision: state?.scene_revision ?? null });
+      const body = { lane, content: text, request_id: crypto.randomUUID(), scene_revision: state?.scene_revision ?? null };
+      let response = correction ? await dreamRpgCorrection({ ...body, target_round: state?.round ?? null, reason: 'user_correction' }) : await dreamRpgTurn(body);
+      if (response.detail?.code === 'RPG_ROUND_BUSY') {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        response = correction ? await dreamRpgCorrection({ ...body, target_round: state?.round ?? null, reason: 'user_correction' }) : await dreamRpgTurn(body);
+      }
       if (response.error) setError(response.detail?.code ?? response.error);
       setInput(''); await reload();
     } catch (e) { setError(String(e)); } finally { setBusy(false); }
@@ -34,6 +40,7 @@ export function RpgDreamPanel({ disabled = false }: { disabled?: boolean }) {
     <section><div className="mono" style={{ padding: 10 }}>KP / SHARED</div>{[...laneEntries('kp'), ...laneEntries('shared')].map(renderEntry)}</section>
     <div style={{ gridColumn: '1 / -1', padding: 10, borderTop: '1px solid var(--dt-border-soft)' }}>
       <select value={lane} onChange={e => setLane(e.target.value as 'character' | 'kp')} disabled={busy}><option value="character">Character</option><option value="kp">KP</option></select>
+      <button type="button" onClick={() => setCorrection(value => !value)} disabled={busy} style={{ marginLeft: 8 }}>{correction ? '修正中' : '修正'}</button>
       <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') void submit(); }} disabled={busy || disabled} placeholder="提交回合" style={{ marginLeft: 8, width: '65%' }} />
       <button type="button" onClick={() => void submit()} disabled={busy || disabled || !input.trim()} style={{ marginLeft: 8 }}>{busy ? '发送中' : '发送'}</button>
       {error && <span className="mono" style={{ color: 'var(--dt-danger)', marginLeft: 8 }}>{error}</span>}
