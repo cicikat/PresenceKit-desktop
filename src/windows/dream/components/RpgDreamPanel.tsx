@@ -45,7 +45,10 @@ export function RpgDreamPanel({ disabled = false }: { disabled?: boolean }) {
         response = correction ? await dreamRpgCorrection({ dream_id: state?.dream_id, request_id: body.request_id, operation: 'clarify', target_round_id: String(state?.round ?? ''), text, reason: '', expected_scene_revision: body.expected_scene_revision }) : await dreamRpgTurn(body);
       }
       if (response.detail?.code === 'RPG_REVISION_CONFLICT') { setNeedsConfirm(true); await reload(state?.dream_id); return; }
-      if (response.error) setError(response.detail?.code ?? response.error);
+      const responseCode = response.detail?.code;
+      if (responseCode === 'RPG_SESSION_UNCERTAIN' || responseCode === 'RPG_DREAM_ID_MISMATCH' || responseCode === 'RPG_KP_OUTPUT_INVALID') setReadOnly(true);
+      if (responseCode === 'RPG_IDEMPOTENCY_CONFLICT') setError(responseCode);
+      else if (response.error) setError(responseCode ?? response.error);
       setInput(''); await reload(state?.dream_id);
     } catch (e) {
       const classified = classifyHttpError(e);
