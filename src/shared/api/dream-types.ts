@@ -272,9 +272,6 @@ export interface DreamArchiveMessage {
   lane?: 'character' | 'kp' | 'shared' | string;
   kind?: string;
   correlation_id?: string;
-  lane?: 'character' | 'kp' | 'shared' | string;
-  kind?: string;
-  correlation_id?: string;
   segments?: NarrativeSegment[];
   segmented_content?: string;
   segment_parse_fallback?: boolean;
