@@ -24,6 +24,13 @@ function formatTimestamp(value: number | null | undefined, language: string, unk
   }).format(new Date(ms));
 }
 
+function RpgReplay({ messages }: { messages: DreamArchiveDetailResponse['messages'] }) {
+  const lanes = ['character', 'kp', 'shared'] as const;
+  return <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', flex: 1, minHeight: 0, overflow: 'auto' }}>
+    {lanes.map(lane => <section key={lane} style={{ borderRight: '1px solid var(--dt-border-soft)' }}><div className="mono" style={{ padding: 10 }}>{lane.toUpperCase()}</div>{messages.filter(message => message.lane === lane).map((message, index) => <div key={`${message.correlation_id ?? index}`} style={{ padding: '7px 10px', borderBottom: '1px solid var(--dt-border-soft)' }}>{message.content}</div>)}</section>)}
+  </div>;
+}
+
 export interface DreamReplayTranscriptProps {
   detail: DreamArchiveDetailResponse;
   herDataUrl: string | null;
@@ -91,7 +98,7 @@ export function DreamReplayTranscript({ detail, herDataUrl, characterName, onExi
         </div>
       )}
 
-      <DreamChatPanel
+      {item.dream_mode === 'rpg' ? <RpgReplay messages={detail.messages.slice(start)} /> : <DreamChatPanel
         messages={visibleMessages}
         loading={false}
         inputDisabled
@@ -111,7 +118,7 @@ export function DreamReplayTranscript({ detail, herDataUrl, characterName, onExi
             </button>
           </div>
         ) : undefined}
-      />
+      />}
     </div>
   );
 }
