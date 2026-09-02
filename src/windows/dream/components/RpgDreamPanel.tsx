@@ -16,12 +16,13 @@ export function RpgDreamPanel({ disabled = false }: { disabled?: boolean }) {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  const reload = useCallback(async () => {
+  const reload = useCallback(async (dreamId?: string) => {
     try {
-      const [nextState, transcript] = await Promise.all([dreamRpgState(), dreamRpgTranscript(null, 80, state?.dream_id)]);
+      const nextState = await dreamRpgState();
+      const transcript = await dreamRpgTranscript(null, 80, dreamId ?? nextState.dream_id);
       setState(nextState); setEntries(transcript.entries ?? []); setNextCursor(transcript.next_cursor ?? null); setError(transcript.partial_read ? t('dream.rpg.partialRead') : null);
     } catch (e) { setError(String(e)); }
-  }, []);
+  }, [t]);
   useEffect(() => { void reload(); }, [reload]);
 
   const loadMore = async () => {
@@ -41,9 +42,9 @@ export function RpgDreamPanel({ disabled = false }: { disabled?: boolean }) {
         await new Promise(resolve => setTimeout(resolve, 500));
         response = correction ? await dreamRpgCorrection({ dream_id: state?.dream_id, request_id: body.request_id, operation: 'clarify', target_round_id: String(state?.round ?? ''), text, reason: '', expected_scene_revision: body.expected_scene_revision }) : await dreamRpgTurn(body);
       }
-      if (response.detail?.code === 'RPG_REVISION_CONFLICT') { setNeedsConfirm(true); await reload(); return; }
+      if (response.detail?.code === 'RPG_REVISION_CONFLICT') { setNeedsConfirm(true); await reload(state?.dream_id); return; }
       if (response.error) setError(response.detail?.code ?? response.error);
-      setInput(''); await reload();
+      setInput(''); await reload(state?.dream_id);
     } catch (e) { setError(String(e)); } finally { setBusy(false); }
   };
   const laneEntries = (name: string) => entries.filter(entry => entry.lane === name);
