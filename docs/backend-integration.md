@@ -1107,4 +1107,4 @@ expose an outer window rectangle and a content rectangle that never includes
 visual bleed. No HTTP, WebSocket, queue, or mobile contract is added.
 ## RPG Dream 客户端接口
 
-桌面端通过 Tauri bridge 调用 `/dream/capabilities`、`/dream/rpg/state`、`/dream/rpg/transcript`、`/dream/rpg/turn` 与 `/dream/rpg/corrections`。RPG 回合请求携带新的 `request_id`、`lane` 和 `scene_revision`；客户端不会回退到普通 `/dream/chat`。transcript 仅用于恢复只读分栏，`partial_read` 会保留并展示恢复提示。
+桌面端通过 Tauri bridge 调用 `/dream/capabilities`、`/dream/rpg/state`、`/dream/rpg/transcript`、`/dream/rpg/turn` 与 `/dream/rpg/corrections`。RPG 回合请求携带新的 `request_id`、`lane` 和 `expected_scene_revision`；客户端不会回退到普通 `/dream/chat`。transcript 的 `items/next_before` 与兼容字段会在 `rpg-normalization.ts` 归一化后用于恢复只读分栏，`partial_read` 会保留并展示恢复提示。
