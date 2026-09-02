@@ -10,6 +10,7 @@ const listeners = new Set<() => void>();
 let records: LayoutRecord[] | null = null;
 let designLayoutRecord: LayoutRecord | null = null;
 let currentLayout: LayoutRecord = { manifest: OBSIDIAN_DEFAULT_LAYOUT, source: 'builtin' };
+let appliedLayoutId: string | null = null;
 
 function validRecord(manifest: unknown, source: LayoutRecord['source']): LayoutRecord | null {
   const errors = validateLayout(manifest);
@@ -93,7 +94,9 @@ export async function setLayout(id: string): Promise<LayoutRecord> {
   const requested = layouts.find(record => record.manifest.id === id);
   currentLayout = requested ?? selectCurrent(layouts);
   if (!requested) console.warn(`[layout] 找不到布局 "${id}"，已回退默认布局`);
+  if (appliedLayoutId === currentLayout.manifest.id) return currentLayout;
   applyLayoutCss(currentLayout.manifest.id, currentLayout.cssText ?? null);
+  appliedLayoutId = currentLayout.manifest.id;
   setUIPref(PREF_KEY, currentLayout.manifest.id);
   listeners.forEach(listener => listener());
   return currentLayout;
@@ -105,6 +108,7 @@ export function applyDesignLayout(record: LayoutRecord): void {
   records = null;
   currentLayout = record;
   applyLayoutCss(record.manifest.id, record.cssText ?? null);
+  appliedLayoutId = record.manifest.id;
   listeners.forEach(listener => listener());
 }
 
@@ -122,6 +126,7 @@ export function subscribe(listener: () => void): () => void {
 
 export function invalidateLayoutCache(): void {
   records = null;
+  appliedLayoutId = null;
 }
 
 onUIPrefChange(key => {
@@ -130,5 +135,6 @@ onUIPrefChange(key => {
   if (next.manifest.id === currentLayout.manifest.id) return;
   currentLayout = next;
   applyLayoutCss(next.manifest.id, next.cssText ?? null);
+  appliedLayoutId = next.manifest.id;
   listeners.forEach(listener => listener());
 });

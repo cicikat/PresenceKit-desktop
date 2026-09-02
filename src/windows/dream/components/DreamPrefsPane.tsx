@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+﻿import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   DEFAULT_DREAM_SETTINGS,
   type DreamState,
@@ -1178,7 +1178,7 @@ export function DreamPrefsPane({
                   <SelectPref<DreamEntryMode>
                     value={entryMode}
                     options={['sandbox', 'scenario', 'mirror']}
-                    labels={{ sandbox: '沙盒', scenario: '剧本', mirror: '镜像' }}
+                    labels={{ sandbox: '沙盒', scenario: '剧本', mirror: '镜像', rpg: '跑团' }}
                     onChange={onEntryModeChange}
                     disabled={isDreamActive}
                   />
@@ -1292,3 +1292,4 @@ export function DreamPrefsPane({
     </>
   );
 }
+

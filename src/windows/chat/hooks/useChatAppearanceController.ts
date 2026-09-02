@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { StateEngine } from '../../../shared/state/store';
 import { avatarStore } from '../../../shared/avatars/store';
 import { chatFontFamily, chatFontUrl, loadChatAppearance, saveChatAppearance, type ChatAppearance } from '../../../shared/chatAppearance';
-import { getDayNight, setTheme as applyRegisteredTheme, setThemeMode, subscribe as subscribeTheme } from '../../../shared/theme/registry';
+import { getDayNight, setThemeMode, subscribe as subscribeTheme } from '../../../shared/theme/registry';
 import { applyMoodOverlay, clearMoodOverlay } from '../../../shared/theme/moodReactive';
 import { getUIPref, setUIPref } from '../../../shared/uiPreferences';
 import { getLayout, listLayouts, setLayout, subscribe as subscribeLayout } from '../../../shared/layout/registry';
@@ -37,10 +37,6 @@ export function useChatAppearanceController(engine: StateEngine) {
   const [appearance, setAppearance] = useState<ChatAppearance>(() => loadChatAppearance());
   const [loadedFontFamily, setLoadedFontFamily] = useState<string | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    applyRegisteredTheme(theme).catch(error => console.warn('[theme] 切换失败:', error));
-  }, [theme]);
 
   useEffect(() => subscribeTheme(() => {
     setTheme(getUIPref('chat.theme', 'paper'));

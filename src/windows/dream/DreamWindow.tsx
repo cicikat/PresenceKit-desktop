@@ -209,7 +209,7 @@ export function DreamWindow({ mode = 'single', groupId = null, groupRoster = {},
   useEffect(() => {
     if (!dreamState || (dreamState.status !== 'DREAM_ACTIVE' && dreamState.status !== 'DREAM_EXIT_REQUESTED')) return;
     const activeMode = dreamState.dream_mode ?? dreamState.mode;
-    if (activeMode === 'sandbox' || activeMode === 'scenario' || activeMode === 'mirror') {
+    if (activeMode === 'sandbox' || activeMode === 'scenario' || activeMode === 'mirror' || activeMode === 'rpg') {
       setEntryMode(activeMode);
       setUIPref('dream.entryMode', activeMode);
     }
@@ -234,7 +234,7 @@ export function DreamWindow({ mode = 'single', groupId = null, groupRoster = {},
         ? await dreamGroupEnter(groupId!)
         : await dreamEnter({
             dream_mode: entryMode,
-            script_id: entryMode === 'scenario' ? scriptId : undefined,
+            script_id: entryMode === 'scenario' || entryMode === 'rpg' ? scriptId : undefined,
           });
       console.debug('[Dream] dreamEnter response:', resp);
       if (!resp.ok) {

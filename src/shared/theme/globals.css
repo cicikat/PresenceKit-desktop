@@ -104,11 +104,10 @@ body::before {
   animation: msg-in calc(var(--motion-base) * var(--motion-scale)) var(--ease-emphasized) both;
 }
 
-/* Theme transition: applied by registry.setTheme() for ~600ms */
+/* Keep theme changes responsive: animate only the document surfaces. */
 html.theme-transitioning,
-html.theme-transitioning *,
-html.theme-transitioning *::before,
-html.theme-transitioning *::after {
+html.theme-transitioning body,
+html.theme-transitioning #root {
   transition:
     background-color calc(var(--motion-slow) * var(--motion-scale)) var(--ease-standard),
     color            calc(var(--motion-slow) * var(--motion-scale)) var(--ease-standard),
@@ -118,9 +117,8 @@ html.theme-transitioning *::after {
 @media (prefers-reduced-motion: reduce) {
   .msg-enter { animation: none; }
   html.theme-transitioning,
-  html.theme-transitioning *,
-  html.theme-transitioning *::before,
-  html.theme-transitioning *::after {
+  html.theme-transitioning body,
+  html.theme-transitioning #root {
     transition: none !important;
   }
 }

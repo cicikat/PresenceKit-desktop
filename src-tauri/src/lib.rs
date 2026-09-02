@@ -1479,6 +1479,34 @@ async fn dream_get_stats(app: tauri::AppHandle) -> Result<serde_json::Value, Str
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
 
+async fn dream_rpg_request(app: &tauri::AppHandle, method: reqwest::Method, path: &str, body: serde_json::Value) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(app);
+    let client = llm_http_client()?;
+    let builder = authorized_request(&cfg, client.request(method, backend_url(&cfg, path)));
+    let resp = builder.json(&body).send().await.map_err(|_| "Dream RPG request failed".to_string())?;
+    let resp = require_success(resp).await?;
+    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn dream_get_capabilities(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app); let resp = authorized_request(&cfg, http_client()?.get(backend_url(&cfg, "/dream/capabilities"))).send().await.map_err(|_| "Dream capabilities request failed".to_string())?; let resp = require_success(resp).await?; resp.json().await.map_err(|e| e.to_string())
+}
+#[tauri::command]
+async fn dream_rpg_state(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app); let resp = authorized_request(&cfg, http_client()?.get(backend_url(&cfg, "/dream/rpg/state"))).send().await.map_err(|_| "Dream RPG state request failed".to_string())?; let resp = require_success(resp).await?; resp.json().await.map_err(|e| e.to_string())
+}
+#[tauri::command]
+async fn dream_rpg_transcript(app: tauri::AppHandle, cursor: Option<String>, limit: Option<u32>) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app); let mut url = url::Url::parse(&backend_url(&cfg, "/dream/rpg/transcript")).map_err(|e| e.to_string())?;
+    { let mut q = url.query_pairs_mut(); if let Some(c) = cursor { q.append_pair("cursor", &c); } q.append_pair("limit", &limit.unwrap_or(50).to_string()); }
+    let resp = authorized_request(&cfg, http_client()?.get(url.to_string())).send().await.map_err(|_| "Dream RPG transcript request failed".to_string())?; let resp = require_success(resp).await?; resp.json().await.map_err(|e| e.to_string())
+}
+#[tauri::command]
+async fn dream_rpg_turn(app: tauri::AppHandle, body: serde_json::Value) -> Result<serde_json::Value, String> { dream_rpg_request(&app, reqwest::Method::POST, "/dream/rpg/turn", body).await }
+#[tauri::command]
+async fn dream_rpg_correction(app: tauri::AppHandle, body: serde_json::Value) -> Result<serde_json::Value, String> { dream_rpg_request(&app, reqwest::Method::POST, "/dream/rpg/corrections", body).await }
+
 fn validate_dream_archive_component(value: &str, label: &str) -> Result<(), String> {
     if value.is_empty()
         || value.len() > 160
@@ -3201,6 +3229,11 @@ pub fn run() {
             hardware_get_devices,
             hardware_connect,
             dream_get_stats,
+            dream_get_capabilities,
+            dream_rpg_state,
+            dream_rpg_transcript,
+            dream_rpg_turn,
+            dream_rpg_correction,
             dream_list_archive,
             dream_get_archive,
             dream_enter,

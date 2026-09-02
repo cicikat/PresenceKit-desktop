@@ -237,10 +237,13 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
 
   const cleanupRuntime = useCallback(async () => {
     const satelliteBridge = satelliteBridgeRef.current;
-    void satelliteBridgeRef.current?.api.destroy().catch(error => console.warn('[design-satellite] 销毁失败:', error));
     satelliteBridgeRef.current = null;
     satellitePayloadRef.current = null;
-    await satelliteBridge?.api.destroy();
+    if (satelliteBridge) {
+      const release = () => { void satelliteBridge.api.destroy().catch(error => console.warn('[design-satellite] satellite destroy failed', error)); };
+      if (typeof requestAnimationFrame === 'function') requestAnimationFrame(release);
+      else release();
+    }
     setSurfaceDiagnostics([]);
     lifecycleRef.current.dispose();
     ledgerRef.current.clear();

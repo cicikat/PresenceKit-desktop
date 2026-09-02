@@ -106,7 +106,13 @@ export interface DreamEnterResponse {
   error?: string;
 }
 
-export type DreamEntryMode = 'sandbox' | 'scenario' | 'mirror';
+export type DreamEntryMode = 'sandbox' | 'scenario' | 'mirror' | 'rpg';
+
+export interface DreamCapabilities { rpg?: { available?: boolean; supported_modes?: string[]; [key: string]: unknown }; [key: string]: unknown }
+export interface RpgState { dream_id?: string; script_id?: string; dream_mode?: string; scene_revision?: number; round?: number; status?: string; [key: string]: unknown }
+export interface RpgTranscriptEntry { lane?: 'character' | 'kp' | 'shared' | string; kind?: string; content?: string; text?: string; correlation_id?: string; [key: string]: unknown }
+export interface RpgTranscript { entries: RpgTranscriptEntry[]; next_cursor?: string | null; partial_read?: boolean; [key: string]: unknown }
+export interface RpgTurnResponse { ok?: boolean; request_id?: string; state?: RpgState; entries?: RpgTranscriptEntry[]; error?: string; detail?: { code?: string; [key: string]: unknown }; [key: string]: unknown }
 
 export interface DreamEnterOptions {
   entry_reason?: string;

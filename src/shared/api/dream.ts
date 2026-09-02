@@ -17,6 +17,7 @@ import type {
   DreamGroupChatResponse,
   DreamPresetOption,
   DreamScenarioOption,
+  DreamCapabilities, RpgState, RpgTranscript, RpgTurnResponse,
 } from './dream-types';
 import { normalizeDreamArchiveDetail, normalizeDreamArchiveList } from './dream-replay';
 
@@ -39,6 +40,12 @@ async function withDreamSettingsTimeout<T>(request: Promise<T>): Promise<T> {
 export async function dreamGetState(): Promise<DreamState> {
   return invokeGated<DreamState>('dream_get_state');
 }
+
+export const dreamGetCapabilities = () => invokeGated<DreamCapabilities>('dream_get_capabilities');
+export const dreamRpgState = () => invokeGated<RpgState>('dream_rpg_state');
+export const dreamRpgTranscript = (cursor?: string | null, limit = 50) => invokeGated<RpgTranscript>('dream_rpg_transcript', { cursor: cursor ?? null, limit });
+export const dreamRpgTurn = (body: Record<string, unknown>) => invokeGated<RpgTurnResponse>('dream_rpg_turn', body);
+export const dreamRpgCorrection = (body: Record<string, unknown>) => invokeGated<RpgTurnResponse>('dream_rpg_correction', body);
 
 export async function dreamEnter(options: DreamEnterOptions = {}): Promise<DreamEnterResponse> {
   return invokeGated<DreamEnterResponse>('dream_enter', {

@@ -14,6 +14,7 @@ const listeners = new Set<() => void>();
 let records: ThemeRecord[] | null = null;
 let designThemeRecord: ThemeRecord | null = null;
 let currentThemeId = 'paper';
+let appliedThemeId: string | null = null;
 let autoTimer: ReturnType<typeof setInterval> | null = null;
 
 function isNightHour(): boolean {
@@ -122,11 +123,13 @@ export async function setTheme(id: string): Promise<void> {
     validRecord(BUILTIN_THEMES[0], 'builtin')!;
   const record = requested ?? fallback;
   if (!requested) console.warn(`[theme] 找不到主题 "${id}"，已回退 paper`);
+  if (appliedThemeId === record.manifest.id) return;
   document.documentElement.classList.add('theme-transitioning');
   applyTheme(record.manifest);
   applyThemeCss(record.manifest.id, record.cssText ?? null);
   resetMoodOverlayBase();
   currentThemeId = record.manifest.id;
+  appliedThemeId = record.manifest.id;
   setUIPref('chat.theme', currentThemeId);
   listeners.forEach(listener => listener());
   setTimeout(() => document.documentElement.classList.remove('theme-transitioning'), 600);
@@ -140,6 +143,7 @@ export function applyDesignTheme(record: ThemeRecord): void {
   applyThemeCss(record.manifest.id, record.cssText ?? null);
   resetMoodOverlayBase();
   currentThemeId = record.manifest.id;
+  appliedThemeId = record.manifest.id;
   listeners.forEach(listener => listener());
 }
 
@@ -157,6 +161,7 @@ export function subscribe(listener: () => void): () => void {
 
 export function invalidateThemeCache(): void {
   records = null;
+  appliedThemeId = null;
 }
 
 // ── Day/Night slot API ──────────────────────────────────────────────────────
