@@ -16,13 +16,14 @@ export function RpgDreamPanel({ disabled = false }: { disabled?: boolean }) {
   const [needsConfirm, setNeedsConfirm] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [readOnly, setReadOnly] = useState(false);
 
   const reload = useCallback(async (dreamId?: string) => {
     try {
       const nextState = await dreamRpgState();
       const transcript = await dreamRpgTranscript(null, 80, dreamId ?? nextState.dream_id);
       setState(nextState); setEntries(transcript.entries ?? []); setNextCursor(transcript.next_cursor ?? null); setError(transcript.partial_read ? t('dream.rpg.partialRead') : null);
-    } catch (e) { setError(String(e)); }
+    } catch (e) { const classified = classifyHttpError(e); setReadOnly(['RPG_SESSION_UNCERTAIN', 'RPG_DREAM_ID_MISMATCH', 'RPG_KP_OUTPUT_INVALID'].includes(classified.code ?? '')); setError(classified.code ?? classified.message); }
   }, [t]);
   useEffect(() => { void reload(); }, [reload]);
 
@@ -56,9 +57,9 @@ export function RpgDreamPanel({ disabled = false }: { disabled?: boolean }) {
   const renderEntry = (entry: RpgTranscriptEntry, index: number) => <div key={`${entry.correlation_id ?? index}`} style={{ padding: '7px 10px', borderBottom: '1px solid var(--dt-border-soft)' }}>{String(entry.content ?? entry.text ?? '')}</div>;
   return <div className="dream-rpg" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', minHeight: 0, flex: 1 }}>
     <section><div className="mono" style={{ padding: 10 }}>{t('dream.rpg.character')}</div>{laneEntries('character').map(renderEntry)}</section>
-    <section><div className="mono" style={{ padding: 10 }}>KP</div>{laneEntries('kp').map(renderEntry)}</section>
-    <section><div className="mono" style={{ padding: 10 }}>SHARED</div>{laneEntries('shared').map(renderEntry)}</section>
-    {nextCursor && <button type="button" onClick={() => void loadMore()} disabled={loadingMore} style={{ gridColumn: '1 / -1' }}>{loadingMore ? 'Loading...' : 'Load more'}</button>}
+    <section><div className="mono" style={{ padding: 10 }}>{t('dream.rpg.kp')}</div>{laneEntries('kp').map(renderEntry)}</section>
+    <section><div className="mono" style={{ padding: 10 }}>{t('dream.rpg.shared')}</div>{laneEntries('shared').map(renderEntry)}</section>
+    {nextCursor && <button type="button" onClick={() => void loadMore()} disabled={loadingMore}>{loadingMore ? t('dream.rpg.loading') : t('dream.rpg.loadMore')}</button>}
     <div style={{ gridColumn: '1 / -1', padding: 10, borderTop: '1px solid var(--dt-border-soft)' }}>
       <select value={lane} onChange={e => setLane(e.target.value as 'character' | 'kp')} disabled={busy}><option value="character">Character</option><option value="kp">KP</option></select>
       <button type="button" onClick={() => setCorrection(value => !value)} disabled={busy} style={{ marginLeft: 8 }}>{correction ? '修正中' : '修正'}</button>

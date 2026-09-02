@@ -1,4 +1,5 @@
 export const zhCN = {
+  'dream.rpg.kp': 'KP', 'dream.rpg.shared': '共享', 'dream.rpg.loadMore': '加载更多', 'dream.rpg.loading': '加载中', 'dream.rpg.readOnly': '当前会话仅可恢复查看',
   'dream.rpg.character': '角色', 'dream.rpg.kpShared': 'KP / 共享', 'dream.rpg.submit': '提交回合', 'dream.rpg.send': '发送', 'dream.rpg.sending': '发送中', 'dream.rpg.correction': '修正', 'dream.rpg.correctionActive': '修正模式', 'dream.rpg.revisionConflict': '场景已变化，请确认后重新提交。', 'dream.rpg.partialRead': '部分恢复',
   'common.language': '语言',
   'common.chinese': '简体中文',
