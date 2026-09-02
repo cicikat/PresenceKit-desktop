@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { dreamRpgState, dreamRpgTranscript, dreamRpgTurn, dreamRpgCorrection } from '../../../shared/api/dream';
 import type { RpgState, RpgTranscriptEntry } from '../../../shared/api/dream-types';
+import { useI18n } from '../../../shared/i18n';
 
 export function RpgDreamPanel({ disabled = false }: { disabled?: boolean }) {
+  const { t } = useI18n();
   const [state, setState] = useState<RpgState | null>(null);
   const [entries, setEntries] = useState<RpgTranscriptEntry[]>([]);
   const [lane, setLane] = useState<'character' | 'kp'>('character');
@@ -15,7 +17,7 @@ export function RpgDreamPanel({ disabled = false }: { disabled?: boolean }) {
   const reload = useCallback(async () => {
     try {
       const [nextState, transcript] = await Promise.all([dreamRpgState(), dreamRpgTranscript(null, 80, state?.dream_id)]);
-      setState(nextState); setEntries(transcript.entries ?? []); setError(transcript.partial_read ? 'partial_read' : null);
+      setState(nextState); setEntries(transcript.entries ?? []); setError(transcript.partial_read ? t('dream.rpg.partialRead') : null);
     } catch (e) { setError(String(e)); }
   }, []);
   useEffect(() => { void reload(); }, [reload]);
@@ -39,8 +41,8 @@ export function RpgDreamPanel({ disabled = false }: { disabled?: boolean }) {
   const laneEntries = (name: string) => entries.filter(entry => entry.lane === name);
   const renderEntry = (entry: RpgTranscriptEntry, index: number) => <div key={`${entry.correlation_id ?? index}`} style={{ padding: '7px 10px', borderBottom: '1px solid var(--dt-border-soft)' }}>{String(entry.content ?? entry.text ?? '')}</div>;
   return <div className="dream-rpg" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', minHeight: 0, flex: 1 }}>
-    <section><div className="mono" style={{ padding: 10 }}>CHARACTER</div>{laneEntries('character').map(renderEntry)}</section>
-    <section><div className="mono" style={{ padding: 10 }}>KP / SHARED</div>{[...laneEntries('kp'), ...laneEntries('shared')].map(renderEntry)}</section>
+    <section><div className="mono" style={{ padding: 10 }}>{t('dream.rpg.character')}</div>{laneEntries('character').map(renderEntry)}</section>
+    <section><div className="mono" style={{ padding: 10 }}>{t('dream.rpg.kpShared')}</div>{[...laneEntries('kp'), ...laneEntries('shared')].map(renderEntry)}</section>
     <div style={{ gridColumn: '1 / -1', padding: 10, borderTop: '1px solid var(--dt-border-soft)' }}>
       <select value={lane} onChange={e => setLane(e.target.value as 'character' | 'kp')} disabled={busy}><option value="character">Character</option><option value="kp">KP</option></select>
       <button type="button" onClick={() => setCorrection(value => !value)} disabled={busy} style={{ marginLeft: 8 }}>{correction ? '修正中' : '修正'}</button>

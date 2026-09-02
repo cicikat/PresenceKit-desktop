@@ -1,6 +1,7 @@
 import type { MessageKey } from './zh-CN';
 
 export const enUS: Record<MessageKey, string> = {
+  'dream.rpg.character': 'Character', 'dream.rpg.kpShared': 'KP / Shared', 'dream.rpg.submit': 'Submit turn', 'dream.rpg.send': 'Send', 'dream.rpg.sending': 'Sending', 'dream.rpg.correction': 'Correction', 'dream.rpg.correctionActive': 'Correction mode', 'dream.rpg.revisionConflict': 'Scene changed. Confirm and submit again.', 'dream.rpg.partialRead': 'Partial recovery',
   'common.language': 'Language',
   'common.chinese': 'Simplified Chinese',
   'common.english': 'English',
