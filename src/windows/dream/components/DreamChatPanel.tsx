@@ -203,11 +203,12 @@ export function DreamChatPanel({
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  const lastMessageText = messages.length ? messages[messages.length - 1].text : '';
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages.length, loading]);
+  }, [messages.length, lastMessageText, loading]);
 
   const handleSend = () => {
     const t = input.trim();
@@ -217,7 +218,7 @@ export function DreamChatPanel({
   };
 
   return (
-    <div className="dream-chat">
+    <div className={`dream-chat${messages.length > 80 ? ' dream-chat--dense' : ''}`}>
       <div ref={scrollRef} className="dream-chat__scroll">
         {endedMessage && (
           <div className="dream-chat__afterglow">

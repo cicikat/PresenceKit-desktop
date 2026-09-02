@@ -8,6 +8,8 @@ import { mapCanonicalDreamMessage, normalizeDreamText } from '../dreamMessage';
 
 let _id = 0;
 function newId() { return `dm-${Date.now()}-${++_id}`; }
+const MAX_DREAM_MESSAGES = 120;
+const appendCapped = <T,>(items: T[], item: T) => [...items, item].slice(-MAX_DREAM_MESSAGES);
 
 // Dream chat is HTTP-primary: the reply text comes via the dreamChat() HTTP
 // response. Brief 84 added a server-side pseudo-stream typewriter replay that
@@ -24,20 +26,22 @@ export function useDreamChat(onExited: () => void) {
   onExitedRef.current = onExited;
 
   const loadingRef = useRef(false);
+  const streamTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingStream = useRef<{ text: string; id: string | null }>({ text: '', id: null });
   function setLoadingState(v: boolean) {
     loadingRef.current = v;
     setLoading(v);
   }
 
   const addSystemMsg = useCallback((text: string) => {
-    setMessages(prev => [...prev, { id: newId(), role: 'system', text }]);
+    setMessages(prev => appendCapped(prev, { id: newId(), role: 'system', text }));
   }, []);
 
   const send = useCallback(async (text: string) => {
     const trimmed = normalizeDreamText(text.trim());
     if (!trimmed) return;
 
-    setMessages(prev => [...prev, { id: newId(), role: 'user', text: trimmed }]);
+    setMessages(prev => appendCapped(prev, { id: newId(), role: 'user', text: trimmed }));
     setLoadingState(true);
 
     let streamId: string | null = null;
@@ -48,20 +52,19 @@ export function useDreamChat(onExited: () => void) {
       // Recompute segments from the full accumulated buffer each delta (cc-tasks/33 §A):
       // the reply is short enough that a full re-parse is cheapest, and it naturally
       // gives the trailing in-flight segment its optimistic render (see parser doc comment).
-      const segments = parseIncremental(normalized);
-      if (streamId === null) {
-        streamId = newId();
-        setStreamingActive(true);
-        const id = streamId;
-        setMessages(prev => [...prev, { id, role: 'her', text: normalized, segments }]);
-      } else {
-        const id = streamId;
-        setMessages(prev => prev.map(m => (m.id === id ? { ...m, text: normalized, segments } : m)));
-      }
+      pendingStream.current = { text: normalized, id: streamId };
+      if (!streamTimer.current) streamTimer.current = setTimeout(() => {
+        streamTimer.current = null;
+        const batch = pendingStream.current;
+        const segments = parseIncremental(batch.text);
+        if (batch.id === null) { const id = newId(); streamId = id; pendingStream.current.id = id; setStreamingActive(true); setMessages(prev => appendCapped(prev, { id, role: 'her', text: batch.text, segments })); }
+        else setMessages(prev => prev.map(m => m.id === batch.id ? { ...m, text: batch.text, segments } : m));
+      }, 40);
     });
 
     try {
       const resp = await dreamChat(trimmed);
+      if (streamTimer.current) { clearTimeout(streamTimer.current); streamTimer.current = null; const batch = pendingStream.current; if (batch.id) setMessages(prev => prev.map(m => m.id === batch.id ? { ...m, text: batch.text, segments: parseIncremental(batch.text) } : m)); streamId = batch.id; }
       disarmStream();
       if (resp.error) {
         if (streamId) {
@@ -82,7 +85,7 @@ export function useDreamChat(onExited: () => void) {
             const id: string = streamId;
             setMessages(prev => prev.map(m => (m.id === id ? { ...m, ...finalMessage, id } : m)));
           } else {
-            setMessages(prev => [...prev, finalMessage]);
+            setMessages(prev => appendCapped(prev, finalMessage));
           }
         } else if (streamId) {
           const id: string = streamId;

@@ -12,6 +12,8 @@ let nextId = 0;
 const newId = () => `gdm-${Date.now()}-${++nextId}`;
 const normalize = normalizeDreamText;
 const httpStatus = (error: unknown) => String(error).match(/\bHTTP (\d+)/)?.[1];
+const MAX_DREAM_MESSAGES = 120;
+const appendCapped = <T,>(items: T[], item: T) => [...items, item].slice(-MAX_DREAM_MESSAGES);
 
 export function useGroupDreamChat(groupId: string | null, enabled = true) {
   const { t } = useI18n();
@@ -39,7 +41,7 @@ export function useGroupDreamChat(groupId: string | null, enabled = true) {
   }, [clearRecoveryTimer]);
 
   const addSystemMsg = useCallback((text: string) => {
-    setMessages(prev => [...prev, { id: newId(), role: 'system', text }]);
+    setMessages(prev => appendCapped(prev, { id: newId(), role: 'system', text }));
   }, []);
 
   const finishRound = useCallback((roundId?: string) => {
@@ -95,7 +97,7 @@ export function useGroupDreamChat(groupId: string | null, enabled = true) {
       streamText.current.set(msg_id, '');
       liveStreams.current.add(msg_id);
       setStreamingActive(true);
-      setMessages(prev => [...prev, { id, role: 'her', text: '', speakerId: char_id, roundId: round_id, wsMsgId: msg_id }]);
+      setMessages(prev => appendCapped(prev, { id, role: 'her', text: '', speakerId: char_id, roundId: round_id, wsMsgId: msg_id }));
     });
     const offDelta = wsClient.on('message_stream_delta', ({ msg_id, delta }) => {
       const id = streamIds.current.get(msg_id);
@@ -185,7 +187,7 @@ export function useGroupDreamChat(groupId: string | null, enabled = true) {
     if (!groupId || !enabled) return;
     const trimmed = normalize(text.trim());
     if (!trimmed) return;
-    setMessages(prev => [...prev, { id: newId(), role: 'user', text: trimmed }]);
+    setMessages(prev => appendCapped(prev, { id: newId(), role: 'user', text: trimmed }));
     loadingRef.current = true;
     setLoading(true);
     try {

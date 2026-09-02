@@ -1943,6 +1943,11 @@
   gap: 12px;
 }
 
+/* Long transcripts prioritize input responsiveness over glass effects. */
+.dream-chat--dense .dream-glow-bubble__body,
+.dream-chat--dense .dream-msg__avatar,
+.dream-chat--dense .dream-msg__avatar-dot { backdrop-filter: none; filter: none; }
+
 @media (max-width: 560px) {
   .dream-background-cropper { padding: 8px; }
   .dream-background-cropper__panel { width: 100%; max-height: calc(100dvh - 16px); }
