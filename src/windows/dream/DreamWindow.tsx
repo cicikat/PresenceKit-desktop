@@ -11,6 +11,7 @@ import { DreamControlBar } from './components/DreamControlBar';
 import { DreamChatPanel } from './components/DreamChatPanel';
 import { DreamReplaySidebar } from './components/DreamReplaySidebar';
 import { DreamReplayTranscript } from './components/DreamReplayTranscript';
+import { RpgDreamPanel } from './components/RpgDreamPanel';
 import { isCurrentReplayRequest } from './replaySelection';
 import { SubHiddenStatePanel } from './components/SubHiddenStatePanel';
 import { Icon } from '../chat/components/UIKit';
@@ -586,7 +587,7 @@ export function DreamWindow({ mode = 'single', groupId = null, groupRoster = {},
 
           {!replayActive && (phase === 'active' || phase === 'ended') && (
             <>
-              <DreamChatPanel
+              {(dreamState?.dream_mode ?? dreamState?.mode) === 'rpg' ? <RpgDreamPanel disabled={phase === 'ended' || retentionText !== null} /> : <DreamChatPanel
                 messages={messages}
                 loading={chatLoading}
                 streamingActive={streamingActive}
@@ -597,7 +598,7 @@ export function DreamWindow({ mode = 'single', groupId = null, groupRoster = {},
                 speakerName={dreamCharacterName}
                 onSend={send}
                 endedMessage={phase === 'ended' ? '梦境已关闭。按 WAKE 醒来。' : undefined}
-              />
+              />}
               {retentionText !== null && (
                 <div className="dream-theme__retention-bar">
                   <button

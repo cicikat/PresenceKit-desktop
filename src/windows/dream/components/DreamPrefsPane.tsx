@@ -16,7 +16,7 @@ import {
 import {
   dreamGetSettings, dreamUpdateSettings, dreamGetStats,
   dreamGroupGetSettings, dreamGroupUpdateSettings, dreamListPresets, dreamListWorlds,
-  dreamListScenarios,
+  dreamListScenarios, dreamGetCapabilities,
 } from '../../../shared/api/dream';
 import { getPromptAssets } from '../../../shared/api/backend';
 import type { PromptAssetOption } from '../../../shared/api/types';
@@ -685,6 +685,7 @@ export function DreamPrefsPane({
   const [availablePresets, setAvailablePresets] = useState<PromptAssetOption[]>([]);
   const [availableWorldCards, setAvailableWorldCards] = useState<PromptAssetOption[]>([]);
   const [availableScenarios, setAvailableScenarios] = useState<DreamScenarioOption[]>([]);
+  const [rpgAvailable, setRpgAvailable] = useState(false);
   const [backgroundCropSrc, setBackgroundCropSrc] = useState<string | null>(null);
   const [backgroundCropTone, setBackgroundCropTone] = useState<DreamBackgroundTone | null>(null);
   const [backgroundSaving, setBackgroundSaving] = useState(false);
@@ -693,6 +694,11 @@ export function DreamPrefsPane({
   const backgroundFileToneRef = useRef<DreamBackgroundTone>('day');
 
   const isDreamActive = dreamState?.status === 'DREAM_ACTIVE' || dreamState?.status === 'DREAM_EXIT_REQUESTED';
+
+  useEffect(() => {
+    if (!open || mode === 'group') return;
+    dreamGetCapabilities().then(cap => setRpgAvailable(cap.rpg?.available === true && (cap.rpg?.supported_modes ?? []).includes('rpg'))).catch(() => setRpgAvailable(false));
+  }, [open, mode]);
 
   const loadSettings = useCallback(async () => {
     setSettingsLoading(true);
@@ -1177,7 +1183,7 @@ export function DreamPrefsPane({
                 <SettingRow label="模式" deferred={isDreamActive}>
                   <SelectPref<DreamEntryMode>
                     value={entryMode}
-                    options={['sandbox', 'scenario', 'mirror']}
+                    options={rpgAvailable ? ['sandbox', 'scenario', 'mirror', 'rpg'] : ['sandbox', 'scenario', 'mirror']}
                     labels={{ sandbox: '沙盒', scenario: '剧本', mirror: '镜像', rpg: '跑团' }}
                     onChange={onEntryModeChange}
                     disabled={isDreamActive}
