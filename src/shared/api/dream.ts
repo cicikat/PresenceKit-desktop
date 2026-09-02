@@ -20,6 +20,7 @@ import type {
   DreamCapabilities, RpgState, RpgTranscript, RpgTurnResponse,
 } from './dream-types';
 import { normalizeDreamArchiveDetail, normalizeDreamArchiveList } from './dream-replay';
+import { normalizeRpgTranscript } from './rpg-normalization';
 
 const DREAM_SETTINGS_TIMEOUT_MS = 5000;
 
@@ -43,7 +44,7 @@ export async function dreamGetState(): Promise<DreamState> {
 
 export const dreamGetCapabilities = () => invokeGated<DreamCapabilities>('dream_get_capabilities');
 export const dreamRpgState = () => invokeGated<RpgState>('dream_rpg_state');
-export const dreamRpgTranscript = (before?: string | null, limit = 50, dreamId?: string | null) => invokeGated<RpgTranscript>('dream_rpg_transcript', { before: before ?? null, limit, dreamId: dreamId ?? null });
+export const dreamRpgTranscript = async (before?: string | null, limit = 50, dreamId?: string | null): Promise<RpgTranscript> => normalizeRpgTranscript(await invokeGated<unknown>('dream_rpg_transcript', { before: before ?? null, limit, dreamId: dreamId ?? null }));
 export const dreamRpgTurn = (body: Record<string, unknown>) => invokeGated<RpgTurnResponse>('dream_rpg_turn', body);
 export const dreamRpgCorrection = (body: Record<string, unknown>) => invokeGated<RpgTurnResponse>('dream_rpg_correction', body);
 
