@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { dreamRpgState, dreamRpgTranscript, dreamRpgTurn, dreamRpgCorrection } from '../../../shared/api/dream';
 import type { RpgState, RpgTranscriptEntry } from '../../../shared/api/dream-types';
 import { useI18n } from '../../../shared/i18n';
+import { classifyHttpError } from '../../../shared/api/httpError';
 
 export function RpgDreamPanel({ disabled = false }: { disabled?: boolean }) {
   const { t } = useI18n();
@@ -45,7 +46,11 @@ export function RpgDreamPanel({ disabled = false }: { disabled?: boolean }) {
       if (response.detail?.code === 'RPG_REVISION_CONFLICT') { setNeedsConfirm(true); await reload(state?.dream_id); return; }
       if (response.error) setError(response.detail?.code ?? response.error);
       setInput(''); await reload(state?.dream_id);
-    } catch (e) { setError(String(e)); } finally { setBusy(false); }
+    } catch (e) {
+      const classified = classifyHttpError(e);
+      if (classified.code === 'RPG_REVISION_CONFLICT') { setNeedsConfirm(true); setError(t('dream.rpg.revisionConflict')); await reload(state?.dream_id); }
+      else setError(classified.code ?? classified.message);
+    } finally { setBusy(false); }
   };
   const laneEntries = (name: string) => entries.filter(entry => entry.lane === name);
   const renderEntry = (entry: RpgTranscriptEntry, index: number) => <div key={`${entry.correlation_id ?? index}`} style={{ padding: '7px 10px', borderBottom: '1px solid var(--dt-border-soft)' }}>{String(entry.content ?? entry.text ?? '')}</div>;
