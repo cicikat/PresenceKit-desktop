@@ -13,14 +13,22 @@ export function RpgDreamPanel({ disabled = false }: { disabled?: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const [correction, setCorrection] = useState(false);
   const [needsConfirm, setNeedsConfirm] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const reload = useCallback(async () => {
     try {
       const [nextState, transcript] = await Promise.all([dreamRpgState(), dreamRpgTranscript(null, 80, state?.dream_id)]);
-      setState(nextState); setEntries(transcript.entries ?? []); setError(transcript.partial_read ? t('dream.rpg.partialRead') : null);
+      setState(nextState); setEntries(transcript.entries ?? []); setNextCursor(transcript.next_cursor ?? null); setError(transcript.partial_read ? t('dream.rpg.partialRead') : null);
     } catch (e) { setError(String(e)); }
   }, []);
   useEffect(() => { void reload(); }, [reload]);
+
+  const loadMore = async () => {
+    if (!nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    try { const page = await dreamRpgTranscript(nextCursor, 80, state?.dream_id); setEntries(current => [...current, ...(page.entries ?? [])]); setNextCursor(page.next_cursor ?? null); } catch (e) { setError(String(e)); } finally { setLoadingMore(false); }
+  };
 
   const submit = async () => {
     const text = input.trim(); if (!text || busy || disabled) return;
@@ -44,6 +52,7 @@ export function RpgDreamPanel({ disabled = false }: { disabled?: boolean }) {
     <section><div className="mono" style={{ padding: 10 }}>{t('dream.rpg.character')}</div>{laneEntries('character').map(renderEntry)}</section>
     <section><div className="mono" style={{ padding: 10 }}>KP</div>{laneEntries('kp').map(renderEntry)}</section>
     <section><div className="mono" style={{ padding: 10 }}>SHARED</div>{laneEntries('shared').map(renderEntry)}</section>
+    {nextCursor && <button type="button" onClick={() => void loadMore()} disabled={loadingMore} style={{ gridColumn: '1 / -1' }}>{loadingMore ? 'Loading...' : 'Load more'}</button>}
     <div style={{ gridColumn: '1 / -1', padding: 10, borderTop: '1px solid var(--dt-border-soft)' }}>
       <select value={lane} onChange={e => setLane(e.target.value as 'character' | 'kp')} disabled={busy}><option value="character">Character</option><option value="kp">KP</option></select>
       <button type="button" onClick={() => setCorrection(value => !value)} disabled={busy} style={{ marginLeft: 8 }}>{correction ? '修正中' : '修正'}</button>
