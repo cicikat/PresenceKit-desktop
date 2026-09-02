@@ -269,6 +269,12 @@ export interface DreamArchiveMessage {
   role: 'user' | 'assistant';
   content: string;
   ts: number | null;
+  lane?: 'character' | 'kp' | 'shared' | string;
+  kind?: string;
+  correlation_id?: string;
+  lane?: 'character' | 'kp' | 'shared' | string;
+  kind?: string;
+  correlation_id?: string;
   segments?: NarrativeSegment[];
   segmented_content?: string;
   segment_parse_fallback?: boolean;

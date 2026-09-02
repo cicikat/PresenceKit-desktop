@@ -75,6 +75,9 @@ function normalizeMessage(value: unknown): DreamArchiveMessage | null {
   const content = stringValue(raw.content);
   if (!content) return null;
   const message: DreamArchiveMessage = { role: raw.role, content, ts: numberValue(raw.ts) };
+  if (typeof raw.lane === 'string') message.lane = raw.lane;
+  if (typeof raw.kind === 'string') message.kind = raw.kind;
+  if (typeof raw.correlation_id === 'string') message.correlation_id = raw.correlation_id;
   if (raw.role === 'assistant') {
     const hasSegments = raw.segments !== undefined;
     const segments = hasSegments ? normalizeDreamSegments(raw.segments) : null;

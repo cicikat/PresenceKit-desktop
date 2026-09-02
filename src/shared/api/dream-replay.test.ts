@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { normalizeDreamArchiveDetail, normalizeDreamArchiveList } from './dream-replay';
 
 describe('dream archive normalization', () => {
+  it('preserves RPG replay lane metadata without exposing unknown fields', () => {
+    const result = normalizeDreamArchiveDetail({ dream_id: 'rpg1', char_id: 'c1', metadata: { dream_id: 'rpg1' }, messages: [{ role: 'assistant', content: 'result', lane: 'shared', kind: 'resolution', correlation_id: 'corr1', hidden_fact: 'no' }] });
+    expect(result?.messages[0]).toMatchObject({ lane: 'shared', kind: 'resolution', correlation_id: 'corr1' });
+    expect(result?.messages[0]).not.toHaveProperty('hidden_fact');
+  });
   it('keeps safe list metadata and tolerates legacy omissions', () => {
     const result = normalizeDreamArchiveList({
       char_id: 'dreamer',
