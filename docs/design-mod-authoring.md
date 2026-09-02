@@ -13,6 +13,8 @@
 | 只重排 Ribbon / Sidebar / Main 固定槽位 | Layout Mod，见 `docs/layout-mods.md` |
 | 拆散官方能力、自绘数据、自由定位、边缘装饰、窗口外 Halo/Island | Design Mod（本文） |
 
+编写 Design Mod 中可选的 `layout` 时，注意不要把 `mainLayout: "hud"` 当作普通聊天布局：在宽窗口或全屏下它会将聊天记录与发送栏分成左右两列。需要记录和发送栏上下排列时使用 `stack`；窄窗口低于 760px 的自动回退不能替代这个选择。
+
 Design Mod 是**可信本地代码**，不是插件沙箱。它可以执行 DOM/Canvas/WebGL 代码，但不得自行建立
 后端 HTTP、WebSocket、第二份 StateEngine 或 Tauri window owner。业务数据来自 `host.signals` 和
 `host.presenters`；业务动作来自 `host.commands`、presenter commands 或 satellite 命令白名单。

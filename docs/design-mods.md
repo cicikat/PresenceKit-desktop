@@ -46,6 +46,8 @@ public/design-mods/<id>/
 它们不会被复制到 `public/themes/` 或 `public/layouts/`。独立主题/布局仍使用原有 registry，来源标记
 为 `design-mod` 只表示本次应用来源。
 
+包内 `layout` 的 `mainLayout` 仍遵循布局 Mod 契约：`hud` 在宽窗口（包括全屏）会将聊天记录与发送栏分成左右两列，只有主区低于 760px 才回退为 `stack`。需要常规上下聊天时应明确使用 `stack`，不能依赖主题 CSS 修正。
+
 ## 运行时入口
 
 ```js

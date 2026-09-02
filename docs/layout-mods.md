@@ -38,6 +38,8 @@ fallback；`src-tauri/target/**` 与 `dist/**` 是可重建产物，不是布局
 | `mainLayout` | 否 | V2 主区模板：`stack`（原始纵向）、`workbench`（右侧输入工作台）、`hud`（左 HUD + 右消息流） |
 | `css` | 否 | 同目录内的 `.css` 文件名 |
 
+> **布局陷阱：** `hud` 不是普通的上下聊天布局。它在宽窗口（包括全屏）会把标题和发送栏放在左列、聊天记录放在右列；只有主区宽度低于 760px 时才自动回退为 `stack`。如果目标是聊天记录与发送栏始终上下排列，请使用 `stack`。主题 CSS 不能修正这个 `mainLayout` 选择。
+
 ## 3. 包格式与可抄样例
 
 ```text
@@ -94,7 +96,8 @@ Grid；布局由 `mainLayout` 的受控模板负责，CSS 只做装饰。
 当前有四个可运行样例：`sidebar-right`（右侧工具栏 + 工作台输入区）、`mirror-stage`（左侧语境栏、
 右侧 Ribbon + HUD 主区）、`focus-stage`（默认收起侧栏 + 原始纵向聊天）和
 `presence-glass-atlas`（雾窗主题的全量布局搭档）。它们分别展示 slot 顺序、方向、宽度、默认可见性
-和 V2 主区模板。后者与主题 `presence-glass` 独立选择：在布局预览选 Atlas、在主题选择雾窗，才能
-同时得到三栏重排与玻璃视觉。窗口变窄到 760px 以下时，`workbench` / `hud` 自动回退为 `stack`，
+和 V2 主区模板。Atlas 使用 `stack`，因此聊天记录和发送栏在同一主列中上下排列；它与主题
+`presence-glass` 独立选择：在布局预览选 Atlas、在主题选择雾窗，才能同时得到三栏重排与玻璃视觉。
+窗口变窄到 760px 以下时，`workbench` / `hud` 自动回退为 `stack`，
 避免输入区或消息流被挤没。桌宠窗口，以及 Dream、偏好、帮助、Pane、Yandere 等 overlay 均不在布局
 slot 范围内。

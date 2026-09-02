@@ -4,7 +4,7 @@
   "author": "PresenceKit 示例",
   "version": "2.0.0",
   "direction": "row-reverse",
-  "mainLayout": "hud",
+  "mainLayout": "stack",
   "slots": {
     "ribbon": { "order": 0, "size": 62 },
     "main": { "order": 1 },
