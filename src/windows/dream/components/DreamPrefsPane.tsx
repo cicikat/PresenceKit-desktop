@@ -697,7 +697,7 @@ export function DreamPrefsPane({
 
   useEffect(() => {
     if (!open || mode === 'group') return;
-    dreamGetCapabilities().then(cap => setRpgAvailable(cap.rpg?.available === true && (cap.rpg?.supported_modes ?? []).includes('rpg'))).catch(() => setRpgAvailable(false));
+    dreamGetCapabilities().then(cap => setRpgAvailable(cap.rpg?.available === true && (cap.supported_modes ?? []).includes('rpg'))).catch(() => setRpgAvailable(false));
   }, [open, mode]);
 
   const loadSettings = useCallback(async () => {
