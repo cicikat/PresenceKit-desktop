@@ -781,3 +781,6 @@ actions call `get_diary_sync_status`, `set_diary_directory`,
 `clear_diary_directory`, and `sync_diary` through the shared gated API. This
 does not change the read-only `SubDiary` panel or its character-inner-diary
 contract.
+## RPG Dream 双栏
+
+`DreamWindow` 在后端状态的 `dream_mode === "rpg"` 时挂载 `RpgDreamPanel`。面板从 RPG state/transcript 恢复活动场景，将 `character` 与 `kp/shared` 分栏展示，并通过 lane 选择提交回合。RPG capability 不可用时，Dream 偏好中的 RPG 模式不会显示；普通 sandbox/scenario/mirror 路径保持原状。

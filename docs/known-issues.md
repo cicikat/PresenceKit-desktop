@@ -369,3 +369,6 @@ useEffect(() => {
 ```
 
 修复后 `tsc --noEmit` 零报错。
+## RPG Dream 客户端（open）
+
+桌面端已完成 capability 门控、入口、双栏 transcript 恢复和回合提交；尚未完成真实后端运行态、网络重试/冲突交互和多分辨率窗口验收。后续需补 `RPG_ROUND_BUSY` 原 body 重试、`RPG_REVISION_CONFLICT` 确认流程及 corrections UI，并以后端三仓总账的 open/partial 状态为准。
