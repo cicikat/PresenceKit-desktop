@@ -1497,9 +1497,9 @@ async fn dream_rpg_state(app: tauri::AppHandle) -> Result<serde_json::Value, Str
     let cfg = load_client_config(&app); let resp = authorized_request(&cfg, http_client()?.get(backend_url(&cfg, "/dream/rpg/state"))).send().await.map_err(|_| "Dream RPG state request failed".to_string())?; let resp = require_success(resp).await?; resp.json().await.map_err(|e| e.to_string())
 }
 #[tauri::command]
-async fn dream_rpg_transcript(app: tauri::AppHandle, cursor: Option<String>, limit: Option<u32>) -> Result<serde_json::Value, String> {
+async fn dream_rpg_transcript(app: tauri::AppHandle, before: Option<String>, limit: Option<u32>, dream_id: Option<String>) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app); let mut url = url::Url::parse(&backend_url(&cfg, "/dream/rpg/transcript")).map_err(|e| e.to_string())?;
-    { let mut q = url.query_pairs_mut(); if let Some(c) = cursor { q.append_pair("cursor", &c); } q.append_pair("limit", &limit.unwrap_or(50).to_string()); }
+    { let mut q = url.query_pairs_mut(); if let Some(c) = before { q.append_pair("before", &c); } if let Some(id) = dream_id { q.append_pair("dream_id", &id); } q.append_pair("limit", &limit.unwrap_or(50).to_string()); }
     let resp = authorized_request(&cfg, http_client()?.get(url.to_string())).send().await.map_err(|_| "Dream RPG transcript request failed".to_string())?; let resp = require_success(resp).await?; resp.json().await.map_err(|e| e.to_string())
 }
 #[tauri::command]

@@ -43,7 +43,7 @@ export async function dreamGetState(): Promise<DreamState> {
 
 export const dreamGetCapabilities = () => invokeGated<DreamCapabilities>('dream_get_capabilities');
 export const dreamRpgState = () => invokeGated<RpgState>('dream_rpg_state');
-export const dreamRpgTranscript = (cursor?: string | null, limit = 50) => invokeGated<RpgTranscript>('dream_rpg_transcript', { cursor: cursor ?? null, limit });
+export const dreamRpgTranscript = (before?: string | null, limit = 50, dreamId?: string | null) => invokeGated<RpgTranscript>('dream_rpg_transcript', { before: before ?? null, limit, dreamId: dreamId ?? null });
 export const dreamRpgTurn = (body: Record<string, unknown>) => invokeGated<RpgTurnResponse>('dream_rpg_turn', body);
 export const dreamRpgCorrection = (body: Record<string, unknown>) => invokeGated<RpgTurnResponse>('dream_rpg_correction', body);
 
