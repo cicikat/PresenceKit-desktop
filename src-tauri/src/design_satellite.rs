@@ -492,6 +492,7 @@ fn ensure_locked(
             .focusable(spec.pointer_mode == "interactive")
             .resizable(false)
             .visible(false);
+        #[cfg(target_os = "windows")]
         builder = builder
             .owner(
                 &app.get_webview_window(MAIN_WINDOW_LABEL)
