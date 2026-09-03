@@ -493,12 +493,14 @@ fn ensure_locked(
             .resizable(false)
             .visible(false);
         #[cfg(target_os = "windows")]
+        {
         builder = builder
             .owner(
                 &app.get_webview_window(MAIN_WINDOW_LABEL)
                     .ok_or_else(|| "main window 不存在".to_string())?,
             )
             .map_err(|error| error.to_string())?;
+        }
         let window = builder.build().map_err(|error| error.to_string())?;
         window
             .set_ignore_cursor_events(spec.pointer_mode == "passthrough")
