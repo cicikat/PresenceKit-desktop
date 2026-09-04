@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { browserCapabilityState, normalizeAgentRuntimeTaskSnapshot, createAgentRuntimeBrowserTask, loadAgentRuntimeTasks, confirmAgentRuntimeBrowserTask, pauseAgentRuntimeBrowserTask, cancelAgentRuntimeTask } from './agent-runtime';
+import { browserCapabilityState, canAgentRuntimeTaskAction, normalizeAgentRuntimeTaskSnapshot, createAgentRuntimeBrowserTask, loadAgentRuntimeTasks, confirmAgentRuntimeBrowserTask, pauseAgentRuntimeBrowserTask, cancelAgentRuntimeTask } from './agent-runtime';
 
 const invokeMock = vi.fn();
 vi.mock('@tauri-apps/api/core', () => ({ invoke: (...args: unknown[]) => invokeMock(...args) }));
@@ -16,6 +16,15 @@ describe('agent runtime browser metadata', () => {
     expect(browserCapabilityState({ enabled: false, adapter_available: true } as any)).toBe('disabled');
     expect(browserCapabilityState({ enabled: true, adapter_available: false } as any)).toBe('unavailable');
     expect(browserCapabilityState({ enabled: false, adapter_available: false, effective_state: 'disabled_remote_server' } as any)).toBe('remote_disabled');
+  });
+
+  it('keeps task controls bounded to lifecycle states', () => {
+    expect(canAgentRuntimeTaskAction('waiting_confirm', 'confirm')).toBe(true);
+    expect(canAgentRuntimeTaskAction('paused', 'confirm')).toBe(false);
+    expect(canAgentRuntimeTaskAction('queued', 'pause')).toBe(true);
+    expect(canAgentRuntimeTaskAction('running', 'pause')).toBe(true);
+    expect(canAgentRuntimeTaskAction('succeeded', 'cancel')).toBe(false);
+    expect(canAgentRuntimeTaskAction('outcome_unknown', 'cancel')).toBe(false);
   });
 
   it('normalizes every lifecycle status and bounded receipt metadata', () => {

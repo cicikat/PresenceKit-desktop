@@ -2,6 +2,7 @@ import { invokeGated } from './authGate';
 
 export type BrowserCapabilityState = 'enabled' | 'disabled' | 'unavailable' | 'remote_disabled';
 export type AgentTaskStatus = 'queued' | 'running' | 'waiting_confirm' | 'paused' | 'succeeded' | 'failed' | 'canceled' | 'expired' | 'outcome_unknown' | 'unknown';
+export type AgentRuntimeTaskAction = 'confirm' | 'pause' | 'cancel';
 
 export interface BrowserCapabilitySnapshot {
   schema_version: string;
@@ -125,4 +126,10 @@ export function browserCapabilityState(snapshot: BrowserCapabilitySnapshot): Bro
   if (!snapshot.enabled) return 'disabled';
   if (!snapshot.adapter_available) return 'unavailable';
   return 'enabled';
+}
+
+export function canAgentRuntimeTaskAction(status: AgentTaskStatus, action: AgentRuntimeTaskAction): boolean {
+  if (action === 'confirm') return status === 'waiting_confirm';
+  if (action === 'pause') return status === 'queued' || status === 'running';
+  return status === 'queued' || status === 'running' || status === 'waiting_confirm' || status === 'paused';
 }
