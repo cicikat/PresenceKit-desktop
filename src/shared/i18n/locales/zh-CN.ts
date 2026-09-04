@@ -48,7 +48,7 @@ export const zhCN = {
   'settings.agentRuntime.credentials': '凭据：从不暴露',
   'settings.agentRuntime.taskCount': '任务 {count} 个',
   'settings.agentRuntime.retryIn': '{seconds} 秒后重试',
-  'settings.agentRuntime.controlUnavailable': '暂停、确认、取消和人工接管需等待后端公开控制 API。',
+  'settings.agentRuntime.controlUnavailable': '该任务未保留执行参数，确认并执行不可用；请重新提交任务。',
   'settings.agentRuntime.safetyHint': '只允许后端配置的 HTTP(S) 域名；浏览器使用隔离 profile，页面内容和凭据不会进入聊天或记忆。',
   'settings.agentRuntime.confirmRequired': '这是高风险操作，执行前必须确认。',
   'settings.agentRuntime.outcomeUnknownHint': '结果未知，不会自动重试；请人工核对后再决定是否重新发起。',

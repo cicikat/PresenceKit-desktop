@@ -2,7 +2,7 @@
 
 ### Agent Runtime 浏览器任务客户端仍为 partial（Brief 70）
 
-影响：Chat 偏好中的 Browser Runtime 已支持创建、运行、确认、暂停和取消；暂停后的恢复和人工接管仍不可用，跨重启后因客户端不保留 URL/参数，既有任务只读展示，避免重放副作用。
+影响：Chat 偏好中的 Browser Runtime 已支持创建、运行、确认、暂停和取消；暂停后的恢复和人工接管仍不可用。跨重启后客户端不保留 URL/参数，既有任务仍可暂停/取消，但不能再次确认并执行，避免重放副作用。
 
 证据：Emerald-presence 当前公开创建/run/get/confirm/pause 和 owner-scoped cancel 路由，但三仓接口总账仍标 `partial, backend-only`，且没有 resume/人工接管路由。
 

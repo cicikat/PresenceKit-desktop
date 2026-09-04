@@ -50,7 +50,7 @@ export const enUS: Record<MessageKey, string> = {
   'settings.agentRuntime.credentials': 'credentials: never exposed',
   'settings.agentRuntime.taskCount': '{count} tasks',
   'settings.agentRuntime.retryIn': 'Retry in {seconds}s',
-  'settings.agentRuntime.controlUnavailable': 'Pause, confirmation, cancellation, and handoff await the backend public control API.',
+  'settings.agentRuntime.controlUnavailable': 'Execution parameters were not retained for this task, so confirmation and run are unavailable. Submit a new task instead.',
   'settings.agentRuntime.safetyHint': 'Only backend-allowlisted HTTP(S) domains are accepted; the browser uses an isolated profile and page content or credentials never enter chat or memory.',
   'settings.agentRuntime.confirmRequired': 'This is a high-risk operation and must be confirmed before execution.',
   'settings.agentRuntime.outcomeUnknownHint': 'The outcome is unknown. It will not be retried automatically; verify it manually before starting again.',
