@@ -786,4 +786,4 @@ contract.
 `DreamWindow` 在后端状态的 `dream_mode === "rpg"` 时挂载 `RpgDreamPanel`。面板从 RPG state/transcript 恢复活动场景，将 `character` 与 `kp/shared` 分栏展示，并通过 lane 选择提交回合。RPG capability 不可用时，Dream 偏好中的 RPG 模式不会显示；普通 sandbox/scenario/mirror 路径保持原状。
 ## Agent Runtime Browser
 
-`AgentRuntimeBrowserSettingsPage` 挂在 Chat 偏好「能力与权限」，通过共享 API 加载 capability 与 task receipt。面板显示有效状态、失败原因、任务状态/时间/错误码/尝试次数/截断和安全 artifact 摘要；轮询使用统一退避并在卸载时清理。后端未提供公开控制契约时保持只读降级，避免把观测数据当作执行结果。
+`AgentRuntimeBrowserSettingsPage` 挂在 Chat 偏好「能力与权限」，通过共享 API 加载 capability 与 task receipt。面板显示有效状态、失败原因、任务状态/时间/错误码/尝试次数/截断和安全 artifact 摘要；提交表单按操作类型收集受控 selector/value 或 Workspace 相对路径，参数只存在当前任务内存中。轮询使用统一退避并在卸载时清理；后端未提供公开控制契约时保持只读降级，避免把观测数据当作执行结果。

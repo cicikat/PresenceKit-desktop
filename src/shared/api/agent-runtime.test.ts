@@ -29,8 +29,8 @@ describe('agent runtime browser metadata', () => {
 
   it('uses the shared bridge for task mutations and scoped queries', async () => {
     invokeMock.mockResolvedValue({ task_id: 't1', status: 'queued' });
-    await createAgentRuntimeBrowserTask({ charId: 'char-a', url: 'https://example.test', operation: 'navigate', idempotencyKey: 'once' });
-    expect(invokeMock).toHaveBeenCalledWith('create_agent_runtime_browser_task', expect.objectContaining({ charId: 'char-a', idempotencyKey: 'once' }));
+    await createAgentRuntimeBrowserTask({ charId: 'char-a', url: 'https://example.test', operation: 'click', idempotencyKey: 'once', params: { selector: '#continue' } });
+    expect(invokeMock).toHaveBeenCalledWith('create_agent_runtime_browser_task', expect.objectContaining({ charId: 'char-a', idempotencyKey: 'once', params: { selector: '#continue' } }));
     await loadAgentRuntimeTasks({ charId: 'char-a', capability: 'browser.automation' });
     expect(invokeMock).toHaveBeenCalledWith('load_agent_runtime_tasks', expect.objectContaining({ charId: 'char-a', capability: 'browser.automation' }));
     await confirmAgentRuntimeBrowserTask('t1', 'char-a');
