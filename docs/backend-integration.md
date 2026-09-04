@@ -1110,7 +1110,7 @@ visual bleed. No HTTP, WebSocket, queue, or mobile contract is added.
 桌面端通过 Tauri bridge 调用 `/dream/capabilities`、`/dream/rpg/state`、`/dream/rpg/transcript`、`/dream/rpg/turn` 与 `/dream/rpg/corrections`。RPG 回合请求携带新的 `request_id`、`lane` 和 `expected_scene_revision`；客户端不会回退到普通 `/dream/chat`。transcript 的 `items/next_before` 与兼容字段会在 `rpg-normalization.ts` 归一化后用于恢复只读分栏，`partial_read` 会保留并展示恢复提示。
 ## Agent Runtime 浏览器任务（Brief 70，partial）
 
-偏好页「能力与权限」中的 Browser Runtime 面板只消费后端脱敏观测：`GET /observability/agent-runtime-browser` 读取 capability，`GET /observability/agent-runtime-tasks` 读取 task receipt。请求通过 `load_agent_runtime_browser`、`load_agent_runtime_tasks` Tauri command，经统一 `invokeGated()` 和 Rust `no_proxy()`/Bearer bridge。客户端仅显示状态、时间、错误码、尝试次数、截断标记和安全 artifact label。
+偏好页「能力与权限」中的 Browser Runtime 面板只消费后端脱敏观测：`GET /observability/agent-runtime-browser` 读取 capability，`GET /observability/agent-runtime-tasks` 读取 task receipt。请求通过 `load_agent_runtime_browser`、`load_agent_runtime_tasks` Tauri command，经统一 `invokeGated()` 和 Rust `no_proxy()`/Bearer bridge。客户端仅显示状态、时间、错误码、尝试次数、截断标记和安全 artifact label/id。
 
 后端 Brief 238 当前公开了创建、运行、单任务读取、确认、暂停和 owner-scoped 取消路由；客户端已通过 Tauri bridge 接入，并以本地 `bot_user_id` + 当前角色绑定 scope。安全操作创建后运行，高风险操作先停在 `waiting_confirm`，确认后才运行；取消使用普通 desktop profile 可调用的 owner-scoped POST 路由。后端尚未公开 resume/人工接管路由，因此暂停后的恢复和人工接管仍明确不可用。客户端不会把 capability enabled 当作任务成功，也不会显示凭据、profile、完整 URL、页面正文、原始参数或绝对路径。
 
