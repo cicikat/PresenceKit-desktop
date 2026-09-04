@@ -1,8 +1,10 @@
 import { invokeGated } from './authGate';
+import { classifyHttpError } from './httpError';
 
 export type BrowserCapabilityState = 'enabled' | 'disabled' | 'unavailable' | 'remote_disabled';
 export type AgentTaskStatus = 'queued' | 'running' | 'waiting_confirm' | 'paused' | 'succeeded' | 'failed' | 'canceled' | 'expired' | 'outcome_unknown' | 'unknown';
 export type AgentRuntimeTaskAction = 'confirm' | 'pause' | 'cancel';
+export type AgentRuntimeErrorKind = 'unauthorized' | 'forbidden' | 'unsupported' | 'conflict' | 'rejected' | 'network' | 'other';
 
 export interface BrowserCapabilitySnapshot {
   schema_version: string;
@@ -132,4 +134,16 @@ export function canAgentRuntimeTaskAction(status: AgentTaskStatus, action: Agent
   if (action === 'confirm') return status === 'waiting_confirm';
   if (action === 'pause') return status === 'queued' || status === 'running';
   return status === 'queued' || status === 'running' || status === 'waiting_confirm' || status === 'paused';
+}
+
+export function classifyAgentRuntimeError(error: unknown): AgentRuntimeErrorKind {
+  const raw = error instanceof Error ? error.message : String(error);
+  const status = raw.match(/\bHTTP (\d+)/)?.[1];
+  if (status === '401') return 'unauthorized';
+  if (status === '403') return 'forbidden';
+  if (status === '404') return 'unsupported';
+  if (status === '409') return 'conflict';
+  if (status === '422') return 'rejected';
+  if (classifyHttpError(error).kind === 'network') return 'network';
+  return 'other';
 }

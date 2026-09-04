@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getActiveCharacterInfo, subscribeActiveCharacter } from '../../../shared/activeCharacter';
-import { browserCapabilityState, canAgentRuntimeTaskAction, cancelAgentRuntimeTask, confirmAgentRuntimeBrowserTask, createAgentRuntimeBrowserTask, loadAgentRuntimeTasks, loadBrowserCapability, normalizeAgentRuntimeTask, normalizeAgentRuntimeTaskSnapshot, pauseAgentRuntimeBrowserTask, runAgentRuntimeBrowserTask, type AgentRuntimeTask, type BrowserCapabilitySnapshot, type BrowserTaskRequest } from '../../../shared/api/agent-runtime';
+import { browserCapabilityState, canAgentRuntimeTaskAction, classifyAgentRuntimeError, cancelAgentRuntimeTask, confirmAgentRuntimeBrowserTask, createAgentRuntimeBrowserTask, loadAgentRuntimeTasks, loadBrowserCapability, normalizeAgentRuntimeTask, normalizeAgentRuntimeTaskSnapshot, pauseAgentRuntimeBrowserTask, runAgentRuntimeBrowserTask, type AgentRuntimeTask, type BrowserCapabilitySnapshot, type BrowserTaskRequest } from '../../../shared/api/agent-runtime';
 import { usePollingBackoff } from '../../../shared/api/backoffPoll';
 import { useI18n } from '../../../shared/i18n';
 
@@ -11,6 +11,7 @@ const CONFIRM_OPERATIONS = new Set(['login', 'pay', 'post', 'delete', 'send_emai
 function replace(template: string, values: Record<string, string | number>): string { return Object.entries(values).reduce((text, [key, value]) => text.replace(`{${key}}`, String(value)), template); }
 function formatTime(value: string | number | null | undefined): string { if (value === null || value === undefined || value === '') return '—'; const date = typeof value === 'number' ? new Date(value * 1000) : new Date(value); return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString(); }
 function newIdempotencyKey(): string { if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID(); return `browser-${Date.now()}-${Math.random().toString(36).slice(2)}`; }
+function formatAgentRuntimeError(error: unknown, t: (key: any) => string): string { return t(`settings.agentRuntime.error.${classifyAgentRuntimeError(error)}` as any); }
 
 export function AgentRuntimeBrowserSettingsPage() {
   const { t } = useI18n();
@@ -25,15 +26,17 @@ export function AgentRuntimeBrowserSettingsPage() {
   const [form, setForm] = useState({ url: '', operation: 'read_page', idempotencyKey: '', selector: '', value: '', workspacePath: '' });
   const pendingRequests = useRef(new Map<string, BrowserTaskRequest>());
   const pendingActionsRef = useRef(new Set<string>());
+  const characterGenerationRef = useRef(0);
+  const activeCharacterRef = useRef(charId);
 
-  useEffect(() => subscribeActiveCharacter(info => { setCharId(info.id); pendingRequests.current.clear(); pendingActionsRef.current.clear(); setPendingActions(new Set()); }), []);
+  useEffect(() => subscribeActiveCharacter(info => { characterGenerationRef.current += 1; activeCharacterRef.current = info.id; setCharId(info.id); pendingRequests.current.clear(); pendingActionsRef.current.clear(); setPendingActions(new Set()); setActionError(null); setLoadError(null); }), []);
   const refresh = useCallback(async () => {
     if (!charId) { setCapability(null); setTasks([]); setInitialLoading(false); return; }
     try {
       const [capabilityResult, taskResult] = await Promise.all([loadBrowserCapability(), loadAgentRuntimeTasks({ charId, capability: 'browser.automation', limit: 20 })]);
       setCapability(capabilityResult); setTasks(normalizeAgentRuntimeTaskSnapshot(taskResult).tasks); setLoadError(null);
-    } catch (error) { setLoadError(String(error)); throw error; } finally { setInitialLoading(false); }
-  }, [charId]);
+    } catch (error) { setLoadError(formatAgentRuntimeError(error, t)); throw error; } finally { setInitialLoading(false); }
+  }, [charId, t]);
   const polling = usePollingBackoff(refresh, { baseIntervalMs: 30_000, maxBackoffMs: 120_000, enabled: Boolean(charId) });
 
   const submit = async () => {
@@ -52,29 +55,39 @@ export function AgentRuntimeBrowserSettingsPage() {
       params.path = form.workspacePath.trim();
     }
     const request: BrowserTaskRequest = { charId, url: form.url.trim(), operation: form.operation, idempotencyKey: form.idempotencyKey.trim() || newIdempotencyKey(), params };
+    const requestGeneration = characterGenerationRef.current;
     setSubmitting(true); setActionError(null);
     try {
       const task = normalizeAgentRuntimeTask(await createAgentRuntimeBrowserTask(request));
       if (!task) throw new Error(t('settings.agentRuntime.error'));
+      if (requestGeneration !== characterGenerationRef.current || activeCharacterRef.current !== request.charId) return;
       pendingRequests.current.set(task.task_id, request); setForm(current => ({ ...current, url: '', idempotencyKey: '', selector: '', value: '', workspacePath: '' }));
       if (task.status === 'queued' && !CONFIRM_OPERATIONS.has(request.operation)) await runAgentRuntimeBrowserTask(task.task_id, request);
       await refresh();
-    } catch (error) { setActionError(String(error)); } finally { setSubmitting(false); }
+    } catch (error) { setActionError(formatAgentRuntimeError(error, t)); } finally { setSubmitting(false); }
   };
 
   const act = async (task: AgentRuntimeTask, action: 'confirm' | 'pause' | 'cancel') => {
     if (pendingActionsRef.current.has(task.task_id)) return;
+    const actionGeneration = characterGenerationRef.current;
+    const actionCharId = activeCharacterRef.current;
+    if (!actionCharId || actionGeneration !== characterGenerationRef.current) return;
     const request = pendingRequests.current.get(task.task_id);
     if (action === 'confirm' && !request) { setActionError(t('settings.agentRuntime.controlUnavailable')); return; }
     pendingActionsRef.current.add(task.task_id);
     setPendingActions(new Set(pendingActionsRef.current));
     setActionError(null);
     try {
-      if (action === 'confirm') { await confirmAgentRuntimeBrowserTask(task.task_id, charId); await runAgentRuntimeBrowserTask(task.task_id, { ...request, confirmed: true }); }
-      else if (action === 'pause') await pauseAgentRuntimeBrowserTask(task.task_id, charId);
-      else await cancelAgentRuntimeTask(task.task_id, charId);
-      await refresh();
-    } catch (error) { setActionError(String(error)); } finally { pendingActionsRef.current.delete(task.task_id); setPendingActions(new Set(pendingActionsRef.current)); }
+      if (actionGeneration !== characterGenerationRef.current || actionCharId !== activeCharacterRef.current) return;
+      if (action === 'confirm') {
+        await confirmAgentRuntimeBrowserTask(task.task_id, actionCharId);
+        if (actionGeneration !== characterGenerationRef.current || actionCharId !== activeCharacterRef.current) return;
+        await runAgentRuntimeBrowserTask(task.task_id, { ...request, confirmed: true });
+      }
+      else if (action === 'pause') await pauseAgentRuntimeBrowserTask(task.task_id, actionCharId);
+      else await cancelAgentRuntimeTask(task.task_id, actionCharId);
+      if (actionGeneration === characterGenerationRef.current && actionCharId === activeCharacterRef.current) await refresh();
+    } catch (error) { setActionError(formatAgentRuntimeError(error, t)); } finally { pendingActionsRef.current.delete(task.task_id); setPendingActions(new Set(pendingActionsRef.current)); }
   };
 
   if (initialLoading && !capability) return <div className="serif" style={{ color: 'var(--ink-3)', fontSize: 13 }}>{t('settings.agentRuntime.loading')}</div>;

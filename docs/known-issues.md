@@ -8,6 +8,10 @@
 
 建议：后端冻结 Brief 238/239 schema、补 resume/人工接管契约并完成真实隔离浏览器联调后，再完成 UI 实测；在此之前保持 `partial/open`。
 
+### Agent Runtime 浏览器生命周期真实验收未完成（Brief 71）
+
+客户端已补齐稳定错误分类、任务控制防重入、角色切换清理和 artifact 脱敏测试；但当前运行中的 8080 后端是旧实例，OpenAPI 没有 Brief 239 浏览器任务写路由，验收环境也没有 Playwright Chromium fixture。真实 Tauri 窗口曾启动，但无法取得可审阅的窗口截图，且 capability 为 `disabled_remote_server`，因此 disabled 以外的真实场景不能标记通过。详见 `docs/brief-71-acceptance-record.md` 与 `docs/runtime-acceptance-matrix.json`；状态保持 `partial/open`。
+
 
 - **苔庭 Design Mod（工单 66）** — `partial/open`。
   M1-M4 包结构、theme/layout、十个 Scene 节点、四组 subregions、presenter 错误木牌、DPR 像素植物、

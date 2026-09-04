@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { browserCapabilityState, canAgentRuntimeTaskAction, normalizeAgentRuntimeTaskSnapshot, createAgentRuntimeBrowserTask, loadAgentRuntimeTasks, confirmAgentRuntimeBrowserTask, pauseAgentRuntimeBrowserTask, cancelAgentRuntimeTask } from './agent-runtime';
+import { browserCapabilityState, canAgentRuntimeTaskAction, classifyAgentRuntimeError, normalizeAgentRuntimeTaskSnapshot, createAgentRuntimeBrowserTask, loadAgentRuntimeTasks, confirmAgentRuntimeBrowserTask, pauseAgentRuntimeBrowserTask, cancelAgentRuntimeTask } from './agent-runtime';
 
 const invokeMock = vi.fn();
 vi.mock('@tauri-apps/api/core', () => ({ invoke: (...args: unknown[]) => invokeMock(...args) }));
@@ -25,6 +25,15 @@ describe('agent runtime browser metadata', () => {
     expect(canAgentRuntimeTaskAction('running', 'pause')).toBe(true);
     expect(canAgentRuntimeTaskAction('succeeded', 'cancel')).toBe(false);
     expect(canAgentRuntimeTaskAction('outcome_unknown', 'cancel')).toBe(false);
+  });
+
+  it('maps bridge failures to stable lifecycle error classes', () => {
+    expect(classifyAgentRuntimeError('HTTP 401: token invalid')).toBe('unauthorized');
+    expect(classifyAgentRuntimeError('HTTP 403: scope missing')).toBe('forbidden');
+    expect(classifyAgentRuntimeError('HTTP 404')).toBe('unsupported');
+    expect(classifyAgentRuntimeError('HTTP 409')).toBe('conflict');
+    expect(classifyAgentRuntimeError('HTTP 422|code=task_request_mismatch|retryable=false|message=rejected')).toBe('rejected');
+    expect(classifyAgentRuntimeError('连接失败')).toBe('network');
   });
 
   it('normalizes every lifecycle status and bounded receipt metadata', () => {

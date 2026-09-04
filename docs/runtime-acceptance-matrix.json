@@ -5,11 +5,11 @@
   "status_summary": "partial",
   "evidence_level": "automated_only",
   "environment": {
-    "desktop_commit": "",
-    "os": "",
-    "tauri_runtime": "",
-    "window_artifact": "",
-    "executed_at": ""
+    "desktop_commit": "4c7a8e8",
+    "os": "Windows Win32NT 10.0.26200.0",
+    "tauri_runtime": "@tauri-apps/cli 2.11.1",
+    "window_artifact": "none; PrintWindow capture unavailable",
+    "executed_at": "2026-09-04T09:40:56Z"
   },
   "cases": [
     {
@@ -25,6 +25,20 @@
       "scenario": "Desktop consumes the canonical backend protocol fixture bundle and rejects forbidden client fields.",
       "status": "passed",
       "evidence": "tests/protocol-fixtures.test.ts"
+    },
+    {
+      "id": "brief-71-browser-lifecycle-automated",
+      "area": "agent-runtime-browser",
+      "scenario": "Capability normalization, lifecycle status projection, bounded controls, error classes, artifact redaction, duplicate-action guard, and role-switch cleanup.",
+      "status": "passed",
+      "evidence": "src/shared/api/agent-runtime.test.ts; src/windows/chat/components/AgentRuntimeBrowserSettingsPage.tsx; docs/brief-71-acceptance-record.md"
+    },
+    {
+      "id": "brief-71-browser-lifecycle-real-tauri",
+      "area": "agent-runtime-browser",
+      "scenario": "Real Tauri window against a pinned local Brief 239 backend and deterministic Chromium fixture: disabled, safe success, confirmation, refresh/reopen, pause/cancel, timeout/disconnect/redirect, and remote/no-user/no-auth degradation.",
+      "status": "blocked",
+      "evidence": "docs/brief-71-acceptance-record.md"
     },
     {
       "id": "tauri-real-window-launch",
