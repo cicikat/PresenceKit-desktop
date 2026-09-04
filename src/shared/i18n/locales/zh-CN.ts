@@ -77,7 +77,7 @@ export const zhCN = {
   'settings.agentRuntime.control.pause': '暂停',
   'settings.agentRuntime.control.cancel': '取消',
   'settings.agentRuntime.control.handoff': '人工接管（不可用）',
-  'settings.agentRuntime.description': '仅显示后端返回的脱敏任务元数据；当前客户端不开放浏览器执行、凭据或本地文件访问。',
+  'settings.agentRuntime.description': '仅显示后端返回的脱敏任务元数据；浏览器在隔离 worker 中执行，客户端不直接暴露执行环境、凭据或本地文件访问。',
   'settings.agentRuntime.refresh': '刷新任务状态',
   'settings.agentRuntime.loading': '正在读取浏览器能力状态…',
   'settings.agentRuntime.empty': '暂无浏览器任务',

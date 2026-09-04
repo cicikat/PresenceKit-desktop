@@ -79,7 +79,7 @@ export const enUS: Record<MessageKey, string> = {
   'settings.agentRuntime.control.pause': 'Pause',
   'settings.agentRuntime.control.cancel': 'Cancel',
   'settings.agentRuntime.control.handoff': 'Handoff (unavailable)',
-  'settings.agentRuntime.description': 'Shows only redacted task metadata from the backend; browser execution, credentials, and local file access are not exposed here.',
+  'settings.agentRuntime.description': 'Shows only redacted task metadata; the browser runs in an isolated worker, while execution environment, credentials, and local file access stay out of the client.',
   'settings.agentRuntime.refresh': 'Refresh task state',
   'settings.agentRuntime.loading': 'Loading browser capability…',
   'settings.agentRuntime.empty': 'No browser tasks',
