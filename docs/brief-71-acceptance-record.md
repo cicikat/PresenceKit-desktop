@@ -18,7 +18,7 @@
 | capability disabled / remote-disabled | `partial` | 运行中的本地 8080 返回 `effective_state=disabled_remote_server`、`allowed_domain_count=0`、`adapter_available=false`；客户端 bridge 会显示只读降级 |
 | no bot user | `passed (code)` | `load_agent_runtime_browser` / task observation 返回 `user_not_configured` 或空列表；写操作拒绝 |
 | metadata redaction | `passed (automated)` | `agent-runtime.test.ts` 覆盖未知字段、路径丢弃、artifact ID 有界投影 |
-| lifecycle action guards | `passed (automated)` | 221 个 Vitest 测试；纯逻辑覆盖 confirm/pause/cancel 状态门控与错误分类 |
+| lifecycle action guards | `passed (automated)` | 222 个 Vitest 测试；纯逻辑覆盖 confirm/pause/cancel 状态门控与错误分类 |
 | duplicate action guard | `passed (code)` | 单 task `pendingActionsRef` 防止快速双击/并发控制；角色切换清理引用和 busy 状态 |
 | type/build/Rust | `passed` | tsc、Vitest、Vite build、cargo check 均通过；build 仅有既有 chunk warning |
 | backend browser unit | `passed` | `Emerald-presence/tests/test_agent_runtime_browser.py`：3 passed |

@@ -136,6 +136,10 @@ export function canAgentRuntimeTaskAction(status: AgentTaskStatus, action: Agent
   return status === 'queued' || status === 'running' || status === 'waiting_confirm' || status === 'paused';
 }
 
+export function isAgentRuntimeScopeCurrent(expectedGeneration: number, currentGeneration: number, expectedCharId: string, currentCharId: string): boolean {
+  return expectedGeneration === currentGeneration && expectedCharId.length > 0 && expectedCharId === currentCharId;
+}
+
 export function classifyAgentRuntimeError(error: unknown): AgentRuntimeErrorKind {
   const raw = error instanceof Error ? error.message : String(error);
   const status = raw.match(/\bHTTP (\d+)/)?.[1];

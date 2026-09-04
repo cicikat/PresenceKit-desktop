@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { browserCapabilityState, canAgentRuntimeTaskAction, classifyAgentRuntimeError, normalizeAgentRuntimeTaskSnapshot, createAgentRuntimeBrowserTask, loadAgentRuntimeTasks, confirmAgentRuntimeBrowserTask, pauseAgentRuntimeBrowserTask, cancelAgentRuntimeTask } from './agent-runtime';
+import { browserCapabilityState, canAgentRuntimeTaskAction, classifyAgentRuntimeError, isAgentRuntimeScopeCurrent, normalizeAgentRuntimeTaskSnapshot, createAgentRuntimeBrowserTask, loadAgentRuntimeTasks, confirmAgentRuntimeBrowserTask, pauseAgentRuntimeBrowserTask, cancelAgentRuntimeTask } from './agent-runtime';
 
 const invokeMock = vi.fn();
 vi.mock('@tauri-apps/api/core', () => ({ invoke: (...args: unknown[]) => invokeMock(...args) }));
@@ -34,6 +34,13 @@ describe('agent runtime browser metadata', () => {
     expect(classifyAgentRuntimeError('HTTP 409')).toBe('conflict');
     expect(classifyAgentRuntimeError('HTTP 422|code=task_request_mismatch|retryable=false|message=rejected')).toBe('rejected');
     expect(classifyAgentRuntimeError('连接失败')).toBe('network');
+  });
+
+  it('rejects stale role generations before writing async results', () => {
+    expect(isAgentRuntimeScopeCurrent(2, 2, 'char-a', 'char-a')).toBe(true);
+    expect(isAgentRuntimeScopeCurrent(1, 2, 'char-a', 'char-a')).toBe(false);
+    expect(isAgentRuntimeScopeCurrent(2, 2, 'char-a', 'char-b')).toBe(false);
+    expect(isAgentRuntimeScopeCurrent(2, 2, '', '')).toBe(false);
   });
 
   it('normalizes every lifecycle status and bounded receipt metadata', () => {

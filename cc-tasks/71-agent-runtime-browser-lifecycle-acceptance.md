@@ -1,6 +1,6 @@
 # Brief 71：Agent Runtime 浏览器客户端生命周期与真实桌面验收
 
-> 状态：`open`
+> 状态：`partial/open`
 > 优先级：`high`
 > 范围：`Emerald-client` 桌面端
 > 前置：后端 Brief 239；客户端 Brief 70
@@ -87,3 +87,11 @@ Browser Runtime 面板已经接入 capability、task receipt、创建、自动�
 - 不把本地绝对路径、完整 URL、页面内容或浏览器凭据存入 localStorage、持久化日志、埋点或 receipt。
 - 不因为组件测试、TypeScript、Vite build 或 `cargo check` 通过，就声称真实桌面/真实浏览器验收通过。
 - 不新增未由 Brief 239 冻结的 REST 字段，不通过客户端猜测后端私有 TaskRecord 结构。
+
+## 当前客户端验收结果（2026-09-04）
+
+客户端已补齐本工单范围内可在 `Emerald-client` 独立完成的生命周期保护：所有任务调用仍经共享 API、`invokeGated()` 和 Tauri Rust bridge；错误按 401/403/404/409/422/网络失败映射为本地化降级状态；单任务 confirm/pause/cancel 有 busy 锁；角色切换会清除旧请求引用、busy 状态和错误，并阻止旧异步请求写入新角色；receipt 仅投影公开 metadata 和有界 artifact ID。
+
+自动化证据：`npx.cmd tsc --noEmit`、`npm.cmd test -- --run`（52 files / 222 tests）、`npm.cmd run build`、`cargo check` 和后端 `tests/test_agent_runtime_browser.py`（3 passed）均通过；记录见 `docs/brief-71-acceptance-record.md`，矩阵见 `docs/runtime-acceptance-matrix.json`。
+
+真实验收仍为 `partial/open`：现有 8080 是旧后端实例，OpenAPI 缺少 Brief 239 浏览器任务写路由；环境未安装 Playwright，无法启动确定性 Chromium fixture；Tauri 进程虽能启动，但 capability 为 `disabled_remote_server`，窗口截图调用挂起且未产生可审阅 artifact。因此 disabled/无用户等 fail-closed 证据已记录，safe success、waiting_confirm、刷新/重开、pause/cancel、timeout/disconnect/redirect 等真实场景不得标记为通过。

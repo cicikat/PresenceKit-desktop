@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getActiveCharacterInfo, subscribeActiveCharacter } from '../../../shared/activeCharacter';
-import { browserCapabilityState, canAgentRuntimeTaskAction, classifyAgentRuntimeError, cancelAgentRuntimeTask, confirmAgentRuntimeBrowserTask, createAgentRuntimeBrowserTask, loadAgentRuntimeTasks, loadBrowserCapability, normalizeAgentRuntimeTask, normalizeAgentRuntimeTaskSnapshot, pauseAgentRuntimeBrowserTask, runAgentRuntimeBrowserTask, type AgentRuntimeTask, type BrowserCapabilitySnapshot, type BrowserTaskRequest } from '../../../shared/api/agent-runtime';
+import { browserCapabilityState, canAgentRuntimeTaskAction, classifyAgentRuntimeError, cancelAgentRuntimeTask, confirmAgentRuntimeBrowserTask, createAgentRuntimeBrowserTask, isAgentRuntimeScopeCurrent, loadAgentRuntimeTasks, loadBrowserCapability, normalizeAgentRuntimeTask, normalizeAgentRuntimeTaskSnapshot, pauseAgentRuntimeBrowserTask, runAgentRuntimeBrowserTask, type AgentRuntimeTask, type BrowserCapabilitySnapshot, type BrowserTaskRequest } from '../../../shared/api/agent-runtime';
 import { usePollingBackoff } from '../../../shared/api/backoffPoll';
 import { useI18n } from '../../../shared/i18n';
 
@@ -32,10 +32,13 @@ export function AgentRuntimeBrowserSettingsPage() {
   useEffect(() => subscribeActiveCharacter(info => { characterGenerationRef.current += 1; activeCharacterRef.current = info.id; setCharId(info.id); pendingRequests.current.clear(); pendingActionsRef.current.clear(); setPendingActions(new Set()); setActionError(null); setLoadError(null); }), []);
   const refresh = useCallback(async () => {
     if (!charId) { setCapability(null); setTasks([]); setInitialLoading(false); return; }
+    const requestGeneration = characterGenerationRef.current;
+    const requestCharId = charId;
     try {
       const [capabilityResult, taskResult] = await Promise.all([loadBrowserCapability(), loadAgentRuntimeTasks({ charId, capability: 'browser.automation', limit: 20 })]);
+      if (!isAgentRuntimeScopeCurrent(requestGeneration, characterGenerationRef.current, requestCharId, activeCharacterRef.current)) return;
       setCapability(capabilityResult); setTasks(normalizeAgentRuntimeTaskSnapshot(taskResult).tasks); setLoadError(null);
-    } catch (error) { setLoadError(formatAgentRuntimeError(error, t)); throw error; } finally { setInitialLoading(false); }
+    } catch (error) { if (isAgentRuntimeScopeCurrent(requestGeneration, characterGenerationRef.current, requestCharId, activeCharacterRef.current)) setLoadError(formatAgentRuntimeError(error, t)); throw error; } finally { if (isAgentRuntimeScopeCurrent(requestGeneration, characterGenerationRef.current, requestCharId, activeCharacterRef.current)) setInitialLoading(false); }
   }, [charId, t]);
   const polling = usePollingBackoff(refresh, { baseIntervalMs: 30_000, maxBackoffMs: 120_000, enabled: Boolean(charId) });
 
@@ -60,34 +63,34 @@ export function AgentRuntimeBrowserSettingsPage() {
     try {
       const task = normalizeAgentRuntimeTask(await createAgentRuntimeBrowserTask(request));
       if (!task) throw new Error(t('settings.agentRuntime.error'));
-      if (requestGeneration !== characterGenerationRef.current || activeCharacterRef.current !== request.charId) return;
+      if (!isAgentRuntimeScopeCurrent(requestGeneration, characterGenerationRef.current, request.charId, activeCharacterRef.current)) return;
       pendingRequests.current.set(task.task_id, request); setForm(current => ({ ...current, url: '', idempotencyKey: '', selector: '', value: '', workspacePath: '' }));
       if (task.status === 'queued' && !CONFIRM_OPERATIONS.has(request.operation)) await runAgentRuntimeBrowserTask(task.task_id, request);
       await refresh();
-    } catch (error) { setActionError(formatAgentRuntimeError(error, t)); } finally { setSubmitting(false); }
+    } catch (error) { if (isAgentRuntimeScopeCurrent(requestGeneration, characterGenerationRef.current, request.charId, activeCharacterRef.current)) setActionError(formatAgentRuntimeError(error, t)); } finally { setSubmitting(false); }
   };
 
   const act = async (task: AgentRuntimeTask, action: 'confirm' | 'pause' | 'cancel') => {
     if (pendingActionsRef.current.has(task.task_id)) return;
     const actionGeneration = characterGenerationRef.current;
     const actionCharId = activeCharacterRef.current;
-    if (!actionCharId || actionGeneration !== characterGenerationRef.current) return;
+    if (!isAgentRuntimeScopeCurrent(actionGeneration, characterGenerationRef.current, actionCharId, activeCharacterRef.current)) return;
     const request = pendingRequests.current.get(task.task_id);
     if (action === 'confirm' && !request) { setActionError(t('settings.agentRuntime.controlUnavailable')); return; }
     pendingActionsRef.current.add(task.task_id);
     setPendingActions(new Set(pendingActionsRef.current));
     setActionError(null);
     try {
-      if (actionGeneration !== characterGenerationRef.current || actionCharId !== activeCharacterRef.current) return;
+      if (!isAgentRuntimeScopeCurrent(actionGeneration, characterGenerationRef.current, actionCharId, activeCharacterRef.current)) return;
       if (action === 'confirm') {
         await confirmAgentRuntimeBrowserTask(task.task_id, actionCharId);
-        if (actionGeneration !== characterGenerationRef.current || actionCharId !== activeCharacterRef.current) return;
+        if (!isAgentRuntimeScopeCurrent(actionGeneration, characterGenerationRef.current, actionCharId, activeCharacterRef.current)) return;
         await runAgentRuntimeBrowserTask(task.task_id, { ...request, confirmed: true });
       }
       else if (action === 'pause') await pauseAgentRuntimeBrowserTask(task.task_id, actionCharId);
       else await cancelAgentRuntimeTask(task.task_id, actionCharId);
-      if (actionGeneration === characterGenerationRef.current && actionCharId === activeCharacterRef.current) await refresh();
-    } catch (error) { setActionError(formatAgentRuntimeError(error, t)); } finally { pendingActionsRef.current.delete(task.task_id); setPendingActions(new Set(pendingActionsRef.current)); }
+      if (isAgentRuntimeScopeCurrent(actionGeneration, characterGenerationRef.current, actionCharId, activeCharacterRef.current)) await refresh();
+    } catch (error) { if (isAgentRuntimeScopeCurrent(actionGeneration, characterGenerationRef.current, actionCharId, activeCharacterRef.current)) setActionError(formatAgentRuntimeError(error, t)); } finally { pendingActionsRef.current.delete(task.task_id); setPendingActions(new Set(pendingActionsRef.current)); }
   };
 
   if (initialLoading && !capability) return <div className="serif" style={{ color: 'var(--ink-3)', fontSize: 13 }}>{t('settings.agentRuntime.loading')}</div>;
