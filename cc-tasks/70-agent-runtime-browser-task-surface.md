@@ -65,4 +65,4 @@
 
 已接入 Chat 偏好「能力与权限」中的 Browser Runtime surface：通过 Tauri bridge 读取 capability/task receipt，并支持创建、运行、安全操作自动执行、高风险确认、暂停和取消；展示状态、时间、错误码、尝试次数、截断和安全 artifact 摘要，轮询使用统一退避。后端 Brief 238 的三仓契约仍为 `partial/backend-only`，且未提供恢复/人工接管路由和完整真实联调，因此本单仍不能标记为 `implemented`。
 
-已知契约限制：后端虽已提供 owner-scoped cancel 路由，但三仓接口总账仍为 `partial/backend-only`；尚无 resume/人工接管契约，且未完成真实隔离浏览器联调和窗口实测。客户端保留明确错误和 `outcome_unknown`，不会提升本地权限、重放副作用或伪造成功。
+已知契约限制：后端虽已提供 owner-scoped cancel 路由，但三仓接口总账仍为 `partial/backend-only`；尚无 resume/人工接管契约，且未完成真实隔离浏览器联调和窗口实测。客户端在 `bot_user_id` 未配置时拒绝所有任务写操作并返回空观测，保留明确错误和 `outcome_unknown`，不会提升本地权限、重放副作用或伪造成功。

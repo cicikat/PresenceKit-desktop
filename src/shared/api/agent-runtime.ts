@@ -9,6 +9,8 @@ export interface BrowserCapabilitySnapshot {
   allowed_domain_count: number;
   download_enabled: boolean;
   upload_enabled: boolean;
+  worker_alive?: boolean;
+  worker_active_count?: number;
   adapter_available: boolean;
   credentials_exposed: false;
   profile_exposed: false;
