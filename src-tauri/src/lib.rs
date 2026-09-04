@@ -1537,9 +1537,9 @@ async fn cancel_agent_runtime_task(app: tauri::AppHandle, task_id: String, char_
         return Err("取消任务需要有效的任务和角色范围".to_string());
     }
     let cfg = load_client_config(&app);
-    let mut url = url::Url::parse(&backend_url(&cfg, &format!("/observability/agent-runtime-tasks/{task_id}"))).map_err(|e| e.to_string())?;
+    let mut url = url::Url::parse(&backend_url(&cfg, &format!("/agent-runtime-browser/tasks/{task_id}/cancel"))).map_err(|e| e.to_string())?;
     { let mut query = url.query_pairs_mut(); query.append_pair("uid", &cfg.bot_user_id); query.append_pair("char_id", &char_id); }
-    let resp = authorized_request(&cfg, http_client()?.delete(url.to_string())).send().await.map_err(|_| "取消浏览器任务请求失败".to_string())?;
+    let resp = authorized_request(&cfg, http_client()?.post(url.to_string())).send().await.map_err(|_| "取消浏览器任务请求失败".to_string())?;
     require_success(resp).await?.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
 
