@@ -89,7 +89,8 @@ export function AgentRuntimeBrowserSettingsPage() {
 
 function TaskRow({ task, t, onAction, canConfirm }: { task: AgentRuntimeTask; t: (key: any) => string; onAction: (task: AgentRuntimeTask, action: 'confirm' | 'pause' | 'cancel') => void; canConfirm: boolean }) {
   const statusKey = STATUS_KEYS.includes(task.status as typeof STATUS_KEYS[number]) ? task.status : 'unknown';
-  const resultLabel = task.artifacts?.find(item => item.label)?.label;
+  const resultArtifact = task.artifacts?.find(item => item.label || item.id);
+  const resultLabel = resultArtifact?.label || resultArtifact?.id;
   const canPause = statusKey === 'queued' || statusKey === 'running';
   const canCancel = canPause || statusKey === 'waiting_confirm' || statusKey === 'paused';
   const showHandoff = statusKey === 'paused' || statusKey === 'outcome_unknown';

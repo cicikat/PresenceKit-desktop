@@ -21,6 +21,7 @@ export interface BrowserCapabilitySnapshot {
 export interface AgentRuntimeArtifact {
   kind?: string;
   label?: string;
+  id?: string;
   size_bytes?: number;
   truncated?: boolean;
 }
@@ -100,10 +101,10 @@ export function normalizeAgentRuntimeTask(value: unknown): AgentRuntimeTask | nu
   const artifacts: AgentRuntimeArtifact[] = Array.isArray(raw.artifacts) ? raw.artifacts.map(item => {
     if (!item || typeof item !== 'object') return null;
     const a = item as Record<string, unknown>;
-    return { kind: typeof a.kind === 'string' ? a.kind : undefined, label: typeof a.label === 'string' ? a.label : undefined, size_bytes: typeof a.size_bytes === 'number' ? a.size_bytes : undefined, truncated: Boolean(a.truncated) };
+    return { kind: typeof a.kind === 'string' ? a.kind : undefined, label: typeof a.label === 'string' ? a.label : undefined, id: typeof a.id === 'string' ? a.id : undefined, size_bytes: typeof a.size_bytes === 'number' ? a.size_bytes : undefined, truncated: Boolean(a.truncated) };
   }).filter(item => item !== null) : [];
   const metadata = raw.result_metadata && typeof raw.result_metadata === 'object' ? raw.result_metadata as Record<string, unknown> : null;
-  const metadataArtifact = metadata && typeof metadata.label === 'string' ? [{ label: metadata.label, kind: typeof metadata.kind === 'string' ? metadata.kind : undefined, size_bytes: typeof metadata.size_bytes === 'number' ? metadata.size_bytes : undefined, truncated: Boolean(metadata.truncated) }] : [];
+  const metadataArtifact = metadata && Array.isArray(metadata.artifact_ids) ? metadata.artifact_ids.filter((id): id is string => typeof id === 'string' && id.length > 0 && id.length <= 128).slice(0, 10).map(id => ({ id, truncated: Boolean(metadata.truncated) })) : [];
   return { task_id: raw.task_id, status, capability: typeof raw.capability === 'string' ? raw.capability : undefined, created_at: typeof raw.created_at === 'string' || typeof raw.created_at === 'number' ? raw.created_at : null, updated_at: typeof raw.updated_at === 'string' || typeof raw.updated_at === 'number' ? raw.updated_at : null, queued_at: typeof raw.queued_at === 'string' || typeof raw.queued_at === 'number' ? raw.queued_at : null, started_at: typeof raw.started_at === 'string' || typeof raw.started_at === 'number' ? raw.started_at : null, finished_at: typeof raw.finished_at === 'string' || typeof raw.finished_at === 'number' ? raw.finished_at : null, expires_at: typeof raw.expires_at === 'string' || typeof raw.expires_at === 'number' ? raw.expires_at : null, error_code: typeof raw.error_code === 'string' ? raw.error_code : null, attempt_count: typeof raw.attempt_count === 'number' ? raw.attempt_count : 0, truncated: Boolean(raw.truncated) || Boolean(metadata?.truncated), artifacts: artifacts.length ? artifacts : metadataArtifact };
 }
 
