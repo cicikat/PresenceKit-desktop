@@ -1,6 +1,6 @@
 # Brief 70：Agent Runtime 浏览器任务与能力状态客户端面
 
-> 状态：`open`
+> 状态：`partial`
 > 优先级：`high`
 > 前置：后端 Brief 238；后端 `/openapi.json` 和三仓接口总账先冻结
 > 范围：`Emerald-client`；不实现浏览器 worker，不接触凭据
@@ -60,3 +60,7 @@
 只有后端 Brief 238 已冻结公开 schema，客户端真实联调覆盖确认/取消/未知结果，且 build、测试和
 实际 UI 检查全部通过后，本工单才能标记 `implemented`。在此之前，客户端不得显示浏览器能力为
 “可用”，也不得把后端仅有的观测端点冒充用户任务控制面。
+
+## 客户端当前交付（2026-09-04）
+
+已接入 Chat 偏好「能力与权限」中的只读 Browser Runtime surface：通过 Tauri bridge 读取脱敏 capability/task 观测，展示状态、时间、错误码、尝试次数、截断和安全 artifact 摘要，并使用统一轮询退避。后端 Brief 238 尚未冻结 owner-facing 创建/确认/暂停/恢复接口，故控制入口明确 disabled，不能标记为 `implemented`。

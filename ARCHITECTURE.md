@@ -508,3 +508,6 @@ backend limits, and posts through `reqwest::Client::no_proxy()`. It stores the
 path and local manifest in `config/client.local.json`; the request body contains
 logical dates and authored text but never filesystem paths. Deletion is a
 server-side tombstone and never mutates the local vault.
+## Agent Runtime Browser
+
+Browser Runtime task surface 位于 Chat 偏好「能力与权限」分类，当前是后端 metadata-only 的只读投影。它不会创建浏览器任务或写入聊天/记忆；后端控制 API 未冻结前，确认、暂停、恢复、取消与人工接管均明确显示不可用。

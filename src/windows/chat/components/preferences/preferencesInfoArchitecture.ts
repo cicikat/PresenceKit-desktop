@@ -26,7 +26,7 @@ export const CHAT_PREFERENCE_TABS: ReadonlyArray<{
 export const CHAT_PREFERENCE_SECTION_IDS: Readonly<Record<ChatPreferenceTab, readonly string[]>> = {
   general: ['language', 'connection', 'adminPanelBridge', 'diarySync'],
   models: ['modelRouting', 'characterModelRouting', 'thinking', 'outputSegmentEnforce'],
-  capabilities: ['desktopTts', 'toolLoop', 'visualPerception', 'computerOperationSafety'],
+  capabilities: ['desktopTts', 'toolLoop', 'visualPerception', 'computerOperationSafety', 'agentRuntimeBrowser'],
   interface: ['themes', 'chatHeader', 'layout', 'font', 'background', 'moodReactive', 'avatars', 'color'],
   characterChat: ['periodDate', 'promptAssets', 'chatSettings', 'presenceNag', 'proactiveGap'],
   petInteraction: ['petVisualStyle', 'petMouse', 'petRoam', 'petRipple', 'playMode', 'call', 'coplay'],

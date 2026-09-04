@@ -1507,6 +1507,40 @@ async fn dream_rpg_turn(app: tauri::AppHandle, body: serde_json::Value) -> Resul
 #[tauri::command]
 async fn dream_rpg_correction(app: tauri::AppHandle, body: serde_json::Value) -> Result<serde_json::Value, String> { dream_rpg_request(&app, reqwest::Method::POST, "/dream/rpg/corrections", body).await }
 
+#[tauri::command]
+async fn load_agent_runtime_browser(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let resp = authorized_request(&cfg, http_client()?.get(backend_url(&cfg, "/observability/agent-runtime-browser")))
+        .send().await.map_err(|_| "浏览器能力状态请求失败".to_string())?;
+    require_success(resp).await?.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn load_agent_runtime_tasks(app: tauri::AppHandle, status: Option<String>, capability: Option<String>, limit: Option<u32>) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let mut url = url::Url::parse(&backend_url(&cfg, "/observability/agent-runtime-tasks")).map_err(|e| e.to_string())?;
+    {
+        let mut query = url.query_pairs_mut();
+        if let Some(value) = status.as_deref().filter(|value| !value.is_empty()) { query.append_pair("status", value); }
+        if let Some(value) = capability.as_deref().filter(|value| !value.is_empty()) { query.append_pair("capability", value); }
+        query.append_pair("limit", &limit.unwrap_or(20).clamp(1, 200).to_string());
+    }
+    let resp = authorized_request(&cfg, http_client()?.get(url.to_string())).send().await.map_err(|_| "浏览器任务状态请求失败".to_string())?;
+    require_success(resp).await?.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn cancel_agent_runtime_task(app: tauri::AppHandle, task_id: String, uid: String, char_id: String) -> Result<serde_json::Value, String> {
+    if task_id.trim().is_empty() || uid.trim().is_empty() || char_id.trim().is_empty() || !task_id.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-') {
+        return Err("取消任务需要有效的任务和角色范围".to_string());
+    }
+    let cfg = load_client_config(&app);
+    let mut url = url::Url::parse(&backend_url(&cfg, &format!("/observability/agent-runtime-tasks/{task_id}"))).map_err(|e| e.to_string())?;
+    { let mut query = url.query_pairs_mut(); query.append_pair("uid", &uid); query.append_pair("char_id", &char_id); }
+    let resp = authorized_request(&cfg, http_client()?.delete(url.to_string())).send().await.map_err(|_| "取消浏览器任务请求失败".to_string())?;
+    require_success(resp).await?.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
 fn validate_dream_archive_component(value: &str, label: &str) -> Result<(), String> {
     if value.is_empty()
         || value.len() > 160
@@ -3234,6 +3268,9 @@ pub fn run() {
             dream_rpg_transcript,
             dream_rpg_turn,
             dream_rpg_correction,
+            load_agent_runtime_browser,
+            load_agent_runtime_tasks,
+            cancel_agent_runtime_task,
             dream_list_archive,
             dream_get_archive,
             dream_enter,
