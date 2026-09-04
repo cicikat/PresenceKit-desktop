@@ -1,5 +1,8 @@
-import { describe, expect, it } from 'vitest';
-import { browserCapabilityState, normalizeAgentRuntimeTaskSnapshot } from './agent-runtime';
+import { describe, expect, it, vi } from 'vitest';
+import { browserCapabilityState, normalizeAgentRuntimeTaskSnapshot, createAgentRuntimeBrowserTask, loadAgentRuntimeTasks, confirmAgentRuntimeBrowserTask, pauseAgentRuntimeBrowserTask, cancelAgentRuntimeTask } from './agent-runtime';
+
+const invokeMock = vi.fn();
+vi.mock('@tauri-apps/api/core', () => ({ invoke: (...args: unknown[]) => invokeMock(...args) }));
 
 describe('agent runtime browser metadata', () => {
   it('keeps unknown task states unknown and drops unsafe fields', () => {
@@ -12,6 +15,7 @@ describe('agent runtime browser metadata', () => {
   it('maps disabled and unavailable capability states without implying success', () => {
     expect(browserCapabilityState({ enabled: false, adapter_available: true } as any)).toBe('disabled');
     expect(browserCapabilityState({ enabled: true, adapter_available: false } as any)).toBe('unavailable');
+    expect(browserCapabilityState({ enabled: false, adapter_available: false, effective_state: 'disabled_remote_server' } as any)).toBe('remote_disabled');
   });
 
   it('normalizes every lifecycle status and bounded receipt metadata', () => {
@@ -21,5 +25,19 @@ describe('agent runtime browser metadata', () => {
     expect(result.tasks.every(task => task.truncated)).toBe(true);
     expect(result.tasks[0].artifacts?.[0]).toMatchObject({ label: 'safe-result', truncated: true });
     expect(result.tasks[0].artifacts?.[0]).not.toHaveProperty('path');
+  });
+
+  it('uses the shared bridge for task mutations and scoped queries', async () => {
+    invokeMock.mockResolvedValue({ task_id: 't1', status: 'queued' });
+    await createAgentRuntimeBrowserTask({ charId: 'char-a', url: 'https://example.test', operation: 'navigate', idempotencyKey: 'once' });
+    expect(invokeMock).toHaveBeenCalledWith('create_agent_runtime_browser_task', expect.objectContaining({ charId: 'char-a', idempotencyKey: 'once' }));
+    await loadAgentRuntimeTasks({ charId: 'char-a', capability: 'browser.automation' });
+    expect(invokeMock).toHaveBeenCalledWith('load_agent_runtime_tasks', expect.objectContaining({ charId: 'char-a', capability: 'browser.automation' }));
+    await confirmAgentRuntimeBrowserTask('t1', 'char-a');
+    await pauseAgentRuntimeBrowserTask('t1', 'char-a');
+    await cancelAgentRuntimeTask('t1', 'char-a');
+    expect(invokeMock).toHaveBeenCalledWith('confirm_agent_runtime_browser_task', { taskId: 't1', charId: 'char-a' });
+    expect(invokeMock).toHaveBeenCalledWith('pause_agent_runtime_browser_task', { taskId: 't1', charId: 'char-a' });
+    expect(invokeMock).toHaveBeenCalledWith('cancel_agent_runtime_task', { taskId: 't1', charId: 'char-a' });
   });
 });

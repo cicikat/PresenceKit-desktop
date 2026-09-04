@@ -510,4 +510,4 @@ logical dates and authored text but never filesystem paths. Deletion is a
 server-side tombstone and never mutates the local vault.
 ## Agent Runtime Browser
 
-Browser Runtime task surface 位于 Chat 偏好「能力与权限」分类，当前是后端 metadata-only 的只读投影。它不会创建浏览器任务或写入聊天/记忆；后端控制 API 未冻结前，确认、暂停、恢复、取消与人工接管均明确显示不可用。
+Browser Runtime task surface 位于 Chat 偏好「能力与权限」分类。它通过 Tauri bridge 绑定本地用户与当前角色，支持提交受控 URL/操作、运行安全任务、确认高风险任务、暂停和取消，同时只渲染 metadata receipt；任务结果不会写入聊天或记忆。后端尚未公开恢复/人工接管路由，对应入口保持不可用。

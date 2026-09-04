@@ -63,4 +63,8 @@
 
 ## 客户端当前交付（2026-09-04）
 
-已接入 Chat 偏好「能力与权限」中的只读 Browser Runtime surface：通过 Tauri bridge 读取脱敏 capability/task 观测，展示状态、时间、错误码、尝试次数、截断和安全 artifact 摘要，并使用统一轮询退避。后端 Brief 238 尚未冻结 owner-facing 创建/确认/暂停/恢复接口，故控制入口明确 disabled，不能标记为 `implemented`。
+已接入 Chat 偏好「能力与权限」中的 Browser Runtime surface：通过 Tauri bridge 读取 capability/task receipt，并支持创建、运行、安全操作自动执行、高风险确认、暂停和取消；展示状态、时间、错误码、尝试次数、截断和安全 artifact 摘要，轮询使用统一退避。后端 Brief 238 的三仓契约仍为 `partial/backend-only`，且未提供恢复/人工接管路由和完整真实联调，因此本单仍不能标记为 `implemented`。
+
+已知契约限制：当前后端 DELETE 取消路由要求 `admin` scope，而标准 desktop profile 不包含该 scope；客户端会透传 403 降级，不提升本地权限或伪造取消成功。待后端提供 owner-scoped cancel 路由后再闭合普通 desktop token 的取消验收。
+
+已知契约限制：当前后端 DELETE 取消路由要求 `admin` scope，而标准 desktop profile 不包含该 scope；客户端会透传 403 降级，不提升本地权限或伪造取消成功。待后端提供 owner-scoped cancel 路由后再闭合普通 desktop token 的取消验收。

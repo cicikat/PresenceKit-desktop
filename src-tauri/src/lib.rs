@@ -1516,11 +1516,13 @@ async fn load_agent_runtime_browser(app: tauri::AppHandle) -> Result<serde_json:
 }
 
 #[tauri::command]
-async fn load_agent_runtime_tasks(app: tauri::AppHandle, status: Option<String>, capability: Option<String>, limit: Option<u32>) -> Result<serde_json::Value, String> {
+async fn load_agent_runtime_tasks(app: tauri::AppHandle, char_id: Option<String>, status: Option<String>, capability: Option<String>, limit: Option<u32>) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
     let mut url = url::Url::parse(&backend_url(&cfg, "/observability/agent-runtime-tasks")).map_err(|e| e.to_string())?;
     {
         let mut query = url.query_pairs_mut();
+        query.append_pair("uid", &cfg.bot_user_id);
+        if let Some(value) = char_id.as_deref().filter(|value| !value.is_empty()) { query.append_pair("char_id", value); }
         if let Some(value) = status.as_deref().filter(|value| !value.is_empty()) { query.append_pair("status", value); }
         if let Some(value) = capability.as_deref().filter(|value| !value.is_empty()) { query.append_pair("capability", value); }
         query.append_pair("limit", &limit.unwrap_or(20).clamp(1, 200).to_string());
@@ -1530,16 +1532,52 @@ async fn load_agent_runtime_tasks(app: tauri::AppHandle, status: Option<String>,
 }
 
 #[tauri::command]
-async fn cancel_agent_runtime_task(app: tauri::AppHandle, task_id: String, uid: String, char_id: String) -> Result<serde_json::Value, String> {
-    if task_id.trim().is_empty() || uid.trim().is_empty() || char_id.trim().is_empty() || !task_id.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-') {
+async fn cancel_agent_runtime_task(app: tauri::AppHandle, task_id: String, char_id: String) -> Result<serde_json::Value, String> {
+    if task_id.trim().is_empty() || char_id.trim().is_empty() || !task_id.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-') {
         return Err("取消任务需要有效的任务和角色范围".to_string());
     }
     let cfg = load_client_config(&app);
     let mut url = url::Url::parse(&backend_url(&cfg, &format!("/observability/agent-runtime-tasks/{task_id}"))).map_err(|e| e.to_string())?;
-    { let mut query = url.query_pairs_mut(); query.append_pair("uid", &uid); query.append_pair("char_id", &char_id); }
+    { let mut query = url.query_pairs_mut(); query.append_pair("uid", &cfg.bot_user_id); query.append_pair("char_id", &char_id); }
     let resp = authorized_request(&cfg, http_client()?.delete(url.to_string())).send().await.map_err(|_| "取消浏览器任务请求失败".to_string())?;
     require_success(resp).await?.json::<serde_json::Value>().await.map_err(|e| e.to_string())
 }
+
+async fn agent_runtime_browser_json_request(app: &tauri::AppHandle, path: &str, body: serde_json::Value) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(app);
+    let resp = authorized_request(&cfg, http_client()?.post(backend_url(&cfg, path)))
+        .json(&body).send().await.map_err(|_| "浏览器任务请求失败".to_string())?;
+    require_success(resp).await?.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn create_agent_runtime_browser_task(app: tauri::AppHandle, char_id: String, url: String, operation: String, idempotency_key: String, confirmed: Option<bool>, ttl_seconds: Option<u32>, params: Option<serde_json::Value>) -> Result<serde_json::Value, String> {
+    if char_id.trim().is_empty() || url.trim().is_empty() || operation.trim().is_empty() || idempotency_key.trim().is_empty() { return Err("浏览器任务参数不完整".to_string()); }
+    let cfg = load_client_config(&app);
+    agent_runtime_browser_json_request(&app, "/agent-runtime-browser/tasks", serde_json::json!({"uid": cfg.bot_user_id, "char_id": char_id, "url": url, "operation": operation, "idempotency_key": idempotency_key, "confirmed": confirmed.unwrap_or(false), "ttl_seconds": ttl_seconds.unwrap_or(900).clamp(1, 3600), "params": params.unwrap_or_else(|| serde_json::json!({}))})).await
+}
+
+#[tauri::command]
+async fn run_agent_runtime_browser_task(app: tauri::AppHandle, task_id: String, char_id: String, url: String, operation: String, idempotency_key: String, confirmed: Option<bool>, ttl_seconds: Option<u32>, params: Option<serde_json::Value>) -> Result<serde_json::Value, String> {
+    if task_id.trim().is_empty() || char_id.trim().is_empty() || !task_id.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-') { return Err("浏览器任务标识不合法".to_string()); }
+    let cfg = load_client_config(&app);
+    agent_runtime_browser_json_request(&app, &format!("/agent-runtime-browser/tasks/{task_id}/run"), serde_json::json!({"uid": cfg.bot_user_id, "char_id": char_id, "url": url, "operation": operation, "idempotency_key": idempotency_key, "confirmed": confirmed.unwrap_or(false), "ttl_seconds": ttl_seconds.unwrap_or(900).clamp(1, 3600), "params": params.unwrap_or_else(|| serde_json::json!({}))})).await
+}
+
+async fn agent_runtime_browser_scoped_action(app: &tauri::AppHandle, task_id: String, char_id: String, action: &str) -> Result<serde_json::Value, String> {
+    if task_id.trim().is_empty() || char_id.trim().is_empty() || !task_id.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-') { return Err("浏览器任务标识不合法".to_string()); }
+    let cfg = load_client_config(app);
+    let mut url = url::Url::parse(&backend_url(&cfg, &format!("/agent-runtime-browser/tasks/{task_id}/{action}"))).map_err(|e| e.to_string())?;
+    { let mut query = url.query_pairs_mut(); query.append_pair("uid", &cfg.bot_user_id); query.append_pair("char_id", &char_id); }
+    let resp = authorized_request(&cfg, http_client()?.post(url.to_string())).send().await.map_err(|_| "浏览器任务控制请求失败".to_string())?;
+    require_success(resp).await?.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn confirm_agent_runtime_browser_task(app: tauri::AppHandle, task_id: String, char_id: String) -> Result<serde_json::Value, String> { agent_runtime_browser_scoped_action(&app, task_id, char_id, "confirm").await }
+
+#[tauri::command]
+async fn pause_agent_runtime_browser_task(app: tauri::AppHandle, task_id: String, char_id: String) -> Result<serde_json::Value, String> { agent_runtime_browser_scoped_action(&app, task_id, char_id, "pause").await }
 
 fn validate_dream_archive_component(value: &str, label: &str) -> Result<(), String> {
     if value.is_empty()
@@ -3271,6 +3309,10 @@ pub fn run() {
             load_agent_runtime_browser,
             load_agent_runtime_tasks,
             cancel_agent_runtime_task,
+            create_agent_runtime_browser_task,
+            run_agent_runtime_browser_task,
+            confirm_agent_runtime_browser_task,
+            pause_agent_runtime_browser_task,
             dream_list_archive,
             dream_get_archive,
             dream_enter,

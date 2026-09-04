@@ -2,11 +2,13 @@
 
 ### Agent Runtime 浏览器任务客户端仍为 partial（Brief 70）
 
-影响：Chat 偏好中的 Browser Runtime 目前只能读取后端脱敏观测；暂停、确认、取消和人工接管入口显示为不可用，客户端不会创建浏览器任务或声称执行成功。
+影响：Chat 偏好中的 Browser Runtime 已支持创建、运行、确认、暂停和取消；暂停后的恢复和人工接管仍不可用，跨重启后因客户端不保留 URL/参数，既有任务只读展示，避免重放副作用。
 
-证据：Emerald-presence Brief 238 仍为 `open`，公开端点只有 `/observability/agent-runtime-browser`、`/observability/agent-runtime-tasks` 及管理员取消路由，尚未冻结可绑定用户身份的 owner-facing 控制 schema。
+证据：Emerald-presence 当前公开创建/run/get/confirm/pause 和管理员 cancel 路由，但三仓接口总账仍标 `partial, backend-only`，且没有 resume/人工接管路由。
 
-建议：后端冻结 Brief 238/239 公开 schema 并完成真实隔离浏览器联调后，再补创建/确认/暂停/恢复/取消控制和浏览器实测；在此之前保持 `partial/open`。
+建议：后端冻结 Brief 238/239 schema、补 resume/人工接管契约并完成真实隔离浏览器联调后，再完成 UI 实测；在此之前保持 `partial/open`。
+
+补充：当前后端 DELETE cancel 路由要求 `admin` scope，标准 desktop token 可能返回 403；客户端保留明确错误，不会申请或复制 admin 权限。
 
 - **苔庭 Design Mod（工单 66）** — `partial/open`。
   M1-M4 包结构、theme/layout、十个 Scene 节点、四组 subregions、presenter 错误木牌、DPR 像素植物、

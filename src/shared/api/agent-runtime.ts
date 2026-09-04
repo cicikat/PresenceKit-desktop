@@ -12,7 +12,7 @@ export interface BrowserCapabilitySnapshot {
   adapter_available: boolean;
   credentials_exposed: false;
   profile_exposed: false;
-  effective_state?: BrowserCapabilityState;
+  effective_state?: BrowserCapabilityState | 'disabled_remote_server';
   reason_code?: string | null;
 }
 
@@ -49,16 +49,43 @@ export async function loadBrowserCapability(): Promise<BrowserCapabilitySnapshot
   return invokeGated<BrowserCapabilitySnapshot>('load_agent_runtime_browser');
 }
 
-export async function loadAgentRuntimeTasks(options: { status?: string; capability?: string; limit?: number } = {}): Promise<AgentRuntimeTaskSnapshot> {
+export async function loadAgentRuntimeTasks(options: { charId?: string; status?: string; capability?: string; limit?: number } = {}): Promise<AgentRuntimeTaskSnapshot> {
   return invokeGated<AgentRuntimeTaskSnapshot>('load_agent_runtime_tasks', {
+    charId: options.charId ?? null,
     status: options.status ?? null,
     capability: options.capability ?? null,
     limit: options.limit ?? 20,
   });
 }
 
-export async function cancelAgentRuntimeTask(taskId: string, uid: string, charId: string): Promise<AgentRuntimeTask> {
-  return invokeGated<AgentRuntimeTask>('cancel_agent_runtime_task', { taskId, uid, charId });
+export interface BrowserTaskRequest {
+  charId: string;
+  url: string;
+  operation: string;
+  idempotencyKey: string;
+  confirmed?: boolean;
+  ttlSeconds?: number;
+  params?: Record<string, unknown>;
+}
+
+export async function createAgentRuntimeBrowserTask(request: BrowserTaskRequest): Promise<AgentRuntimeTask> {
+  return invokeGated<AgentRuntimeTask>('create_agent_runtime_browser_task', { ...request, ttlSeconds: request.ttlSeconds ?? 900, confirmed: request.confirmed ?? false, params: request.params ?? {} });
+}
+
+export async function runAgentRuntimeBrowserTask(taskId: string, request: BrowserTaskRequest): Promise<{ receipt: AgentRuntimeTask; result?: Record<string, unknown> | null }> {
+  return invokeGated('run_agent_runtime_browser_task', { taskId, ...request, confirmed: request.confirmed ?? false, params: request.params ?? {} });
+}
+
+export async function confirmAgentRuntimeBrowserTask(taskId: string, charId: string): Promise<AgentRuntimeTask> {
+  return invokeGated<AgentRuntimeTask>('confirm_agent_runtime_browser_task', { taskId, charId });
+}
+
+export async function pauseAgentRuntimeBrowserTask(taskId: string, charId: string): Promise<AgentRuntimeTask> {
+  return invokeGated<AgentRuntimeTask>('pause_agent_runtime_browser_task', { taskId, charId });
+}
+
+export async function cancelAgentRuntimeTask(taskId: string, charId: string): Promise<AgentRuntimeTask> {
+  return invokeGated<AgentRuntimeTask>('cancel_agent_runtime_task', { taskId, charId });
 }
 
 const TASK_STATUSES = new Set<AgentTaskStatus>(['queued', 'running', 'waiting_confirm', 'paused', 'succeeded', 'failed', 'canceled', 'expired', 'outcome_unknown']);
@@ -86,7 +113,12 @@ export function normalizeAgentRuntimeTaskSnapshot(value: unknown): AgentRuntimeT
 }
 
 export function browserCapabilityState(snapshot: BrowserCapabilitySnapshot): BrowserCapabilityState {
-  if (snapshot.effective_state) return snapshot.effective_state;
+  if (snapshot.effective_state === 'disabled_remote_server') return 'remote_disabled';
+  if (snapshot.effective_state === 'remote_disabled') return 'remote_disabled';
+  if (snapshot.effective_state === 'disabled') return 'disabled';
+  if (snapshot.effective_state === 'unavailable') return 'unavailable';
+  if (snapshot.effective_state === 'enabled' && !snapshot.adapter_available) return 'unavailable';
+  if (snapshot.effective_state === 'enabled') return 'enabled';
   if (!snapshot.enabled) return 'disabled';
   if (!snapshot.adapter_available) return 'unavailable';
   return 'enabled';
