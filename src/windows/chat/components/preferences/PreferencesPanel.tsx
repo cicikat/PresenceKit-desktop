@@ -26,7 +26,6 @@ import { PromptAssetsSettings } from './PromptAssetsSettings';
 import { ChatSettingsSection } from './ChatSettingsSection';
 import { MinuteSelect, PrefRange, PrefRow, PrefSwitch, prefActionButtonStyle, prefSelectStyle } from './PrefAtoms';
 import { ComputerOperationSafetySettings } from './ComputerOperationSafetySettings';
-import { AgentRuntimeBrowserSettingsPage } from '../AgentRuntimeBrowserSettingsPage';
 import { PeriodDateSettings } from './PeriodDateSettings';
 import { DesignModSettings } from './DesignModSettings';
 import { CHAT_PREFERENCE_TABS, type ChatPreferenceTab } from './preferencesInfoArchitecture';
@@ -181,8 +180,6 @@ export function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, 
                 <VisualPerceptionSettingsPage />
                 <div style={{ height: 1, background: 'var(--paper-edge)' }} />
                 <ComputerOperationSafetySettings />
-                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
-                <AgentRuntimeBrowserSettingsPage />
               </>
             ) : tab === 'interface' ? (
               <>
