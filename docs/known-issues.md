@@ -1,19 +1,21 @@
 # docs/known-issues.md — 已知问题与技术债
 
-### Agent Runtime 浏览器客户端已退役，历史实窗验收仍为 partial/open（Brief 72）
+### Agent Runtime 浏览器旧后端 compatibility 路由待发布迁移确认（Brief 72，observe）
 
 影响：桌面端不再配置 browser allowlist、提交或观测浏览器任务，也没有 Tauri bridge、
 `bot_user_id`、URL/operation/params 缓存或恢复路径。后端 admin 面板独立拥有 worker、allowlist
 和 task receipt；桌面端不会展示 token、cookie、profile、文件路径、完整 URL/query、页面正文或
 原始参数。
 
-证据：`tests/client-surface-retirement.test.ts` 锁定退役边界；后端三仓接口总账将 browser
-surface 标为 backend-only。Brief 71 的旧 client 实现从未完成真实 Chromium/Tauri 场景，故其
-历史验收记录仍为 `partial/open`，见 `docs/brief-71-acceptance-record.md` 与
+证据：`tests/client-surface-retirement.test.ts` 锁定退役边界；真实 Tauri WebView 经 CDP
+打开偏好并硬刷新后，旧标题、表单、提交按钮和 URL 输入均为 0。后端三仓接口总账仍将旧
+owner bridge 标为 OpenAPI-deprecated compatibility，直到发布客户端完成迁移；当前 admin
+`/settings/agent-runtime-browser*` 是唯一提交面。Brief 71 的旧 client 生命周期验收仍是
+历史 `partial/open`，见 `docs/brief-71-acceptance-record.md` 与
 `docs/runtime-acceptance-matrix.json`。
 
-建议：仅在后端 admin 面板完成真实隔离浏览器验收；不得以这个历史缺口重新引入桌面任务表单、
-bridge 或自动确认/恢复行为。
+建议：由后端仓在确认发布迁移后删除 deprecated compatibility routes，并继续在 admin 面板完成
+真实隔离浏览器验收；不得以这个历史缺口重新引入桌面任务表单、bridge 或自动确认/恢复行为。
 
 
 - **苔庭 Design Mod（工单 66）** — `partial/open`。

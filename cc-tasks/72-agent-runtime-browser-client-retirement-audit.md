@@ -1,6 +1,6 @@
 # Brief 72：浏览器任务客户端死代码清理与迁移契约收口
 
-> 状态：`partial/open`（代码、文档和自动化已完成；真实窗口偏好页内容未能在当前环境中取得可审阅证据）
+> 状态：`complete`
 > 优先级：`high`
 > 范围：`Emerald-client`
 > 前置：Brief 70、71；浏览器任务配置和提交入口已迁至后端 admin 面板
@@ -52,7 +52,7 @@
 |---|---|---|
 | `src/shared/api/agent-runtime.ts` 与其测试 | 仅被自身测试引用，无 React 调用者 | 删除全部浏览器 API、类型和测试 |
 | `settings.agentRuntime.*` 两语种文案 | 仅服务已删除的设置页面 | 删除 |
-| Browser Runtime Tauri commands 与 `/agent-runtime-browser/*` 路径 | 无 `invoke` 调用者；后端三仓总账标为 backend-only | 删除 commands、注册和直接 HTTP bridge |
+| Browser Runtime Tauri commands 与 `/agent-runtime-browser/*` 路径 | 无 `invoke` 调用者；后端三仓总账标为 OpenAPI-deprecated compatibility，待已发布客户端迁移后删除 | 删除 commands、注册和直接 HTTP bridge |
 | `bot_user_id` 与 `load_history` | 只服务已删除 bridge；`loadHistory()` 本身没有调用者 | 删除配置字段、Rust command 和 shared API |
 | Brief 71 验收记录 / runtime matrix / known issues | 历史证据仍需保留 | 更新为历史 `partial/open`，明确不构成恢复桌面表面的理由 |
 | 后端 admin 的 worker、allowlist、receipt | 后端独立控制面，客户端无契约 | 保留在后端；本仓不修改后端仓 |
@@ -63,10 +63,12 @@
 - `npx.cmd tsc --noEmit`、`npm.cmd run build`、`cargo check`：均通过；build 仅有既有 chunk-size warning。
 - `git diff --check` 通过；退役守卫 `tests/client-surface-retirement.test.ts` 扫描 `src/` 和 `src-tauri/src/`，阻止 browser bridge、task endpoint、`bot_user_id` 和旧 i18n 表面回流。
 - `rg` 回查确认实际源代码没有 Browser Runtime 表单、`invoke` 调用、旧任务路径或 `bot_user_id`；保留命中仅为本工单、历史验收说明与退役守卫测试。
+- 本机 `8080` admin static index 与 browser fragment 返回 200；fragment 包含 worker、allowlist 和 task receipt UI。无凭据读取 `/settings/agent-runtime-browser*` 返回 401，未发送任何任务请求。
 
 ### 真实窗口证据
 
-`npm.cmd run tauri dev` 两次启动了标题为 `PresenceKit-desktop` 的真实窗口；一次向该窗口发送了
-Ctrl+R。当前本地后端 `127.0.0.1:18080` 不可达。Windows UI Automation 能定位窗口，但 WebView2
-没有公开控制树（0 button），屏幕捕获也未取得该窗口前景内容，故无法审阅偏好页是否显示表单。
-此项保持 `partial/open`，不能以进程启动或静态验证替代。
+以 `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9333` 启动真实 Tauri
+窗口后，CDP 连接其唯一 `http://localhost:1420/` WebView，点击 `偏好`，再执行一次
+`page.reload()` 并重新点击 `偏好`。刷新前后均断言：偏好按钮计数为 1；`浏览器实验任务`、
+`提交一次受控实验`、`提交任务` 和旧 HTTP(S) URL 输入的计数均为 0。该检查只读取固定旧表单
+锚点，不读取聊天正文、凭据或后端数据；未执行发布、确认、暂停、取消或创建操作。

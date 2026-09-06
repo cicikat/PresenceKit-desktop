@@ -1076,10 +1076,11 @@ visual bleed. No HTTP, WebSocket, queue, or mobile contract is added.
 桌面端通过 Tauri bridge 调用 `/dream/capabilities`、`/dream/rpg/state`、`/dream/rpg/transcript`、`/dream/rpg/turn` 与 `/dream/rpg/corrections`。RPG 回合请求携带新的 `request_id`、`lane` 和 `expected_scene_revision`；客户端不会回退到普通 `/dream/chat`。transcript 的 `items/next_before` 与兼容字段会在 `rpg-normalization.ts` 归一化后用于恢复只读分栏，`partial_read` 会保留并展示恢复提示。
 ## Agent Runtime 浏览器任务退役（Brief 72）
 
-后端总账已将 browser worker、allowlist、任务提交、确认和 receipt 标为 backend/admin
-surface，没有桌面客户端契约。桌面端已删除 Browser Runtime 的 shared API、Tauri command、
-`bot_user_id` 配置和所有任务写入/观测入口；不会直接请求 `/agent-runtime-browser/*` 或
-`/observability/agent-runtime-*`。因此浏览器任务不能由角色切换、刷新或重启后的旧内存恢复、
-确认或执行，也不会向客户端泄露凭据、cookie、profile、文件路径、完整 URL/query、页面正文
-或原始参数。Brief 71 的真实 Tauri/Chromium 验收仍为历史 `partial/open` 记录，不能作为恢复
-客户端桥接的理由。
+后端总账将旧 `/agent-runtime-browser/*` 和 observability 路由列为 OpenAPI-deprecated
+compatibility：它们只在已发布客户端仍有调用时保留。Brief 72 的桌面客户端已删除 Browser
+Runtime shared API、Tauri command、`bot_user_id` 配置和所有任务写入/观测入口；不会直接请求
+这些路径。后端 `/settings/agent-runtime-browser*` 是当前唯一的 admin policy、worker、
+allowlist、提交和 receipt 面；后端仓应在确认已发布客户端完成迁移后自行移除 compatibility
+routes。本仓不会由角色切换、刷新或重启后的旧内存恢复、确认或执行浏览器任务，也不会泄露
+凭据、cookie、profile、文件路径、完整 URL/query、页面正文或原始参数。Brief 71 的真实
+Tauri/Chromium 生命周期验收仍为历史 `partial/open` 记录，不能作为恢复客户端桥接的理由。

@@ -32,6 +32,7 @@
 - `npm.cmd run tauri dev` 曾成功启动真实 Tauri 进程并显示 `PresenceKit-desktop` 窗口，但后端请求不可达/能力为 remote-disabled，无法完成 safe success、waiting_confirm、pause/cancel、timeout/disconnect/redirect 全链路。
 - 尝试通过 Windows `PrintWindow` 截取真实 Tauri 窗口时调用挂起，未生成可审阅截图；已终止并清理临时产物。因此没有把“无截图的进程启动”记录为 UI 通过。
 - 2026-09-06 的 Brief 72 退役复核再次启动了真实 `PresenceKit-desktop` 窗口并向其发送 Ctrl+R；Windows UI Automation 能定位窗口但 WebView2 没有公开 controls（0 button），无法审阅偏好页内容。此运行不构成 UI 验收通过。
+- 同日的后续复核以临时 CDP 端口连接同一真实 WebView，打开偏好、硬刷新并再次打开偏好；旧 Browser Runtime 标题、表单、提交按钮和 URL 输入均为 0。该结果只证明退役后的客户端没有任务表面，不补写 Brief 71 已删除实现的生命周期成功证据。
 - 刷新/重开/重启后的 waiting_confirm 只能验证客户端代码的 fail-closed 设计：没有本会话内安全请求引用时确认按钮禁用；后端没有公开 resume/confirmation handle，不能执行恢复。
 
 ## 结论

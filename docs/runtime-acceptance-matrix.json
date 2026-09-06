@@ -31,7 +31,7 @@
       "area": "retired-client-surface",
       "scenario": "Desktop source contains no browser task form, browser bridge, task endpoint, browser lifecycle cache, or bot-user configuration.",
       "status": "passed",
-      "evidence": "tests/client-surface-retirement.test.ts; docs/brief-71-acceptance-record.md"
+      "evidence": "tests/client-surface-retirement.test.ts; real Tauri CDP hard-refresh record in cc-tasks/72-agent-runtime-browser-client-retirement-audit.md; docs/brief-71-acceptance-record.md"
     },
     {
       "id": "brief-71-browser-lifecycle-real-tauri",
