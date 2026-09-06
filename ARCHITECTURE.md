@@ -259,7 +259,6 @@ Tauri Rust 在 `src-tauri/src/lib.rs`：
 - `send_chat`：POST `/desktop/chat`，使用 `reqwest.no_proxy()`；响应保留 assistant `turn_id` / `msg_id`。
 - HTTP client 普通请求超时为 15 秒，chat / wake / Dream 等 LLM 请求超时为 120 秒；401（token 无效）与 403（scope 不足，detail 含所需 scope）分开报错，文案均不含 token 值，见 `safe_http_error`。
 - `ws_bridge.rs`：原生 WebSocket Bearer 鉴权、收发桥接和 URL query token 清洗。
-- `load_history`：GET `/memory/{user_id}/short-term`，使用 Bearer token。
 - `load_garden_state`：GET `/garden/state`，使用 Bearer token。
 - `load_sensor_realtime`：GET `/sensor/realtime`，使用 Bearer token；无数据响应归一为 `_no_data`。
 - `sensor/visual.rs`：仅 Windows 启动的视觉观察采样器。每次内存截屏前先 GET `/perception/visual/config`，再检查本地 opt-in 与锁屏；主屏 dHash 显著变化时才将内存 JPEG（长边 ≤1280）POST `/perception/visual`，图片不落盘。
@@ -471,7 +470,7 @@ Dream 背景按 `day` / `night` 分开记录。旧版单字段 `dream_background
 - 客户端和后端当前正式使用冻结的 v0.1 WS 协议。
 - `assistant_message` / `state_update` / `user_message` / `client_event` 是未排期的后续设计，当前未实现且不阻塞产品 v1。
 - action executor 当前覆盖 v0.1 的 9 类 allowlist 动作，尚未接入 v1 capabilities。
-- P-02 已将 backend base、WebSocket base、admin token 和 sensor config 外化到 client config；`config/client.local.json` 不提交。`bot_user_id` 默认为空，`load_history` 在空 id 时返回空历史；token 默认值仅为不可用占位符 `CHANGE_ME`。
+- P-02 已将 backend base、WebSocket base、admin token 和 sensor config 外化到 client config；`config/client.local.json` 不提交。Brief 72 已删除无调用者的 `bot_user_id` 与短期历史兼容 bridge；token 默认值仅为不可用占位符 `CHANGE_ME`。
 
 完整列表见 `docs/known-issues.md`。
 
@@ -508,6 +507,11 @@ backend limits, and posts through `reqwest::Client::no_proxy()`. It stores the
 path and local manifest in `config/client.local.json`; the request body contains
 logical dates and authored text but never filesystem paths. Deletion is a
 server-side tombstone and never mutates the local vault.
-## Agent Runtime Browser
+## Agent Runtime Browser retirement (Brief 72)
 
-Browser Runtime task surface 位于 Chat 偏好「能力与权限」分类。它通过 Tauri bridge 绑定本地用户与当前角色，支持提交受控 URL/操作、运行安全任务、确认高风险任务、暂停和取消，同时只渲染 metadata receipt；任务结果不会写入聊天或记忆。后端尚未公开恢复/人工接管路由，对应入口保持不可用。
+Browser policy, allowlist, worker and task receipt are backend-admin-owned. The desktop
+client has no Browser Runtime preferences entry, shared API, Tauri bridge, task lifecycle
+state, or `bot_user_id` configuration. It never submits browser URLs/operations/params and
+never receives browser credentials, cookies, profiles, local paths, page content, or raw task
+results. The earlier Brief 71 real Tauri/Chromium evidence remains historical `partial/open`;
+it is not a reason to restore the retired client surface.

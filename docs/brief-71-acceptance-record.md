@@ -1,6 +1,10 @@
 # Brief 71：Agent Runtime 浏览器生命周期验收记录
 
-状态：`partial/open`（真实桌面与真实 Chromium 条件未满足，未伪造通过）
+状态：`partial/open`（历史验收；Brief 72 已退役桌面 Browser Runtime 表面，真实桌面与真实 Chromium 条件仍未满足，未伪造通过）
+
+> 2026-09-06：Brief 72 删除了 Browser Runtime 的桌面 UI、shared API、Tauri bridge、
+> `bot_user_id` 配置与生命周期缓存。以下记录只保留为当时实现的未完成验收证据，不再代表
+> 当前客户端功能，也不能作为重新引入任务创建、确认、暂停、取消或观测入口的依据。
 
 ## 运行上下文
 
@@ -15,11 +19,9 @@
 
 | case | 结果 | 证据 |
 |---|---|---|
-| capability disabled / remote-disabled | `partial` | 运行中的本地 8080 返回 `effective_state=disabled_remote_server`、`allowed_domain_count=0`、`adapter_available=false`；客户端 bridge 会显示只读降级 |
-| no bot user | `passed (code)` | `load_agent_runtime_browser` / task observation 返回 `user_not_configured` 或空列表；写操作拒绝 |
-| metadata redaction | `passed (automated)` | `agent-runtime.test.ts` 覆盖未知字段、路径丢弃、artifact ID 有界投影 |
-| lifecycle action guards | `passed (automated)` | 222 个 Vitest 测试；纯逻辑覆盖 confirm/pause/cancel 状态门控与错误分类 |
-| duplicate action guard | `passed (code)` | 单 task `pendingActionsRef` 防止快速双击/并发控制；角色切换清理引用和 busy 状态 |
+| desktop surface retired | `passed (automated)` | `tests/client-surface-retirement.test.ts` 断言当前客户端没有 browser bridge、任务路径、表单文案或 `bot_user_id` |
+| former capability / no-user degradation | `historical partial` | 原 bridge 已删除；后端 admin 面板独立拥有 capability、allowlist 和 task receipt |
+| metadata redaction / lifecycle controls | `historical` | 原 `agent-runtime.test.ts` 和旧偏好组件随 Brief 72 一并删除，不再是当前桌面行为 |
 | type/build/Rust | `passed` | tsc、Vitest、Vite build、cargo check 均通过；build 仅有既有 chunk warning |
 | backend browser unit | `passed` | `Emerald-presence/tests/test_agent_runtime_browser.py`：3 passed |
 
@@ -29,8 +31,9 @@
 - 后端仓库当前存在用户未提交改动，且 Playwright Python 模块未安装（`playwright=False`），没有可用的确定性 Chromium fixture。
 - `npm.cmd run tauri dev` 曾成功启动真实 Tauri 进程并显示 `PresenceKit-desktop` 窗口，但后端请求不可达/能力为 remote-disabled，无法完成 safe success、waiting_confirm、pause/cancel、timeout/disconnect/redirect 全链路。
 - 尝试通过 Windows `PrintWindow` 截取真实 Tauri 窗口时调用挂起，未生成可审阅截图；已终止并清理临时产物。因此没有把“无截图的进程启动”记录为 UI 通过。
+- 2026-09-06 的 Brief 72 退役复核再次启动了真实 `PresenceKit-desktop` 窗口并向其发送 Ctrl+R；Windows UI Automation 能定位窗口但 WebView2 没有公开 controls（0 button），无法审阅偏好页内容。此运行不构成 UI 验收通过。
 - 刷新/重开/重启后的 waiting_confirm 只能验证客户端代码的 fail-closed 设计：没有本会话内安全请求引用时确认按钮禁用；后端没有公开 resume/confirmation handle，不能执行恢复。
 
 ## 结论
 
-本记录只证明客户端代码、桥接边界、错误降级和自动化测试通过；Brief 71 要求的真实后端 schema、Chromium worker、Tauri 窗口截图及完整生命周期场景仍保持 `partial/open`。不得将本记录解释为 release acceptance。
+本记录只保留历史客户端实现的证据；Brief 71 要求的真实后端 schema、Chromium worker、Tauri 窗口截图及完整生命周期场景仍保持 `partial/open`。当前客户端不再拥有该表面，不得将本记录解释为 release acceptance 或恢复 bridge 的依据。

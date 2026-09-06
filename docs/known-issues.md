@@ -1,16 +1,19 @@
 # docs/known-issues.md — 已知问题与技术债
 
-### Agent Runtime 浏览器任务客户端仍为 partial（Brief 70）
+### Agent Runtime 浏览器客户端已退役，历史实窗验收仍为 partial/open（Brief 72）
 
-影响：Chat 偏好中的 Browser Runtime 已支持创建、运行、确认、暂停和取消；暂停后的恢复和人工接管仍不可用。跨重启后客户端不保留 URL/参数，既有任务仍可暂停/取消，但不能再次确认并执行，避免重放副作用。
+影响：桌面端不再配置 browser allowlist、提交或观测浏览器任务，也没有 Tauri bridge、
+`bot_user_id`、URL/operation/params 缓存或恢复路径。后端 admin 面板独立拥有 worker、allowlist
+和 task receipt；桌面端不会展示 token、cookie、profile、文件路径、完整 URL/query、页面正文或
+原始参数。
 
-证据：Emerald-presence 当前公开创建/run/get/confirm/pause 和 owner-scoped cancel 路由，但三仓接口总账仍标 `partial, backend-only`，且没有 resume/人工接管路由。
+证据：`tests/client-surface-retirement.test.ts` 锁定退役边界；后端三仓接口总账将 browser
+surface 标为 backend-only。Brief 71 的旧 client 实现从未完成真实 Chromium/Tauri 场景，故其
+历史验收记录仍为 `partial/open`，见 `docs/brief-71-acceptance-record.md` 与
+`docs/runtime-acceptance-matrix.json`。
 
-建议：后端冻结 Brief 238/239 schema、补 resume/人工接管契约并完成真实隔离浏览器联调后，再完成 UI 实测；在此之前保持 `partial/open`。
-
-### Agent Runtime 浏览器生命周期真实验收未完成（Brief 71）
-
-客户端已补齐稳定错误分类、任务控制防重入、角色切换清理和 artifact 脱敏测试；但当前运行中的 8080 后端是旧实例，OpenAPI 没有 Brief 239 浏览器任务写路由，验收环境也没有 Playwright Chromium fixture。真实 Tauri 窗口曾启动，但无法取得可审阅的窗口截图，且 capability 为 `disabled_remote_server`，因此 disabled 以外的真实场景不能标记通过。详见 `docs/brief-71-acceptance-record.md` 与 `docs/runtime-acceptance-matrix.json`；状态保持 `partial/open`。
+建议：仅在后端 admin 面板完成真实隔离浏览器验收；不得以这个历史缺口重新引入桌面任务表单、
+bridge 或自动确认/恢复行为。
 
 
 - **苔庭 Design Mod（工单 66）** — `partial/open`。
@@ -109,7 +112,7 @@ v0.1 已正式冻结现有 legacy WS + HTTP `/desktop/chat` 路径，不再把�
 
 ## 已完成：客户端鉴权配置迁出前端源码
 
-`admin_token` 仅由 Rust 本地配置读取，前端不保存或传递 token；`config/client.local.json` 已被忽略。`bot_user_id` 默认为空，`load_history` 收到空 id 时返回空历史；默认 token `CHANGE_ME` 只是不可用占位符。ChatPanel 正常历史路径使用 `/chat-log/*`，不依赖 QQ 号。
+`admin_token` 仅由 Rust 本地配置读取，前端不保存或传递 token；`config/client.local.json` 已被忽略。客户端不再保留 `bot_user_id` 或 `/memory/{uid}/short-term` 兼容读取；ChatPanel 正常历史路径使用 `/chat-log/*`，不依赖 QQ 号。默认 token `CHANGE_ME` 只是不可用占位符。
 
 ---
 

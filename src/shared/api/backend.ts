@@ -5,19 +5,6 @@ export async function sendChat(message: string, replyTo?: ReplyToPayload): Promi
   return invokeGated<ChatResponse>('send_chat', replyTo ? { message, replyTo } : { message });
 }
 
-export interface HistoryEntry {
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: number;
-}
-
-export async function loadHistory(): Promise<HistoryEntry[]> {
-  const result = await invokeGated<{ user_id: string; history: HistoryEntry[]; count: number }>(
-    'load_history',
-  );
-  return result.history;
-}
-
 export async function loadGardenState(): Promise<GardenState> {
   return invokeGated<GardenState>('load_garden_state');
 }

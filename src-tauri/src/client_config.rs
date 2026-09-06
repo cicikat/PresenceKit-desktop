@@ -14,7 +14,6 @@ const DEFAULT_WEBSOCKET_BASE: &str = "ws://127.0.0.1:8080/ws/desktop";
 // 填 desktop profile token（`emt_…`，由后端 `POST /auth/tokens` 签发，profile=desktop）；
 // legacy admin secret（旧 god token）仍兼容，字段名/env var 名不变。见后端仓 docs/security.md。
 const DEFAULT_ADMIN_TOKEN_PLACEHOLDER: &str = "CHANGE_ME";
-const DEFAULT_BOT_USER_ID: &str = "";
 const DEFAULT_SENSOR_WINDOW_SECONDS: u32 = 30;
 const DEFAULT_SENSOR_TICK_SECONDS: u32 = 5;
 const DEFAULT_SENSOR_VERSION: &str = "emerald-client-rust-1.0";
@@ -68,7 +67,6 @@ pub struct ClientConfig {
     pub admin_token: String,
     pub sensor_config: SensorConfig,
     pub visual_perception_config: crate::sensor::visual::VisualPerceptionConfig,
-    pub bot_user_id: String,
     pub diary_sync: DiarySyncConfig,
 }
 
@@ -83,7 +81,6 @@ impl Default for ClientConfig {
                 .unwrap_or_else(|_| DEFAULT_ADMIN_TOKEN_PLACEHOLDER.to_string()),
             sensor_config: SensorConfig::default(),
             visual_perception_config: crate::sensor::visual::VisualPerceptionConfig::default(),
-            bot_user_id: DEFAULT_BOT_USER_ID.into(),
             diary_sync: DiarySyncConfig::default(),
         }
     }
@@ -102,8 +99,6 @@ struct PartialClientConfig {
     sensor_config: Option<PartialSensorConfig>,
     #[serde(default, alias = "visual_perception_config")]
     visual_perception_config: Option<PartialVisualPerceptionConfig>,
-    #[serde(default, alias = "bot_user_id")]
-    bot_user_id: Option<String>,
     #[serde(default, alias = "diary_sync")]
     diary_sync: Option<DiarySyncConfig>,
 }
@@ -174,9 +169,6 @@ fn apply_partial(cfg: &mut ClientConfig, partial: PartialClientConfig) {
     }
     if let Some(v) = partial.admin_token {
         cfg.admin_token = v;
-    }
-    if let Some(v) = partial.bot_user_id {
-        cfg.bot_user_id = v;
     }
     if let Some(v) = partial.diary_sync {
         cfg.diary_sync = v;
@@ -593,7 +585,6 @@ mod save_config_tests {
                 enabled: Some(true),
                 sample_interval_seconds: Some(0),
             }),
-            bot_user_id: None,
             diary_sync: None,
         });
         assert!(!cfg.visual_perception_config.enabled);

@@ -271,7 +271,8 @@ src/windows/toy/
 | 启动历史 | `loadChatLogDates()` + `loadChatLogDay(date)` → Tauri `load_chat_log_dates` / `load_chat_log_day` | 按日文件从后端 `/chat-log/*` 读取 |
 | 用户发送 | `sendChat()` → Tauri `send_chat` | 当前走 HTTP `/desktop/chat` |
 
-**与 `/memory/{uid}/short-term` 的关系**：`loadHistory()` 客户端函数仍保留，`/memory/{uid}/short-term` 后端接口也未删除，但 ChatPanel 启动逻辑不再调用它。后续 mood 推断等模块如有需要仍可使用。
+**与 `/memory/{uid}/short-term` 的关系**：Brief 72 删除了没有调用者的 `loadHistory()`
+兼容函数和 Tauri bridge；ChatPanel 只使用 `/chat-log/*`，不会携带或配置用户 ID 来读取短期历史。
 
 **日期处理**：所有日期加减使用 `date-fns`（`format` / `subDays` / `parseISO`），不手算 month/day。
 
@@ -784,8 +785,12 @@ contract.
 ## RPG Dream 双栏
 
 `DreamWindow` 在后端状态的 `dream_mode === "rpg"` 时挂载 `RpgDreamPanel`。面板从 RPG state/transcript 恢复活动场景，将 `character` 与 `kp/shared` 分栏展示，并通过 lane 选择提交回合。RPG capability 不可用时，Dream 偏好中的 RPG 模式不会显示；普通 sandbox/scenario/mirror 路径保持原状。
-## Agent Runtime Browser
+## Agent Runtime Browser retirement (Brief 72)
 
-Browser capability configuration and experiment task submission are owned by the backend admin panel. The desktop client no longer mounts a browser task form or requires a manually entered `botUserId`; shared bridge code remains only for compatibility with older backends during migration.
-
-`AgentRuntimeBrowserSettingsPage` 挂在 Chat 偏好「能力与权限」，通过共享 API 加载 capability 与 task receipt。面板显示有效状态、失败原因、任务状态/时间/错误码/尝试次数/截断和安全 artifact 摘要；提交表单按操作类型收集受控 selector/value 或 Workspace 相对路径，参数只存在当前任务内存中。轮询使用统一退避并在卸载时清理；后端未提供公开控制契约时保持只读降级，避免把观测数据当作执行结果。
+Browser policy, allowlist, worker state and experiment task submission are owned by the
+backend admin panel. The desktop client has no browser task form, observation panel, shared
+API, Tauri bridge, lifecycle cache, or `botUserId`/`bot_user_id` configuration. It neither
+submits a browser URL, operation or params nor receives tokens, cookies, profile paths, local
+files, full URLs/query strings, page bodies, or raw task results. The old Brief 71 surface was
+removed rather than retained as a compatibility bridge; a refresh, character switch, or restart
+therefore cannot reconstruct, confirm, resume, or run a browser task from stale client memory.

@@ -28,15 +28,15 @@
     },
     {
       "id": "brief-71-browser-lifecycle-automated",
-      "area": "agent-runtime-browser",
-      "scenario": "Capability normalization, lifecycle status projection, bounded controls, error classes, artifact redaction, duplicate-action guard, and role-switch cleanup.",
+      "area": "retired-client-surface",
+      "scenario": "Desktop source contains no browser task form, browser bridge, task endpoint, browser lifecycle cache, or bot-user configuration.",
       "status": "passed",
-      "evidence": "src/shared/api/agent-runtime.test.ts; src/windows/chat/components/AgentRuntimeBrowserSettingsPage.tsx; docs/brief-71-acceptance-record.md"
+      "evidence": "tests/client-surface-retirement.test.ts; docs/brief-71-acceptance-record.md"
     },
     {
       "id": "brief-71-browser-lifecycle-real-tauri",
-      "area": "agent-runtime-browser",
-      "scenario": "Real Tauri window against a pinned local Brief 239 backend and deterministic Chromium fixture: disabled, safe success, confirmation, refresh/reopen, pause/cancel, timeout/disconnect/redirect, and remote/no-user/no-auth degradation.",
+      "area": "historical-agent-runtime-browser",
+      "scenario": "Historical Brief 71 real Tauri/Chromium lifecycle acceptance was not completed before the desktop client surface was retired.",
       "status": "blocked",
       "evidence": "docs/brief-71-acceptance-record.md"
     },

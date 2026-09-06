@@ -68,13 +68,13 @@ Rust/Tauri HTTP client 统一显式禁用代理并设置超时：普通请求 15
 
 | 客户端文件 | 调用 |
 |---|---|
-| `src/shared/api/backend.ts` | `sendChat()`、`loadHistory()`、`loadGardenState()`、`loadDiaryList()`、`loadDiaryEntry()`、`loadSensorRealtime()`、`getPromptAssets()`、`patchPromptAssets()` |
+| `src/shared/api/backend.ts` | `sendChat()`、`loadGardenState()`、`loadDiaryList()`、`loadDiaryEntry()`、`loadSensorRealtime()`、`getPromptAssets()`、`patchPromptAssets()` |
 | `src/shared/api/chat-settings.ts` | `getChatSettings()`、`setChatMode()`、`setChatStyle()`、`setChatMultiMessage()`，由偏好面板「其他」tab 的 `ChatSettingsSection` 调用 |
 | `src/shared/api/ws.ts` | `wsClient.connect()`、通过 Tauri commands / events 完成 legacy WS 收发 |
 | `src/shared/state/toolStatusOverlay.ts` | 内存态 `tool_status` 队列；仅覆盖动向 NOW，不写 StateEngine、timeline 或本地偏好 |
 | `src/shared/design-mod/presenters/` | 统一 Sidebar Status/Flow/Garden/Diary presenter；复用 Tauri API、共享 mood/activity poller，不新增后端接口 |
 | `src-tauri/src/ws_bridge.rs` | 原生 WS 连接、Bearer header、URL 清洗与前端事件桥接 |
-| `src-tauri/src/lib.rs` | `send_chat`、`load_history`、`load_garden_state`、`load_diary_list`、`load_diary_entry`、`get_prompt_assets`、`patch_prompt_assets`、头像 / Dream 背景文件 commands、Dream 字体目录扫描、主题 / 布局 Mod manifest 与 CSS 扫描 |
+| `src-tauri/src/lib.rs` | `send_chat`、`load_garden_state`、`load_diary_list`、`load_diary_entry`、`get_prompt_assets`、`patch_prompt_assets`、头像 / Dream 背景文件 commands、Dream 字体目录扫描、主题 / 布局 Mod manifest 与 CSS 扫描 |
 | `src/windows/chat/components/ChatPanel.tsx` | 启动历史、发送消息、订阅 WS 主动消息 |
 | `src/windows/chat/components/Ribbon.tsx` | 读取 WS 连接状态 |
 | `src/windows/chat/components/SubGarden.tsx` | 消费 `GardenPresenter` 展示花园状态 |
@@ -235,46 +235,13 @@ assistant correlation ID 已对齐：`HTTP turn_id = HTTP msg_id = WS channel_me
 
 ---
 
-## HTTP：加载短期历史
+## HTTP：历史记录
 
-当前真实路径：
-
-```text
-ChatPanel mount
-  → loadHistory()
-  → invoke("load_history", { userId })
-  → Rust reqwest GET http://127.0.0.1:8080/memory/{user_id}/short-term
-```
-
-后端要求 Bearer token：
-
-```http
-Authorization: Bearer <admin_token>
-```
-
-前端不再传 admin token。当前客户端仍保留备用 `loadHistory()` 的 `BOT_USER_ID` 默认值；`ADMIN_TOKEN` 已迁移到 Rust 侧本地配置读取，再由 Rust/Tauri command 作为 Bearer token 调后端。配置说明见“客户端本地配置”。
-
-后端返回：
-
-```json
-{
-  "user_id": "<owner_user_id>",
-  "history": [
-    {"role": "user", "content": "...", "timestamp": 1748000000}
-  ],
-  "count": 1
-}
-```
-
-客户端映射成 bubble：
-
-```ts
-{
-  role: entry.role,
-  text: entry.content,
-  time: entry.timestamp * 1000
-}
-```
+ChatPanel 启动和按日懒加载只通过 Tauri `load_chat_log_dates` / `load_chat_log_day`
+读取后端 `/chat-log/*`。Brief 72 已删除无调用者的 `/memory/{user_id}/short-term`
+兼容 bridge 和 `bot_user_id` 配置；桌面客户端不会从该路径读取历史或将用户 ID 放入请求。
+前端不传 admin token，Rust 从本地配置读取 `ADMIN_TOKEN` 并作为 Bearer header 调用当前
+保留的 Tauri HTTP commands。
 
 ---
 
@@ -769,7 +736,6 @@ Authorization: Bearer <admin_token>
 | `native_ws_send(connection_id, message)` | 前端 → Rust → 后端 | 发送既有 legacy WS payload，不改变消息协议 |
 | `native_ws_disconnect()` | 前端 → Rust → 后端 | 关闭当前原生 WebSocket |
 | `send_chat(message, reply_to?)` | 前端 → Rust → 后端 | POST `/desktop/chat`；`reply_to` 可选，右键引用回复时携带 `{text, ts}`（cc-tasks/36） |
-| `load_history(user_id)` | 前端 → Rust → 后端 | GET `/memory/{user_id}/short-term`；Rust 侧读取 admin token |
 | `load_garden_state()` | 前端 → Rust → 后端 | GET `/garden/state`；Rust 侧读取 admin token |
 | `load_diary_list()` | 前端 → Rust → 后端 | GET `/diary/list`；Rust 侧读取 admin token |
 | `load_diary_entry(date)` | 前端 → Rust → 后端 | GET `/diary/{date}`；Rust 侧读取 admin token |
@@ -835,7 +801,7 @@ reqwest::Client::builder()
 
 普通 HTTP client 设置 15 秒超时；chat / wake / Dream 等 LLM 请求使用 120 秒超时。
 
-当前 `send_chat`、`load_history`、`load_garden_state`、`load_diary_list`、`load_diary_entry`、`load_chat_log_dates`、`load_chat_log_day`、`get_prompt_assets`、`patch_prompt_assets` 和 `load_hidden_state_debug` 已符合这条规则。
+当前 `send_chat`、`load_garden_state`、`load_diary_list`、`load_diary_entry`、`load_chat_log_dates`、`load_chat_log_day`、`get_prompt_assets`、`patch_prompt_assets` 和 `load_hidden_state_debug` 已符合这条规则。
 
 Client Auth Sync（R9 / SEC-AUTH-1）已同步的受保护调用点：
 
@@ -1108,12 +1074,12 @@ visual bleed. No HTTP, WebSocket, queue, or mobile contract is added.
 ## RPG Dream 客户端接口
 
 桌面端通过 Tauri bridge 调用 `/dream/capabilities`、`/dream/rpg/state`、`/dream/rpg/transcript`、`/dream/rpg/turn` 与 `/dream/rpg/corrections`。RPG 回合请求携带新的 `request_id`、`lane` 和 `expected_scene_revision`；客户端不会回退到普通 `/dream/chat`。transcript 的 `items/next_before` 与兼容字段会在 `rpg-normalization.ts` 归一化后用于恢复只读分栏，`partial_read` 会保留并展示恢复提示。
-## Agent Runtime 浏览器任务（Brief 70，partial）
+## Agent Runtime 浏览器任务退役（Brief 72）
 
-偏好页「能力与权限」中的 Browser Runtime 面板只消费后端脱敏观测：`GET /observability/agent-runtime-browser` 读取 capability，`GET /observability/agent-runtime-tasks` 读取 task receipt。请求通过 `load_agent_runtime_browser`、`load_agent_runtime_tasks` Tauri command，经统一 `invokeGated()` 和 Rust `no_proxy()`/Bearer bridge。客户端仅显示状态、时间、错误码、尝试次数、截断标记和安全 artifact label/id。
-
-后端 Brief 238 当前公开了创建、运行、单任务读取、确认、暂停和 owner-scoped 取消路由；客户端已通过 Tauri bridge 接入，并以本地 `bot_user_id` + 当前角色绑定 scope。安全操作创建后运行，高风险操作先停在 `waiting_confirm`，确认后才运行；取消使用普通 desktop profile 可调用的 owner-scoped POST 路由。后端尚未公开 resume/人工接管路由，因此暂停后的恢复和人工接管仍明确不可用。客户端不会把 capability enabled 当作任务成功，也不会显示凭据、profile、完整 URL、页面正文、原始参数或绝对路径。
-
-当本地 `bot_user_id` 未配置时，Rust bridge 不向任务观测接口发送空用户筛选，也不允许创建、运行或控制任务；能力面板返回 `user_not_configured` 的不可用状态，避免把后端的空筛选语义扩大为跨用户观测。
-
-Brief 71 生命周期保护：客户端把 bridge 错误稳定映射为 unauthorized/forbidden/unsupported/conflict/rejected/network 等本地化降级，不自动重建或重放任务；单任务控制使用 busy 锁，角色切换递增 generation 并清理旧请求引用，旧角色的异步结果不会写入新角色面板。刷新或重启后没有安全请求引用时，`waiting_confirm` 只读/取消可用，确认按钮保持禁用。
+后端总账已将 browser worker、allowlist、任务提交、确认和 receipt 标为 backend/admin
+surface，没有桌面客户端契约。桌面端已删除 Browser Runtime 的 shared API、Tauri command、
+`bot_user_id` 配置和所有任务写入/观测入口；不会直接请求 `/agent-runtime-browser/*` 或
+`/observability/agent-runtime-*`。因此浏览器任务不能由角色切换、刷新或重启后的旧内存恢复、
+确认或执行，也不会向客户端泄露凭据、cookie、profile、文件路径、完整 URL/query、页面正文
+或原始参数。Brief 71 的真实 Tauri/Chromium 验收仍为历史 `partial/open` 记录，不能作为恢复
+客户端桥接的理由。
