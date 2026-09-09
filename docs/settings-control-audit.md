@@ -94,3 +94,7 @@ modify any backend configuration. The Tauri process owns the loopback bridge;
 the system browser only sees a short-lived capability URL and continues to use
 the normal scoped-token login flow. Mobile has no equivalent entry and remains
 dependent on its own VPN, DIRECT/PAC, or working system network path.
+
+## Preset forced streaming compatibility (2026-09-09)
+
+The backend admin Preset editor owns force_stream (default false, Chat Completions only) for generation and tool decisions. Desktop keeps selecting backend routing profiles with no additional setting or permission. Mobile still receives complete HTTP JSON. Browser and real gateway verification remain observe in the backend interface catalog.
