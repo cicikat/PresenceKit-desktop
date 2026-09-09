@@ -1092,3 +1092,7 @@ allowlist、提交和 receipt 面；后端仓应在确认已发布客户端完�
 routes。本仓不会由角色切换、刷新或重启后的旧内存恢复、确认或执行浏览器任务，也不会泄露
 凭据、cookie、profile、文件路径、完整 URL/query、页面正文或原始参数。Brief 71 的真实
 Tauri/Chromium 生命周期验收仍为历史 `partial/open` 记录，不能作为恢复客户端桥接的理由。
+
+## Mobile typography alignment (2026-09-09)
+
+Backend mobile HTTP/poll add optional display_text for hl/big/sm, referencing this client's inlineStyle.tsx behavior. Existing desktop channel_message/message_segments and UI rendering are unchanged. Mobile canonical reply/content remains plain for old clients, notifications, TTS and dedup. The backend catalog records real-device visual verification and plain-history style loss as observe/roadmap respectively.
