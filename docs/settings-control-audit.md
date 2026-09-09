@@ -41,6 +41,12 @@ to use only the persona-scoped settings and runtime endpoints documented below.
 
 ## 管理面板（admin token）
 
+- 图片上传用途和 OCR 连接由后端模型路由页 `GET/PUT /image-recognition` 管理。
+  默认通用视觉；OCR 使用独立连接，显式选择 GLM Layout Parsing 完整 Endpoint 或
+  OpenAI Chat Completions Base URL。密钥、地址和协议不下发桌面或手机。
+  两端继续消费 `/upload/ingest`，手机/电脑自动化仍继承通用视觉。
+  真实 GLM 服务和实体设备上传验收为 `observe`，详见后端三仓接口总账。
+
 - 模型路由支持从 legacy `llm` 一键初始化 `model_presets`，之后可维护 preset、密钥、URL、模型、`api_protocol`（`chat_completions` / `responses`）与 routing profile。管理面重命名 preset 时会自动更新所有 routing profile 引用并热重载。profile 内的 `sensor_judge` 与 `scenario_reconcile` 是后端后台 category，分别用于传感器裁决与 Dream 发送后的语义校准（缺失时兼容回退 `intent → chat`），桌面端不单独展示或编辑其超时、重试和断路器策略。协议字段只由后端管理面配置；桌面端仍只选择既有 routing profile，不下发 API key、URL 或协议配置。
 - 代理、上下文轮数、legacy LLM 参数和视觉模型不再是假只读镜像，保存后热重载。
 - TTS 管理配置含服务端总开关、桌面语音条开关、情绪分档、服务 URL、参考音频/文本与语速；provider 的选择、参数和试听只在后端管理面处理。桌面端只调用 `/settings/tts-desktop`、`/settings/tts-auto-play` 和 `/tts/synthesize`，不读取 provider 配置或密钥；兼容层仍返回 `{audio_b64, mime}`。
