@@ -1,5 +1,13 @@
 # docs/backend-integration.md — 后端接口与接入现状
 
+## API 思考存档（2026-09-09）
+
+后端已默认独立保存 API 返回的思考，提供 admin-only
+`GET /observability/llm-reasoning`（limit/before/model 元数据分页）与
+`GET /observability/llm-reasoning/{call_id}`（parts 正文）。desktop token 无权访问，
+本客户端尚无 IPC/展开 UI。call_id 表示一次模型请求，尚不关联聊天 turn_id；后续展示
+需要受限读取契约和明确关联，不能按时间猜测。现有聊天 HTTP/WS 和 ack 不变。
+
 本文档记录本仓当前和 `Emerald-presence` 的连接方式。三仓接口总账见
 `Emerald-presence/docs/three-repo-interface-catalog.md`；桌面消息细节统一见
 `docs/protocol-v0.md`。

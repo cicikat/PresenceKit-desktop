@@ -1,5 +1,10 @@
 # docs/known-issues.md — 已知问题与技术债
 
+### API 思考可选展开（2026-09-09，roadmap）
+
+后端默认存档思考并提供 admin-only API；桌面展开 UI、IPC 与聊天 turn_id 关联尚未
+实现。不得给桌面增加 admin 凭据来替代受限读取契约。真实窗口验收未完成。
+
 ### Agent Runtime 浏览器旧后端 compatibility 路由待发布迁移确认（Brief 72，observe）
 
 影响：桌面端不再配置 browser allowlist、提交或观测浏览器任务，也没有 Tauri bridge、

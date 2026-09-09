@@ -1,5 +1,11 @@
 # 设置与功能开关审计（P0–P2）
 
+## API 思考存档（2026-09-09，roadmap）
+
+后端默认存档 API 已返回的思考，与 `thinking.enabled` 生成开关独立；没有客户端存储
+开关。admin-only `/observability/llm-reasoning` 提供列表/详情，标准 desktop token
+不可读。未来展开 UI 是展示偏好，须先补 turn_id 关联和受限读取接口；当前未实现。
+
 ## 桌面偏好归类（2026-07-30）
 
 本次仅调整信息架构，存储 key、后端 API 和 Tauri command 均不变。
