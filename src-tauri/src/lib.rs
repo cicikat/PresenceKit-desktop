@@ -83,6 +83,17 @@ fn llm_http_client() -> Result<reqwest::Client, String> {
         .map_err(|_| "无法创建后端连接".to_string())
 }
 
+// Owner turns include OCR and multiple tool calls. Bound connection setup separately
+// from the complete turn; ordinary polling and other LLM endpoints keep their budgets.
+fn chat_http_client() -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .no_proxy()
+        .connect_timeout(std::time::Duration::from_secs(15))
+        .timeout(std::time::Duration::from_secs(600))
+        .build()
+        .map_err(|_| "无法创建后端连接".to_string())
+}
+
 fn authorized_request(
     cfg: &crate::client_config::ClientConfig,
     request: reqwest::RequestBuilder,
@@ -923,7 +934,7 @@ async fn send_chat(
     reply_to: Option<ReplyToPayload>,
 ) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
-    let client = llm_http_client()?;
+    let client = chat_http_client()?;
 
     let mut body = serde_json::json!({ "message": message });
     if let Some(reply_to) = reply_to {
@@ -1272,8 +1283,8 @@ async fn upload_document(
         .text("message", message)
         .text("channel", "desktop");
 
-    // 4. 发请求(必须 no_proxy)
-    let client = http_client()?;
+    // Upload ingest includes recognition and a complete chat turn.
+    let client = chat_http_client()?;
 
     let resp = authorized_request(&cfg, client.post(backend_url(&cfg, "/upload/ingest")))
         .multipart(form)
