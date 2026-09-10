@@ -55,7 +55,9 @@ fn presence_nag_window(app: &AppHandle) -> tauri::Result<WebviewWindow> {
 }
 
 #[tauri::command]
-pub fn ensure_pet_window(
+// Synchronous commands run on the invoking WebView thread on Windows. Creating
+// another WebView there can deadlock WebView2; use the async command dispatcher.
+pub async fn ensure_pet_window(
     app: AppHandle,
     state: State<'_, WindowLifecycleState>,
 ) -> Result<(), String> {
@@ -69,7 +71,7 @@ pub fn ensure_pet_window(
 }
 
 #[tauri::command]
-pub fn destroy_pet_window(
+pub async fn destroy_pet_window(
     app: AppHandle,
     state: State<'_, WindowLifecycleState>,
 ) -> Result<(), String> {

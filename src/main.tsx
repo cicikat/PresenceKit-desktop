@@ -61,9 +61,13 @@ function AppRoot() {
         onRoomOpen={() => setActiveWindow("room")}
         isCovered={activeWindow !== "chat"}
       />
-      {activeWindow === "activity" && <ActivityWindow onClose={() => setActiveWindow("chat")} />}
-      {activeWindow === "toy" && <ToyWindow onClose={() => setActiveWindow("chat")} />}
-      {activeWindow === "room" && <RoomWindow onClose={() => setActiveWindow("chat")} />}
+      {/* Keep first-load suspension inside the overlay. The auth gate and main
+          window must stay mounted while a new role's chunk is loading. */}
+      <Suspense fallback={<div style={{ position: 'fixed', inset: 0, zIndex: 110, background: 'var(--paper)' }}><LoadingView /></div>}>
+        {activeWindow === "activity" && <ActivityWindow onClose={() => setActiveWindow("chat")} />}
+        {activeWindow === "toy" && <ToyWindow onClose={() => setActiveWindow("chat")} />}
+        {activeWindow === "room" && <RoomWindow onClose={() => setActiveWindow("chat")} />}
+      </Suspense>
     </>
   );
 }
