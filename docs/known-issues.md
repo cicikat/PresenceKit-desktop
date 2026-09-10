@@ -395,3 +395,7 @@ useEffect(() => {
 ## RPG Dream 客户端（open）
 
 桌面端已完成 capability 门控、入口、双栏 transcript 恢复、回合提交、`RPG_ROUND_BUSY` 原 body 短退避重试和基础 corrections UI；尚未完成真实后端运行态、`RPG_REVISION_CONFLICT` 确认流程和多分辨率窗口验收，仍以后端三仓总账的 open/partial 状态为准。
+
+## Brief 242 设置重整验收（observe）
+
+相关 40 项 Vitest、类型检查、生产构建和 React 浏览器夹具通过；阅读状态保持与角色刷新已验证。真实 Tauri 原生窗口、真实后端保存及手机设备联调尚未完成，不能以夹具 IPC 结果替代。详见 settings-control-audit.md 与后端三仓接口总账。

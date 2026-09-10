@@ -10,6 +10,11 @@ type DreamContext = {
 export function useChatWindowNavigation() {
   const [specOpen, setSpecOpen] = useState(false);
   const [prefsOpen, setPrefsOpen] = useState(false);
+  useEffect(() => {
+    const open = () => setPrefsOpen(true);
+    window.addEventListener('open-activity-preferences', open);
+    return () => window.removeEventListener('open-activity-preferences', open);
+  }, []);
   const [dreamWindowOpen, setDreamWindowOpen] = useState(false);
   const [dreamContext, setDreamContext] = useState<DreamContext>({ mode: 'single', groupId: null, roster: {} });
   const [dreamAfterglow, setDreamAfterglow] = useState(false);

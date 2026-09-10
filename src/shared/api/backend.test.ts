@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { deleteCharacterAvatar, getPromptAssets, invalidatePromptAssetsCache, uploadCharacterAvatar } from './backend';
+import { deleteCharacterAvatar, getPromptAssets, invalidatePromptAssetsCache, patchPromptAssets, uploadCharacterAvatar } from './backend';
 
 const { invokeGated } = vi.hoisted(() => ({ invokeGated: vi.fn() }));
 vi.mock('./authGate', () => ({ invokeGated }));
@@ -14,6 +14,42 @@ describe('prompt asset mutation cache boundary', () => {
   beforeEach(() => {
     invokeGated.mockReset();
     invalidatePromptAssetsCache();
+  });
+
+  it('preserves routing status and leaves absent fields unknown', async () => {
+    const response = assets(null);
+    Object.assign(response.characters[0], { model_routing: null, effective_profile: 'default', resolved_chat_preset: 'local', resolved_chat_model: 'example', global_profile: 'default', binding_source: 'global', chat_configured: false });
+    invokeGated.mockResolvedValueOnce(response).mockResolvedValueOnce(assets(null));
+    expect((await getPromptAssets()).characters[0]).toMatchObject({ model_routing: null, effective_profile: 'default', resolved_chat_preset: 'local', resolved_chat_model: 'example', global_profile: 'default', binding_source: 'global', chat_configured: false });
+    const missing = (await getPromptAssets({ force: true })).characters[0];
+    expect(missing.model_routing).toBeUndefined();
+    expect(missing.chat_configured).toBeUndefined();
+  });
+
+  it('an old request follows the fresh request after a character switch', async () => {
+    let finishOld!: (value: unknown) => void;
+    let finishNew!: (value: unknown) => void;
+    const next = assets(null);
+    next.characters[0].id = 'b'; next.active.active_character = 'b';
+    invokeGated.mockImplementationOnce(() => new Promise(resolve => { finishOld = resolve; }))
+      .mockResolvedValueOnce({ active: next.active })
+      .mockImplementationOnce(() => new Promise(resolve => { finishNew = resolve; }));
+    const old = getPromptAssets();
+    await patchPromptAssets({ active_character: 'b' });
+    const fresh = getPromptAssets();
+    finishOld(assets('/stale.png'));
+    await Promise.resolve();
+    finishNew(next);
+    expect((await old).active.active_character).toBe('b');
+    expect(await fresh).toEqual(await getPromptAssets());
+    expect(invokeGated).toHaveBeenCalledTimes(3);
+  });
+
+  it('retries after failure and invalidation without retaining an old cache', async () => {
+    invokeGated.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(assets('/fresh.png'));
+    await expect(getPromptAssets()).rejects.toThrow('offline');
+    invalidatePromptAssetsCache();
+    expect((await getPromptAssets()).characters[0].avatar_url).toBe('/fresh.png');
   });
 
   it('invalidates prompt assets after avatar upload and deletion', async () => {

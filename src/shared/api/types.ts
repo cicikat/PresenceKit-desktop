@@ -320,6 +320,10 @@ export interface PromptAssetCharacter {
   model_routing?: string | null;
   effective_profile?: string;
   resolved_chat_preset?: string;
+  resolved_chat_model?: string;
+  global_profile?: string;
+  binding_source?: 'character' | 'global';
+  chat_configured?: boolean;
 }
 
 export interface PromptAssetOption {

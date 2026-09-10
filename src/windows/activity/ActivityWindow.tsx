@@ -16,7 +16,6 @@ import { ReadingPage } from './components/ReadingPage';
 import { GomokuPage } from './components/GomokuPage';
 import { ChessPage } from './components/ChessPage';
 import { DreamSeedPanel } from './components/DreamSeedPanel';
-import { ActivityPreferencesPanel } from './components/ActivitySettingsPage';
 import { toggleDayNight, getDayNight, subscribe as subscribeTheme } from '../../shared/theme/registry';
 import { useI18n } from '../../shared/i18n';
 
@@ -27,7 +26,6 @@ interface ActivityWindowProps {
 export function ActivityWindow({ onClose }: ActivityWindowProps) {
   const { t } = useI18n();
   const [activeTab, setActiveTab] = useState<ActivityTab>('home');
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [theme, setTheme] = useState(() => getDayNight().active);
 
   const handleTab = (tab: ActivityTab) => setActiveTab(tab);
@@ -53,7 +51,7 @@ export function ActivityWindow({ onClose }: ActivityWindowProps) {
         activeTab={activeTab}
         onTab={handleTab}
         onClose={onClose}
-        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenSettings={() => window.dispatchEvent(new Event('open-activity-preferences'))}
         theme={theme}
         onThemeToggle={handleThemeToggle}
       />
@@ -69,7 +67,6 @@ export function ActivityWindow({ onClose }: ActivityWindowProps) {
         </div>
       </div>
 
-      <ActivityPreferencesPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 }

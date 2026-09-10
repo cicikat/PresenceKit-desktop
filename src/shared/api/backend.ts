@@ -92,20 +92,29 @@ export function validateUploadFile(filePath: string, fileSize: number): UploadEr
 
 let promptAssetsCache: PromptAssetsResponse | null = null;
 let promptAssetsInFlight: Promise<PromptAssetsResponse> | null = null;
+let promptAssetsGeneration = 0;
 
 /** Shared within a WebView; concurrent consumers (ChatWindow/presenter/settings)
  * reuse one request. Mutations below invalidate the cache explicitly. */
 export function getPromptAssets(options: { force?: boolean } = {}): Promise<PromptAssetsResponse> {
   if (!options.force && promptAssetsCache) return Promise.resolve(promptAssetsCache);
   if (promptAssetsInFlight) return promptAssetsInFlight;
-  promptAssetsInFlight = invokeGated<unknown>('get_prompt_assets')
-    .then(response => { promptAssetsCache = normalizePromptAssets(response); return promptAssetsCache; })
-    .finally(() => { promptAssetsInFlight = null; });
+  const generation = promptAssetsGeneration;
+  const request = invokeGated<unknown>('get_prompt_assets')
+    .then(response => {
+      if (generation !== promptAssetsGeneration) return getPromptAssets({ force: true });
+      promptAssetsCache = normalizePromptAssets(response);
+      return promptAssetsCache;
+    })
+    .finally(() => { if (promptAssetsInFlight === request) promptAssetsInFlight = null; });
+  promptAssetsInFlight = request;
   return promptAssetsInFlight;
 }
 
 export function invalidatePromptAssetsCache(): void {
+  ++promptAssetsGeneration;
   promptAssetsCache = null;
+  promptAssetsInFlight = null;
 }
 
 export async function getCharacterAvatar(charId: string): Promise<string | null> {
@@ -180,6 +189,13 @@ function normalizeCharacterEntry(value: unknown): PromptAssetCharacter | null {
     kind: typeof value.kind === 'string' ? value.kind : undefined,
     avatar_url: typeof value.avatar_url === 'string' ? value.avatar_url : null,
     has_runtime_avatar: typeof value.has_runtime_avatar === 'boolean' ? value.has_runtime_avatar : false,
+    model_routing: typeof value.model_routing === 'string' ? value.model_routing : value.model_routing === null ? null : undefined,
+    effective_profile: typeof value.effective_profile === 'string' ? value.effective_profile : undefined,
+    resolved_chat_preset: typeof value.resolved_chat_preset === 'string' ? value.resolved_chat_preset : undefined,
+    resolved_chat_model: typeof value.resolved_chat_model === 'string' ? value.resolved_chat_model : undefined,
+    global_profile: typeof value.global_profile === 'string' ? value.global_profile : undefined,
+    binding_source: value.binding_source === 'character' || value.binding_source === 'global' ? value.binding_source : undefined,
+    chat_configured: typeof value.chat_configured === 'boolean' ? value.chat_configured : undefined,
   };
 }
 

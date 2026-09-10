@@ -1,5 +1,30 @@
 # 设置与功能开关审计（P0–P2）
 
+
+## Brief 242：统一偏好与后端设置职责（2026-09-10，current）
+
+此条目替代下文历史七分类/Activity 独立偏好的描述。Chat 偏好现为常规、界面、角色与
+对话、桌宠与互动、高级。模型方案、角色模型/资源绑定、对话风格、思考、工具循环、
+段落兜底和后端权限编辑迁往管理面板。Reality 世界书/提示词启用组合与角色头像由管理面
+创作页提供；本地外观头像与截图同意、语音播放、陪玩现场控制仍保留。
+
+`CurrentCharacterStatus` 使用现有 `get_prompt_assets`/`patch_prompt_assets`；只读展示
+`model_routing/effective_profile/resolved_chat_preset/resolved_chat_model/global_profile/
+binding_source/chat_configured`，缺字段显示未知。切换角色、聚焦或手动刷新重新读取；
+缓存按代次作废，旧响应不会覆盖切换后的角色。模型重置在管理面使用原有 null 语义。
+
+`ActivityAppearanceSettings` 合并活动外观，保留 reading.fontSize/maxWidth、board.theme、
+chess.pieceStyle 与 activity.debug 五个原 key。Activity 的 `open-activity-preferences`
+事件打开 Chat 偏好；Activity/Reading 继续挂载，不关闭会话或另开 WebView。
+移除无引用的旧模型/能力设置组件和独立 Activity 偏好，保留其他消费者需要的 API/IPC。
+存在感弹窗开关留在桌宠与互动，沿用原同步语义；裁剪层高于统一偏好，避免头像/背景裁剪被遮挡。
+本次未改 Rust、WS、scope、ack、TTL、手机或 relay；后端能力真值仍由后端维护。
+
+验收：相关 Vitest 40 项、TypeScript、生产构建通过；浏览器夹具实际挂载 React 页面，
+覆盖角色切换、缺字段、失败重试、聚焦刷新、活动中打开偏好和阅读第 2 页保持。
+`observe`：真实 Tauri 原生窗口与真实后端/手机设备联调未完成；夹具 IPC 不代表实机。
+
+
 ## API 思考存档（2026-09-09，roadmap）
 
 后端默认存档 API 已返回的思考，与 `thinking.enabled` 生成开关独立；没有客户端存储

@@ -1,4 +1,6 @@
-﻿import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { CurrentCharacterStatus } from './CurrentCharacterStatus';
+import { ActivityAppearanceSettings } from './ActivityAppearanceSettings';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { avatarStore } from '../../../../shared/avatars/store';
 import { getActiveCharacterName, subscribeActiveCharacter } from '../../../../shared/activeCharacter';
@@ -13,19 +15,11 @@ import { CallSettingsPage } from '../CallSettingsPage';
 import { CoplaySettingsPage } from '../CoplaySettingsPage';
 import { ConnectionSettingsPage } from '../ConnectionSettingsPage';
 import { DiarySyncSettingsPage } from '../DiarySyncSettingsPage';
-import { ToolLoopSettingsPage } from '../ToolLoopSettingsPage';
-import { ThinkingSettingsPage } from '../ThinkingSettingsPage';
-import { OutputSegmentEnforceSettingsPage } from '../OutputSegmentEnforceSettingsPage';
-import { ModelRoutingSettingsPage } from '../ModelRoutingSettingsPage';
-import { CharacterModelRoutingSettingsPage } from '../CharacterModelRoutingSettingsPage';
 import { DesktopTtsSettingsPage } from '../DesktopTtsSettingsPage';
 import { VisualPerceptionSettingsPage } from '../VisualPerceptionSettingsPage';
 import { useI18n, type Language } from '../../../../shared/i18n';
 import { Icon } from '../UIKit';
-import { PromptAssetsSettings } from './PromptAssetsSettings';
-import { ChatSettingsSection } from './ChatSettingsSection';
 import { MinuteSelect, PrefRange, PrefRow, PrefSwitch, prefActionButtonStyle, prefSelectStyle } from './PrefAtoms';
-import { ComputerOperationSafetySettings } from './ComputerOperationSafetySettings';
 import { PeriodDateSettings } from './PeriodDateSettings';
 import { DesignModSettings } from './DesignModSettings';
 import { CHAT_PREFERENCE_TABS, type ChatPreferenceTab } from './preferencesInfoArchitecture';
@@ -54,6 +48,12 @@ export function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, 
       })
       .catch(error => setFontLoadError(String(error)));
   }, [open]);
+
+  useEffect(() => {
+    const handler = () => { setTab('interface'); window.setTimeout(() => document.getElementById('activity-appearance')?.scrollIntoView(), 0); };
+    window.addEventListener('open-activity-preferences', handler);
+    return () => window.removeEventListener('open-activity-preferences', handler);
+  }, []);
 
   if (!open) return null;
 
@@ -93,10 +93,12 @@ export function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, 
   return (
     <>
       {cropSrc && (
-        <AvatarCropper imageSrc={cropSrc} onConfirm={handleCropConfirm} onCancel={handleCropCancel} />
+        <div style={{ position: 'relative', zIndex: 170 }}>
+          <AvatarCropper imageSrc={cropSrc} onConfirm={handleCropConfirm} onCancel={handleCropCancel} />
+        </div>
       )}
       {bgCropSrc && (
-        <div onClick={e => e.stopPropagation()} style={{ position: 'fixed', inset: 0, zIndex: 120 }}>
+        <div onClick={e => e.stopPropagation()} style={{ position: 'fixed', inset: 0, zIndex: 170 }}>
           <DreamBackgroundCropper imageSrc={bgCropSrc} onConfirm={handleBgCropConfirm} onCancel={handleBgCropCancel} />
         </div>
       )}
@@ -108,7 +110,7 @@ export function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, 
         onChange={e => { const f = e.target.files?.[0]; if (f) handleBgFileChange(f); e.target.value = ''; }} />
       <div onClick={onClose} style={{
         position: 'fixed', inset: 0, background: 'oklch(0.20 0.04 60 / 0.45)',
-        backdropFilter: 'blur(6px)', zIndex: 110, display: 'flex',
+        backdropFilter: 'blur(6px)', zIndex: 160, display: 'flex',
       }}>
         <div onClick={e => e.stopPropagation()} style={{
           margin: 'auto', width: 'min(540px, 92vw)',
@@ -159,27 +161,7 @@ export function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, 
                 <ConnectionSettingsPage />
                 <div style={{ height: 1, background: 'var(--paper-edge)' }} />
                 <DiarySyncSettingsPage />
-              </>
-            ) : tab === 'models' ? (
-              <>
-                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
-                <ModelRoutingSettingsPage />
-                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
-                <CharacterModelRoutingSettingsPage />
-                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
-                <ThinkingSettingsPage />
-                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
-                <OutputSegmentEnforceSettingsPage />
-              </>
-            ) : tab === 'capabilities' ? (
-              <>
-                <DesktopTtsSettingsPage />
-                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
-                <ToolLoopSettingsPage />
-                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
                 <VisualPerceptionSettingsPage />
-                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
-                <ComputerOperationSafetySettings />
               </>
             ) : tab === 'interface' ? (
               <>
@@ -421,36 +403,18 @@ export function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, 
                 </div>
                 <div style={{ height: 1, background: 'var(--paper-edge)' }} />
                 <ChatColorPage />
+                <ActivityAppearanceSettings />
               </>
             ) : tab === 'characterChat' ? (
               <>
+                <CurrentCharacterStatus onCharacterSwitched={onCharacterSwitched} />
                 <PeriodDateSettings />
-                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
-                <PromptAssetsSettings onCharacterAvatarChange={onCharacterAvatarChange} onCharacterSwitched={onCharacterSwitched} />
-                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
-                <ChatSettingsSection />
-                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
-                <PrefRow label="允许存在感弹窗" hint={`开启后，${activeCharName}被冷落久了会用带头像的弹窗找你；默认关闭`}>
-                  <PrefSwitch active={presenceNagEnabled} onClick={onPresenceNagToggle} />
-                </PrefRow>
-                <PrefRow label="主动消息最小间隔" hint={`${activeCharName}每隔至少 ${proactiveGapHours} h 才会主动发消息 · 范围 0.5–12`}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <button
-                      onClick={() => onProactiveGapChange(Math.max(0.5, proactiveGapHours - 0.5))}
-                      style={prefActionButtonStyle}
-                    >−</button>
-                    <span className="mono" style={{ width: 38, textAlign: 'center', color: 'var(--ink-2)', fontSize: 11 }}>
-                      {proactiveGapHours}h
-                    </span>
-                    <button
-                      onClick={() => onProactiveGapChange(Math.min(12, proactiveGapHours + 0.5))}
-                      style={prefActionButtonStyle}
-                    >+</button>
-                  </div>
-                </PrefRow>
               </>
             ) : tab === 'petInteraction' ? (
               <>
+                <PrefRow label={t('settings.presencePopup.title')} hint={t('settings.presencePopup.hint')}>
+                  <PrefSwitch active={presenceNagEnabled} onClick={onPresenceNagToggle} />
+                </PrefRow>
                 <div>
                   <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink)', marginBottom: 2 }}>桌宠粒子风格</div>
                   <div className="mono" style={{ fontSize: 9.5, color: 'var(--ink-3)', letterSpacing: 1.1 }}>
@@ -554,6 +518,7 @@ export function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, 
                   当前由「惊讶」情绪触发害羞躲避。按住 Ctrl 可临时钉住桌宠并稳定拖动。
                 </div>
                 <div style={{ height: 1, background: 'var(--paper-edge)' }} />
+                <DesktopTtsSettingsPage />
                 <CallSettingsPage />
                 <div style={{ height: 1, background: 'var(--paper-edge)' }} />
                 <CoplaySettingsPage />
