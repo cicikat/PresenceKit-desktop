@@ -16,6 +16,9 @@ export interface ChatAppearance {
   themeFontSize: number;
   fontFile: string | null;
   backgroundBlur: number;
+  chatOpacity: number;
+  showEmotionAccent: boolean;
+  showEmotionLabel: boolean;
   motionScale: number;
   backgroundKind: BackgroundKind;
   backgroundVideoPath: string | null;
@@ -41,6 +44,9 @@ const DEFAULT_APPEARANCE: ChatAppearance = {
   themeFontSize: 14,
   fontFile: null,
   backgroundBlur: 18,
+  chatOpacity: 1,
+  showEmotionAccent: true,
+  showEmotionLabel: true,
   motionScale: defaultMotionScale(),
   backgroundKind: 'none',
   backgroundVideoPath: null,
@@ -60,6 +66,9 @@ export function loadChatAppearance(): ChatAppearance {
     chatFontSize: clamp(saved.chatFontSize, LEGACY_BUBBLE_FONT_SIZE[legacySize] ?? DEFAULT_APPEARANCE.chatFontSize, 11, 24),
     themeFontSize: clamp(saved.themeFontSize, DEFAULT_APPEARANCE.themeFontSize, 11, 22),
     fontFile: typeof saved.fontFile === 'string' ? saved.fontFile : null,
+    chatOpacity: clamp(saved.chatOpacity, 1, 0.1, 1),
+    showEmotionAccent: saved.showEmotionAccent !== false,
+    showEmotionLabel: saved.showEmotionLabel !== false,
     backgroundBlur: clamp(saved.backgroundBlur, DEFAULT_APPEARANCE.backgroundBlur, 0, 36),
     motionScale: clamp(saved.motionScale, DEFAULT_APPEARANCE.motionScale, 0, 1.5),
     backgroundKind: (['none', 'image', 'particles', 'video'] as const).includes(saved.backgroundKind as BackgroundKind)

@@ -287,6 +287,15 @@ export function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, 
                     )}
                   </div>
                 </PrefRow>
+                <PrefRow label={t('settings.chatOpacity.title')} hint={t('settings.chatOpacity.hint')}>
+                  <PrefRange min={0.1} max={1} step={0.05} unit="" ariaLabel={t('settings.chatOpacity.title')} value={appearance.chatOpacity} onChange={(value: number) => onAppearanceChange({ chatOpacity: value })} />
+                </PrefRow>
+                <PrefRow label={t('settings.emotionAccent.title')} hint={t('settings.emotionAccent.hint')}>
+                  <PrefSwitch ariaLabel={t('settings.emotionAccent.title')} active={appearance.showEmotionAccent} onClick={() => onAppearanceChange({ showEmotionAccent: !appearance.showEmotionAccent })} />
+                </PrefRow>
+                <PrefRow label={t('settings.emotionLabel.title')} hint={t('settings.emotionLabel.hint')}>
+                  <PrefSwitch ariaLabel={t('settings.emotionLabel.title')} active={appearance.showEmotionLabel} onClick={() => onAppearanceChange({ showEmotionLabel: !appearance.showEmotionLabel })} />
+                </PrefRow>
                 <PrefRow label="背景模糊" hint="0 为清晰原图，36 为最大模糊">
                   <PrefRange
                     min={0}

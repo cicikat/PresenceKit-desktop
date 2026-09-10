@@ -3,7 +3,7 @@
  * Phase 2c+: 按日文件懒加载历史，滚顶继续往前拉
  * ============================================================ */
 
-import { useState, useEffect, useRef, useCallback, memo, type CSSProperties, type ReactNode } from 'react';
+import { useState, useEffect, useRef, useCallback, memo, cloneElement, type ReactElement, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { format, subDays, parseISO } from 'date-fns';
 import { Tag, Icon, Btn } from './UIKit';
@@ -406,7 +406,7 @@ function BreathingAvatar({
   );
 }
 
-const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, youVisible, assistantFontSize, userFontSize, ttsEnabled, onBubbleContextMenu }: any) {
+const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, youVisible, assistantFontSize, userFontSize, ttsEnabled, showEmotionAccent, showEmotionLabel, onBubbleContextMenu }: any) {
   const fromUser = msg.role === 'user';
   const hue = msg.moodHue ?? currentHue;
   const time = msg.time ? new Date(msg.time).toLocaleTimeString('zh', { hour: '2-digit', minute: '2-digit' }) : '';
@@ -501,7 +501,7 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
       <div style={{ flex: 1, maxWidth: 'calc(100% - 60px)' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
           <span className="mono" style={{ fontSize: chatThemeFontSize(9.5), letterSpacing: 1.4, color: 'var(--ink-3)' }}>HIM · {time}</span>
-          {msg.moodLabel && <Tag hue={hue}>{msg.moodLabel}</Tag>}
+          {showEmotionLabel && msg.moodLabel && <Tag hue={hue}>{msg.moodLabel}</Tag>}
         </div>
         {!stickerOnly && ttsEnabled && !msg.isStreaming && (
           <div style={{ marginBottom: 8 }}>
@@ -545,7 +545,7 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
             style={{
               padding: stickerOnly ? 5 : '11px 15px',
               background: 'var(--paper-2)',
-              borderLeft: `3px solid oklch(0.55 0.13 ${hue})`,
+              borderLeft: showEmotionAccent ? `3px solid oklch(0.55 0.13 ${hue})` : '1px solid var(--paper-edge)',
               borderTop: '1px solid var(--paper-edge)',
               borderRight: '1px solid var(--paper-edge)',
               borderBottom: '1px solid var(--paper-edge)',
@@ -573,7 +573,7 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
 
 // ── 主组件 ──────────────────────────────────────────────────────────────────
 
-export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontSize = 14, dreamActive = false, characterAvatarDataUrl = null, mainLayout = 'stack', onOpenRoom, onOpenPrefs }: any) {
+export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontSize = 14, chatOpacity = 1, showEmotionAccent = true, showEmotionLabel = true, dreamActive = false, characterAvatarDataUrl = null, mainLayout = 'stack', onOpenRoom, onOpenPrefs }: any) {
   const { language, t } = useI18n();
   const [state, setState] = useState(engine.get());
   useEffect(() => engine.subscribe(setState), [engine]);
@@ -1935,9 +1935,10 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
   const isSideComposer = resolvedMainLayout === 'workbench';
   const isHud = resolvedMainLayout === 'hud';
   const { mounts: designMounts } = useDesignMounts();
-  const designRegion = (id: 'chat.header' | 'chat.transcript' | 'chat.composer', content: ReactNode) => {
+  const designRegion = (id: 'chat.header' | 'chat.transcript' | 'chat.composer', content: ReactElement<{ style: CSSProperties }>) => {
     const mount = designMounts[id];
-    return mount ? createPortal(content, mount, `design-${id}`) : content;
+    const faded = cloneElement(content, { style: { ...content.props.style, filter: `opacity(${chatOpacity})` } });
+    return mount ? createPortal(faded, mount, `design-${id}`) : faded;
   };
 
   return (
@@ -2061,7 +2062,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
               youVisible={youVisible}
               assistantFontSize={fontSizes.assistant}
               userFontSize={fontSizes.user}
-              ttsEnabled={ttsEnabled}
+              showEmotionAccent={showEmotionAccent} showEmotionLabel={showEmotionLabel} ttsEnabled={ttsEnabled}
               onBubbleContextMenu={onBubbleContextMenu}
             />
           </div>
@@ -2075,7 +2076,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
             <div style={{
               padding: '12px 16px', borderRadius: '2px 6px 6px 2px',
               background: 'var(--paper-2)',
-              borderLeft: `3px solid oklch(0.55 0.13 ${currentHue})`,
+              borderLeft: showEmotionAccent ? `3px solid oklch(0.55 0.13 ${currentHue})` : '1px solid var(--paper-edge)',
               borderTop: '1px solid var(--paper-edge)',
               borderRight: '1px solid var(--paper-edge)',
               borderBottom: '1px solid var(--paper-edge)',
@@ -2128,7 +2129,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
             display: 'flex', alignItems: 'center', gap: 8,
             padding: '8px 12px', marginBottom: 10,
             background: 'var(--paper)', border: '1px solid var(--paper-edge)',
-            borderLeft: `3px solid oklch(0.55 0.13 ${currentHue})`,
+            borderLeft: showEmotionAccent ? `3px solid oklch(0.55 0.13 ${currentHue})` : '1px solid var(--paper-edge)',
             borderRadius: 'var(--radius-sm)',
           }}>
             <div style={{

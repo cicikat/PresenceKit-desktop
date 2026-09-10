@@ -1,4 +1,10 @@
 export const zhCN = {
+  "settings.chatOpacity.title": "聊天区域不透明度",
+  "settings.chatOpacity.hint": "1 为不透明；整体淡化聊天记录和输入区（包括文字），与 Mod 原有透明度叠加。",
+  "settings.emotionAccent.title": "气泡情绪色条",
+  "settings.emotionAccent.hint": "显示角色消息左侧的情绪颜色竖线。",
+  "settings.emotionLabel.title": "消息情绪标签",
+  "settings.emotionLabel.hint": "显示时间旁的 CALM 等情绪标签；不影响角色情绪和语音。",
   'settings.presencePopup.title': '存在感弹窗',
   'settings.presencePopup.hint': '允许桌面显示陪伴提醒；提醒时间与主动消息策略在管理面板设置。',
   'settings.current.title': '当前角色状态',

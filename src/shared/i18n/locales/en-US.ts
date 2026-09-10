@@ -1,6 +1,12 @@
 import type { MessageKey } from './zh-CN';
 
 export const enUS: Record<MessageKey, string> = {
+  "settings.chatOpacity.title": "Chat area opacity",
+  "settings.chatOpacity.hint": "1 is opaque. Fades the transcript and composer, including text, on top of the Mod?s opacity.",
+  "settings.emotionAccent.title": "Emotion accent on bubbles",
+  "settings.emotionAccent.hint": "Show the emotion color along the left edge of character messages.",
+  "settings.emotionLabel.title": "Message emotion labels",
+  "settings.emotionLabel.hint": "Show labels such as CALM beside the timestamp. Does not change emotion or voice.",
   'settings.presencePopup.title': 'Presence popups',
   'settings.presencePopup.hint': 'Allow companion reminders on the desktop. Configure reminder timing and proactive message policy in the admin panel.',
   'settings.current.title': 'Current character status',

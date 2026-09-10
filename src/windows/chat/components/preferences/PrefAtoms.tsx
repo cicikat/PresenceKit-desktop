@@ -36,11 +36,12 @@ export function PrefRow({ label, hint, children }: any) {
   );
 }
 
-export function PrefRange({ min, max, step, value, onChange }: any) {
+export function PrefRange({ min, max, step, value, onChange, unit = 'px', ariaLabel }: any) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: 250 }}>
       <input
         type="range"
+        aria-label={ariaLabel}
         min={min}
         max={max}
         step={step}
@@ -49,7 +50,7 @@ export function PrefRange({ min, max, step, value, onChange }: any) {
         style={{ flex: 1, minWidth: 0 }}
       />
       <span className="mono" style={{ width: 34, color: 'var(--ink-3)', fontSize: 10, letterSpacing: 0.8 }}>
-        {value}px
+        {value}{unit}
       </span>
     </div>
   );

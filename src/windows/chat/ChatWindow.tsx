@@ -227,7 +227,7 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen, isCovered = 
           )}
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, minWidth: 0 }}>
             {navigation.groupView === null ? (
-              <ChatPanel key={charSwitchKey} engine={engine} chatRectRef={chatRectRef} headerVisible={appearanceController.chatHeaderVisible} chatFontSize={appearanceController.appearance.chatFontSize} dreamActive={navigation.dreamWindowOpen} characterAvatarDataUrl={characterAvatarDataUrl} mainLayout={appearanceController.activeLayout.manifest.mainLayout} onOpenRoom={onRoomOpen} onOpenPrefs={() => navigation.setPrefsOpen(true)} />
+              <ChatPanel key={charSwitchKey} engine={engine} chatRectRef={chatRectRef} headerVisible={appearanceController.chatHeaderVisible} chatFontSize={appearanceController.appearance.chatFontSize} chatOpacity={appearanceController.appearance.chatOpacity} showEmotionAccent={appearanceController.appearance.showEmotionAccent} showEmotionLabel={appearanceController.appearance.showEmotionLabel} dreamActive={navigation.dreamWindowOpen} characterAvatarDataUrl={characterAvatarDataUrl} mainLayout={appearanceController.activeLayout.manifest.mainLayout} onOpenRoom={onRoomOpen} onOpenPrefs={() => navigation.setPrefsOpen(true)} />
             ) : navigation.groupView === 'list' ? (
               <GroupListPanel
                 onSelectGroup={id => navigation.setGroupView(id)}
