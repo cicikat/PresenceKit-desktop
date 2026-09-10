@@ -400,3 +400,5 @@ input, textarea { font-family: inherit; }
   padding: 5px 8px;
   border-radius: var(--radius-sm);
 }
+
+.chat-sent-quote { margin-bottom: 6px; padding: 8px 12px; border: 1px solid var(--paper-edge); border-radius: 6px; background: var(--paper-2); color: var(--ink-3); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }

@@ -116,6 +116,7 @@ interface ChatMsg {
   text: string;
   time: number;
   speakerId?: string; // char_id; absent = owner (right bubble)
+  replyTo?: { text: string; time: number };
   moodHue?: number;
   moodLabel?: string;
   deleted?: string;
@@ -446,11 +447,12 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
     const attachNote = isAttachment ? (attachmentMatch![2] ?? '') : '';
 
     return (
-      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-end', gap: youVisible ? 8 : 0, padding: '8px 0' }}>
+      <div onContextMenu={e => { e.preventDefault(); onBubbleContextMenu?.(msg, e.clientX, e.clientY); }} style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-end', gap: youVisible ? 8 : 0, padding: '8px 0' }}>
         <div style={{ maxWidth: '78%' }}>
           <div className="mono" style={{ fontSize: chatThemeFontSize(9.5), letterSpacing: 1.4, color: 'var(--ink-3)', textAlign: 'right', marginBottom: 4 }}>
             YOU · {time}
           </div>
+          {msg.replyTo && <div className="chat-sent-quote">{truncateForPreview(msg.replyTo.text, 200)}</div>}
           <div style={{
             padding: '10px 14px',
             background: 'var(--ink)', color: 'var(--paper)',
@@ -1675,7 +1677,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       : undefined;
     setInput('');
     setReplyTarget(null);
-    setMessages(m => [...m, { id: newId(), role: 'user', text: t, time: Date.now() }]);
+    setMessages(m => [...m, { id: newId(), role: 'user', text: t, time: Date.now(), replyTo: replyTarget ?? undefined }]);
     chatSessionMetrics.recordTurn();
     engine.setLocalFocus('想事情');
     setLoading(true);
