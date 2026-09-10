@@ -289,13 +289,19 @@ export async function transcribeAudio(audioB64: string): Promise<{ text: string 
   return invokeGated<{ text: string }>('transcribe_audio', { audioB64 });
 }
 
+export interface UploadAttachment { filePath?: string; filename?: string; dataB64?: string }
+
+export async function previewChatAttachment(filePath: string): Promise<string> {
+  return invokeGated('preview_chat_attachment', { filePath });
+}
+
 export async function uploadDocument(
-  filePath: string,
+  filePath: string | UploadAttachment[],
   message: string,
 ): Promise<UploadIngestResponse> {
   try {
     return await invokeGated<UploadIngestResponse>('upload_document', {
-      filePath,
+      ...(Array.isArray(filePath) ? { attachments: filePath } : { filePath }),
       message,
     });
   } catch (err) {

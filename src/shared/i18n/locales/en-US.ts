@@ -1,6 +1,17 @@
 import type { MessageKey } from './zh-CN';
 
 export const enUS: Record<MessageKey, string> = {
+  "chat.attachments.pending": "Pending attachments",
+  "chat.attachments.remove": "Remove attachment",
+  "chat.attachments.unsupported": "Supported: TXT, MD, DOCX, PNG, JPG, GIF and WebP.",
+  "chat.attachments.countLimit": "Send up to 10 images at once.",
+  "chat.attachments.singleDocument": "Send one document at a time, without images.",
+  "chat.attachments.sizeLimit": "Images: up to 10MB. Documents: up to 5MB.",
+  "chat.attachments.readFailed": "Cannot read attachment. Check file type, size and access.",
+  "chat.attachments.sendFailed": "Delivery unconfirmed. Attachments retained. Check for a reply before retrying to avoid duplicates.",
+  "chat.attachments.replyPrefix": "Replying to the following message:",
+  "chat.attachments.images": "Images",
+  "chat.attachments.documents": "Documents",
   "settings.chatOpacity.title": "Chat area opacity",
   "settings.chatOpacity.hint": "1 is opaque. Fades the transcript and composer, including text, on top of the Mod?s opacity.",
   "settings.emotionAccent.title": "Emotion accent on bubbles",

@@ -1257,31 +1257,65 @@ fn normalize_sensor_realtime_value(val: serde_json::Value) -> serde_json::Value 
     }
 }
 
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ChatAttachment {
+    file_path: Option<String>,
+    filename: Option<String>,
+    data_b64: Option<String>,
+}
+
+fn read_chat_attachment(item: ChatAttachment) -> Result<(String, Vec<u8>), String> {
+    let filename = item.filename.or_else(|| item.file_path.as_ref().and_then(|p| Path::new(p).file_name()?.to_str().map(str::to_owned)))
+        .ok_or("HTTP 422: missing filename")?;
+    let filename = Path::new(&filename).file_name().and_then(|s| s.to_str())
+        .ok_or("HTTP 422: invalid filename")?.to_owned();
+    let suffix = Path::new(&filename).extension().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
+    let max = match suffix.as_str() {
+        "png" | "jpg" | "jpeg" | "gif" | "webp" => 10 * 1024 * 1024,
+        "txt" | "md" | "docx" => 5 * 1024 * 1024,
+        _ => return Err("HTTP 415: unsupported attachment".into()),
+    };
+    let bytes = match (item.file_path, item.data_b64) {
+        (Some(path), None) => {
+            if fs::metadata(&path).map_err(|_| "HTTP 422: cannot read attachment")?.len() > max {
+                return Err("HTTP 413: attachment too large".into());
+            }
+            fs::read(path).map_err(|_| "HTTP 422: cannot read attachment")?
+        },
+        (None, Some(encoded)) => {
+            if encoded.len() as u64 > (max + 2) / 3 * 4 { return Err("HTTP 413: attachment too large".into()); }
+            base64::engine::general_purpose::STANDARD.decode(encoded).map_err(|_| "HTTP 422: invalid attachment data")?
+        },
+        _ => return Err("HTTP 422: invalid attachment source".into()),
+    };
+    if bytes.len() as u64 > max { return Err("HTTP 413: attachment too large".into()); }
+    Ok((filename, bytes))
+}
+
+#[tauri::command]
+async fn preview_chat_attachment(file_path: String) -> Result<String, String> {
+    let (filename, bytes) = read_chat_attachment(ChatAttachment { file_path: Some(file_path), filename: None, data_b64: None })?;
+    let suffix = Path::new(&filename).extension().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
+    let mime = match suffix.as_str() { "png" => "image/png", "jpg" | "jpeg" => "image/jpeg", "gif" => "image/gif", "webp" => "image/webp", _ => return Err("HTTP 415: not an image".into()) };
+    Ok(format!("data:{};base64,{}", mime, base64::engine::general_purpose::STANDARD.encode(bytes)))
+}
+
 #[tauri::command]
 async fn upload_document(
     app: tauri::AppHandle,
-    file_path: String,
+    file_path: Option<String>,
     message: String,
+    attachments: Option<Vec<ChatAttachment>>,
 ) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
-    // 1. 读文件 bytes
-    let bytes = std::fs::read(&file_path).map_err(|e| format!("读文件失败: {}", e))?;
-
-    // 2. 从 file_path 提取文件名(用于 multipart Part 的 file_name)
-    let filename = std::path::Path::new(&file_path)
-        .file_name()
-        .and_then(|s| s.to_str())
-        .ok_or_else(|| "无法解析文件名".to_string())?
-        .to_string();
-
-    // 3. 构造 multipart body
-    let part = reqwest::multipart::Part::bytes(bytes)
-        .file_name(filename.clone());
-
-    let form = reqwest::multipart::Form::new()
-        .part("file", part)
-        .text("message", message)
-        .text("channel", "desktop");
+    let files = attachments.unwrap_or_else(|| vec![ChatAttachment { file_path, filename: None, data_b64: None }]);
+    if files.is_empty() || files.len() > 10 { return Err("HTTP 422: invalid attachment count".into()); }
+    let mut form = reqwest::multipart::Form::new().text("message", message).text("channel", "desktop");
+    for item in files {
+        let (filename, bytes) = read_chat_attachment(item)?;
+        form = form.part("files", reqwest::multipart::Part::bytes(bytes).file_name(filename));
+    }
 
     // Upload ingest includes recognition and a complete chat turn.
     let client = chat_http_client()?;
@@ -3204,6 +3238,7 @@ pub fn run() {
             set_period_date,
             clear_period_date,
             upload_document,
+            preview_chat_attachment,
             transcribe_audio,
             start_voice_hotkey_listener,
             save_avatar,
@@ -3896,5 +3931,20 @@ mod avatar_file_tests {
         assert!(!is_generated_avatar_for_role("dream_background_night_123.png", "dream_background_day"));
         assert!(!is_generated_avatar_for_role("her_default.png", "her"));
         assert!(!is_generated_avatar_for_role("her_123.jpg", "her"));
+    }
+
+    #[test]
+    fn chat_attachment_memory_source_validates_and_decodes() {
+        let item = |name: &str, data: &str| ChatAttachment {
+            filename: Some(name.into()), file_path: None, data_b64: Some(data.into()),
+        };
+        let (name, bytes) = read_chat_attachment(item("paste.png", "aGVsbG8=")).unwrap();
+        assert_eq!(name, "paste.png");
+        assert_eq!(bytes, b"hello");
+        assert!(read_chat_attachment(item("paste.exe", "aGVsbG8=")).unwrap_err().starts_with("HTTP 415"));
+        assert!(read_chat_attachment(item("paste.png", "!invalid")).unwrap_err().starts_with("HTTP 422"));
+        assert!(read_chat_attachment(ChatAttachment {
+            filename: Some("paste.png".into()), file_path: Some("unused.png".into()), data_b64: Some("aGVsbG8=".into()),
+        }).unwrap_err().starts_with("HTTP 422"));
     }
 }

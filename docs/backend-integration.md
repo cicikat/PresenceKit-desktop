@@ -1126,3 +1126,11 @@ Backend mobile HTTP/poll add optional display_text for hl/big/sm, referencing th
 
 实现与跨仓边界见 `docs/chat-usability-2026-09-10.md`（本目录中为同名文档）。聊天/上传使用 600 秒总等待与 15 秒连接预算；桌宠创建/销毁采用 async command；子页面懒加载独立 Suspense。
 界面新增不透明度、情绪色条/标签开关；附件先暂存后发送，用户与角色均可引用。真实窗口/慢请求验收及历史引用恢复仍 open；跨仓总账同步待后端仓处理。
+
+### 附件草稿 IPC（2026-09-10）
+
+- upload_document 保持 filePath/message 旧参数兼容；新增可选 attachments 数组，每项为 filePath 或 dataB64（二选一）与 filename。不包含本地预览数据。
+- preview_chat_attachment(filePath) 仅本地读取图片，返回 data URL；不联网、不落盘。图片 10MB，文档 5MB，类型白名单在 Rust 校验。
+- upload_document 一次组装 multipart files/message/channel=desktop，调用现有 POST /upload/ingest，Bearer/chat scope 和 HTTP/WS msg_id 去重保持原样。剪贴板图片仅点击发送后离开客户端。
+- 后端当前不接受文档与图片混合、多个文档；桌面草稿提前拦截。最多 10 张图为本地批次限制。
+- 上传引用为 message 中的明确附言；文本引用仍使用原 reply_to。历史 API 没有引用字段，历史恢复 open。

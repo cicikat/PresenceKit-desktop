@@ -41,3 +41,6 @@ public/live2d/models/
 *.njsproj
 *.sln
 *.sw?
+
+# Local browser regression artifacts
+.tmp/

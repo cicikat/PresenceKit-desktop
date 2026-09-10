@@ -26,3 +26,12 @@
 partial：TypeScript 与 cargo check 通过（中间验证）。真实慢 OCR/工具、原生窗口与剪贴板、Mod 视觉和手机联调待验收。
 
 引用验收：浏览器挂载实际 React，右键用户消息、点击回复、提交文字、检查发送后引用卡片通过。历史重载恢复仍 open。
+
+## 最终验证记录
+
+- npm test：54 个文件、222 项全部通过。
+- npm run build（含 TypeScript）：通过；保留既有大 chunk 提示。
+- cargo check：通过；Rust 附件内存来源/解码/类型/冲突输入回归测试 1 项通过。
+- 浏览器真实挂载 React、模拟 Tauri IPC：首次进入活动与视频、返回聊天、右键自身引用、发送后引用卡片、粘贴/选择图片暂存、删除、多图与附言单次上传、失败保留附件与文字、情绪开关和不透明度通过，pageerror 为 0。
+- 复验脚本 scripts/chat-usability-browser.mjs；先启动 npm run dev，需要已安装 Playwright（可通过 PLAYWRIGHT_PACKAGE_JSON 指定）。生成的本地截图位于 .tmp/。
+- partial/open：未用真实后端验证慢 OCR/工具超时；未验证真实系统剪贴板、文件选择器、原生桌宠开关、多屏位置和所有自绘 Mod；浏览器 IPC 夹具不等于原生窗口验收。手机未修改、未设备联调。

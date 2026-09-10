@@ -12,7 +12,7 @@ import { MOOD_TABLE } from '../../../shared/state/store';
 import { avatarStore } from '../../../shared/avatars/store';
 import { open } from '@tauri-apps/plugin-dialog';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
-import { sendChat, uploadDocument, desktopWake } from '../../../shared/api/backend';
+import { sendChat, uploadDocument, previewChatAttachment, desktopWake } from '../../../shared/api/backend';
 import { shouldSkipDesktopWake, markDesktopWakeFired } from '../../../shared/desktopWakeGate';
 import { useVoiceInput } from '../../../shared/voice/useVoiceInput';
 import { getDesktopTtsEnabled, getTtsAutoPlay, type TtsAutoPlaySettings } from '../../../shared/api/runtimeSettings';
@@ -30,7 +30,7 @@ import { useDesignMounts } from '../../../shared/design-mod/mounts';
 import { chatSessionMetrics } from '../../../shared/design-mod/metrics';
 import { publishPetSnapshot } from '../../../shared/pet/bridge';
 import { TypingDots } from '../../../shared/ui/TypingDots';
-import type { ChatLogEntry, UploadError, NarrativeSegment, StickerPayload } from '../../../shared/api/types';
+import type { ChatLogEntry, NarrativeSegment, StickerPayload } from '../../../shared/api/types';
 import { normalizeChatDisplayText } from '../chatDisplay';
 import { renderInlineStyled } from '../inlineStyle';
 import type { MainLayoutId } from '../../../shared/layout/contract';
@@ -42,6 +42,7 @@ import {
   pruneRenderedFallbacks,
   setBoundedMapEntry,
 } from '../correlation';
+import { mergeAttachments, fileToDraft, type DraftAttachment } from '../draftAttachments';
 import { createLatestTimer } from '../chatTimer';
 
 function splitReply(text: string): string[] {
@@ -596,6 +597,13 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
   // cc-tasks/36：右键引用回复。ctxMenu 是当前打开的气泡右键菜单（全局单例，避免多开）；
   // replyTarget 是待发送的引用态，text 为展示用原文、time 为该消息的整条时间戳（毫秒）。
   const [ctxMenu, setCtxMenu] = useState<{ msg: ChatMsg; x: number; y: number } | null>(null);
+  const [attachments, setAttachments] = useState<DraftAttachment[]>([]);
+  const attachmentsRef = useRef(attachments);
+  attachmentsRef.current = attachments;
+  const [draftError, setDraftError] = useState<string | null>(null);
+  const [preparing, setPreparing] = useState(false);
+  const preparingRef = useRef(false);
+  const sendingRef = useRef(false);
   const [replyTarget, setReplyTarget] = useState<{ text: string; time: number } | null>(null);
 
   useEffect(() => {
@@ -1671,7 +1679,10 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
 
   const send = async () => {
     const t = input.trim();
-    if (!t || loading) return;
+    if (loading || preparingRef.current || sendingRef.current) return;
+    if (attachments.length) { await doUpload(); return; }
+    if (!t) return;
+    sendingRef.current = true;
     const replyTo = replyTarget
       ? { text: truncateForReplyTo(replyTarget.text), ts: replyTarget.time / 1000 }
       : undefined;
@@ -1744,21 +1755,31 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       }]);
       setLoading(false);
       console.log('[chat] loadingClearedBy: error | loadingSource: send');
-    }
+    } finally { sendingRef.current = false; }
   };
 
-  const doUpload = useCallback(async (filePath: string, filename: string) => {
+  const doUpload = async () => {
+    sendingRef.current = true;
+    const submitted = attachments;
+    const quote = replyTarget;
+    const filename = submitted.map(item => item.filename).join(', ');
     const userMessage = input.trim();
     const placeholderText = userMessage
       ? `📎 ${filename}\n${userMessage}`
       : `📎 ${filename}`;
     setMessages(prev => [...prev, {
-      id: newId(), role: 'user', text: placeholderText, time: Date.now(),
+      id: newId(), role: 'user', text: placeholderText, time: Date.now(), replyTo: quote ?? undefined,
     }]);
     setInput('');
+    setDraftError(null);
+    chatSessionMetrics.recordTurn();
+    engine.setLocalFocus('想事情');
     setLoading(true);
     try {
-      const resp = await uploadDocument(filePath, userMessage);
+      const message = quote ? t('chat.attachments.replyPrefix') + '\n' + truncateForReplyTo(quote.text) + '\n\n' + userMessage : userMessage;
+      const resp = await uploadDocument(submitted.map(({ filePath, filename, dataB64 }) => ({ filePath, filename, dataB64 })), message);
+      setAttachments(current => current.filter(item => !submitted.some(sent => sent.id === item.id)));
+      setReplyTarget(current => current === quote ? null : current);
       // Defer render same as send() — WS channel_message is primary path.
       const reply = resp.reply;
       const msgId = responseMsgId(resp);
@@ -1805,103 +1826,59 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       }, 3000);
       pendingSendReplyRef.current = { timerId, reply, msgId };
       console.log('[chat] httpDone | loadingSource: upload | waitingForWs: true | msg_id:', msgId ?? '(none)', '| contentHash:', contentHash, '| partsCount:', reply.split(/\n+/).filter(Boolean).length, '| timestamp:', Date.now());
-    } catch (err: any) {
-      let msg = '上传失败';
-      if (err && typeof err === 'object' && 'kind' in err) {
-        const e = err as UploadError;
-        switch (e.kind) {
-          case 'size_limit':       msg = '文件超过 5MB 限制'; break;
-          case 'unsupported_type': msg = '仅支持 .txt / .md / .docx / .png / .jpg / .gif / .webp'; break;
-          case 'parse_failed':     msg = '文件解析失败，请检查内容'; break;
-          case 'network':          msg = `网络错误：${e.message}`; break;
-          default:                 msg = `上传失败：${e.message}`;
-        }
-      } else {
-        msg = `上传失败：${String(err)}`;
-      }
-      setMessages(prev => [...prev, {
-        id: newId(), role: 'system', text: `(${msg})`, time: Date.now(),
-      }]);
+    } catch (err: unknown) {
+      setDraftError(t('chat.attachments.sendFailed'));
+      setInput(current => current || userMessage);
       setLoading(false);
-      console.log('[chat] loadingClearedBy: error | loadingSource: upload');
-    }
-  }, [input, scheduleAssistantSegments]);
+    } finally { sendingRef.current = false; }
+  };
 
-  const onClickAttach = useCallback(async () => {
-    setShowAttachMenu(false);
-    let picked: string | null = null;
+  const addDrafts = (added: DraftAttachment[]) => {
     try {
-      const res = await open({
-        multiple: false,
-        filters: [{ name: '文档', extensions: ['txt', 'md', 'docx'] }],
-      });
-      if (typeof res === 'string') picked = res;
-    } catch (err) {
-      console.warn('[upload] 选择文件失败:', err);
-      return;
-    }
-    if (!picked) return;
-    const lower = picked.toLowerCase();
-    if (!['.txt', '.md', '.docx'].some(ext => lower.endsWith(ext))) {
-      setMessages(prev => [...prev, {
-        id: newId(), role: 'system', text: '(仅支持 .txt / .md / .docx)', time: Date.now(),
-      }]);
-      return;
-    }
-    const filename = picked.split(/[\\/]/).pop() || picked;
-    doUpload(picked, filename);
-  }, [doUpload]);
+      const next = mergeAttachments(attachmentsRef.current, added);
+      attachmentsRef.current = next;
+      setAttachments(next);
+    } catch (error) { setDraftError(t((error as Error).message as Parameters<typeof t>[0])); }
+  };
 
-  const onClickImage = useCallback(async () => {
-    setShowAttachMenu(false);
-    let picked: string | null = null;
+  const stagePaths = async (paths: string[]) => {
+    if (preparingRef.current || sendingRef.current) return;
+    preparingRef.current = true;
+    setPreparing(true);
+    setDraftError(null);
     try {
-      const res = await open({
-        multiple: false,
-        filters: [{ name: '图片', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'] }],
-      });
-      if (typeof res === 'string') picked = res;
-    } catch (err) {
-      console.warn('[upload] 选择图片失败:', err);
-      return;
-    }
-    if (!picked) return;
-    const lower = picked.toLowerCase();
-    if (!['.png', '.jpg', '.jpeg', '.gif', '.webp'].some(ext => lower.endsWith(ext))) {
-      setMessages(prev => [...prev, {
-        id: newId(), role: 'system', text: '(仅支持 .png / .jpg / .jpeg / .gif / .webp)', time: Date.now(),
-      }]);
-      return;
-    }
-    const filename = picked.split(/[\\/]/).pop() || picked;
-    doUpload(picked, filename);
-  }, [doUpload]);
+      const drafts = paths.map(filePath => ({ id: crypto.randomUUID(), filePath, filename: filePath.split(/[\\/]/).pop() || filePath }));
+      mergeAttachments(attachments, drafts);
+      const ready = await Promise.all(drafts.map(async item => ({ ...item,
+        preview: /\.(png|jpe?g|gif|webp)$/i.test(item.filename) ? await previewChatAttachment(item.filePath) : undefined,
+      })));
+      addDrafts(ready);
+    } catch (error) {
+      const key = (error as Error).message;
+      setDraftError(key?.startsWith('chat.attachments.') ? t(key as Parameters<typeof t>[0]) : t('chat.attachments.readFailed'));
+    } finally { preparingRef.current = false; setPreparing(false); }
+  };
 
-  const handleDropPaths = useCallback((paths: string[]) => {
-    if (paths.length === 0) return;
-    const path = paths[0];
-    const filename = path.split(/[\\/]/).pop() || path;
-    const lower = filename.toLowerCase();
-    const isDoc = /\.(txt|md|docx)$/.test(lower);
-    const isImg = /\.(png|jpg|jpeg|gif|webp)$/.test(lower);
-    if (!isDoc && !isImg) {
-      const ext = filename.match(/\.[^.]+$/)?.[0] ?? '(无后缀)';
-      setMessages(prev => [...prev, {
-        id: newId(), role: 'system',
-        text: `（不支持的文件类型：${ext}）`,
-        time: Date.now(),
-      }]);
-      return;
-    }
-    if (paths.length > 1) {
-      setMessages(prev => [...prev, {
-        id: newId(), role: 'system',
-        text: `（只发送了第一个文件，其余 ${paths.length - 1} 个忽略）`,
-        time: Date.now(),
-      }]);
-    }
-    doUpload(path, filename);
-  }, [doUpload]);
+  const pickAttachment = async (image: boolean) => {
+    setShowAttachMenu(false);
+    try {
+      const picked = await open({ multiple: image, filters: [{ name: t(image ? 'chat.attachments.images' : 'chat.attachments.documents'), extensions: image ? ['png', 'jpg', 'jpeg', 'gif', 'webp'] : ['txt', 'md', 'docx'] }] });
+      if (picked) await stagePaths(typeof picked === 'string' ? [picked] : picked);
+    } catch { setDraftError(t('chat.attachments.readFailed')); }
+  };
+  const onClickAttach = () => pickAttachment(false);
+  const onClickImage = () => pickAttachment(true);
+  const handleDropPaths = (paths: string[]) => { void stagePaths(paths); };
+
+  const pasteAttachments = async (files: File[]) => {
+    if (preparingRef.current || sendingRef.current) return;
+    preparingRef.current = true;
+    setPreparing(true);
+    setDraftError(null);
+    try { addDrafts(await Promise.all(files.map(fileToDraft))); }
+    catch (error) { setDraftError(t((error as Error).message as Parameters<typeof t>[0]) || t('chat.attachments.readFailed')); }
+    finally { preparingRef.current = false; setPreparing(false); }
+  };
 
   const handleDropPathsRef = useRef(handleDropPaths);
   useEffect(() => { handleDropPathsRef.current = handleDropPaths; }, [handleDropPaths]);
@@ -2126,12 +2103,21 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
 
       {/* INPUT */}
       {designRegion('chat.composer', <div data-chat-region="composer" style={{ gridArea: 'composer', position: 'relative', minWidth: 0, padding: 18, borderTop: isSideComposer ? 'none' : '1px solid var(--paper-edge)', borderLeft: isSideComposer ? '1px solid var(--paper-edge)' : 'none', background: avatars.chatBackground?.dataUrl ? 'oklch(from var(--paper-2) l c h / 0.85)' : 'var(--paper-2)', ...(isSideComposer ? { overflowY: 'auto' } : {}), ...(isHud ? { borderRight: '1px solid var(--paper-edge)' } : {}) }}>
+        {(attachments.length > 0 || preparing || draftError) && <div className="chat-attachment-tray" aria-label={t('chat.attachments.pending')}>
+          {attachments.map(item => <div key={item.id} className="chat-attachment-card">
+            {item.preview ? <img src={item.preview} alt={item.filename} /> : <Icon name="attach" size={24} />}
+            <span title={item.filename}>{item.filename}</span>
+            <button disabled={loading || sendingRef.current} onClick={() => setAttachments(current => current.filter(draft => draft.id !== item.id))} aria-label={t('chat.attachments.remove')} title={t('chat.attachments.remove')}>×</button>
+          </div>)}
+          {preparing && <span role="status">{t('common.loading')}</span>}
+          {draftError && <span role="alert">{draftError}</span>}
+        </div>}
         {replyTarget && (
           <div style={{
             display: 'flex', alignItems: 'center', gap: 8,
             padding: '8px 12px', marginBottom: 10,
             background: 'var(--paper)', border: '1px solid var(--paper-edge)',
-            borderLeft: showEmotionAccent ? `3px solid oklch(0.55 0.13 ${currentHue})` : '1px solid var(--paper-edge)',
+            borderLeft: `3px solid oklch(0.55 0.13 ${currentHue})`,
             borderRadius: 'var(--radius-sm)',
           }}>
             <div style={{
@@ -2207,7 +2193,11 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
           <textarea
             value={input}
             onChange={e => onInputChange(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
+            onPaste={e => {
+              const files = Array.from(e.clipboardData.files);
+              if (files.length) { e.preventDefault(); void pasteAttachments(files); }
+            }}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(); } }}
             placeholder="写点什么…"
             rows={1}
             style={{
@@ -2218,7 +2208,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
               outline: 'none', minHeight: 44, maxHeight: 120, lineHeight: 1.5,
             }}
           />
-          <button onClick={send} style={{
+          <button onClick={send} disabled={loading || preparing || (!input.trim() && !attachments.length)} style={{
             height: 44, padding: '0 18px', borderRadius: 'var(--radius-md)',
             background: 'var(--accent)', color: 'var(--paper)',
             border: 'none', fontWeight: 600, cursor: 'pointer',

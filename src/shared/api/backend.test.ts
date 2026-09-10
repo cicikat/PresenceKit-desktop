@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { deleteCharacterAvatar, getPromptAssets, invalidatePromptAssetsCache, patchPromptAssets, uploadCharacterAvatar } from './backend';
+import { uploadDocument, sendChat, deleteCharacterAvatar, getPromptAssets, invalidatePromptAssetsCache, patchPromptAssets, uploadCharacterAvatar } from './backend';
 
 const { invokeGated } = vi.hoisted(() => ({ invokeGated: vi.fn() }));
 vi.mock('./authGate', () => ({ invokeGated }));
@@ -66,5 +66,18 @@ describe('prompt asset mutation cache boundary', () => {
     expect((await getPromptAssets()).characters[0].avatar_url).toBeNull();
     expect(invokeGated).toHaveBeenCalledWith('upload_character_avatar', expect.any(Object));
     expect(invokeGated).toHaveBeenCalledWith('delete_character_avatar', { charId: 'a' });
+  });
+});
+
+describe('chat transport compatibility', () => {
+  it('keeps original single-path upload and forwards buffered media in one command', async () => {
+    invokeGated.mockReset(); invokeGated.mockResolvedValue({ reply: 'ok' });
+    await uploadDocument('photo.png', 'caption');
+    expect(invokeGated).toHaveBeenLastCalledWith('upload_document', { filePath: 'photo.png', message: 'caption' });
+    const attachments = [{ filename: 'paste.png', dataB64: 'aGVsbG8=' }, { filePath: 'second.png' }];
+    await uploadDocument(attachments, 'together');
+    expect(invokeGated).toHaveBeenLastCalledWith('upload_document', { attachments, message: 'together' });
+    await sendChat('reply', { text: 'my own message', ts: 123 });
+    expect(invokeGated).toHaveBeenLastCalledWith('send_chat', { message: 'reply', replyTo: { text: 'my own message', ts: 123 } });
   });
 });
