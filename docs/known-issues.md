@@ -407,3 +407,11 @@ useEffect(() => {
 界面新增不透明度、情绪色条/标签开关；附件先暂存后发送，用户与角色均可引用。真实窗口/慢请求验收及历史引用恢复仍 open；跨仓总账同步待后端仓处理。
 
 桌面交互验收更新：222 项前端测试、build、Rust 附件回归及浏览器模拟 IPC 交互通过。真实桌宠/系统剪贴板/慢后端与自绘 Mod、历史引用恢复仍为 partial/open，详见 chat-usability-2026-09-10.md。
+
+## 关闭聊天顶部栏后的启动崩溃（2026-09-10，fixed）
+
+根因：透明度包装器将 headerVisible && JSX 的 false 当成 ReactElement，访问 content.props.style 抛 TypeError，被入口 RoleLoadBoundary 统一显示为本地模块加载失败。
+修复：applyChatRegionOpacity 接受 ReactNode，先用 isValidElement 判定；false/null/undefined 原样保留，有效元素再复制样式。保持顶部栏偏好，不清空设置。
+验证：4 项回归测试和生产构建通过；真实 Tauri WebView 重载后输入框可见、header 数量 0、错误页数量 0、pageerror 0。浏览器脚本新增 --hidden-header，覆盖保存隐藏顶部栏的启动分支。
+跨端：纯桌面渲染修复，沿用原 chat.headerVisible/appearance 偏好；不新增后端管理设置、HTTP/WS/IPC、鉴权、队列、手机/relay 或观测端点。后端总账未修改，跨仓记录同步仍 open。
+本修复不改变此前真实慢 OCR、系统剪贴板和桌宠等尚未完成的验收状态。

@@ -3,7 +3,7 @@
  * Phase 2c+: 按日文件懒加载历史，滚顶继续往前拉
  * ============================================================ */
 
-import { useState, useEffect, useRef, useCallback, memo, cloneElement, type ReactElement, type CSSProperties, type ReactNode } from 'react';
+import { useState, useEffect, useRef, useCallback, memo, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { format, subDays, parseISO } from 'date-fns';
 import { Tag, Icon, Btn } from './UIKit';
@@ -43,6 +43,7 @@ import {
   setBoundedMapEntry,
 } from '../correlation';
 import { mergeAttachments, fileToDraft, type DraftAttachment } from '../draftAttachments';
+import { applyChatRegionOpacity } from '../chatRegionAppearance';
 import { createLatestTimer } from '../chatTimer';
 
 function splitReply(text: string): string[] {
@@ -1914,9 +1915,9 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
   const isSideComposer = resolvedMainLayout === 'workbench';
   const isHud = resolvedMainLayout === 'hud';
   const { mounts: designMounts } = useDesignMounts();
-  const designRegion = (id: 'chat.header' | 'chat.transcript' | 'chat.composer', content: ReactElement<{ style: CSSProperties }>) => {
+  const designRegion = (id: 'chat.header' | 'chat.transcript' | 'chat.composer', content: ReactNode) => {
     const mount = designMounts[id];
-    const faded = cloneElement(content, { style: { ...content.props.style, filter: `opacity(${chatOpacity})` } });
+    const faded = applyChatRegionOpacity(content, chatOpacity);
     return mount ? createPortal(faded, mount, `design-${id}`) : faded;
   };
 

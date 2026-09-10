@@ -35,3 +35,11 @@ partial：TypeScript 与 cargo check 通过（中间验证）。真实慢 OCR/�
 - 浏览器真实挂载 React、模拟 Tauri IPC：首次进入活动与视频、返回聊天、右键自身引用、发送后引用卡片、粘贴/选择图片暂存、删除、多图与附言单次上传、失败保留附件与文字、情绪开关和不透明度通过，pageerror 为 0。
 - 复验脚本 scripts/chat-usability-browser.mjs；先启动 npm run dev，需要已安装 Playwright（可通过 PLAYWRIGHT_PACKAGE_JSON 指定）。生成的本地截图位于 .tmp/。
 - partial/open：未用真实后端验证慢 OCR/工具超时；未验证真实系统剪贴板、文件选择器、原生桌宠开关、多屏位置和所有自绘 Mod；浏览器 IPC 夹具不等于原生窗口验收。手机未修改、未设备联调。
+
+## 关闭聊天顶部栏后的启动崩溃（2026-09-10，fixed）
+
+根因：透明度包装器将 headerVisible && JSX 的 false 当成 ReactElement，访问 content.props.style 抛 TypeError，被入口 RoleLoadBoundary 统一显示为本地模块加载失败。
+修复：applyChatRegionOpacity 接受 ReactNode，先用 isValidElement 判定；false/null/undefined 原样保留，有效元素再复制样式。保持顶部栏偏好，不清空设置。
+验证：4 项回归测试和生产构建通过；真实 Tauri WebView 重载后输入框可见、header 数量 0、错误页数量 0、pageerror 0。浏览器脚本新增 --hidden-header，覆盖保存隐藏顶部栏的启动分支。
+跨端：纯桌面渲染修复，沿用原 chat.headerVisible/appearance 偏好；不新增后端管理设置、HTTP/WS/IPC、鉴权、队列、手机/relay 或观测端点。后端总账未修改，跨仓记录同步仍 open。
+本修复不改变此前真实慢 OCR、系统剪贴板和桌宠等尚未完成的验收状态。

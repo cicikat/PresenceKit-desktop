@@ -11,13 +11,13 @@ const {chromium}=createRequire(pkg)('playwright');
 const browser=await chromium.launch({channel:'msedge',headless:true});
 const page=await browser.newPage({viewport:{width:1280,height:900}});
 const errors=[];page.on('pageerror',e=>errors.push(String(e)));
-await page.addInitScript(()=>{
+await page.addInitScript((hideHeader)=>{
  localStorage.setItem('emerald.chat.lastDesktopWakeAt',String(Date.now()));
  window.calls=[];let cb=0; window.__TAURI_EVENT_PLUGIN_INTERNALS__={unregisterListener:()=>{}};
  window.__TAURI_INTERNALS__={metadata:{currentWindow:{label:'main'},currentWebview:{label:'main'}},transformCallback:()=>++cb,unregisterCallback:()=>{},convertFileSrc:p=>p,invoke:async(cmd,args)=>{
  window.calls.push({cmd,args});
  if(cmd==='get_token_status')return {configured:true,prefix:'fixture'};
- if(cmd==='load_ui_prefs')return '{}';
+ if(cmd==='load_ui_prefs')return JSON.stringify(hideHeader ? { 'chat.headerVisible': false } : {});
  if(cmd==='read_avatars_json')return '{}';
  if(cmd==='get_prompt_assets')return {characters:[],active:{},lorebooks:[],jailbreaks:[],dream_presets:[],world_cards:[]};
  if(cmd==='load_chat_log_dates')return {dates:[new Date().toISOString().slice(0,10)]};
@@ -33,10 +33,11 @@ await page.addInitScript(()=>{
  if(cmd==='preview_chat_attachment')return 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jA1cAAAAASUVORK5CYII=';
  return {};
  }};
-});
+}, process.argv.includes('--hidden-header'));
 try {
  await page.goto('http://127.0.0.1:1420');
  await page.getByText('My previous message',{exact:true}).waitFor();
+ if(process.argv.includes('--hidden-header') && await page.locator('[data-chat-region="header"]').count())throw Error('Hidden header rendered');
  await page.getByRole('button',{name:'一起做事',exact:true}).click();
  await page.locator('.activity-window').waitFor();
  await page.locator('.activity-window button').first().click();

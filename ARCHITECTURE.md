@@ -545,3 +545,5 @@ it is not a reason to restore the retired client surface.
 
 实现与跨仓边界见 `docs/chat-usability-2026-09-10.md`（本目录中为同名文档）。聊天/上传使用 600 秒总等待与 15 秒连接预算；桌宠创建/销毁采用 async command；子页面懒加载独立 Suspense。
 界面新增不透明度、情绪色条/标签开关；附件先暂存后发送，用户与角色均可引用。真实窗口/慢请求验收及历史引用恢复仍 open；跨仓总账同步待后端仓处理。
+
+聊天区域透明度由 applyChatRegionOpacity 处理 ReactNode；保存隐藏顶部栏时 false/null 区域保持隐藏，不访问 props。启动回归与真实 Tauri 复验见 docs/chat-usability-2026-09-10.md（2026-09-10 修复）。
