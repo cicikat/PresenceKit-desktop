@@ -2,7 +2,9 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { Icon } from '../chat/components/UIKit';
 import { listenPetSnapshots } from '../../shared/pet/bridge';
 import { DEFAULT_PET_SNAPSHOT } from '../../shared/pet/types';
-import type { Mood } from '../../shared/state/store';
+import { MOOD_TABLE, type Mood } from '../../shared/state/store';
+import { useI18n } from '../../shared/i18n';
+import './RoomWindow.css';
 import { ThreeCallStage } from './ThreeCallStage';
 import type { ThreeCallStageHandle } from './ThreeCallStage';
 import { Live2DCallStage } from './Live2DCallStage';
@@ -37,6 +39,7 @@ function formatTime(secs: number): string {
 // ── component ─────────────────────────────────────────────────────────────────
 
 export function RoomWindow({ onClose }: { onClose: () => void }) {
+  const { t } = useI18n();
   const [charName, setCharName] = useState(() => getActiveCharacterName());
   useEffect(() => subscribeActiveCharacter(() => setCharName(getActiveCharacterName())), []);
   const [mood, setMood] = useState<Mood>(DEFAULT_PET_SNAPSHOT.mood);
@@ -158,18 +161,22 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
 
   return (
     <div
+      className="call-room"
+      data-talking={presenter.talking}
       role="dialog"
+      aria-label={t('room.call.title')}
       aria-modal
       style={{
+        '--call-hue': MOOD_TABLE[mood].auraHue,
         position: 'fixed', inset: 0, zIndex: 200,
         display: 'flex', flexDirection: 'column',
         background: 'oklch(0.08 0.02 240)',
         outline: '2px solid var(--accent, oklch(0.55 0.18 210))',
         boxShadow: '0 0 40px var(--dt-glow-1, oklch(0.55 0.18 210 / 0.25)), 0 0 80px var(--dt-glow-2, oklch(0.55 0.18 210 / 0.10))',
-      }}
+      } as React.CSSProperties}
     >
       {/* top bar */}
-      <div style={{
+      <div className="call-room__header" style={{
         display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px',
         background: 'oklch(0.10 0.02 240 / 0.90)',
         backdropFilter: 'blur(8px)',
@@ -196,7 +203,7 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
       </div>
 
       {/* Character stage container — 3D (Three.js) or Live2D, picked by roomSettings.renderMode */}
-      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
+      <div className="call-room__stage" style={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
         {renderMode === 'live2d' ? (
           <Live2DCallStage mood={mood} talking={presenter.talking} />
         ) : (
@@ -209,6 +216,11 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
           />
         )}
 
+        <div className="call-room__ambience" aria-hidden="true"><i /><i /><i /></div>
+        <div className="call-room__presence" role="status">
+          <span className="call-room__wave" aria-hidden="true"><i /><i /><i /><i /><i /></span>
+          {t(presenter.talking ? 'room.call.speaking' : sending ? 'room.call.thinking' : 'room.call.listening')}
+        </div>
         {/* Assistant VN bubble — bottom center */}
         {presenter.bubble && (
           <VnBubble
@@ -245,7 +257,7 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
       </div>
 
       {/* chat input bar */}
-      <div style={{
+      <div className="call-room__composer" style={{
         display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px',
         background: 'oklch(0.10 0.02 240 / 0.90)',
         backdropFilter: 'blur(8px)',
@@ -309,7 +321,7 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
       </div>
 
       {/* bottom controls */}
-      <div style={{
+      <div className="call-room__controls" style={{
         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 20,
         padding: '16px 24px',
         background: 'oklch(0.10 0.02 240 / 0.90)',

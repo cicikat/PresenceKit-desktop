@@ -1,4 +1,8 @@
 export const zhCN = {
+"room.call.title": "视频通话",
+"room.call.listening": "在这里，听你说",
+"room.call.thinking": "正在想你的话…",
+"room.call.speaking": "正在说话",
 "settings.avatar.mode": "模型类型",
 "settings.avatar.model3d": "3D 模型",
 "settings.avatar.live2d": "Live2D 模型",

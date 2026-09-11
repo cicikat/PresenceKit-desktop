@@ -2,6 +2,10 @@ import type { MessageKey } from './zh-CN';
 
 
 export const enUS: Record<MessageKey, string> = {
+"room.call.title": "Video call",
+"room.call.listening": "Here, listening to you",
+"room.call.thinking": "Thinking about your words…",
+"room.call.speaking": "Speaking",
 "settings.avatar.mode": "Model type",
 "settings.avatar.model3d": "3D models",
 "settings.avatar.live2d": "Live2D models",
