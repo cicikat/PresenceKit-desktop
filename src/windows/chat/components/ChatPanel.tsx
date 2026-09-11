@@ -1573,8 +1573,8 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       const { msg_id } = message;
       if (dreamActiveRef.current) return;
       if (streamingLocalIdRef.current.has(msg_id) || wsMsgIdToLocalIdsRef.current.has(msg_id)) return;
-      // 流开始即停 loading 状态（用户已能看到 token 到来，无需继续等）
-      setLoading(false);
+      // Keep the waiting indicator until the first visible paragraph arrives.
+      setLoading(true);
       const firstId = newId();
       streamingLocalIdRef.current.set(msg_id, [firstId]);
       streamingTextRef.current.set(msg_id, '');
@@ -1603,6 +1603,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       const acc = (streamingTextRef.current.get(msg_id) ?? '') + delta;
       streamingTextRef.current.set(msg_id, acc);
       const parts = splitReply(acc);
+      if (parts.length > 0) setLoading(false);
       const effParts = parts.length === 0 ? [''] : parts;
       while (ids.length < effParts.length) ids.push(newId());
       streamingLocalIdRef.current.set(msg_id, ids);
@@ -2062,7 +2063,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
           </div>
         )}
 
-        {messages.map((m: ChatMsg) => (
+        {messages.filter(m => !m.isStreaming || m.text.trim()).map((m: ChatMsg) => (
           <div key={m.id} className={m.role === 'user' || m.role === 'assistant' ? 'msg-enter' : undefined}>
             {reasoningVisible && reasoningStarts.has(m.id) && <TurnReasoningPanel turnId={m.turnId} pending={Boolean(m.wsMsgId && !m.turnId) || Boolean(m.isStreaming && !m.streamingDone)} cache={reasoningCache} />}
             <Bubble
