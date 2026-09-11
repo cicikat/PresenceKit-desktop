@@ -862,3 +862,12 @@ therefore cannot reconstruct, confirm, resume, or run a browser task from stale 
 界面新增不透明度、情绪色条/标签开关；附件先暂存后发送，用户与角色均可引用。真实窗口/慢请求验收及历史引用恢复仍 open；跨仓总账同步待后端仓处理。
 
 聊天区域透明度由 applyChatRegionOpacity 处理 ReactNode；保存隐藏顶部栏时 false/null 区域保持隐藏，不访问 props。启动回归与真实 Tauri 复验见 docs/chat-usability-2026-09-10.md（2026-09-10 修复）。
+## 通话与聊天修复（2026-09-11，partial）
+
+RoomWindow.css 负责视频通话环境光、状态波形、玻璃控件和减少动画偏好；
+CallSettingsPage 将 3D/Live2D 显式分类，Live2DSettingsSection 的 modelOnly
+复用模式供桌宠页直接选择同一份 live2d.settings 模型。
+ChatPanel 流式入口使用单聊范围过滤，首个可见段落到达后关闭加载占位；
+TurnReasoningPanel 不再限制 640px。输入区基于容器宽度换行，隐藏文本滚动条，
+LayoutHost 窄窗侧栏改为浮层，偏好 Grid 从顶部排列。
+验收记录见 `docs/client-fixes-2026-09-11.md`，真实 Tauri/手机验收 open。

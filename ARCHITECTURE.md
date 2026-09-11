@@ -578,3 +578,10 @@ it is not a reason to restore the retired client surface.
 界面新增不透明度、情绪色条/标签开关；附件先暂存后发送，用户与角色均可引用。真实窗口/慢请求验收及历史引用恢复仍 open；跨仓总账同步待后端仓处理。
 
 聊天区域透明度由 applyChatRegionOpacity 处理 ReactNode；保存隐藏顶部栏时 false/null 区域保持隐藏，不访问 props。启动回归与真实 Tauri 复验见 docs/chat-usability-2026-09-10.md（2026-09-10 修复）。
+## 通话与聊天七项修复（2026-09-11，partial）
+
+单聊/通话使用 shared/api/realityMessageScope 过滤群聊、梦境和非当前角色事件；
+加载气泡等待首个可见正文后再交接。思考正文占满聊天区，窄输入区使用整行文本框，
+LayoutHost 在 ≤640px 时将侧栏呈现为可关闭浮层。视频通话增加 RoomWindow.css
+环境视觉；3D/Live2D 设置分组，桌宠直接选择共用 Live2D 模型。
+实现、验证和跨端 open 项见 `docs/client-fixes-2026-09-11.md`。

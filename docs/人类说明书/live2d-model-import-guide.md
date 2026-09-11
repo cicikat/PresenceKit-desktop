@@ -1,5 +1,9 @@
 # Live2D 模型导入说明书
 
+2026-09-11 入口更新：偏好 → 桌宠与互动 → 3D 模型 / Live2D 模型分类按钮。
+桌宠粒子风格选 Live2D 后也可直接选模型，两处共用同一选择。
+本机已导入 hiyori_free、hiyori_pro 两个 runtime；资源被 gitignore 忽略，新机器需自行导入。
+
 > 与 `docs/room-model-import-guide.md`（Three.js 3D 角色）平行的独立渲染模式。
 > 目标：把 Cubism 4/5 模型丢进指定目录，Chat 偏好里选一下就能用，不用改代码。
 > 只支持 Cubism 4/5（`.model3.json`）。**不支持 Cubism 2**（`.model.json`）。
