@@ -2,6 +2,8 @@ import type { MessageKey } from './zh-CN';
 
 
 export const enUS: Record<MessageKey, string> = {
+"settings.visual.onDemand": "Allow character-requested screenshots",
+"settings.visual.onDemandHint": "Capture this unlocked PC only when requested. Send to your configured vision service for a privacy-filtered summary. Requires the backend screen observation switch; separate from periodic sampling.",
 "settings.toolDisplay.title": "Show tool calls",
 "settings.toolDisplay.hint": "Show tools used in conversations and proactive activity. Does not change execution.",
 "tools.chain": "Tool calls",

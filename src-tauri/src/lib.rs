@@ -59,8 +59,10 @@ fn update_visual_perception_settings(
     state: tauri::State<'_, VisualRunnerState>,
     enabled: bool,
     sample_interval_seconds: u64,
+    on_demand_enabled: Option<bool>,
 ) -> Result<crate::sensor::visual::VisualPerceptionSettings, String> {
-    let next = VisualPerceptionConfig::validated(enabled, sample_interval_seconds)?;
+    let mut next = VisualPerceptionConfig::validated(enabled, sample_interval_seconds)?;
+    next.on_demand_enabled = on_demand_enabled.unwrap_or_else(|| state.runtime.config().on_demand_enabled);
     crate::client_config::save_visual_perception_config(&app, &next)?;
     state.runtime.apply(&next);
     Ok(state.runtime.settings())

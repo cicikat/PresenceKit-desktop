@@ -119,6 +119,8 @@ struct PartialSensorConfig {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PartialVisualPerceptionConfig {
+    #[serde(default, alias = "on_demand_enabled")]
+    on_demand_enabled: Option<bool>,
     #[serde(default)]
     enabled: Option<bool>,
     #[serde(default, alias = "sample_interval_seconds")]
@@ -199,7 +201,10 @@ fn apply_partial(cfg: &mut ClientConfig, partial: PartialClientConfig) {
             next.enabled,
             next.sample_interval_seconds,
         ) {
-            Ok(validated) => cfg.visual_perception_config = validated,
+            Ok(mut validated) => {
+                validated.on_demand_enabled = visual.on_demand_enabled.unwrap_or(next.on_demand_enabled);
+                cfg.visual_perception_config = validated;
+            },
             Err(error) => eprintln!("[client_config] 忽略无效 visualPerceptionConfig: {error}"),
         }
     }
@@ -514,6 +519,7 @@ pub fn save_visual_perception_config(
         "visualPerceptionConfig".into(),
         serde_json::json!({
             "enabled": visual.enabled,
+            "onDemandEnabled": visual.on_demand_enabled,
             "sampleIntervalSeconds": visual.sample_interval_seconds,
         }),
     );
@@ -582,6 +588,7 @@ mod save_config_tests {
             admin_token: None,
             sensor_config: None,
             visual_perception_config: Some(PartialVisualPerceptionConfig {
+                on_demand_enabled: None,
                 enabled: Some(true),
                 sample_interval_seconds: Some(0),
             }),

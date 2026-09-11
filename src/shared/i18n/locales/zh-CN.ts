@@ -1,4 +1,6 @@
 export const zhCN = {
+"settings.visual.onDemand": "允许角色按需截图",
+"settings.visual.onDemandHint": "角色请求时截取本机未锁定的画面，发送到已配置的视觉服务，返回隐私过滤后的概括。需同时开启后端按需截图；与定时采样独立。",
 "settings.toolDisplay.title": "显示工具调用",
 "settings.toolDisplay.hint": "显示对话与主动行为中的工具调用和结果，不影响工具执行。",
 "tools.chain": "工具调用",

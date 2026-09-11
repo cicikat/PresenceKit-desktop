@@ -41,11 +41,11 @@ export function VisualPerceptionSettingsPage() {
 
   useEffect(() => { refresh(); }, []);
 
-  const save = async (enabled: boolean, nextMinutes: number) => {
+  const save = async (enabled: boolean, nextMinutes: number, onDemandEnabled = settings?.onDemandEnabled) => {
     const clamped = Math.max(1, Math.min(60, Math.round(nextMinutes)));
     setSaving(true);
     try {
-      const value = await updateVisualPerceptionSettings(enabled, clamped * 60);
+      const value = await updateVisualPerceptionSettings(enabled, clamped * 60, onDemandEnabled);
       setSettings(value);
       setMinutes(clamped);
       setError(null);
@@ -62,6 +62,11 @@ export function VisualPerceptionSettingsPage() {
 
   return (
     <section style={{ display: 'grid', gap: 12 }}>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <input type="checkbox" checked={!!settings.onDemandEnabled} disabled={saving}
+          onChange={e => void save(settings.enabled, minutes, e.target.checked)} />
+        <span>{t('settings.visual.onDemand')}<small style={{ display: 'block', color: 'var(--ink-3)' }}>{t('settings.visual.onDemandHint')}</small></span>
+      </label>
       <div>
         <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>{t('settings.visual.title')}</div>
         <div className="mono" style={{ marginTop: 3, fontSize: 9.5, letterSpacing: 0.8, color: 'var(--ink-3)' }}>{t('settings.visual.description')}</div>

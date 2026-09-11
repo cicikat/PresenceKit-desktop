@@ -25,6 +25,8 @@ const CHANGE_DISTANCE_THRESHOLD: u32 = 8;
 #[serde(rename_all = "camelCase")]
 pub struct VisualPerceptionConfig {
     pub enabled: bool,
+    #[serde(default)]
+    pub on_demand_enabled: bool,
     pub sample_interval_seconds: u64,
 }
 
@@ -32,6 +34,7 @@ impl Default for VisualPerceptionConfig {
     fn default() -> Self {
         Self {
             enabled: false,
+            on_demand_enabled: false,
             sample_interval_seconds: DEFAULT_SAMPLE_INTERVAL_SECONDS,
         }
     }
@@ -45,7 +48,7 @@ impl VisualPerceptionConfig {
                 MIN_SAMPLE_INTERVAL_SECONDS, MAX_SAMPLE_INTERVAL_SECONDS
             ));
         }
-        Ok(Self { enabled, sample_interval_seconds })
+        Ok(Self { enabled, sample_interval_seconds, on_demand_enabled: false })
     }
 }
 
@@ -73,12 +76,15 @@ impl Default for VisualPerceptionStatus {
 #[serde(rename_all = "camelCase")]
 pub struct VisualPerceptionSettings {
     pub enabled: bool,
+    pub on_demand_enabled: bool,
     pub sample_interval_seconds: u64,
     pub status: VisualPerceptionStatus,
 }
 
 pub struct VisualRuntime {
     enabled: AtomicBool,
+    on_demand_enabled: AtomicBool,
+    consent_revision: AtomicU64,
     sample_interval_seconds: AtomicU64,
     status: Mutex<VisualPerceptionStatus>,
 }
@@ -87,6 +93,8 @@ impl VisualRuntime {
     pub fn new(config: &VisualPerceptionConfig) -> Self {
         Self {
             enabled: AtomicBool::new(config.enabled),
+            on_demand_enabled: AtomicBool::new(config.on_demand_enabled),
+            consent_revision: AtomicU64::new(0),
             sample_interval_seconds: AtomicU64::new(config.sample_interval_seconds),
             status: Mutex::new(VisualPerceptionStatus::default()),
         }
@@ -94,6 +102,9 @@ impl VisualRuntime {
 
     pub fn apply(&self, config: &VisualPerceptionConfig) {
         self.enabled.store(config.enabled, Ordering::SeqCst);
+        if self.on_demand_enabled.swap(config.on_demand_enabled, Ordering::SeqCst) != config.on_demand_enabled {
+            self.consent_revision.fetch_add(1, Ordering::SeqCst);
+        }
         self.sample_interval_seconds
             .store(config.sample_interval_seconds, Ordering::SeqCst);
         if !config.enabled {
@@ -104,6 +115,7 @@ impl VisualRuntime {
     pub fn config(&self) -> VisualPerceptionConfig {
         VisualPerceptionConfig {
             enabled: self.enabled.load(Ordering::SeqCst),
+            on_demand_enabled: self.on_demand_enabled.load(Ordering::SeqCst),
             sample_interval_seconds: self.sample_interval_seconds.load(Ordering::SeqCst),
         }
     }
@@ -113,6 +125,7 @@ impl VisualRuntime {
         let status = self.status.lock().map(|status| status.clone()).unwrap_or_default();
         VisualPerceptionSettings {
             enabled: config.enabled,
+            on_demand_enabled: config.on_demand_enabled,
             sample_interval_seconds: config.sample_interval_seconds,
             status,
         }
@@ -158,13 +171,13 @@ impl Drop for VisualRunnerHandle {
 pub fn spawn_visual_runner(cfg: VisualRunnerConfig) -> Result<VisualRunnerHandle, String> {
     let client = reqwest::Client::builder()
         .no_proxy()
+        .redirect(reqwest::redirect::Policy::none())
         .timeout(Duration::from_secs(10))
         .build()
         .map_err(|error| format!("无法创建视觉观察 HTTP client: {error}"))?;
     let stop = Arc::new(AtomicBool::new(false));
     let stop_for_thread = Arc::clone(&stop);
     let (tick_tx, mut tick_rx) = async_runtime::channel::<()>(1);
-    let runtime = Arc::clone(&cfg.runtime);
 
     let thread = thread::Builder::new()
         .name("visual-observation-sampler".into())
@@ -177,7 +190,7 @@ pub fn spawn_visual_runner(cfg: VisualRunnerConfig) -> Result<VisualRunnerHandle
                 }
                 thread::sleep(granularity);
                 elapsed += granularity;
-                let interval = Duration::from_secs(runtime.sample_interval_seconds.load(Ordering::SeqCst));
+                let interval = Duration::from_secs(5);
                 if elapsed >= interval {
                     elapsed = Duration::ZERO;
                     let _ = tick_tx.try_send(());
@@ -186,9 +199,17 @@ pub fn spawn_visual_runner(cfg: VisualRunnerConfig) -> Result<VisualRunnerHandle
         })
         .map_err(|error| format!("无法启动视觉观察采样线程: {error}"))?;
 
+    let stop_for_task = Arc::clone(&stop);
     async_runtime::spawn(async move {
         let mut previous_hash: Option<u64> = None;
+        let mut last_sample = std::time::Instant::now();
         while tick_rx.recv().await.is_some() {
+            if stop_for_task.load(Ordering::SeqCst) { break; }
+            poll_screen_request(&cfg, &client, &stop_for_task).await;
+            if last_sample.elapsed().as_secs() < cfg.runtime.sample_interval_seconds.load(Ordering::SeqCst) {
+                continue;
+            }
+            last_sample = std::time::Instant::now();
             if !cfg.runtime.enabled.load(Ordering::SeqCst) {
                 cfg.runtime.record("local_disabled", false, false);
                 continue;
@@ -199,6 +220,64 @@ pub fn spawn_visual_runner(cfg: VisualRunnerConfig) -> Result<VisualRunnerHandle
 
     Ok(VisualRunnerHandle { stop, thread: Some(thread) })
 }
+
+async fn poll_screen_request(cfg: &VisualRunnerConfig, client: &reqwest::Client, stop: &AtomicBool) {
+    use base64::Engine;
+    let base = cfg.backend_base_url.trim_end_matches('/');
+    let revision = cfg.runtime.consent_revision.load(Ordering::SeqCst);
+    let available = cfg.runtime.on_demand_enabled.load(Ordering::SeqCst) && has_unlocked_desktop();
+    let response = client.post(format!("{base}/perception/screen/poll"))
+        .bearer_auth(&cfg.admin_token)
+        .json(&serde_json::json!({"device": "desktop", "available": available, "idle_seconds": screen_idle_seconds()}))
+        .send().await;
+    let Ok(response) = response else { return };
+    if !response.status().is_success() { return; }
+    let Ok(body) = response.json::<serde_json::Value>().await else { return };
+    if body["enabled"] != true { return; }
+    let Some(id) = body["request"]["request_id"].as_str() else { return };
+    if stop.load(Ordering::SeqCst) || revision != cfg.runtime.consent_revision.load(Ordering::SeqCst) { return; }
+    let ttl = body["request"]["ttl_seconds"].as_f64().unwrap_or(0.0);
+    let started = std::time::Instant::now();
+    let mut status = "disabled";
+    let mut image = String::new();
+    if cfg.runtime.on_demand_enabled.load(Ordering::SeqCst) {
+        status = "locked";
+        if has_unlocked_desktop() {
+            status = "failed";
+            if let Ok(frame) = capture_primary_screen() {
+                if let Ok(jpeg) = encode_jpeg(frame) {
+                    image = base64::engine::general_purpose::STANDARD.encode(jpeg);
+                    status = "ok";
+                }
+            }
+        }
+    }
+    if !cfg.runtime.on_demand_enabled.load(Ordering::SeqCst) || !has_unlocked_desktop() {
+        image.clear();
+        status = "disabled";
+    }
+    if started.elapsed().as_secs_f64() >= ttl || stop.load(Ordering::SeqCst) || revision != cfg.runtime.consent_revision.load(Ordering::SeqCst) { return; }
+    let sent = client.post(format!("{base}/perception/screen/result"))
+        .bearer_auth(&cfg.admin_token)
+        .json(&serde_json::json!({"device": "desktop", "request_id": id, "status": status, "image_base64": image}))
+        .send().await;
+    let pushed = status == "ok" && sent.is_ok_and(|r| r.status().is_success());
+    cfg.runtime.record(if pushed { "pushed" } else { "failed" }, true, pushed);
+}
+
+#[cfg(target_os = "windows")]
+fn screen_idle_seconds() -> f64 {
+    use windows::Win32::UI::Input::KeyboardAndMouse::{GetLastInputInfo, LASTINPUTINFO};
+    use windows::Win32::System::SystemInformation::GetTickCount;
+    let mut info = LASTINPUTINFO { cbSize: std::mem::size_of::<LASTINPUTINFO>() as u32, dwTime: 0 };
+    unsafe {
+        if GetLastInputInfo(&mut info).as_bool() { GetTickCount().wrapping_sub(info.dwTime) as f64 / 1000.0 }
+        else { 864000.0 }
+    }.min(864000.0)
+}
+
+#[cfg(not(target_os = "windows"))]
+fn screen_idle_seconds() -> f64 { 864000.0 }
 
 async fn sample_once(
     cfg: &VisualRunnerConfig,
@@ -459,7 +538,29 @@ mod tests {
     fn visual_config_defaults_to_opt_in_and_five_minutes() {
         let config = VisualPerceptionConfig::default();
         assert!(!config.enabled);
+        assert!(!config.on_demand_enabled);
         assert_eq!(config.sample_interval_seconds, 300);
+    }
+
+    #[test]
+    fn old_shadow_opt_in_does_not_authorize_on_demand_capture() {
+        let config: VisualPerceptionConfig = serde_json::from_str(r#"{"enabled":true,"sampleIntervalSeconds":300}"#).unwrap();
+        assert!(!config.on_demand_enabled);
+    }
+
+    #[test]
+    fn revoke_and_reenable_invalidates_an_inflight_consent_revision() {
+        let mut config = VisualPerceptionConfig::default();
+        config.on_demand_enabled = true;
+        let runtime = VisualRuntime::new(&config);
+        let original = runtime.consent_revision.load(Ordering::SeqCst);
+        config.on_demand_enabled = false;
+        runtime.apply(&config);
+        config.on_demand_enabled = true;
+        runtime.apply(&config);
+        assert_ne!(original, runtime.consent_revision.load(Ordering::SeqCst));
+        assert!(runtime.settings().on_demand_enabled);
+        assert!(!runtime.settings().enabled);
     }
 
     #[test]

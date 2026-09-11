@@ -19,6 +19,7 @@ export interface VisualPerceptionStatus {
 
 export interface VisualPerceptionSettings {
   enabled: boolean;
+  onDemandEnabled: boolean;
   sampleIntervalSeconds: number;
   status: VisualPerceptionStatus;
 }
@@ -30,6 +31,7 @@ export function getVisualPerceptionSettings(): Promise<VisualPerceptionSettings>
 export function updateVisualPerceptionSettings(
   enabled: boolean,
   sampleIntervalSeconds: number,
+  onDemandEnabled?: boolean,
 ): Promise<VisualPerceptionSettings> {
-  return invoke('update_visual_perception_settings', { enabled, sampleIntervalSeconds });
+  return invoke('update_visual_perception_settings', { enabled, sampleIntervalSeconds, onDemandEnabled });
 }
