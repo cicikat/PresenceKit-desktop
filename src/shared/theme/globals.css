@@ -261,6 +261,17 @@ input, textarea { font-family: inherit; }
 .chat-composer-row--compact { flex-wrap: wrap; }
 .chat-composer-row--compact > textarea { order: -1; flex: 1 0 100% !important; box-sizing: border-box; }
 .chat-composer-row--compact > button:last-child { margin-left: auto; }
+[data-chat-region="composer"] { container-type: inline-size; container-name: chat-composer; }
+@container chat-composer (max-width: 620px) {
+  .chat-composer-row { flex-wrap: wrap; }
+  .chat-composer-row > textarea { order: -1; flex: 1 0 100% !important; box-sizing: border-box; }
+  .chat-composer-row > button:last-child { margin-left: auto; }
+}
+@container chat-layout (max-width: 640px) {
+  [data-layout-slot="sidebar"] { position: absolute; top: 0; z-index: 20; width: min(320px, calc(100% - 60px)) !important; box-shadow: 0 12px 32px #0003; }
+  [data-layout-slot="sidebar"][data-sidebar-edge="left"] { left: 52px; }
+  [data-layout-slot="sidebar"][data-sidebar-edge="right"] { right: 52px; }
+}
 
 @media (max-width: 760px) {
   .activity-game-page { padding: 20px 16px !important; gap: 16px !important; }

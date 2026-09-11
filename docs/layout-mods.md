@@ -1,5 +1,8 @@
 # 布局 Mod 说明书
 
+窄窗口补充（2026-09-11）：LayoutHost 容器宽度 ≤640px 时，Sidebar 作为可关闭的浮层
+显示，不再挤占 main 宽度；保持 manifest 的左右顺序及已保存的侧栏尺寸。
+
 布局 mod 是一份描述 Chat 既有区域如何排布的 `layout.json`，可选附带受安检的
 `layout.css`。它只换排布，不换组件或执行代码。
 
