@@ -445,3 +445,8 @@ useEffect(() => {
   消费 roster 头像，本次无手机上传设置或 relay 变更。桌面样式和 Design Mod 无后端总开关。
 - 后端 `docs/three-repo-interface-catalog.md` 同步为 open：当前授权限本仓，未修改后端仓。
   待同步内容：桌面新增既有角色头像 API 的设置入口，接口/权限未扩展，真实跨端验收未完成。
+## 2026-09-11 七项客户端修复验收 — partial/open
+
+群聊隔离、加载占位、思考宽度、窄栏输入、活动偏好、视频视觉和 Live2D 入口的施工与验证
+见 `docs/client-fixes-2026-09-11.md`。真实 Tauri 窗口、模型渲染、手机后台 relay 联调及
+后端 three-repo-interface-catalog 总账同步仍 open；不将编译/纯逻辑测试作为完整验收。

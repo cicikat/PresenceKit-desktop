@@ -1169,3 +1169,9 @@ Validation: 48 related regressions plus 3 focused persistence/reload tests passe
 ## Character thinking voice (2026-09-11)
 
 The backend adds character_voice and voice_preview to /settings/thinking (persona), managed in the admin panel. Existing /chat/turns/{turn_id}/reasoning, parts and canonical ID semantics are unchanged. Desktop still renders original provider-returned reasoning; no post-processing narration or new IPC/WS payload. The prompt requests first-person character voice with stable mood variants; provider compliance is observe. See backend docs/thinking-voice.md.
+# 单聊订阅隔离（2026-09-11）
+
+普通聊天与视频通话在消费 WS 前过滤 round_id、非 reality source/domain、非当前 char_id。
+stream_start 保留后端既有 source；后续 delta/end 按已接受 msg_id 更新。
+未标元数据的 legacy 单聊仍兼容，群聊订阅与原有 ack 不变。验收边界见
+`docs/client-fixes-2026-09-11.md`（partial）。

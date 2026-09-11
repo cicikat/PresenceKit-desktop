@@ -14,7 +14,8 @@ import { sendChat } from '../../shared/api/backend';
 import { wsClient } from '../../shared/api/ws';
 import { useVoiceInput } from '../../shared/voice/useVoiceInput';
 import { VnBubble } from './VnBubble';
-import { getActiveCharacterName, subscribeActiveCharacter } from '../../shared/activeCharacter';
+import { getActiveCharacterInfo, getActiveCharacterName, subscribeActiveCharacter } from '../../shared/activeCharacter';
+import { isSingleRealityMessage } from '../../shared/api/realityMessageScope';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -77,8 +78,15 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
   // lifecycle entirely. stream_end normally clears it, onWatchdogTimeout above covers the case
   // where the WS dies mid-stream and stream_end never arrives.
   useEffect(() => {
-    const unStart = wsClient.on('message_stream_start', () => setSending(true));
-    const unEnd = wsClient.on('message_stream_end', () => setSending(false));
+    const acceptedStreams = new Set<string>();
+    const unStart = wsClient.on('message_stream_start', message => {
+      if (!isSingleRealityMessage(message, getActiveCharacterInfo().id)) return;
+      acceptedStreams.add(message.msg_id);
+      setSending(true);
+    });
+    const unEnd = wsClient.on('message_stream_end', message => {
+      if (acceptedStreams.delete(message.msg_id) && acceptedStreams.size === 0) setSending(false);
+    });
     return () => { unStart(); unEnd(); };
   }, []);
 

@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { wsClient } from '../../shared/api/ws';
+import { isSingleRealityMessage } from '../../shared/api/realityMessageScope';
+import { getActiveCharacterInfo } from '../../shared/activeCharacter';
 import {
   startTurn,
   forceFinish,
@@ -104,7 +106,9 @@ export function useVnPresenter(options: VnPresenterOptions = {}): VnPresenterAPI
   // ── ws ingest wiring ─────────────────────────────────────────────────────────
 
   useEffect(() => {
-    const unStart = wsClient.on('message_stream_start', ({ msg_id }) => {
+    const unStart = wsClient.on('message_stream_start', (message) => {
+      if (!isSingleRealityMessage(message, getActiveCharacterInfo().id)) return;
+      const { msg_id } = message;
       const now = performance.now();
       if (turnRef.current && !turnRef.current.done) {
         turnRef.current = forceFinish(turnRef.current);
@@ -120,7 +124,9 @@ export function useVnPresenter(options: VnPresenterOptions = {}): VnPresenterAPI
       if (turnRef.current) turnRef.current = markStreamClosed(turnRef.current, msg_id);
     });
 
-    const unMsg = wsClient.on('channel_message', ({ content, msg_id }) => {
+    const unMsg = wsClient.on('channel_message', (message) => {
+      if (!isSingleRealityMessage(message, getActiveCharacterInfo().id)) return;
+      const { content, msg_id } = message;
       const now = performance.now();
       const cur = turnRef.current;
       if (cur && cur.msgId === msg_id) {
@@ -131,7 +137,9 @@ export function useVnPresenter(options: VnPresenterOptions = {}): VnPresenterAPI
       beginNewTurn(turnFromChannelMessage(msg_id, content, now));
     });
 
-    const unSeg = wsClient.on('message_segments', ({ segments, msg_id }) => {
+    const unSeg = wsClient.on('message_segments', (message) => {
+      if (!isSingleRealityMessage(message, getActiveCharacterInfo().id)) return;
+      const { segments, msg_id } = message;
       const parts = (segments ?? [])
         .filter(s => s.text.trim())
         .map(s => ({ text: s.text, perform: s.perform }));

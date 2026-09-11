@@ -28,7 +28,8 @@ import { classifyHttpError } from '../../../shared/api/httpError';
 import { dreamGetState } from '../../../shared/api/dream';
 import { wsClient } from '../../../shared/api/ws';
 import { notifyOnMessage } from '../../../shared/api/notify';
-import { getActiveCharacterName } from '../../../shared/activeCharacter';
+import { getActiveCharacterInfo, getActiveCharacterName } from '../../../shared/activeCharacter';
+import { isSingleRealityMessage, type RealityMessageScope } from '../../../shared/api/realityMessageScope';
 import { chatThemeFontSize } from '../../../shared/chatAppearance';
 import { useI18n } from '../../../shared/i18n';
 import { useDesignMounts } from '../../../shared/design-mod/mounts';
@@ -153,7 +154,7 @@ interface FallbackRecord {
   renderedMsgIds: string[];
 }
 
-interface RealityChannelMessage {
+interface RealityChannelMessage extends RealityMessageScope {
   content: string;
   msg_id: string;
   source?: string;
@@ -1384,7 +1385,9 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       }
     });
 
-    const processRealityChannelMessage = ({ content, msg_id, source, sticker }: RealityChannelMessage) => {
+    const processRealityChannelMessage = (message: RealityChannelMessage) => {
+      if (!isSingleRealityMessage(message, getActiveCharacterInfo().id)) return;
+      const { content, msg_id, source, sticker } = message;
       // Defense: only consume reality messages (source field added P0; old server = no source = reality).
       if (source && source !== 'reality') return;
       pruneStalePendingSegments(pendingSegmentsByMsgIdRef.current);
@@ -1495,7 +1498,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
     processRealityChannelMessageRef.current = processRealityChannelMessage;
 
     const unsubMsg = wsClient.on('channel_message', (message) => {
-      if (message.source && message.source !== 'reality') return;
+      if (!isSingleRealityMessage(message, getActiveCharacterInfo().id)) return;
       if (dreamActiveRef.current) {
         parkRealityMessage(message);
         console.log('[chat] appendSource: dream-parked | msg_id:', message.msg_id, '| parkedCount:', parkedRealityMessagesRef.current.size);
@@ -1505,7 +1508,9 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       void notifyOnMessage(message.msg_id, getActiveCharacterName(), message.content);
     });
 
-    const unsubSegs = wsClient.on('message_segments', ({ content, segments, msg_id, source }) => {
+    const unsubSegs = wsClient.on('message_segments', (message) => {
+      if (!isSingleRealityMessage(message, getActiveCharacterInfo().id)) return;
+      const { content, segments, msg_id, source } = message;
       // Defense: only consume reality segments.
       if (source && source !== 'reality') return;
       const parkedMessage = parkedRealityMessagesRef.current.get(msg_id);
@@ -1563,8 +1568,11 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
 
     // ── 流式事件订阅 ─────────────────────────────────────────────────────────
 
-    const unsubStreamStart = wsClient.on('message_stream_start', ({ msg_id }) => {
+    const unsubStreamStart = wsClient.on('message_stream_start', (message) => {
+      if (!isSingleRealityMessage(message, getActiveCharacterInfo().id)) return;
+      const { msg_id } = message;
       if (dreamActiveRef.current) return;
+      if (streamingLocalIdRef.current.has(msg_id) || wsMsgIdToLocalIdsRef.current.has(msg_id)) return;
       // 流开始即停 loading 状态（用户已能看到 token 到来，无需继续等）
       setLoading(false);
       const firstId = newId();
