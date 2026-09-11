@@ -156,3 +156,8 @@ observe: physical phone/network/Doze and live image-model end-to-end validation 
 ## XHS reader deployment (2026-09-11)
 
 Backend-owned settings remain authoritative; no client credentials or local switches were added. Docker login and a user-provided share were verified with body text, one WebP image description and ten sampled comments. The adapter supports xhslink.cn and returns busy/cooldown_seconds in its settings projection. Reads are serialized with a 15-25 second cooldown and five-minute backoff on login/rate rejection. Native chat verification and loading the new code in the running backend remain observe.
+
+
+## Character thinking voice (2026-09-11)
+
+Backend GET/POST /settings/thinking (persona) adds character_voice, default true under thinking.enabled. Admin Conversation/Thinking owns the toggle and voice_preview (effective means prompt guidance active, not guaranteed provider output). Existing desktop reasoning display is presentation-only; no new client configuration, IPC, scope or WS field. Native mode adds a composed prompt without another model call; it can affect reply wording. Historical reasoning stays unchanged. See backend docs/thinking-voice.md. Native style compliance and physical-window verification remain observe; mobile reasoning UI remains roadmap.

@@ -1164,3 +1164,8 @@ charId。界面页 HER/YOU 后备头像仍使用本地 avatarStore，不混用�
 current: talk_owner stamps the trigger write envelope; autonomy is conversational. The existing capture/slow pipeline records assistant-only history and trigger-aware memory with existing provenance. No candidate signal is represented as a user message. New trigger event-log blocks have timestamps and the reader handles assistant-only entries and canonical turn_id. The canonical ledger keeps inline display markup separately from sanitized memory text. /chat-log/{date} adds optional assistant_display_text by scope and turn ID; desktop replays it through the existing inline renderer with plain-text fallback. No new store, scope, notification or ack policy.
 
 Validation: 48 related regressions plus 3 focused persistence/reload tests passed; desktop TypeScript and production build passed. observe: native desktop restart/phone rendering has not been tested; mobile optional styled history consumption remains roadmap. Historical stripped styles and previously unrecorded proactive messages cannot be reconstructed.
+
+
+## Character thinking voice (2026-09-11)
+
+The backend adds character_voice and voice_preview to /settings/thinking (persona), managed in the admin panel. Existing /chat/turns/{turn_id}/reasoning, parts and canonical ID semantics are unchanged. Desktop still renders original provider-returned reasoning; no post-processing narration or new IPC/WS payload. The prompt requests first-person character voice with stable mood variants; provider compliance is observe. See backend docs/thinking-voice.md.
