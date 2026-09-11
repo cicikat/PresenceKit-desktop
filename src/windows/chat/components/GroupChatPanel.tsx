@@ -1,3 +1,4 @@
+import { WorkspaceBackButton } from '../../../shared/ui/WorkspaceBackButton';
 /* ============================================================
  * GroupChatPanel — 多角色群聊面板 (spec-10 §4)
  * 复用 ChatPanel 的流式引擎范式（streamingLocalIdRef / streamingTextRef /
@@ -152,11 +153,7 @@ function GroupSettingsPanel({
       display: 'flex', flexDirection: 'column',
     }}>
       {/* Header */}
-      <div style={{
-        padding: '10px 16px', borderBottom: '1px solid var(--paper-edge)',
-        display: 'flex', alignItems: 'center', gap: 10,
-        background: 'var(--paper-2)', flexShrink: 0,
-      }}>
+      <div className="workspace-toolbar">
         <button
           onClick={onClose}
           style={{
@@ -691,15 +688,7 @@ export function GroupChatPanel({
         display: 'flex', alignItems: 'center', gap: 10,
         background: 'var(--paper-2)', flexShrink: 0,
       }}>
-        <button
-          onClick={onBack}
-          title="返回群列表"
-          style={{
-            background: 'transparent', border: 'none', cursor: 'pointer',
-            color: 'var(--ink-3)', fontSize: 20, padding: '0 4px', lineHeight: 1,
-            display: 'flex', alignItems: 'center',
-          }}
-        >‹</button>
+        <WorkspaceBackButton onClick={onBack} label={t('navigation.backGroups')} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="serif" style={{ fontSize: 15, fontWeight: 600, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {title}

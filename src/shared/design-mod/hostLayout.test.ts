@@ -2,6 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { getDesignModHostLayoutState, type DesignModHostPhase } from './hostLayout';
 
 describe('design Mod host layout contract', () => {
+  it('temporarily restores the native page without changing the active Mod phase', () => {
+    const state = getDesignModHostLayoutState('active', true);
+    expect(state.phase).toBe('active');
+    expect(state.defaultShellInteractive).toBe(true);
+    expect(state.modLayerVisible).toBe(false);
+    expect(getDesignModHostLayoutState('active').modLayerVisible).toBe(true);
+  });
   it.each([
     ['builtin-default', true, false],
     ['loading', true, false],

@@ -2,6 +2,11 @@
 
 ## 自由合成样架 1.2（2026-09-11）
 
+同日导航补充：进入活动/群聊时，宿主 nativePage 临时显示标准 LayoutHost，并以
+DesignMountsSuspended context 让该 React 子树返回本地挂载；Mod 图层暂停显示，
+退出后恢复原 portal。Mod 保持已激活状态，不修改公开 attach/Host API，不重建 ChatPanel。
+标准壳和自由合成样架的导航/草稿往返已通过 Chromium IPC 夹具；原生验证仍 open。
+
 `freeform-capability-fixture` 默认改为单窗口视觉小说式聊天舞台：叠层细边框、浅阴影、
 虚实连线和 hover/focus 反馈。主聊天与所有侧栏能力保留；Flow/Status 拆分为子区，
 Garden/Diary 使用完整 renderer 保留失败重试。窄屏信息卡置于主舞台下方，减少动态

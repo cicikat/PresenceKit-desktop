@@ -1,22 +1,14 @@
-/* ============================================================
- * ActivityWindow — 独立活动空间（看书 / 五子棋 / 国际象棋）
- * 全屏覆盖，position: fixed，z-index 110
- *
- * 架构说明：
- *   ActivityWindow 由 main.tsx 中的 AppRoot 组件通过 activeWindow 状态切换挂载，
- *   与 ChatWindow 为 sibling 关系，不在 ChatWindow 组件树内。
- *   不读写 Chat messages / Chat state / Chat session。
- *   只共享全局 CSS variables（--paper / --ink / --forest 等）。
- * ============================================================ */
+import { WorkspaceBackButton } from '../../shared/ui/WorkspaceBackButton';
+/** Activity workspace inside the main chat slot; ChatPanel remains mounted. */
 
-import { useEffect, useState, type CSSProperties } from 'react';
-import { ActivityRibbon, type ActivityTab } from './components/ActivityRibbon';
+import { useState, type CSSProperties } from 'react';
+import type { ActivityTab } from './components/ActivityRibbon';
 import { ActivityHomePage } from './components/ActivityHomePage';
 import { ReadingPage } from './components/ReadingPage';
 import { GomokuPage } from './components/GomokuPage';
 import { ChessPage } from './components/ChessPage';
 import { DreamSeedPanel } from './components/DreamSeedPanel';
-import { toggleDayNight, getDayNight, subscribe as subscribeTheme } from '../../shared/theme/registry';
+
 import { useI18n } from '../../shared/i18n';
 
 interface ActivityWindowProps {
@@ -26,36 +18,23 @@ interface ActivityWindowProps {
 export function ActivityWindow({ onClose }: ActivityWindowProps) {
   const { t } = useI18n();
   const [activeTab, setActiveTab] = useState<ActivityTab>('home');
-  const [theme, setTheme] = useState(() => getDayNight().active);
-
-  const handleTab = (tab: ActivityTab) => setActiveTab(tab);
-
-  useEffect(() => subscribeTheme(() => setTheme(getDayNight().active)), []);
-
-  const handleThemeToggle = () => toggleDayNight();
 
   return (
     <div
       className="activity-window"
-      role="dialog"
-      aria-modal="true"
+      role="region"
       aria-label={t('activity.window.label')}
       style={{
-        position: 'fixed', inset: 0, zIndex: 110,
+        position: 'relative', height: '100%', minHeight: 0, flexDirection: 'column',
         background: 'var(--paper)',
         display: 'flex',
       } as CSSProperties}
     >
-      {/* left ribbon */}
-      <ActivityRibbon
-        activeTab={activeTab}
-        onTab={handleTab}
-        onClose={onClose}
-        onOpenSettings={() => window.dispatchEvent(new Event('open-activity-preferences'))}
-        theme={theme}
-        onThemeToggle={handleThemeToggle}
-      />
-
+      <div className="workspace-toolbar">
+        <WorkspaceBackButton onClick={activeTab === 'home' ? onClose : () => setActiveTab('home')} label={t(activeTab === 'home' ? 'navigation.backChat' : 'navigation.backActivities')} />
+        <div className="serif" style={{ flex: 1, fontSize: 15, fontWeight: 600, color: 'var(--ink)' }}>{t('activity.window.label')}</div>
+        <button type="button" className="workspace-action" onClick={() => window.dispatchEvent(new Event('open-activity-preferences'))}>{t('navigation.preferences')}</button>
+      </div>
       {/* main content */}
       <div className="activity-main" style={{ flex: 1, display: 'flex', minWidth: 0, minHeight: 0 }}>
         <div className="activity-page" style={{ flex: 1, display: 'flex', minWidth: 0, overflow: 'hidden' }}>

@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useCallback, type CSSProperties } from 'react';
+﻿import { lazy, Suspense, useState, useEffect, useRef, useCallback, type CSSProperties } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { StateEngine } from '../../shared/state/store';
 import { ToolStatusOverlayController, type ToolStatusOverlayState } from '../../shared/state/toolStatusOverlay';
@@ -32,7 +32,9 @@ import { useChatAppearanceController } from './hooks/useChatAppearanceController
 import { usePetController } from './hooks/usePetController';
 import { useChatWindowNavigation } from './hooks/useChatWindowNavigation';
 
-export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen, isCovered = false }: { onActivityOpen?: () => void; onToyOpen?: () => void; onRoomOpen?: () => void; isCovered?: boolean } = {}) {
+const ActivityWindow = lazy(() => import('../activity/ActivityWindow').then(m => ({ default: m.ActivityWindow })));
+
+export function ChatWindow({ onToyOpen, onRoomOpen, isCovered = false }: { onToyOpen?: () => void; onRoomOpen?: () => void; isCovered?: boolean } = {}) {
   const engineRef = useRef<StateEngine | null>(null);
   if (!engineRef.current) engineRef.current = new StateEngine();
   const engine = engineRef.current;
@@ -44,6 +46,7 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen, isCovered = 
   const toolStatusController = toolStatusRef.current;
   const [toolStatus, setToolStatus] = useState<ToolStatusOverlayState | null>(() => toolStatusController.get());
   const navigation = useChatWindowNavigation();
+  const [activityOpen, setActivityOpen] = useState(false);
   const [documentVisible, setDocumentVisible] = useState(() => !document.hidden);
   useEffect(() => {
     presenters.setToolStatus(toolStatus);
@@ -56,7 +59,7 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen, isCovered = 
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, []);
-  const visualPaused = isCovered || navigation.dreamWindowOpen || !documentVisible;
+  const visualPaused = isCovered || activityOpen || navigation.dreamWindowOpen || !documentVisible;
 
   const appearanceController = useChatAppearanceController(engine);
   const petController = usePetController(engine, onToyOpen);
@@ -165,10 +168,11 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen, isCovered = 
         } as CSSProperties}
       >
         <DesignModHost
+          nativePage={activityOpen || navigation.groupView !== null}
           engine={engine}
           presenters={presenters}
           toolStatus={toolStatus}
-          isCovered={isCovered}
+          isCovered={isCovered || activityOpen || navigation.groupView !== null}
           dreamActive={navigation.dreamWindowOpen}
           navigation={{ groupView: navigation.groupView, sidebarTab: appearanceController.sidebarTab, sidebarOpen: appearanceController.sidebarOpen }}
           commands={{
@@ -189,7 +193,7 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen, isCovered = 
           sidebarSize={appearanceController.sidebarWidth}
           slots={{
             ribbon: <DesignAwareRegion id="chat.ribbon"><Ribbon
-              sidebarOpen={appearanceController.sidebarOpen}
+              sidebarOpen={!activityOpen && appearanceController.sidebarOpen}
               sidebarTab={appearanceController.sidebarTab}
               onSidebarTab={appearanceController.onSidebarTab}
               onCloseSidebar={appearanceController.closeSidebar}
@@ -202,12 +206,14 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen, isCovered = 
               onOpenPrefs={() => navigation.setPrefsOpen(true)}
               dreamWindowOpen={navigation.dreamWindowOpen}
               onDreamToggle={navigation.toggleDreamWindow}
-              onActivityOpen={onActivityOpen}
+              activityActive={activityOpen}
+              groupActive={navigation.groupView !== null}
+              onActivityOpen={() => { navigation.setGroupView(null); setActivityOpen(value => !value); }}
               onToyOpen={onToyOpen}
               playModeEnabled={petController.playModeEnabled}
-              onGroupOpen={() => navigation.setGroupView('list')}
+              onGroupOpen={() => { setActivityOpen(false); navigation.setGroupView(value => value === null ? 'list' : null); }}
             /></DesignAwareRegion>,
-            sidebar: appearanceController.sidebarOpen ? <div style={{ display: 'flex', height: '100%', minWidth: 0, flex: 1 }}>
+            sidebar: !activityOpen && appearanceController.sidebarOpen ? <div style={{ display: 'flex', height: '100%', minWidth: 0, flex: 1 }}>
               {appearanceController.sidebarOnRight && <Divider onDrag={appearanceController.onDividerDrag} />}
               <div style={{ flex: 1, minWidth: 0 }}><SidebarPanel
                 engine={engine}
@@ -233,8 +239,11 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen, isCovered = 
             <VideoBg src={appearanceController.appearance.backgroundVideoPath} blur={appearanceController.appearance.backgroundBlur} paused={visualPaused} />
           )}
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, minWidth: 0 }}>
-            {navigation.groupView === null ? (
-              <ChatPanel key={charSwitchKey} engine={engine} chatRectRef={chatRectRef} headerVisible={appearanceController.chatHeaderVisible} chatFontSize={appearanceController.appearance.chatFontSize} chatOpacity={appearanceController.appearance.chatOpacity} showEmotionAccent={appearanceController.appearance.showEmotionAccent} showEmotionLabel={appearanceController.appearance.showEmotionLabel} dreamActive={navigation.dreamWindowOpen} characterAvatarDataUrl={characterAvatarDataUrl} mainLayout={appearanceController.activeLayout.manifest.mainLayout} onOpenRoom={onRoomOpen} onOpenPrefs={() => navigation.setPrefsOpen(true)} />
+              <ChatPanel hidden={activityOpen || navigation.groupView !== null} key={charSwitchKey} engine={engine} chatRectRef={chatRectRef} headerVisible={appearanceController.chatHeaderVisible} chatFontSize={appearanceController.appearance.chatFontSize} chatOpacity={appearanceController.appearance.chatOpacity} showEmotionAccent={appearanceController.appearance.showEmotionAccent} showEmotionLabel={appearanceController.appearance.showEmotionLabel} dreamActive={navigation.dreamWindowOpen} characterAvatarDataUrl={characterAvatarDataUrl} mainLayout={appearanceController.activeLayout.manifest.mainLayout} onOpenRoom={onRoomOpen} onOpenPrefs={() => navigation.setPrefsOpen(true)} />
+            {activityOpen ? (
+              <Suspense fallback={null}><ActivityWindow onClose={() => setActivityOpen(false)} /></Suspense>
+            ) : navigation.groupView === null ? (
+              null
             ) : navigation.groupView === 'list' ? (
               <GroupListPanel
                 onSelectGroup={id => navigation.setGroupView(id)}

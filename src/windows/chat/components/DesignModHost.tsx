@@ -1,3 +1,4 @@
+import { DesignMountsSuspended } from '../../../shared/design-mod/mounts';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useI18n } from '../../../shared/i18n';
@@ -35,6 +36,7 @@ import { canReuseSatellitePayload } from '../../../shared/design-mod/satellitePa
 import { TransformController } from '../../../shared/design-mod/transform';
 
 interface DesignModHostProps {
+  nativePage?: boolean;
   engine: any;
   presenters: SidebarPresenters;
   toolStatus: any;
@@ -128,7 +130,7 @@ function DesignModRecoveryOverlay({
   );
 }
 
-export function DesignModHost({ engine, presenters, toolStatus, isCovered, dreamActive, navigation, commands, renderSidebar, renderChat, children }: DesignModHostProps) {
+export function DesignModHost({ nativePage = false, engine, presenters, toolStatus, isCovered, dreamActive, navigation, commands, renderSidebar, renderChat, children }: DesignModHostProps) {
   const { t } = useI18n();
   const [selectedId, setSelectedId] = useState(getSelectedDesignModId);
   const [diagnostic, setDiagnostic] = useState<DesignModDiagnostic>(formatDiagnostic('idle', 'builtin-default'));
@@ -167,7 +169,7 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
       : diagnostic.phase === 'error'
         ? 'error'
         : diagnostic.phase === 'activating' ? 'activating' : 'loading';
-  const hostLayout = getDesignModHostLayoutState(hostPhase);
+  const hostLayout = getDesignModHostLayoutState(hostPhase, nativePage);
 
   useEffect(() => {
     presenters.setPaused(runtimePaused);
@@ -691,7 +693,7 @@ export function DesignModHost({ engine, presenters, toolStatus, isCovered, dream
     data-design-mod-default-shell-visible={hostLayout.defaultShellVisible ? 'true' : 'false'}
     data-design-mod-layer-visible={hostLayout.modLayerVisible ? 'true' : 'false'}
   >
-    <div className="design-mod-default-shell" data-design-mod-default-shell={hostLayout.defaultShellVisible ? 'visible' : 'hidden'}>{renderChat}</div>
+    <div className="design-mod-default-shell" data-design-mod-default-shell={hostLayout.defaultShellVisible ? 'visible' : 'hidden'}><DesignMountsSuspended.Provider value={nativePage}>{renderChat}</DesignMountsSuspended.Provider></div>
     {layers}
     {hostLayout.modLayerVisible && <div style={{ display: 'none' }} aria-hidden="true">
       {(['flow', 'garden', 'diary', 'status'] as const).map(tab => hasCapabilityAttachment(attached, tab) ? (

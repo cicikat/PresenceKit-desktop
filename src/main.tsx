@@ -11,7 +11,6 @@ const isSatelliteWindow = windowView === "design-satellite";
 const isMainWindow = !isSatelliteWindow && windowView !== "pet" && windowView !== "presence-nag" && windowView !== "diary-detail";
 
 const ChatWindow = lazy(() => import("./windows/chat/ChatWindow").then(module => ({ default: module.ChatWindow })));
-const ActivityWindow = lazy(() => import("./windows/activity").then(module => ({ default: module.ActivityWindow })));
 const ToyWindow = lazy(() => import("./windows/toy").then(module => ({ default: module.ToyWindow })));
 const RoomWindow = lazy(() => import("./windows/room").then(module => ({ default: module.RoomWindow })));
 const PetWindow = lazy(() => import("./windows/pet/PetWindow").then(module => ({ default: module.PetWindow })));
@@ -52,11 +51,10 @@ class RoleLoadBoundary extends Component<{ children: ReactNode }, { error: Error
 }
 
 function AppRoot() {
-  const [activeWindow, setActiveWindow] = React.useState<"chat" | "activity" | "toy" | "room">("chat");
+  const [activeWindow, setActiveWindow] = React.useState<"chat" | "toy" | "room">("chat");
   return (
     <>
       <ChatWindow
-        onActivityOpen={() => setActiveWindow("activity")}
         onToyOpen={() => setActiveWindow("toy")}
         onRoomOpen={() => setActiveWindow("room")}
         isCovered={activeWindow !== "chat"}
@@ -64,7 +62,7 @@ function AppRoot() {
       {/* Keep first-load suspension inside the overlay. The auth gate and main
           window must stay mounted while a new role's chunk is loading. */}
       <Suspense fallback={<div style={{ position: 'fixed', inset: 0, zIndex: 110, background: 'var(--paper)' }}><LoadingView /></div>}>
-        {activeWindow === "activity" && <ActivityWindow onClose={() => setActiveWindow("chat")} />}
+
         {activeWindow === "toy" && <ToyWindow onClose={() => setActiveWindow("chat")} />}
         {activeWindow === "room" && <RoomWindow onClose={() => setActiveWindow("chat")} />}
       </Suspense>

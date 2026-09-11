@@ -27,8 +27,8 @@ const HOST_SIZE: DesignModHostSizeContract = Object.freeze({
  * The default React tree remains mounted in every phase. Only the visible and
  * interactive layer changes after a Mod has completed activation.
  */
-export function getDesignModHostLayoutState(phase: DesignModHostPhase): DesignModHostLayoutState {
-  const modLayerVisible = phase === 'active';
+export function getDesignModHostLayoutState(phase: DesignModHostPhase, nativePage = false): DesignModHostLayoutState {
+  const modLayerVisible = phase === 'active' && !nativePage;
   return {
     phase,
     defaultShellVisible: !modLayerVisible,

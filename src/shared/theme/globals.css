@@ -408,3 +408,7 @@ input, textarea { font-family: inherit; }
 .chat-attachment-card span { width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-attachment-card button { position: absolute; right: -6px; top: -6px; border-radius: 50%; width: 22px; height: 22px; border: 1px solid var(--paper-edge); background: var(--paper); color: var(--ink); cursor: pointer; }
 .chat-sent-quote { margin-bottom: 6px; padding: 8px 12px; border: 1px solid var(--paper-edge); border-radius: 6px; background: var(--paper-2); color: var(--ink-3); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Preserve ribbon width while retaining wheel, touch and keyboard scrolling. */
+.chat-ribbon__scroll { scrollbar-width: none; }
+.chat-ribbon__scroll::-webkit-scrollbar { display: none; width: 0; height: 0; }

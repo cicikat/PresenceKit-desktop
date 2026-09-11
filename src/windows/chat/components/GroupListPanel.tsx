@@ -1,3 +1,5 @@
+import { useI18n } from '../../../shared/i18n';
+import { WorkspaceBackButton } from '../../../shared/ui/WorkspaceBackButton';
 /* ============================================================
  * GroupListPanel — 群列表 + 建群入口 (spec-10 §4/§5)
  * 角色花名册从 /settings/prompt-assets characters 多选；
@@ -169,6 +171,7 @@ export function GroupListPanel({
   onSelectGroup: (groupId: string) => void;
   onBack: () => void;
 }) {
+  const { t } = useI18n();
   const [groups, setGroups] = useState<GroupSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -227,20 +230,8 @@ export function GroupListPanel({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--paper)' }}>
       {/* Header */}
-      <div style={{
-        padding: '10px 16px', borderBottom: '1px solid var(--paper-edge)',
-        display: 'flex', alignItems: 'center', gap: 10,
-        background: 'var(--paper-2)', flexShrink: 0,
-      }}>
-        <button
-          onClick={onBack}
-          title="关闭"
-          style={{
-            background: 'transparent', border: 'none', cursor: 'pointer',
-            color: 'var(--ink-3)', fontSize: 20, padding: '0 4px', lineHeight: 1,
-            display: 'flex', alignItems: 'center',
-          }}
-        >‹</button>
+      <div className="workspace-toolbar">
+        <WorkspaceBackButton onClick={onBack} label={t('navigation.backChat')} />
         <div className="serif" style={{ flex: 1, fontSize: 15, fontWeight: 600, color: 'var(--ink)' }}>群聊</div>
         <div className="mono" style={{ fontSize: chatThemeFontSize(9), color: 'var(--ink-3)', letterSpacing: 1.3 }}>GROUP CHAT</div>
       </div>

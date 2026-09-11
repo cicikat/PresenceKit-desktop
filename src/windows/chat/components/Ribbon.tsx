@@ -39,7 +39,7 @@ function RibBtn({ icon, label, active, onClick, customIcon }: any) {
     <div style={{ position: 'relative', flexShrink: 0 }}
       onMouseEnter={showTooltip}
       onMouseLeave={() => setHover(false)}>
-      <button ref={buttonRef} aria-label={label} onClick={onClick} style={{
+      <button ref={buttonRef} aria-label={label} aria-pressed={Boolean(active)} onClick={onClick} style={{
         width: 38, height: 38, borderRadius: 'var(--radius-md)',
         background: active ? 'var(--on-forest)' : 'transparent',
         color: active ? 'var(--forest)' : 'var(--on-forest-2)',
@@ -78,7 +78,7 @@ export function Ribbon({
   petBusy, petError, onPetRetry,
   onOpenSpec, onOpenPrefs,
   dreamWindowOpen, onDreamToggle,
-  onActivityOpen,
+  onActivityOpen, activityActive, groupActive,
   onToyOpen,
   playModeEnabled,
   onGroupOpen,
@@ -141,11 +141,11 @@ export function Ribbon({
           onClick={() => { if (sidebarOpen && sidebarTab === 'garden') onCloseSidebar(); else onSidebarTab('garden'); }} />
         <Sep />
         <DreamEntryButton active={dreamWindowOpen} onToggle={onDreamToggle} />
-        <RibBtn icon="grid2" label="一起做事" onClick={onActivityOpen} />
+        <RibBtn icon="grid2" label="一起做事" active={activityActive} onClick={onActivityOpen} />
         {playModeEnabled && (
           <RibBtn label="玩耍模式" customIcon={<HeartIcon />} onClick={onToyOpen} />
         )}
-        <RibBtn icon="chat"  label="群聊"    onClick={onGroupOpen} />
+        <RibBtn icon="chat"  label="群聊" active={groupActive} onClick={onGroupOpen} />
         <RibBtn icon="pet" label={petError ? t('pet.retry') : t('pet.toggle')} active={petVisible} onClick={petError ? onPetRetry : onPetToggle} customIcon={petBusy ? <span aria-hidden="true">...</span> : undefined} />
       </div>
       <div className="chat-ribbon__footer">

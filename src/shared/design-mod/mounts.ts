@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import type { DesignComponentId } from './contract';
 
 type DesignMountMap = Partial<Record<DesignComponentId, HTMLElement>>;
 let mounts: DesignMountMap = {};
 let active = false;
 const listeners = new Set<() => void>();
+export const DesignMountsSuspended = createContext(false);
 
 function notify(): void { listeners.forEach(listener => listener()); }
 
@@ -24,7 +25,8 @@ export function setDesignMount(id: DesignComponentId, mount: HTMLElement | null)
 export function clearDesignMounts(): void { mounts = {}; active = false; notify(); }
 
 export function useDesignMounts(): { mounts: DesignMountMap; active: boolean } {
+  const suspended = useContext(DesignMountsSuspended);
   const [, rerender] = useState(0);
   useEffect(() => { const listener = () => rerender(value => value + 1); return subscribeDesignMounts(listener); }, []);
-  return { mounts, active };
+  return suspended ? { mounts: {}, active: false } : { mounts, active };
 }
