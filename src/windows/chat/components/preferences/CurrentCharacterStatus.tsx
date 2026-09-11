@@ -3,7 +3,8 @@ import { getPromptAssets, patchPromptAssets } from '../../../../shared/api/backe
 import type { PromptAssetsResponse } from '../../../../shared/api/types';
 import { subscribeActiveCharacter, updateActiveCharacterFromAssets } from '../../../../shared/activeCharacter';
 import { useI18n } from '../../../../shared/i18n';
-import { PrefRow, prefSelectStyle } from './PrefAtoms';
+import './SettingsSections.css';
+import { PrefRow, prefSelectStyle, prefActionButtonStyle } from './PrefAtoms';
 
 export function CurrentCharacterStatus({ onCharacterSwitched }: { onCharacterSwitched?: () => void }) {
   const { t } = useI18n();
@@ -36,8 +37,8 @@ export function CurrentCharacterStatus({ onCharacterSwitched }: { onCharacterSwi
   }
   const character = assets?.characters.find(c => c.id === assets.active.active_character);
   const unknown = t('settings.current.unknown');
-  return <section style={{ display: 'grid', gap: 14 }}>
-    <h3>{t('settings.current.title')}</h3>
+  return <section className="settings-section">
+    <header className="settings-section__header"><h3>{t('settings.current.title')}</h3><button type="button" style={prefActionButtonStyle} onClick={() => void refresh()}>{t('settings.current.refresh')}</button></header>
     {error && <p role="alert">{t('settings.current.error')}</p>}
     <button type="button" onClick={() => void refresh()}>{t('settings.current.refresh')}</button>
     {!assets ? <p role="status">{error ? unknown : t('settings.current.loading')}</p> : <>
@@ -46,7 +47,7 @@ export function CurrentCharacterStatus({ onCharacterSwitched }: { onCharacterSwi
           {assets.characters.map(c => <option key={c.id} value={c.id}>{c.label || c.id}</option>)}
         </select>
       </PrefRow>
-      <p>{t('settings.current.readOnly')}</p>
+      <p className="settings-section__hint">{t('settings.current.readOnly')}</p>
       <PrefRow label={t('settings.current.source')}><span>{character?.binding_source === 'character' ? t('settings.current.bound') : character?.binding_source === 'global' || character?.model_routing === null ? t('settings.current.global') : character?.model_routing ? t('settings.current.bound') : unknown}</span></PrefRow>
       <PrefRow label={t('settings.current.profile')}><span>{character?.effective_profile || unknown}</span></PrefRow>
       <PrefRow label={t('settings.current.preset')}><span>{character?.resolved_chat_preset || unknown}</span></PrefRow>
