@@ -62,11 +62,6 @@ export function VisualPerceptionSettingsPage() {
 
   return (
     <section style={{ display: 'grid', gap: 12 }}>
-      <label style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <input type="checkbox" checked={!!settings.onDemandEnabled} disabled={saving}
-          onChange={e => void save(settings.enabled, minutes, e.target.checked)} />
-        <span>{t('settings.visual.onDemand')}<small style={{ display: 'block', color: 'var(--ink-3)' }}>{t('settings.visual.onDemandHint')}</small></span>
-      </label>
       <div>
         <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>{t('settings.visual.title')}</div>
         <div className="mono" style={{ marginTop: 3, fontSize: 9.5, letterSpacing: 0.8, color: 'var(--ink-3)' }}>{t('settings.visual.description')}</div>
@@ -84,6 +79,23 @@ export function VisualPerceptionSettingsPage() {
           style={{ width: 42, height: 22, flexShrink: 0, borderRadius: 11, border: 'none', cursor: saving ? 'wait' : 'pointer', background: settings.enabled ? 'var(--accent)' : 'var(--paper-edge)', padding: 2 }}
         >
           <span style={{ display: 'block', width: 18, height: 18, borderRadius: '50%', background: 'white', transform: `translateX(${settings.enabled ? 20 : 0}px)`, transition: 'transform .2s' }} />
+        </button>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink)' }}>{t('settings.visual.onDemand')}</div>
+          <div className="mono" style={{ marginTop: 2, fontSize: 9.5, letterSpacing: 0.7, color: 'var(--ink-3)' }}>{t('settings.visual.onDemandHint')}</div>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={!!settings.onDemandEnabled}
+          disabled={saving}
+          onClick={() => void save(settings.enabled, minutes, !settings.onDemandEnabled)}
+          aria-label={t('settings.visual.onDemand')}
+          style={{ width: 42, height: 22, flexShrink: 0, borderRadius: 11, border: 'none', cursor: saving ? 'wait' : 'pointer', background: settings.onDemandEnabled ? 'var(--accent)' : 'var(--paper-edge)', padding: 2 }}
+        >
+          <span style={{ display: 'block', width: 18, height: 18, borderRadius: '50%', background: 'white', transform: `translateX(${settings.onDemandEnabled ? 20 : 0}px)`, transition: 'transform .2s' }} />
         </button>
       </div>
       <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, opacity: settings.enabled ? 1 : 0.55 }}>

@@ -31,7 +31,7 @@ try {
    const {VisualPerceptionSettingsPage}=await import('/src/windows/chat/components/VisualPerceptionSettingsPage.tsx');
    createRoot(document.getElementById('root')).render(React.default.createElement(VisualPerceptionSettingsPage));
  });
- const toggle=page.getByRole('checkbox');
+ const toggle=page.getByRole('switch');
  await toggle.check();
  await page.waitForFunction(()=>window.calls.some(c=>c.cmd==='update_visual_perception_settings'&&c.args.onDemandEnabled===true&&c.args.enabled===false));
  await toggle.uncheck();
