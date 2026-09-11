@@ -1,5 +1,14 @@
 # 可信设计 Mod
 
+## 自由合成样架 1.2（2026-09-11）
+
+`freeform-capability-fixture` 默认改为单窗口视觉小说式聊天舞台：叠层细边框、浅阴影、
+虚实连线和 hover/focus 反馈。主聊天与所有侧栏能力保留；Flow/Status 拆分为子区，
+Garden/Diary 使用完整 renderer 保留失败重试。窄屏信息卡置于主舞台下方，减少动态
+效果偏好禁用过渡。manifest 与 index 均不再声明窗外 Halo/Island；`surfaces/` 旧资源
+保留作作者参考但不会加载。本次没有修改 native surface/Scene/Host API 契约。
+真实 Windows 验收仍为 open，见 `ui-polish-2026-09-11.md`。
+
 > 创建或修改 Mod 请先读 `docs/design-mod-authoring.md`。本文记录宿主实现、运行时边界和历史兼容；
 > 作者可用 API、manifest 字段、最小示例和验收清单以作者说明书为准。
 
