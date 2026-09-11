@@ -186,3 +186,13 @@ origin=chat|autonomy、tool_name、status、ts。status 为 running/success/erro
 历史 /chat-log 增加可选 entry_kind=narration 和 tool_activity；近期工具回执复用既有 30 条 action_trace，
 与同 event_id 旧旁白对账。设置 chat.toolActivityVisible 仅控制本地展示，默认 true。
 实现、验证及原生/手机 open 边界见 docs/tool-activity-2026-09-12.md（本文在 docs 时为同目录）。
+
+## Autonomy XML compatibility and cadence (2026-09-12, partial)
+Autonomy opts into existing XML tool encoding in chat_turn; ordinary native-only callers keep
+strict FC semantics. Parsed tools remain bounded by the exposed names; private prose never sends.
+Existing run.events now retain safe evaluation_error/error_type metadata. No new store or scope.
+Runtime settings were updated through admin APIs and read back: interval 30 minutes, 48 evaluations/day,
+global proactive gap 45 minutes; daily talk cap 8 and evaluation minimum interval 15 minutes unchanged.
+open: restart backend to activate code and observe real delivery/circuit recovery. No real test message sent.
+Screenshot planning remains separate: desktop visual sampling is shadow-only and local consent is off;
+mobile offers a text snapshot, not this requested on-demand image capture. See desktop docs/proactivity-2026-09-12.md.
