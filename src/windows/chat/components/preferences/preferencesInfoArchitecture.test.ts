@@ -15,6 +15,7 @@ describe('preferences information architecture', () => {
   it('keeps existing settings reachable from their new categories', () => {
     expect(CHAT_PREFERENCE_SECTION_IDS.general).toContain('connection');
     expect(CHAT_PREFERENCE_SECTION_IDS.characterChat).toContain('currentCharacterStatus');
+    expect(CHAT_PREFERENCE_SECTION_IDS.characterChat).toContain('reasoningDisplay');
     expect(CHAT_PREFERENCE_SECTION_IDS.interface).toContain('activityAppearance');
     expect(Object.values(CHAT_PREFERENCE_SECTION_IDS).flat()).not.toEqual(expect.arrayContaining(['thinking', 'toolLoop']));
     expect(CHAT_PREFERENCE_SECTION_IDS.petInteraction).toEqual(expect.arrayContaining(['call', 'coplay']));

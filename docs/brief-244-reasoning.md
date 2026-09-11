@@ -1,60 +1,60 @@
-# Brief 244：桌面消息模型返回思考
+# Brief 244：回复间的内心活动旁白
 
-日期：2026-09-11。状态：本仓实现及自动/浏览器验收完成，整体 **partial**，真实后端与
-Tauri/release 验收 **open**。来源：`../Emerald-presence/cc-tasks/244-frontend-reasoning-handoff.md`。
-本单只修改本仓；手机实现、后端工单及总账没有跨仓写入。
+2026-09-11 更新。状态：本仓实现完成，整体 **partial**；真实历史恢复和真实 Tauri/后端联调 **open**。
+用户明确限定本仓，历史接口修复留后端工单。后端交接见
+`../cc-tasks/244-history-turn-id-backend-handoff.md`，未修改其他仓库。
 
-## 当前实现
+## 当前体验与实现
 
-- Reality 主聊天 assistant 气泡保存 canonical `turnId`。HTTP `msg_id` 只匹配 WS，
-  成功响应中的 `turn_id` 才用于思考查询；覆盖 WS 先到、HTTP 先到、流式替换、HTTP fallback
-  和尚未播放完的分段。历史仅使用已有显式 `entry.turn_id`，不按时间或内容猜测。
-- 默认收起“模型返回思考”；点击才调用 `load_turn_reasoning({ turnId })`。
-  展示每次调用的模型、seq、completed/interrupted、全部 parts 的 source 和文本。
-  completed 文案明确仅协议消费完成，仍可能触及长度上限。
-- Rust 复用 `http_client()`、`authorized_request()`，使用标准 desktop Bearer、
-  `no_proxy()`、15 秒超时和 URL path segment 编码。不新增凭据，不调用 admin 全局归档。
-  HTTP 失败只传状态码，不将后端错误正文泄露给 UI。
-- API 仍经 `invokeGated`；401 进入既有连接门禁，403 权限不足，404 版本不支持，
-  503 稍后重试；其他失败通用提示。空记录显示“本回合没有可用的模型思考记录”，允许重读。
-- 每个 ChatPanel 持有按 turn_id 索引的内存缓存，最多 50 个非空结果；在途查询合并，
-  空结果/失败不负缓存，手动重读绕过已缓存记录。卸载清空缓存并拒绝旧代响应。
-  组件卸载/收起忽略迟到结果；角色 ID 通知重建 ChatPanel，头像 revision 不触发重建。
-- 仅 React 文本节点渲染思考，没有 HTML 注入、工具调用、聊天回灌或 TTS 播放。
-  中文和英文文案均为语义 i18n key；无新偏好、落盘或自动轮询。
+- 设置 → 角色与对话 → **显示思考入口**。默认开启，只控制本地 UI；关闭隐藏所有思考旁白，
+  停止新增读取，重启后保持选择。复用 uiPreferences 的 `chat.reasoningVisible`，不修改生成/归档。
+- 每次完整回复只有一个居中的浅底“展开思考”按钮，位于首个 assistant 分段前。
+  `reasoningAnchors` 依据 canonical turnId 分组，后续分段、连续的不同回复不会混淆。
+  未完成流式回复与缺少 ID 的消息不猜测关联。
+- 展开是柔和旁白，无头像/气泡边框；仅显示“{角色名}的内心活动：”和正文。
+  名称订阅 activeCharacter，不硬编码。所有返回文本依调用顺序保留，
+  模型、调用号、来源、协议、完成/中断字段均不展示；原文只以 React 文本节点渲染。
+- `TurnReasoningCache` 按 canonical turn_id 缓存、合并在途请求，最多 50 个非空回合。
+  重新收起/展开使用缓存；手动重新读取可刷新。失败/空结果不负缓存，空记录不代表没有思考。
+  卸载忽略迟到响应，切换角色清空缓存。关闭显示不取消底层已经发出的只读请求，但结果不回填 UI。
+- HTTP fallback、WS 先到、HTTP 先到、流式完成仍使用原有正文/分段/对账路径，
+  canonical turn_id 仅来自 HTTP 明确字段；transport msg_id 不能作为思考查询 ID。
+- Tauri `load_turn_reasoning({ turnId })` / memory.read GET 不变；使用 desktop Bearer、
+  no_proxy、15 秒超时，不申请 admin 凭据。401 原连接门禁、403/404/503/一般错误和空记录可重试。
+  UI 错误也不显示 scope 名或后端原始错误正文。
 
-## 三面闭环检查
+## 历史恢复的真实边界
 
-| 检查面 | 证据与结论 |
+后端日志确实可能已有 turn_id，但当前 `admin/routers/chat_log.py::_parse_day` 遇到
+`> ` 元数据仅跳过，最终没有把 ID 返回给前端，所以重启后仅靠当前真实历史接口无法恢复入口。
+前端一直支持 `ChatLogEntry.turn_id`；本次已验证带显式 ID 的历史回复只产生一个入口，
+刷新页面后可以重新展开读取。该验证使用假定后端已补字段的夹具，**不代表后端已修好**。
+不在前端解析后端文件、不按时间/正文推测、不另存一份聊天/思考正文做补丁。
+后端具体修复和回归要求见交接单，用户已指定后端另单实施。
+
+## 三面闭环
+
+| 检查面 | 当前结论 |
 |---|---|
-| 后端管理与观测 | 只读核对 `admin/routers/observability.py`：回合端点要求 memory.read，已有 available/entries 与 503；全局归档仍 admin-only。`settings_thinking.py` 与管理面 feature-center 的生成设置独立，本单不新增配置/effective state/审计/trace/队列。 |
-| 桌面设置与手机 | 桌面只读展开，无生成开关；手机 `lib/models/app_models.dart` 已分别解析 msgId/turnId，但 lib 无 reasoning 读取/展示实现。本单不改 Flutter/Android、后台服务、relay 或 poll/ack。手机 UI 留 roadmap。 |
-| 原链路与相邻路径 | 只读核对 owner `admin/routers/chat.py` 返回 `msg_id = _stream_msg_id or turn_id`；本仓 sendChat → HTTP → correlation → WS/fallback 原正文、分段、去重、ack 不变。仅补 canonical 字段和单独 GET；memory.read 权限由后端裁决，无客户端权限真值副本。 |
+| 管理与观测 | 回合 GET 已由 memory.read 授权；生成配置由 settings_thinking 与管理面维护。只读 UI 不新增后端配置/effective state/trace/队列；全局归档仍 admin-only。 |
+| 桌面设置与手机 | 新本地显示偏好位于角色与对话，默认 true，复用既有 load/save_ui_prefs。手机模型已分开解析 msgId/turnId，思考 UI 仍 roadmap；无 Flutter/Android/relay/poll/ack 改动。 |
+| 原链路与相邻路径 | HTTP msg_id 与 canonical turn_id 分离；分段对账、正文、ack、TTL、TTS 和通知保持原行为。历史字段遗漏由只读源码核对确认，scope/角色桶修复要求交接后端。 |
 
-## 已完成验收
+## 验证
 
-- `npm.cmd test`：57 个文件、238 项通过（含本单 12 项）。
-- `npm.cmd run build`：通过（包含 TypeScript）；已有大 chunk 提示仍在。
-- `cargo check`：通过。
-- `node scripts/turn-reasoning-browser.mjs`：Edge headless 实际加载 React 页面，Tauri IPC
-  与模型响应为夹具，不连接真实后端。四种路径 fallback、WS 先到、流式完成、HTTP 先到均通过；
-  确认 transport ID 与 canonical ID 不同仍查询正确，同回合多气泡只读取一次，正文不重复。
-- 浏览器覆盖默认收起/懒加载、多次调用、中断状态、403/404/503/500、空记录重读、401 原门禁、
-  HTML 样式的原文安全显示、旧消息无入口、真实 activeCharacter 通知及迟到结果隔离。
-- 浏览器在 1280×900 与收起侧栏的 480×800 下截图目检，通过面板换行与宽度检查。
-  本地重现截图位于 `.tmp/turn-reasoning-wide.png`、`.tmp/turn-reasoning-narrow.png`，不提交产物。
+- `npm.cmd test`：58 文件、242 项通过；新增每回合唯一入口、不同回合边界、历史 ID、
+  流式/缺 ID 跳过、全部文本保留与技术字段移除回归。
+- `npm.cmd run build`：通过，包含 TypeScript；已有大 chunk 提示仍在。本次未改 Rust。
+- `node scripts/turn-reasoning-browser.mjs`：实际 Edge headless 加载 React 页面，IPC/数据为夹具；
+  覆盖四种收包顺序、WS ACK/流式替换断言、分段不重复入口、全正文保留、文本安全、错误/空记录重试、
+  角色切换迟到结果、动态角色名、带 canonical ID 的历史加载、设置入口与刷新后的偏好保持。
+- 旁白截图在 `.tmp/turn-reasoning-wide.png`、`.tmp/turn-reasoning-narrow.png`、
+  `.tmp/turn-reasoning-history.png`；本地产物不提交。
 
-## 未完成与交接
+## Open / roadmap
 
-- **open**：真实 Tauri WebView + 实际 desktop profile token + 后端模型归档的全链路验证，
-  包括实际流式、多步工具/中断归档、后端重启及 release 包。浏览器 IPC 夹具不替代这些验收。
-- **roadmap**：WS-only 另一端目前没有 canonical turn_id，不能将 transport msg_id 当作回合；
-  保留无入口，待后端明确关联契约。无关联旧归档、QQ、主动消息、Dream、Stage 不回填。
-- **roadmap**：手机同类 UI 和真机验证由手机仓独立实施。
-- **open**：480px 保留默认宽侧栏会挤压整个聊天区，是已有全局布局问题；本单窄屏验收收起侧栏。
-- **open**：`../Emerald-presence/docs/three-repo-interface-catalog.md` 当前仍写客户端 roadmap，
-  本单遵守“在本仓库”范围未修改。建议后端仓同步：桌面关联/IPC/UI **current**，
-  浏览器夹具验证完成，真实 Tauri/后端验收 **open**，手机及 WS-only 关联 **roadmap**。
-
-本单不对外发布，不新增或改变 HTTP/WS 正文、mobile poll/ack、TTL、relay、通知行为，
-不修改 `thinking.enabled`，不要求管理员凭据。
+- **open**：真实后端历史 turn_id 返回修复；详见后端交接单。
+- **open**：真实 Tauri/后端归档/release 联调，不能以 IPC 夹具代替。
+- **roadmap**：WS-only 另一端无 canonical ID；无关联旧日志、QQ、主动消息、Dream、Stage、手机 UI。
+- **open**：480px 默认宽侧栏挤压聊天流为已有全局布局问题；窄屏面板验证先收起侧栏。
+- **open**：后端三仓总账仍待其仓同步，本单不越过用户明确的仓库范围。

@@ -2,7 +2,11 @@
 
 ### API 思考展开验收与跨端关联（Brief 244，2026-09-11，partial/open）
 
-桌面 IPC、canonical 关联、懒加载面板和回归已实现；详情见 brief-244-reasoning.md。
+桌面 IPC、canonical 关联、每次回复一个居中旁白入口、角色与对话展示开关已实现；
+详情见 brief-244-reasoning.md。展开不再显示模型/调用/来源字段。
+**open：历史恢复**。后端 chat_log._parse_day 忽略 > 元数据，实际不返回 turn_id；
+这使重启后的历史回复缺少思考入口。用户要求后端另单，未跨仓修复；具体施工和验收见
+../cc-tasks/244-history-turn-id-backend-handoff.md。带 ID 的历史夹具通过不等于真实后端已修复。
 open：真实 Tauri WebView + 真实后端 desktop token/模型归档联调、release 验收未完成；
 浏览器 IPC 夹具不代表实机通过。手机无展开 UI，保留 roadmap。
 仅收到 WS 的另一端没有 canonical turn_id（当前 WS 只有 transport msg_id），不提供

@@ -1,18 +1,20 @@
-# 244：桌面按消息展开模型返回思考 — 本仓验收回执
+# 244：桌面内心活动旁白 — 本仓验收回执
 
 来源：`../Emerald-presence/cc-tasks/244-frontend-reasoning-handoff.md`。
-状态：**partial**（本仓实现完成；真实后端/Tauri/release 验收 **open**）。
+2026-09-11 用户追加：只改本仓、每回复一个旁白入口、角色与对话显示开关、隐藏技术字段。
+状态：**partial**；本仓 UI 已完成，真实历史接口修复和 Tauri/release 验收 **open**。
 
-- [x] 保存 HTTP canonical turn_id，默认收起的只读面板。
-- [x] 懒加载、多次调用、模型/来源/文本、中断状态、失败和空记录可重读。
-- [x] 401/403/404/503 降级，沿用 desktop Bearer 和 memory.read。
-- [x] 按回合缓存，角色/会话卸载清理并忽略迟到响应。
-- [x] 非流式、流式、HTTP/WS 顺序、旧消息与原正文去重回归。
+- [x] 保存 HTTP canonical turn_id，按每次完整回复提供一个居中浅底“展开思考”入口。
+- [x] 动态“角色名的内心活动：”及全部思考正文，不展示模型/调用/来源/协议字段。
+- [x] 角色与对话 → 显示思考入口，默认 true，本地持久化并实时生效。
+- [x] 懒加载、按回合缓存、错误/空记录重试、角色切换和卸载忽略迟到结果。
+- [x] 非流式、流式、HTTP/WS 顺序、原正文去重与历史显式 ID 回归。
 - [x] i18n、架构、前端结构、接口/协议、设置审计、已知问题同步。
-- [x] 238 项 Vitest、生产构建、cargo check、真实浏览器页面 IPC 夹具验收。
-- [ ] 真实后端与 Tauri/release 联调（open）。
-- [ ] 手机端实现与真机验收（roadmap，非本仓范围）。
-- [ ] 后端三仓总账同步（open，本单限定本仓，待后端仓同步）。
+- [x] 242 项 Vitest、生产构建、真实浏览器 IPC 夹具验证。
+- [ ] **open**：当前后端历史解析器没有返回日志中已有的 turn_id，重启真实历史仍无入口。
+  用户要求后端另单；施工要求见 `cc-tasks/244-history-turn-id-backend-handoff.md`。
+- [ ] **open**：真实后端与 Tauri/release 联调。
+- [ ] **roadmap**：手机 UI 与真机验收、WS-only 和其他未关联来源。
+- [ ] **open**：后端三仓总账同步（留其仓处理）。
 
-WS-only 无 canonical ID 的消息不猜测关联；QQ/主动/Dream/Stage 保留 roadmap。
-完整证据和重现步骤见 `docs/brief-244-reasoning.md`。
+完整实现与验收边界见 `docs/brief-244-reasoning.md`。

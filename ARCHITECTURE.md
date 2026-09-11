@@ -1,15 +1,15 @@
 # ARCHITECTURE.md — PresenceKit-desktop 架构总览
 
-## Brief 244：按回合展开模型返回思考（2026-09-11，partial）
+## Brief 244：按回复展开内心活动（2026-09-11，partial）
 
-Reality Chat 的 assistant 气泡保存显式 canonical turn_id；HTTP msg_id 只用于对账，
-流式 msg_id 不等于 canonical turn_id。ChatPanel 将 HTTP 关联补到已展示分段和后续分段，
-TurnReasoningPanel 默认收起，经 shared/api/turnReasoning → load_turn_reasoning →
-GET /chat/turns/{turn_id}/reasoning 懒加载，只作文本渲染，不进入 TTS、工具或聊天正文。
-TurnReasoningCache 按 turn_id 缓存，属于单个 ChatPanel 生命周期；角色切换订阅重建
-ChatPanel，清空缓存并忽略迟到结果。头像 revision 不重建会话。
-实现、三面检查与真实窗口 open 项见 docs/brief-244-reasoning.md。
-
+Reality Chat 保留显式 canonical turn_id；HTTP msg_id 仅用于 WS 对账。
+reasoningAnchors 在完整回复的第一个 assistant 分段前放置唯一旁白入口，不在 Bubble 内重复。
+TurnReasoningPanel 默认收起，居中显示浅底“展开思考”；展开只显示动态角色名与全部思考正文，
+不展示模型、调用序号、来源或协议状态。读取仍经原 memory.read IPC，纯文本、不进入 TTS。
+角色与对话设置新增“显示思考入口”，本地 chat.reasoningVisible 默认 true，使用 uiPreferences
+持久化并实时同步；不更改后端生成策略。缓存仍属于 ChatPanel 生命周期，角色切换清空。
+历史条目有显式 turn_id 即可恢复入口，但当前后端解析器丢弃该字段；用户指定后端另单处理，
+交接见 cc-tasks/244-history-turn-id-backend-handoff.md。详情见 docs/brief-244-reasoning.md。
 
 ## 偏好与视觉小说式舞台（2026-09-11，partial）
 

@@ -22,7 +22,7 @@ export const CHAT_PREFERENCE_TABS: ReadonlyArray<{
 export const CHAT_PREFERENCE_SECTION_IDS: Readonly<Record<ChatPreferenceTab, readonly string[]>> = {
   general: ['language', 'connection', 'adminPanelBridge', 'diarySync', 'visualPerception'],
   interface: ['themes', 'chatHeader', 'layout', 'font', 'background', 'moodReactive', 'avatars', 'color', 'activityAppearance'],
-  characterChat: ['currentCharacterStatus', 'periodDate'],
+  characterChat: ['currentCharacterStatus', 'reasoningDisplay', 'periodDate'],
   petInteraction: ['presencePopup', 'petVisualStyle', 'petMouse', 'petRoam', 'petRipple', 'playMode', 'desktopTts', 'call', 'coplay'],
   advanced: ['yandereVisual'],
 };

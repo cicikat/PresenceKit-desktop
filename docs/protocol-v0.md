@@ -6,7 +6,9 @@
 turn_id 用于 GET /chat/turns/{turn_id}/reasoning（memory.read）；HTTP msg_id 只与
 WS channel_message/message_segments/message_stream_* 的传输 ID 对账。
 流式 msg_id 可以不同于 turn_id，禁止互换或按时间/内容猜测。当前 WS 未传 canonical
-turn_id，因此 WS-only 消费端无明确关联时不展示入口。具体 IPC 与降级见 backend-integration.md。
+turn_id，因此 WS-only 消费端无明确关联时不展示入口。当前历史接口解析器也未返回已有日志
+的 turn_id，恢复问题留后端工单。本仓只按显式字段为每次回复显示一个旁白入口；
+具体 IPC 与降级见 backend-integration.md。
 
 
 MCP 调用仍只在后端执行；桌面端只能收到不含远端工具细节的本地瞬态状态。

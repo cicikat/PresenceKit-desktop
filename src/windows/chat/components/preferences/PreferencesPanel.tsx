@@ -1,4 +1,5 @@
 import { CurrentCharacterAvatar } from './CurrentCharacterAvatar';
+import { ReasoningDisplaySettings } from './ReasoningDisplaySettings';
 import { CurrentCharacterStatus } from './CurrentCharacterStatus';
 import { ActivityAppearanceSettings } from './ActivityAppearanceSettings';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
@@ -419,6 +420,7 @@ export function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, 
               <>
                 <CurrentCharacterAvatar />
                 <CurrentCharacterStatus onCharacterSwitched={onCharacterSwitched} />
+                <ReasoningDisplaySettings />
                 <PeriodDateSettings />
               </>
             ) : tab === 'petInteraction' ? (

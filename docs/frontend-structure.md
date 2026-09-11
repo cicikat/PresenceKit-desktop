@@ -1,15 +1,15 @@
 # docs/frontend-structure.md — 前端结构指南
 
-## Brief 244：消息思考面板（2026-09-11，partial）
+## Brief 244：回复间思考旁白（2026-09-11，partial）
 
-ChatPanel/Bubble 内的 TurnReasoningPanel 为有 canonical turnId 的 assistant 气泡提供
-默认收起的只读展开入口。点击加载，显示所有调用的模型、来源、文本、协议完成/中断状态；
-错误和空记录可以重新读取。React 文本节点保留原文，不运行 HTML、不套聊天标签解释器。
-同回合分段共享单会话缓存与在途请求，最多缓存 50 个非空结果；不持久化，空结果不缓存。
-ChatWindow 的 activeCharacter ID 变化重建 ChatPanel（单纯头像变化不重建），
-防止管理面/跨窗口角色通知绕过偏好页回调留下旧面板。卸载忽略在途请求结果。
-详情与验收边界见 brief-244-reasoning.md。
-
+ChatPanel 使用 reasoningAnchors 按 canonical turnId 标识每次回复，仅在第一个已完成
+assistant 分段前渲染 TurnReasoningPanel；后续分段不会重复入口。旁白在聊天流中央，
+浅底按钮“展开思考”默认收起，展开只显示“{角色名}的内心活动：”及按原顺序拼接的全部正文。
+角色名订阅 activeCharacter，正文是纯文本，不展示任何模型/调用/来源/协议元数据。
+ReasoningDisplaySettings 位于 PreferencesPanel 的角色与对话页，shared/reasoningDisplay.ts
+通过 uiPreferences 持久化 chat.reasoningVisible（默认 true），关闭卸载旁白、停止新增查询。
+缓存与在途请求仍按 turn_id、单会话隔离，失败和空结果可重试，不持久化思考正文。
+显式历史 turn_id 能恢复入口；当前后端历史缺字段留后端工单，详见 brief-244-reasoning.md。
 
 ## 偏好与视觉小说式舞台（2026-09-11，partial）
 
