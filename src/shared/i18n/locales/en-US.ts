@@ -1,6 +1,11 @@
 import type { MessageKey } from './zh-CN';
 
 export const enUS: Record<MessageKey, string> = {
+  'settings.avatar.title': "Current character avatar",
+  'settings.avatar.hint': "Used for this character in chat and dreams. PNG, JPEG or WebP, up to 10 MB.",
+  'settings.avatar.change': "Change avatar",
+  'settings.avatar.saving': "Saving?",
+  'settings.avatar.error': "Could not load or save the avatar. Check the image format, size and connection, then retry.",
   "chat.attachments.pending": "Pending attachments",
   "chat.attachments.remove": "Remove attachment",
   "chat.attachments.unsupported": "Supported: TXT, MD, DOCX, PNG, JPG, GIF and WebP.",

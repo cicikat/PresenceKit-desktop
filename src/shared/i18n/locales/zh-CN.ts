@@ -1,4 +1,9 @@
 export const zhCN = {
+  'settings.avatar.title': '当前角色头像',
+  'settings.avatar.hint': '用于当前角色的对话与梦境。支持 PNG、JPEG、WebP，最大 10 MB。',
+  'settings.avatar.change': '更换头像',
+  'settings.avatar.saving': '正在保存…',
+  'settings.avatar.error': '头像读取或保存失败，请重试并检查图片格式、大小与连接。',
   "chat.attachments.pending": "待发送附件",
   "chat.attachments.remove": "移除附件",
   "chat.attachments.unsupported": "支持 TXT、MD、DOCX 和 PNG、JPG、GIF、WebP 图片。",

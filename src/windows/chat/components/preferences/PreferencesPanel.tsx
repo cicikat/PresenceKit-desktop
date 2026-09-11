@@ -1,3 +1,4 @@
+import { CurrentCharacterAvatar } from './CurrentCharacterAvatar';
 import { CurrentCharacterStatus } from './CurrentCharacterStatus';
 import { ActivityAppearanceSettings } from './ActivityAppearanceSettings';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
@@ -416,6 +417,7 @@ export function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, 
               </>
             ) : tab === 'characterChat' ? (
               <>
+                <CurrentCharacterAvatar />
                 <CurrentCharacterStatus onCharacterSwitched={onCharacterSwitched} />
                 <PeriodDateSettings />
               </>
