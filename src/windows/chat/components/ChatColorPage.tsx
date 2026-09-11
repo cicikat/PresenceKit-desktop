@@ -1,3 +1,4 @@
+import { AppearancePreview } from '../../../shared/theme/AppearancePreview';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   loadUserPresets,
@@ -369,6 +370,7 @@ export function ChatColorPage() {
         )}
       </div>
 
+      <AppearancePreview tokens={selectedPreset ? tokens : (editSlot === 'day' ? PAPER_THEME.tokens : DARK_THEME.tokens) as Record<string, string>} />
       {/* Color groups */}
       {selectedPreset ? (
         <div style={{ display: 'grid', gap: 14 }}>

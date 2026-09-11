@@ -1,5 +1,13 @@
 # docs/known-issues.md — 已知问题与技术债
 
+### 聊天交互修整验收（2026-09-11，partial/open）
+
+实现与浏览器夹具验证见 ui-refinements-2026-09-11.md。活动/群聊标准壳及 Design Mod
+往返、气泡透明度、思考延迟占位与自动刷新、双端配色预览已实现。
+open：真实 Tauri / 模型归档延迟 / release 验收；未跨仓修改后端总账，待后端仓同步。
+思考空记录自动读取最多 30 次，缺 canonical ID 等待最多 60 秒；超时停止，不无限轮询。
+手机入口仍 roadmap，历史缺 turn_id 仍依赖后端修复。
+
 ### API 思考展开验收与跨端关联（Brief 244，2026-09-11，partial/open）
 
 桌面 IPC、canonical 关联、每次回复一个居中旁白入口、角色与对话展示开关已实现；

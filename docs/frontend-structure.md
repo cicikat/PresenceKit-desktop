@@ -1,5 +1,15 @@
 # docs/frontend-structure.md — 前端结构指南
 
+## 聊天交互修整（2026-09-11，partial）
+
+最新覆盖见 ui-refinements-2026-09-11.md：ActivityWindow 不再由 AppRoot 全屏挂载，
+改由 ChatWindow 主区域懒加载，不使用 ActivityRibbon。ChatPanel 在活动/群聊期间保持挂载。
+DesignModHost 的 nativePage 与 DesignMountsSuspended 只调整局部视图，不改变 Host API。
+Ribbon 支持活动/群聊选中和二次点击退出；图标区无滚动条，仍可滚动。
+透明度作用于 Bubble 底色；TurnReasoningPanel 在 canonical ID 就绪前保持展开状态，
+有界自动刷新，移除重读按钮。AppearancePreview 用隔离 token 绘制实时预览，Chat/Dream 共用。
+偏好第 4 类为“测试”；Dream 色彩页提供共用主题选择，布局依旧隔离。
+
 ## Brief 244：回复间思考旁白（2026-09-11，partial）
 
 ChatPanel 使用 reasoningAnchors 按 canonical turnId 标识每次回复，仅在第一个已完成

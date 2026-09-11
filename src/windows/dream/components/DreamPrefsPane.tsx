@@ -1,3 +1,5 @@
+import { AppearancePreview } from '../../../shared/theme/AppearancePreview';
+import { ThemePicker } from '../../../shared/theme/ThemePicker';
 ﻿import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   DEFAULT_DREAM_SETTINGS,
@@ -501,6 +503,7 @@ function DreamColorTab({
   appearance: DreamAppearance;
   onAppearanceChange: (patch: Partial<DreamAppearance>) => void;
 }) {
+  const { t } = useI18n();
   const [tone, setTone] = useState<'day' | 'night'>('day');
 
   const overrides = tone === 'day' ? appearance.colorOverridesDay : appearance.colorOverridesNight;
@@ -582,6 +585,12 @@ function DreamColorTab({
           )}
         </div>
 
+        <AppearancePreview dream tokens={{ ...defaults, ...overrides }} />
+        <div style={{ marginBottom: 16 }}>
+          <h3>{t('appearance.sharedTheme')}</h3>
+          <p>{t('appearance.sharedTheme.hint')}</p>
+          <ThemePicker key={tone} slot={tone} />
+        </div>
         {/* Color groups */}
         {DREAM_COLOR_GROUPS.map(group => (
           <div key={group.label} style={{ marginBottom: 14 }}>

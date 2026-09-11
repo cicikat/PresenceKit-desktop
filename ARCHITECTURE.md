@@ -1,5 +1,13 @@
 # ARCHITECTURE.md — PresenceKit-desktop 架构总览
 
+## 聊天交互修整（2026-09-11，partial）
+
+ActivityWindow 改为 ChatWindow 主区域，保留主 ChatPanel 实例；活动/群聊二次点击返回，
+Design Mod 通过局部 portal suspension 临时呈现标准壳。透明度仅影响气泡底色。
+思考入口在首个本机回复到达时占位，canonical ID 到达后展开自动读取，不重新挂载入口。
+Chat/Dream 共用 AppearancePreview 和主题注册中心，但不共用布局。
+当前事实、验证与跨仓 open 项见 docs/ui-refinements-2026-09-11.md；以下同日旧描述以本节为准。
+
 ## Brief 244：按回复展开内心活动（2026-09-11，partial）
 
 Reality Chat 保留显式 canonical turn_id；HTTP msg_id 仅用于 WS 对账。

@@ -171,5 +171,9 @@ release 只读 `resource_dir/themes/`；新放入目录的 mod 点击 ThemePicke
 
 ## 9. 已知缺口
 
+2026-09-11：ChatColorPage 与 DreamColorTab 已内嵌实时对话缩略预览，使用所编辑的日/夜
+token；梦境色彩页新增共用 ThemePicker。主题可共用，Layout/Design Mod 仍只作用于 Chat。
+验证及真实窗口 open 项见 ui-refinements-2026-09-11.md。
+
 cc-tasks/42 已补齐 UI mod 的磁盘 CSS 读取、样例目录名与主题列表手动刷新入口；当前没有
 已确认的 UI mod 加载缺口。功能自由合成不属于 UI mod，见 §8 和 [design-mods.md](design-mods.md)。
