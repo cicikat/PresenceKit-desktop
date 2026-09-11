@@ -1485,6 +1485,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       // 注意：必须在 scheduleAssistantSegments 之前处理，否则 wsMsgIdToLocalIdsRef 里
       // 已存的 msg_id 会触发 duplicate-skip guard 而跳过渲染。
       if (streamingLocalIdRef.current.has(msg_id)) {
+        setLoading(false);
         // Reconcile the live streamed bubbles with the canonical (scrubbed)
         // split. Also maps any already-parked message_segments per-index.
         replaceStreamingBubbleWithParts(msg_id, content, normalizedHash);
@@ -1647,6 +1648,9 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       // 流结束：关闭所有气泡的打字光标，等待 canonical channel_message 替换
       const ids = streamingLocalIdRef.current.get(msg_id);
       if (!ids) return;
+      if (!sendingRef.current && !pendingSendReplyRef.current && !streamingTextRef.current.get(msg_id)?.trim()) {
+        setLoading(false);
+      }
       setMessages(prev => prev.map(m => ids.includes(m.id) ? { ...m, streamingDone: true } : m));
       void notifyOnMessage(msg_id, getActiveCharacterName(), streamingTextRef.current.get(msg_id) ?? '');
       console.log('[chat] stream-end | msg_id:', msg_id, '| bubbles:', ids.length);
