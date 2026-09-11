@@ -169,3 +169,12 @@ Backend-owned settings remain authoritative; no client credentials or local swit
 ## Character thinking voice (2026-09-11)
 
 Backend GET/POST /settings/thinking (persona) adds character_voice, default true under thinking.enabled. Admin Conversation/Thinking owns the toggle and voice_preview (effective means prompt guidance active, not guaranteed provider output). Existing desktop reasoning display is presentation-only; no new client configuration, IPC, scope or WS field. Native mode adds a composed prompt without another model call; it can affect reply wording. Historical reasoning stays unchanged. See backend docs/thinking-voice.md. Native style compliance and physical-window verification remain observe; mobile reasoning UI remains roadmap.
+
+
+## 用户称谓接线补充（2026-09-11）
+
+current：复用 GET/PATCH `/users/{user_id}/pronoun`（admin），默认“她”，允许“她 / 他 / 祂 / TA / 它”；管理面「个人设置 → 用户称谓」编辑，保存后下一次组装生效。GET 返回有效称谓，原始配置可经 `/users/{user_id}/facts` 观测。Reality 身份约定、事实边界、长期观察、日记/历史/重点事实框架使用所选称谓；显示名及多人 speaker 归属保留。引用、角色卡、历史正文不做全文替换。未新增配置源、存储或网络调用。
+
+桌面使用现有 openAdminPanel 管理面桥，手机 `/mobile/chat` 继承后端组装；无新 WS/IPC/ack/TTL/锁或通知协议。手机原生称谓编辑及 Dream 专项称谓统一为 roadmap；真实模型文风、双端真机体验为 observe。
+
+thinking 原生提示标题改为【你们约定的思维链thinking输出方式*特调】，保留原有文风正文与执行闸门。
