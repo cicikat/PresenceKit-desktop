@@ -1,5 +1,19 @@
 # docs/frontend-structure.md — 前端结构指南
 
+## 偏好与视觉小说式舞台（2026-09-11，partial）
+
+角色与对话页新增 `CurrentCharacterAvatar`，订阅当前角色和头像 revision，复用
+`AvatarCropper` 裁为 256px PNG，经既有 `uploadCharacterAvatar` 保存；取消、角色切换
+和卸载释放 object URL。读取忽略过期响应，上传锁定裁剪目标角色，失败保留裁剪供重试。
+这是真正的角色头像；界面页 HER/YOU 是本地外观后备头像。
+
+`ActivityAppearanceSettings` 与 `CurrentCharacterStatus` 使用 `SettingsSections.css`
+统一横向行、控件宽度、只读值换行和标题操作栏。
+自由合成 1.2 在单 WebView 内排布 Ribbon、主聊天舞台和可滚动信息卡；窄于 760px
+将信息卡移到聊天下方。虚实连线与鼠标/键盘焦点响应不接管输入或拖动；使用 ResizeObserver
+和被动 scroll listener，卸载全部释放。花园/日记保留完整官方错误/重试界面。
+验证与 open 项见 `ui-polish-2026-09-11.md`。
+
 
 ## Brief 242：统一偏好与后端设置职责（2026-09-10，current）
 

@@ -40,7 +40,6 @@ export function CurrentCharacterStatus({ onCharacterSwitched }: { onCharacterSwi
   return <section className="settings-section">
     <header className="settings-section__header"><h3>{t('settings.current.title')}</h3><button type="button" style={prefActionButtonStyle} onClick={() => void refresh()}>{t('settings.current.refresh')}</button></header>
     {error && <p role="alert">{t('settings.current.error')}</p>}
-    <button type="button" onClick={() => void refresh()}>{t('settings.current.refresh')}</button>
     {!assets ? <p role="status">{error ? unknown : t('settings.current.loading')}</p> : <>
       <PrefRow label={t('settings.current.character')}>
         <select style={prefSelectStyle} value={assets.active.active_character} disabled={busy} onChange={e => void selectCharacter(e.target.value)}>

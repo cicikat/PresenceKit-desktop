@@ -1134,3 +1134,11 @@ Backend mobile HTTP/poll add optional display_text for hl/big/sm, referencing th
 - upload_document 一次组装 multipart files/message/channel=desktop，调用现有 POST /upload/ingest，Bearer/chat scope 和 HTTP/WS msg_id 去重保持原样。剪贴板图片仅点击发送后离开客户端。
 - 后端当前不接受文档与图片混合、多个文档；桌面草稿提前拦截。最多 10 张图为本地批次限制。
 - 上传引用为 message 中的明确附言；文本引用仍使用原 reply_to。历史 API 没有引用字段，历史恢复 open。
+## 2026-09-11：角色头像设置入口恢复
+
+偏好「角色与对话」的 `CurrentCharacterAvatar` 复用 `get_character_avatar` /
+`upload_character_avatar`，裁剪后上传 256 × 256 PNG；HTTP 路径、persona scope 和 Rust
+no_proxy 桥接不变。成功后失效 prompt-assets 缓存并发送 activeCharacter avatar revision，
+驱动 Chat/Dream 既有头像刷新。角色切换取消未提交裁剪；已经发出的上传始终写入原目标
+charId。界面页 HER/YOU 后备头像仍使用本地 avatarStore，不混用后端角色头像。
+浏览器以 IPC mock 验证，真实后端与手机设备同步为 open，见 `ui-polish-2026-09-11.md`。

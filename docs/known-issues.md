@@ -415,3 +415,14 @@ useEffect(() => {
 验证：4 项回归测试和生产构建通过；真实 Tauri WebView 重载后输入框可见、header 数量 0、错误页数量 0、pageerror 0。浏览器脚本新增 --hidden-header，覆盖保存隐藏顶部栏的启动分支。
 跨端：纯桌面渲染修复，沿用原 chat.headerVisible/appearance 偏好；不新增后端管理设置、HTTP/WS/IPC、鉴权、队列、手机/relay 或观测端点。后端总账未修改，跨仓记录同步仍 open。
 本修复不改变此前真实慢 OCR、系统剪贴板和桌宠等尚未完成的验收状态。
+## 2026-09-11 偏好与自由合成舞台：partial / open
+
+- 已实现：活动/角色设置行统一、当前角色头像裁剪上传、自由合成单窗口视觉小说式舞台。
+- 浏览器 IPC mock 验证不能证明真实 Tauri 与后端联调完成；真实 100%/125%/175% DPI、
+  多显示器、窗口 hide/restore、旧 Halo 运行会话切换到新版后的销毁、真实头像上传与
+  手机群聊头像刷新仍为 open。建议按 `ui-polish-2026-09-11.md` 的 E 项逐项实测。
+- 跨仓只读核对：后端 `admin/routers/settings_prompt_assets.py` 使用 persona scope 与
+  runtime override → authored default 头像读取顺序；手机 `GroupRosterMember.avatarUrl`
+  消费 roster 头像，本次无手机上传设置或 relay 变更。桌面样式和 Design Mod 无后端总开关。
+- 后端 `docs/three-repo-interface-catalog.md` 同步为 open：当前授权限本仓，未修改后端仓。
+  待同步内容：桌面新增既有角色头像 API 的设置入口，接口/权限未扩展，真实跨端验收未完成。

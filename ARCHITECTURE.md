@@ -1,5 +1,17 @@
 # ARCHITECTURE.md — PresenceKit-desktop 架构总览
 
+## 偏好与视觉小说式舞台（2026-09-11，partial）
+
+`CurrentCharacterAvatar` 在偏好「角色与对话」提供当前角色头像预览和裁剪上传，复用
+角色头像 API、prompt-assets 缓存失效与 activeCharacter revision 通知；角色切换关闭
+未提交裁剪，读取取消过期响应。界面页 HER/YOU 仍为本地外观后备头像。
+一起做事和角色状态共用 `SettingsSections.css` 的横向标签/控件比例。
+
+自由合成能力样架 1.2 改为单窗口视觉小说式舞台，真实 Ribbon、聊天三块和侧栏能力
+仍由宿主 portal。Flow/Status 使用 subregions，Garden/Diary 使用完整官方 renderer
+以保留加载/错误/重试态；默认不创建 native surfaces。连线只在几何和滚动变化时重画。
+实现、浏览器回归和真实窗口 open 项见 `docs/ui-polish-2026-09-11.md`。
+
 
 ## Brief 242：统一偏好与后端设置职责（2026-09-10，current）
 
