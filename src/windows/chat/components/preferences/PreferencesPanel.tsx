@@ -146,7 +146,7 @@ export function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, 
               </button>
             ))}
           </div>
-          <div style={{ padding: '18px 22px', display: 'grid', gap: 18, flex: 1, minHeight: 0, overflowY: 'auto' }}>
+          <div style={{ padding: '18px 22px', display: 'grid', alignContent: 'start', gap: 18, flex: 1, minHeight: 0, overflowY: 'auto' }}>
             {tab === 'general' ? (
               <>
                 <PrefRow label={t('common.language')} hint={t('settings.language.hint')}>

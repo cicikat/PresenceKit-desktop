@@ -1,4 +1,9 @@
 .settings-section { display: grid; gap: 0; min-width: 0; container-type: inline-size; }
+.activity-appearance-settings { align-content: start; gap: 18px; }
+.activity-appearance-settings > h3 { padding: 0; }
+.activity-appearance-settings > div:not(.settings-avatar) { padding: 0; border: 0; }
+.activity-appearance-settings > div > select { width: 140px !important; max-width: 48%; }
+.activity-appearance-settings details { padding: 0; }
 .settings-section h3 { margin: 0; font-size: 14px; font-weight: 600; color: var(--ink); }
 .settings-section > h3, .settings-section__header { padding: 0 0 16px; }
 .settings-section__header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }

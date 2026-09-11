@@ -106,7 +106,7 @@ export function CoplaySettingsPage() {
   const displayError = actionError ?? loadError;
 
   return (
-    <div style={{ display: 'grid', gap: 14 }}>
+    <div style={{ display: 'grid', alignContent: 'start', gap: 18, minWidth: 0 }}>
       <div>
         <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink)', marginBottom: 2 }}>陪玩模式</div>
         <div className="mono" style={{ fontSize: 9.5, color: 'var(--ink-3)', letterSpacing: 1.1 }}>
