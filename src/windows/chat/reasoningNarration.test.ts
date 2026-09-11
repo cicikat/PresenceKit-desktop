@@ -3,6 +3,11 @@ import { reasoningAnchors, reasoningNarrationText } from './reasoningNarration';
 import type { TurnReasoning } from '../../shared/api/turnReasoningState';
 
 describe('reply narration boundaries', () => {
+  it('reserves the first local reply before its canonical ID arrives without guessing an API ID', () => {
+    const first = { id: 'first', role: 'assistant', wsMsgId: 'transport', reasoningPending: true, isStreaming: true };
+    expect([...reasoningAnchors([first, { id: 'other', role: 'assistant', wsMsgId: 'remote' }])]).toEqual(['first']);
+    expect([...reasoningAnchors([{ ...first, turnId: 'canonical', isStreaming: false }, { id: 'second', role: 'assistant', turnId: 'canonical' }])]).toEqual(['first']);
+  });
   it('groups all paragraphs of one reply without merging adjacent distinct replies', () => {
     const messages = [
       { id: 'user', role: 'user', turnId: 'first' },
@@ -16,14 +21,14 @@ describe('reply narration boundaries', () => {
     expect([...reasoningAnchors([...messages, { id: 'e', role: 'assistant', turnId: 'first' }])]).toEqual(['a', 'c']);
   });
 
-  it('uses explicit historical canonical IDs and ignores old unassociated and unfinished messages', () => {
+  it('uses explicit historical canonical IDs and ignores old unassociated messages', () => {
     expect([...reasoningAnchors([
       { id: 'old', role: 'assistant' },
       { id: 'blank', role: 'assistant', turnId: ' ' },
       { id: 'stream', role: 'assistant', turnId: 'live', isStreaming: true },
       { id: 'history-1', role: 'assistant', turnId: 'archived' },
       { id: 'history-2', role: 'assistant', turnId: 'archived' },
-    ])]).toEqual(['history-1']);
+    ])]).toEqual(['stream', 'history-1']);
   });
 });
 

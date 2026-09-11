@@ -4,17 +4,20 @@ interface ReasoningMessage {
   id: string;
   role: string;
   turnId?: string;
+  wsMsgId?: string;
+  reasoningPending?: boolean;
   isStreaming?: boolean;
 }
 
-/** The first completed assistant segment anchors one narration per canonical reply. */
+/** The first assistant segment anchors one narration per canonical reply. */
 export function reasoningAnchors(messages: readonly ReasoningMessage[]): Set<string> {
   const seen = new Set<string>();
   const anchors = new Set<string>();
   for (const message of messages) {
-    if (message.role !== 'assistant' || message.isStreaming || !message.turnId?.trim()) continue;
-    if (seen.has(message.turnId)) continue;
-    seen.add(message.turnId);
+    if (message.role !== 'assistant') continue;
+    const identity = message.turnId?.trim() || (message.reasoningPending ? message.wsMsgId?.trim() : undefined);
+    if (!identity || seen.has(identity)) continue;
+    seen.add(identity);
     anchors.add(message.id);
   }
   return anchors;

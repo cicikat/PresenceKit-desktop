@@ -48,7 +48,7 @@ import {
   setBoundedMapEntry,
 } from '../correlation';
 import { mergeAttachments, fileToDraft, type DraftAttachment } from '../draftAttachments';
-import { applyChatRegionOpacity } from '../chatRegionAppearance';
+
 import { createLatestTimer } from '../chatTimer';
 
 function splitReply(text: string): string[] {
@@ -131,6 +131,7 @@ interface ChatMsg {
   // message_segments correlation
   wsMsgId?: string;
   turnId?: string;
+  reasoningPending?: boolean;
   segments?: NarrativeSegment[];
   segmentedContent?: string;
   // 仅 live channel_message 携带；历史接口尚未持久化 sticker。
@@ -414,7 +415,7 @@ function BreathingAvatar({
   );
 }
 
-const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, youVisible, assistantFontSize, userFontSize, ttsEnabled, showEmotionAccent, showEmotionLabel, onBubbleContextMenu }: any) {
+const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, youVisible, assistantFontSize, userFontSize, ttsEnabled, showEmotionAccent, showEmotionLabel, chatOpacity = 1, onBubbleContextMenu }: any) {
   const fromUser = msg.role === 'user';
   const hue = msg.moodHue ?? currentHue;
   const time = msg.time ? new Date(msg.time).toLocaleTimeString('zh', { hour: '2-digit', minute: '2-digit' }) : '';
@@ -462,7 +463,7 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
           {msg.replyTo && <div className="chat-sent-quote">{truncateForPreview(msg.replyTo.text, 200)}</div>}
           <div style={{
             padding: '10px 14px',
-            background: 'var(--ink)', color: 'var(--paper)',
+            background: `color-mix(in srgb, var(--ink) ${chatOpacity * 100}%, transparent)`, color: 'var(--paper)',
             borderRadius: '6px 6px 1px 6px',
             fontSize: userFontSize, lineHeight: 1.55,
             boxShadow: '0 4px 12px oklch(0.30 0.04 60 / 0.18)',
@@ -553,7 +554,7 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
             }}
             style={{
               padding: stickerOnly ? 5 : '11px 15px',
-              background: 'var(--paper-2)',
+              background: `color-mix(in srgb, var(--paper-2) ${chatOpacity * 100}%, transparent)`,
               borderLeft: showEmotionAccent ? `3px solid oklch(0.55 0.13 ${hue})` : '1px solid var(--paper-edge)',
               borderTop: '1px solid var(--paper-edge)',
               borderRight: '1px solid var(--paper-edge)',
@@ -582,7 +583,7 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
 
 // ── 主组件 ──────────────────────────────────────────────────────────────────
 
-export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontSize = 14, chatOpacity = 1, showEmotionAccent = true, showEmotionLabel = true, dreamActive = false, characterAvatarDataUrl = null, mainLayout = 'stack', onOpenRoom, onOpenPrefs }: any) {
+export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible = true, chatFontSize = 14, chatOpacity = 1, showEmotionAccent = true, showEmotionLabel = true, dreamActive = false, characterAvatarDataUrl = null, mainLayout = 'stack', onOpenRoom, onOpenPrefs }: any) {
   const { language, t } = useI18n();
   const [state, setState] = useState(engine.get());
   useEffect(() => engine.subscribe(setState), [engine]);
@@ -1237,6 +1238,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         moodHue,
         moodLabel,
         time: Date.now(),
+        reasoningPending: idx === 0 && sendingRef.current,
         wsMsgId: wsMsgId && idx === 0 ? wsMsgId : undefined,
         turnId: canonicalTurnId ?? (wsMsgId ? canonicalTurnsRef.current.get(wsMsgId) : undefined),
         segments: pending?.segments,
@@ -1577,6 +1579,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         moodLabel: MOOD_LABEL_EN[m.mood],
         time: Date.now(),
         wsMsgId: msg_id,
+        reasoningPending: sendingRef.current,
         isStreaming: true,
         streamingDone: false,
       }]);
@@ -1936,8 +1939,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
   const { mounts: designMounts } = useDesignMounts();
   const designRegion = (id: 'chat.header' | 'chat.transcript' | 'chat.composer', content: ReactNode) => {
     const mount = designMounts[id];
-    const faded = applyChatRegionOpacity(content, chatOpacity);
-    return mount ? createPortal(faded, mount, `design-${id}`) : faded;
+    return mount ? createPortal(hidden ? <div hidden>{content}</div> : content, mount, `design-${id}`) : content;
   };
 
   return (
@@ -1947,6 +1949,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
       background: avatars.chatBackground?.dataUrl ? 'transparent' : 'var(--paper)',
       overflow: 'hidden',
       ...mainLayoutGrid(resolvedMainLayout),
+      ...(hidden ? { display: 'none' } : {}),
     }}>
       {/* HEADER */}
       {designRegion('chat.header', headerVisible && (
@@ -2053,9 +2056,10 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
 
         {messages.map((m: ChatMsg) => (
           <div key={m.id} className={m.role === 'user' || m.role === 'assistant' ? 'msg-enter' : undefined}>
-            {reasoningVisible && reasoningStarts.has(m.id) && <TurnReasoningPanel key={m.turnId} turnId={m.turnId!} cache={reasoningCache} />}
+            {reasoningVisible && reasoningStarts.has(m.id) && <TurnReasoningPanel turnId={m.turnId} pending={Boolean(m.wsMsgId && !m.turnId) || Boolean(m.isStreaming && !m.streamingDone)} cache={reasoningCache} />}
             <Bubble
               msg={m}
+              chatOpacity={chatOpacity}
               currentHue={currentHue}
               herDataUrl={herDataUrl}
               youDataUrl={youDataUrl}

@@ -42,6 +42,11 @@ admin-only /observability/llm-reasoning 列表/详情仍属于管理员全局归
 前端已验证带显式 ID 的历史恢复，不按时间或正文猜测关联。展示为每次回复一个旁白，
 本地显示开关不新增 IPC 或 REST 契约。详情及跨仓总账待同步项见 brief-244-reasoning.md。
 
+2026-09-11 展示补充：本机发送中的 WS 首段可先保留思考入口，但只有 HTTP canonical
+turn_id 就绪后才允许 load_turn_reasoning。展开后空记录每 2 秒重读、最多 30 次；关闭
+停止定时器并忽略迟到结果。无新增 HTTP/IPC/WS 字段，不扩大 memory.read scope。
+详情与后端总账待同步项见 ui-refinements-2026-09-11.md。
+
 本文档记录本仓当前和 `Emerald-presence` 的连接方式。三仓接口总账见
 `Emerald-presence/docs/three-repo-interface-catalog.md`；桌面消息细节统一见
 `docs/protocol-v0.md`。

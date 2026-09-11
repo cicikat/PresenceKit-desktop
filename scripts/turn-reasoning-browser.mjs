@@ -84,8 +84,16 @@ try {
   if(delivery==='stream')check(chatLogs.some(line=>line.includes('stream-replace-split')),'Stream was not reconciled');
   console.log('PASS delivery:',delivery);
  }
- const panel=page.locator('.turn-reasoning').first();
- const retry=()=>panel.getByRole('button',{name:'重新读取',exact:true});
+ const panel=page.locator('.turn-reasoning').last();
+ let nextAttempt=0;
+ // Completed records have no reread button. Exercise each failure on a new turn.
+ const retry=()=>({click:async()=>{
+   const before=await page.locator('.turn-reasoning').count();
+   await page.locator('textarea').fill('retry-'+nextAttempt++);
+   await page.locator('textarea').press('Enter');
+   await page.waitForFunction(n=>document.querySelectorAll('.turn-reasoning').length===n+1,before);
+   await panel.getByRole('button').click();
+ }});
  for(const [status,label] of [[403,'查看权限'],[404,'当前版本暂不支持'],[503,'稍后重试'],[500,'读取失败']]) {
   await page.evaluate(s=>window.reasoningStatus=s,status);
   await retry().click();
@@ -93,7 +101,7 @@ try {
  }
  await page.evaluate(()=>{window.reasoningStatus=0;window.reasoningEmpty=true;});
  await retry().click();
- await panel.getByText('本回合没有可用的模型思考记录',{exact:true}).waitFor();
+ await panel.getByText('本回合没有可用的模型思考记录',{exact:true}).waitFor({timeout:70000});
  await page.evaluate(()=>{window.reasoningEmpty=false;window.prettyThoughts=true;});
  await retry().click();
  await panel.locator('pre').waitFor();
