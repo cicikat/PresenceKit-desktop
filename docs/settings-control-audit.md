@@ -1,5 +1,13 @@
 # 设置与功能开关审计（P0–P2）
 
+## IME awareness (2026-09-11)
+
+Backend-owned `ime_ingest` / `ime_awareness` flags and `ime_judge` routing are managed in the admin UI.
+IME Android owns recording, upload and realtime batching switches. This client keeps the existing proactive
+message/notification path; no new native switch, raw IME read permission, WS payload or ack protocol.
+Physical device delivery remains observe. Backend contract: docs/ime-ingest.md.
+
+
 
 ## Brief 242：统一偏好与后端设置职责（2026-09-10，current）
 
