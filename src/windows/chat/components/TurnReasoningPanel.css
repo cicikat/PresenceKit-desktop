@@ -26,7 +26,7 @@
 .turn-reasoning button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .turn-reasoning-content {
   box-sizing: border-box;
-  width: min(100%, 640px);
+  width: 100%;
   margin: 12px auto 0;
   padding: 0 12px;
   max-height: 420px;
