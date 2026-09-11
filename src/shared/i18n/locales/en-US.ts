@@ -2,6 +2,14 @@ import type { MessageKey } from './zh-CN';
 
 
 export const enUS: Record<MessageKey, string> = {
+"settings.toolDisplay.title": "Show tool calls",
+"settings.toolDisplay.hint": "Show tools used in conversations and proactive activity. Does not change execution.",
+"tools.chain": "Tool calls",
+"tools.running": "Running",
+"tools.success": "Succeeded",
+"tools.error": "Failed",
+"tools.unknown": "Outcome unknown",
+"tools.pending_confirmation": "Awaiting confirmation",
 "room.call.title": "Video call",
 "room.call.listening": "Here, listening to you",
 "room.call.thinking": "Thinking about your words…",

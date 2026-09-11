@@ -1,4 +1,12 @@
 export const zhCN = {
+"settings.toolDisplay.title": "显示工具调用",
+"settings.toolDisplay.hint": "显示对话与主动行为中的工具调用和结果，不影响工具执行。",
+"tools.chain": "工具调用",
+"tools.running": "执行中",
+"tools.success": "成功",
+"tools.error": "失败",
+"tools.unknown": "结果未知",
+"tools.pending_confirmation": "等待确认",
 "room.call.title": "视频通话",
 "room.call.listening": "在这里，听你说",
 "room.call.thinking": "正在想你的话…",

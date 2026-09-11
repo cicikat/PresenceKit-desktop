@@ -78,3 +78,11 @@ ChatPanel 以 WS 为主路径、HTTP 为延时 fallback；精确去重、早到 
 | `client_event` | C→S | 未实现 |
 | `v/ts/payload` envelope | 双向 | 未实现 |
 | hello capabilities | C→S | 未实现 |
+
+## 工具链与动作旁白（2026-09-12，partial）
+新增 tool_activity WS 展示事件；字段为 event_id、chain_id、char_id、source=reality、
+origin=chat|autonomy、tool_name、status、ts。status 为 running/success/error/unknown/pending_confirmation。
+无 ack、不进发言/TTS、不携带参数结果；ChatPanel 按角色过滤、按调用去重、同链连接。
+历史 /chat-log 增加可选 entry_kind=narration 和 tool_activity；近期工具回执复用既有 30 条 action_trace，
+与同 event_id 旧旁白对账。设置 chat.toolActivityVisible 仅控制本地展示，默认 true。
+实现、验证及原生/手机 open 边界见 docs/tool-activity-2026-09-12.md（本文在 docs 时为同目录）。

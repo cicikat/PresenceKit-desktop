@@ -17,6 +17,9 @@ import { shouldSkipDesktopWake, markDesktopWakeFired } from '../../../shared/des
 import { useVoiceInput } from '../../../shared/voice/useVoiceInput';
 import { getDesktopTtsEnabled, getTtsAutoPlay, type TtsAutoPlaySettings } from '../../../shared/api/runtimeSettings';
 import { useReasoningVisible } from '../../../shared/reasoningDisplay';
+import { useToolActivityVisible } from '../../../shared/toolActivityDisplay';
+import { isToolActivity, mergeToolActivity, type ToolActivity } from '../../../shared/api/toolActivity';
+import { ToolActivityChain } from './ToolActivityChain';
 import { reasoningAnchors } from '../reasoningNarration';
 import { TurnReasoningPanel } from './TurnReasoningPanel';
 import { loadTurnReasoning } from '../../../shared/api/turnReasoning';
@@ -119,6 +122,8 @@ function formatDateCN(dateStr: string): string {
 // ── 消息类型 ────────────────────────────────────────────────────────────────
 
 interface ChatMsg {
+  toolActivities?: ToolActivity[];
+  narration?: boolean;
   id: string;
   role: 'user' | 'assistant' | 'system' | 'divider' | 'raw_fallback' | 'no_more';
   text: string;
@@ -265,13 +270,19 @@ function entriesToMsgs(dateStr: string, entries: ChatLogEntry[], rawFallback: bo
         return new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, min).getTime();
       })();
 
+    if (isToolActivity(entry.tool_activity)) {
+      const activity = entry.tool_activity;
+      const chain = msgs.find(message => message.toolActivities?.[0]?.chain_id === activity.chain_id);
+      if (chain) chain.toolActivities = mergeToolActivity(chain.toolActivities!, activity);
+      else msgs.push({ id: `tool:${activity.chain_id}`, role: 'system', text: '', time: ts, toolActivities: [activity] });
+    }
     if (entry.user) {
       msgs.push({ id: newId(), role: 'user', text: entry.user, time: ts, turnId: entry.turn_id });
     }
     if (entry.assistant) {
       const segments = splitReply(entry.assistant_display_text || entry.assistant);
       segments.forEach((seg) => {
-        msgs.push({ id: newId(), role: 'assistant', text: seg, time: ts, turnId: entry.turn_id });
+        msgs.push({ id: newId(), role: entry.entry_kind === 'narration' ? 'system' : 'assistant', narration: entry.entry_kind === 'narration', text: seg, time: ts, turnId: entry.turn_id });
       });
     }
   }
@@ -593,7 +604,24 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
   useEffect(() => avatarStore.subscribe(setAvatars), []);
 
   const [messages, setMessages] = useState<ChatMsg[]>([]);
+  useEffect(() => wsClient.on('tool_activity', activity => {
+    if (activity.char_id !== getActiveCharacterInfo().id) return;
+    setMessages(previous => {
+      const id = `tool:${activity.chain_id}`;
+      const chain = previous.find(item => item.id === id);
+      if (chain) return previous.map(item => item.id === id ? { ...item, toolActivities: mergeToolActivity(item.toolActivities ?? [], activity) } : item);
+      return [...previous, { id, role: 'system', text: '', time: activity.ts * 1000, toolActivities: [activity] }];
+    });
+  }), []);
+  useEffect(() => {
+    const expire = () => setMessages(previous => previous.map(message => message.toolActivities
+      ? { ...message, toolActivities: message.toolActivities.map(item => item.status === 'running' && Date.now() - item.ts * 1000 > 600_000 ? { ...item, status: 'unknown' as const } : item) }
+      : message));
+    const timer = window.setInterval(expire, 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
   const reasoningVisible = useReasoningVisible();
+  const toolActivityVisible = useToolActivityVisible();
   const reasoningStarts = useMemo(() => reasoningAnchors(messages), [messages]);
   const [reasoningCache] = useState(() => new TurnReasoningCache(loadTurnReasoning));
   const canonicalTurnsRef = useRef(new Map<string, string>());
@@ -888,7 +916,15 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
 
       const historyAssistantCount = msgs.filter(m => m.role === 'assistant').length;
       console.log('[chat] appendSource: history-replay | phase: init | assistantBubbles:', historyAssistantCount, '| totalMsgs:', msgs.length);
-      setMessages(msgs);
+      setMessages(previous => {
+        const pendingTools = previous.filter(item => item.toolActivities);
+        for (const pending of pendingTools) {
+          const saved = msgs.find(item => item.id === pending.id);
+          if (saved) for (const activity of pending.toolActivities!) saved.toolActivities = mergeToolActivity(saved.toolActivities ?? [], activity);
+          else msgs.push(pending);
+        }
+        return msgs;
+      });
 
       // Register canonical turn IDs and hashes for WS cross-path dedup.
       const _histInitNow = Date.now();
@@ -2067,10 +2103,10 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
           </div>
         )}
 
-        {messages.filter(m => !m.isStreaming || m.text.trim()).map((m: ChatMsg) => (
+        {messages.filter(m => (!m.isStreaming || m.text.trim()) && (toolActivityVisible || (!m.toolActivities && !m.narration))).map((m: ChatMsg) => (
           <div key={m.id} className={m.role === 'user' || m.role === 'assistant' ? 'msg-enter' : undefined}>
             {reasoningVisible && reasoningStarts.has(m.id) && <TurnReasoningPanel turnId={m.turnId} pending={Boolean(m.wsMsgId && !m.turnId) || Boolean(m.isStreaming && !m.streamingDone)} cache={reasoningCache} />}
-            <Bubble
+            {m.toolActivities ? <ToolActivityChain items={m.toolActivities} /> : <Bubble
               msg={m}
               chatOpacity={chatOpacity}
               currentHue={currentHue}
@@ -2081,7 +2117,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
               userFontSize={fontSizes.user}
               showEmotionAccent={showEmotionAccent} showEmotionLabel={showEmotionLabel} ttsEnabled={ttsEnabled}
               onBubbleContextMenu={onBubbleContextMenu}
-            />
+            />}
           </div>
         ))}
 

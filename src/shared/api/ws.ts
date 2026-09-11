@@ -11,11 +11,13 @@ import type {
   ToolStatusPayload,
 } from './types';
 import { isToolStatusPayload } from '../state/toolStatusOverlay';
+import { isToolActivity, type ToolActivity } from './toolActivity';
 import { isPresenceNagEnabled } from '../presenceNag';
 import { getActiveCharacterInfo } from '../activeCharacter';
 import { actionType, actionParams, stringParam } from './wsActionParams';
 
 type EventMap = {
+  tool_activity: ToolActivity;
   state: ConnectionState;
   channel_message: { content: string; msg_id: string; source?: string; domain?: 'reality' | 'dream'; char_id?: string; round_id?: string; sticker?: StickerPayload };
   message_segments: { content: string; segments: NarrativeSegment[]; msg_id: string; source?: string; domain?: 'reality' | 'dream'; char_id?: string; round_id?: string };
@@ -208,6 +210,9 @@ class WSClient {
         break;
       case 'tool_status':
         if (isToolStatusPayload(msg)) this.emit('tool_status', msg);
+        break;
+      case 'tool_activity':
+        if (isToolActivity(msg)) this.emit('tool_activity', msg);
         break;
     }
   }

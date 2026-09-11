@@ -45,6 +45,7 @@ export interface ToolStatusPayload {
 }
 
 export type ServerMessage =
+  | import('./toolActivity').ToolActivity
   | { type: 'hello_ack'; server_version: string }
   | { type: 'channel_message'; content: string; msg_id: string; source?: string; domain?: GroupDomain; char_id?: string; round_id?: string; sticker?: StickerPayload }
   | { type: 'message_segments'; content: string; segments: NarrativeSegment[]; msg_id: string; source?: string; domain?: GroupDomain; char_id?: string; round_id?: string }
@@ -177,6 +178,8 @@ export interface DiaryEntry {
 }
 
 export interface ChatLogEntry {
+  entry_kind?: 'narration';
+  tool_activity?: import('./toolActivity').ToolActivity;
   time: string;
   user: string;
   assistant: string;

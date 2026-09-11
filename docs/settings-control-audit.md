@@ -178,3 +178,11 @@ current：复用 GET/PATCH `/users/{user_id}/pronoun`（admin），默认“她�
 桌面使用现有 openAdminPanel 管理面桥，手机 `/mobile/chat` 继承后端组装；无新 WS/IPC/ack/TTL/锁或通知协议。手机原生称谓编辑及 Dream 专项称谓统一为 roadmap；真实模型文风、双端真机体验为 observe。
 
 thinking 原生提示标题改为【你们约定的思维链thinking输出方式*特调】，保留原有文风正文与执行闸门。
+
+## 工具链与动作旁白（2026-09-12，partial）
+新增 tool_activity WS 展示事件；字段为 event_id、chain_id、char_id、source=reality、
+origin=chat|autonomy、tool_name、status、ts。status 为 running/success/error/unknown/pending_confirmation。
+无 ack、不进发言/TTS、不携带参数结果；ChatPanel 按角色过滤、按调用去重、同链连接。
+历史 /chat-log 增加可选 entry_kind=narration 和 tool_activity；近期工具回执复用既有 30 条 action_trace，
+与同 event_id 旧旁白对账。设置 chat.toolActivityVisible 仅控制本地展示，默认 true。
+实现、验证及原生/手机 open 边界见 docs/tool-activity-2026-09-12.md（本文在 docs 时为同目录）。
