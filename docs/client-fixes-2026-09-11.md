@@ -22,6 +22,14 @@ stream_start 不再提前撤下加载气泡；首个可见段落到达时才交�
 
 ## 三面闭环检查记录
 
+## 6. 窄栏输入
+
+使用 ChatPanel 实际容器宽度切换紧凑输入布局：文本占整行，工具按钮横排到下一行；
+按钮不挤压文本，输入框保留水平书写、隐藏滚动条（仍可键盘/滚轮滚动长内容）。
+验证：TypeScript，宽窄容器浏览器检查待记录；真实 Tauri DPI 验收 open。
+
+## 三面闭环检查记录
+
 - 后端 channels/desktop_ws.py 的 stream_start 已包含 source 和可选 char_id/round_id/domain，
   delta/end 仅靠 msg_id 关联；本次修复客户端消费，不新增协议或后端配置。
 - 管理面权限、默认值、effective state、队列、trace、审计、TTL 沿用既有链路。

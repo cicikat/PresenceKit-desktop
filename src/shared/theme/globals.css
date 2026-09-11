@@ -255,6 +255,12 @@ input, textarea { font-family: inherit; }
 .activity-companion-sidebar { min-width: 0; height: min(calc(100dvh - 40px), 520px); }
 .activity-companion-sidebar > * { min-height: 0; height: 100%; }
 .chat-composer-row { min-width: 0; }
+.chat-composer-row > button { flex-shrink: 0; white-space: nowrap; }
+.chat-composer-row > textarea { scrollbar-width: none; writing-mode: horizontal-tb; field-sizing: content; }
+.chat-composer-row > textarea::-webkit-scrollbar { display: none; }
+.chat-composer-row--compact { flex-wrap: wrap; }
+.chat-composer-row--compact > textarea { order: -1; flex: 1 0 100% !important; box-sizing: border-box; }
+.chat-composer-row--compact > button:last-child { margin-left: auto; }
 
 @media (max-width: 760px) {
   .activity-game-page { padding: 20px 16px !important; gap: 16px !important; }

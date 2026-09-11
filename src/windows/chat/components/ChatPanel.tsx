@@ -2202,7 +2202,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
             ))}
           </div>
         )}
-        <div className="chat-composer-row" style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+        <div className={`chat-composer-row${compactLayout ? ' chat-composer-row--compact' : ''}`} style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
           <button onClick={() => void handleMicClick()} title={voice.isRecording ? '点击停止录音' : '语音输入 (Alt+1)'} aria-label={voice.isRecording ? '点击停止录音' : '语音输入 (Alt+1)'} style={{
             width: 44, height: 44, borderRadius: 'var(--radius-md)',
             background: voice.isRecording ? 'oklch(0.55 0.18 25)' : 'var(--paper)',
