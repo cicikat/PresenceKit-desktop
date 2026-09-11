@@ -2,6 +2,11 @@ import type { MessageKey } from './zh-CN';
 
 
 export const enUS: Record<MessageKey, string> = {
+"settings.avatar.mode": "Model type",
+"settings.avatar.model3d": "3D models",
+"settings.avatar.live2d": "Live2D models",
+"settings.avatar.model": "Select model",
+"settings.avatar.sharedHint": "The pet and video call share this model. Changes apply immediately.",
 "navigation.backChat": "Back to chat",
 "navigation.backActivities": "? Back to activities",
 "navigation.back": "Back",

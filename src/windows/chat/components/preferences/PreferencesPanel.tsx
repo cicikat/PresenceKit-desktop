@@ -14,6 +14,7 @@ import { DreamBackgroundCropper } from '../../../dream/components/DreamBackgroun
 import { ThemePicker } from '../../../../shared/theme/ThemePicker';
 import { ChatColorPage } from '../ChatColorPage';
 import { CallSettingsPage } from '../CallSettingsPage';
+import { Live2DSettingsSection } from '../Live2DSettingsSection';
 import { CoplaySettingsPage } from '../CoplaySettingsPage';
 import { ConnectionSettingsPage } from '../ConnectionSettingsPage';
 import { DiarySyncSettingsPage } from '../DiarySyncSettingsPage';
@@ -483,9 +484,7 @@ export function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, 
                         </span>
                       </div>
                     </PrefRow>
-                    <div className="mono" style={{ fontSize: 9.5, color: 'var(--ink-3)', letterSpacing: 1.1 }}>
-                      模型与表情映射与视频通话共用，去 6 视频通话 页配置
-                    </div>
+                    <Live2DSettingsSection modelOnly />
                   </>
                 )}
                 <div style={{ height: 1, background: 'var(--paper-edge)' }} />

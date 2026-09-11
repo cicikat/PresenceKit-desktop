@@ -8,6 +8,7 @@ import {
 } from '../../../shared/live2d/live2dSettings';
 import { listLive2DModels } from '../../../shared/live2d/live2dAssets';
 import type { Live2DModelAsset } from '../../../shared/live2d/live2dAssets';
+import { useI18n } from '../../../shared/i18n';
 
 // Local copies of CallSettingsPage's Row/SliderNum/Divider/selectStyle primitives — importing
 // them directly would create a circular dependency (CallSettingsPage renders this section).
@@ -84,7 +85,8 @@ const BG_OPTIONS: { value: Live2DBgKind; label: string }[] = [
   { value: 'image', label: '图片' },
 ];
 
-export function Live2DSettingsSection() {
+export function Live2DSettingsSection({ modelOnly = false }: { modelOnly?: boolean }) {
+  const { t } = useI18n();
   const [settings, setSettings] = useState<Live2DSettings>(loadLive2DSettings);
   const [models, setModels] = useState<Live2DModelAsset[]>([]);
   const [modelsError, setModelsError] = useState<string | null>(null);
@@ -109,9 +111,9 @@ export function Live2DSettingsSection() {
   return (
     <div style={{ display: 'grid', gap: 18 }}>
       <div>
-        <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink)', marginBottom: 2 }}>Live2D 模型</div>
+        <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink)', marginBottom: 2 }}>{t('settings.avatar.live2d')}</div>
         <div className="mono" style={{ fontSize: 9.5, color: 'var(--ink-3)', letterSpacing: 1.1 }}>
-          扫描 public/live2d/models/ 下的模型目录，选择后即时替换
+          {t('settings.avatar.sharedHint')}
         </div>
       </div>
 
@@ -121,13 +123,14 @@ export function Live2DSettingsSection() {
         </div>
       )}
 
-      <Row label="模型" hint="public/live2d/models/<模型名>/ 下的 *.model3.json">
+      <Row label={t('settings.avatar.model')}>
         {models.length === 0 ? (
           <div className="mono" style={{ fontSize: 10, color: 'var(--ink-3)', letterSpacing: 0.8, maxWidth: 220, textAlign: 'right' }}>
             未找到模型，放到 public/live2d/models/&lt;名&gt;/ 后刷新
           </div>
         ) : (
           <select
+            aria-label={t('settings.avatar.live2d')}
             value={settings.modelDir}
             onChange={e => patch({ modelDir: e.target.value })}
             style={{ ...selectStyle, width: 170 }}
@@ -144,6 +147,7 @@ export function Live2DSettingsSection() {
         </div>
       )}
 
+      {!modelOnly && <>
       <Row label="缩放" hint="0.2–3">
         <SliderNum min={0.2} max={3} step={0.01} value={settings.scaleMul} onChange={v => patch({ scaleMul: v })} />
       </Row>
@@ -218,6 +222,7 @@ export function Live2DSettingsSection() {
           style={textInputStyle}
         />
       </Row>
+      </>}
     </div>
   );
 }

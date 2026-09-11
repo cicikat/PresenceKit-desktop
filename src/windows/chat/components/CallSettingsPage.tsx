@@ -18,6 +18,7 @@ import {
 import type { RoomPreset } from '../../../shared/room/roomPresets';
 import type { RenderMode } from '../../../shared/room/roomSettings';
 import { Live2DSettingsSection } from './Live2DSettingsSection';
+import { useI18n } from '../../../shared/i18n';
 
 // ─── shared styles ────────────────────────────────────────────────────────────
 
@@ -114,6 +115,7 @@ function SectionHeader({ label, hint, open, onToggle }: {
 // ─── main component ───────────────────────────────────────────────────────────
 
 export function CallSettingsPage() {
+  const { t } = useI18n();
   const [settings, setSettings] = useState<RoomSettings>(loadRoomSettings);
   const [chars, setChars] = useState<RoomAsset[]>([]);
   const [scenes, setScenes] = useState<RoomAsset[]>([]);
@@ -232,16 +234,17 @@ export function CallSettingsPage() {
 
   return (
     <div style={{ display: 'grid', gap: 18 }}>
-      <Row label="渲染模式" hint="3D 模型 · Live2D，即时切换">
-        <select
-          value={renderMode}
-          onChange={e => patch({ renderMode: e.target.value as RenderMode })}
-          style={{ ...selectStyle, width: 120 }}
-        >
-          <option value="model3d">3D 模型</option>
-          <option value="live2d">Live2D</option>
-        </select>
-      </Row>
+      <div role="group" aria-label={t('settings.avatar.mode')} style={{ display: 'flex', gap: 8 }}>
+        {(['model3d', 'live2d'] as RenderMode[]).map(mode => (
+          <button key={mode} aria-pressed={renderMode === mode} onClick={() => patch({ renderMode: mode })}
+            style={{ flex: 1, minWidth: 0, padding: '12px 16px', borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--paper-edge)', font: 'inherit', cursor: 'pointer',
+              background: renderMode === mode ? 'var(--accent)' : 'var(--paper-2)',
+              color: renderMode === mode ? 'var(--paper)' : 'var(--ink-2)' }}>
+            {t(mode === 'model3d' ? 'settings.avatar.model3d' : 'settings.avatar.live2d')}
+          </button>
+        ))}
+      </div>
 
       {renderMode === 'live2d' && <Live2DSettingsSection />}
 

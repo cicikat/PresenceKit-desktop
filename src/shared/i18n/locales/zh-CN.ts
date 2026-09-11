@@ -1,4 +1,9 @@
 export const zhCN = {
+"settings.avatar.mode": "模型类型",
+"settings.avatar.model3d": "3D 模型",
+"settings.avatar.live2d": "Live2D 模型",
+"settings.avatar.model": "选择模型",
+"settings.avatar.sharedHint": "桌宠与视频通话共用所选模型，切换后即时生效。",
 "navigation.backChat": "返回主聊天",
 "navigation.backActivities": "返回一起做事",
 "navigation.back": "返回",

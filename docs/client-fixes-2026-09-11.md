@@ -26,13 +26,21 @@ stream_start 不再提前撤下加载气泡；首个可见段落到达时才交�
 按钮不挤压文本，输入框保留水平书写、隐藏滚动条（仍可键盘/滚轮滚动长内容）。
 验证：TypeScript，宽窄容器浏览器检查待记录；真实 Tauri DPI 验收 open。
 
-## 三面闭环检查记录
-
 ## 7. 一起做事偏好
 
 偏好滚动区 grid 改为 align-content:start，避免少量设置撑满窗口形成巨大行距；
 陪玩与活动外观统一 18px 间距，活动下拉采用紧凑宽度。设置值、权限和 API 未改动。
 验证：CSS 检查；浏览器/真实窗口验收待记录。
+
+## 三面闭环检查记录
+
+## 2. Live2D 模型与分类
+
+下载包的 runtime 分别导入 public/live2d/models/hiyori_free 和 hiyori_pro，保留贴图/动作
+相对路径，未复制 Cubism 编辑工程。资源与已有 Core 按 gitignore 留在本机。
+视频通话偏好顶部提供 3D/Live2D 两个显式分类按钮；桌宠 Live2D 分类直接提供模型选择，
+沿用同一 live2d.settings 与跨窗口同步，不新增第二份模型真值。
+验证：模型引用完整性、TypeScript；实际模型动态效果验收 open。
 
 ## 三面闭环检查记录
 
