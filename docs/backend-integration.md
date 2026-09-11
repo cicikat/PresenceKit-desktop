@@ -34,10 +34,13 @@ memory.read，不需要也不申请 admin token。回合 ID 作为 URL path segm
 protocol/status/reasoning_chars/parts，parts 含 source/text，不覆盖为最后一次调用。
 HTTP 错误仅透传状态码：401 接入原 authGate，403/404/503 分别展示权限不足、版本不支持、
 稍后重试；空记录不代表模型没有思考，允许手动重新读取。没有自动轮询或新增落盘。
-canonical turn_id 来自 send_chat 成功响应或已有历史显式字段，msg_id 仅对账；
+canonical turn_id 来自 send_chat 成功响应或历史显式字段，msg_id 仅对账；
 缺 canonical ID 的 WS-only、历史、主动/Dream/Stage 消息不推测关联。
 admin-only /observability/llm-reasoning 列表/详情仍属于管理员全局归档，本客户端不调用。
-详情及跨仓总账待同步项见 brief-244-reasoning.md。
+当前后端 chat_log._parse_day 实际未返回 turn_id（忽略元数据），所以重启后历史入口尚不能恢复。
+用户指定仅修改本仓；后端修复要求见 ../cc-tasks/244-history-turn-id-backend-handoff.md。
+前端已验证带显式 ID 的历史恢复，不按时间或正文猜测关联。展示为每次回复一个旁白，
+本地显示开关不新增 IPC 或 REST 契约。详情及跨仓总账待同步项见 brief-244-reasoning.md。
 
 本文档记录本仓当前和 `Emerald-presence` 的连接方式。三仓接口总账见
 `Emerald-presence/docs/three-repo-interface-catalog.md`；桌面消息细节统一见
@@ -1149,3 +1152,10 @@ no_proxy 桥接不变。成功后失效 prompt-assets 缓存并发送 activeChar
 驱动 Chat/Dream 既有头像刷新。角色切换取消未提交裁剪；已经发出的上传始终写入原目标
 charId。界面页 HER/YOU 后备头像仍使用本地 avatarStore，不混用后端角色头像。
 浏览器以 IPC mock 验证，真实后端与手机设备同步为 open，见 `ui-polish-2026-09-11.md`。
+
+
+## Proactive history and inline display (2026-09-11)
+
+current: talk_owner stamps the trigger write envelope; autonomy is conversational. The existing capture/slow pipeline records assistant-only history and trigger-aware memory with existing provenance. No candidate signal is represented as a user message. New trigger event-log blocks have timestamps and the reader handles assistant-only entries and canonical turn_id. The canonical ledger keeps inline display markup separately from sanitized memory text. /chat-log/{date} adds optional assistant_display_text by scope and turn ID; desktop replays it through the existing inline renderer with plain-text fallback. No new store, scope, notification or ack policy.
+
+Validation: 48 related regressions plus 3 focused persistence/reload tests passed; desktop TypeScript and production build passed. observe: native desktop restart/phone rendering has not been tested; mobile optional styled history consumption remains roadmap. Historical stripped styles and previously unrecorded proactive messages cannot be reconstructed.

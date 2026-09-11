@@ -3,7 +3,7 @@
  * Phase 2c+: 按日文件懒加载历史，滚顶继续往前拉
  * ============================================================ */
 
-import { useState, useEffect, useRef, useCallback, memo, type CSSProperties, type ReactNode } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, memo, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { format, subDays, parseISO } from 'date-fns';
 import { Tag, Icon, Btn } from './UIKit';
@@ -16,6 +16,8 @@ import { sendChat, uploadDocument, previewChatAttachment, desktopWake } from '..
 import { shouldSkipDesktopWake, markDesktopWakeFired } from '../../../shared/desktopWakeGate';
 import { useVoiceInput } from '../../../shared/voice/useVoiceInput';
 import { getDesktopTtsEnabled, getTtsAutoPlay, type TtsAutoPlaySettings } from '../../../shared/api/runtimeSettings';
+import { useReasoningVisible } from '../../../shared/reasoningDisplay';
+import { reasoningAnchors } from '../reasoningNarration';
 import { TurnReasoningPanel } from './TurnReasoningPanel';
 import { loadTurnReasoning } from '../../../shared/api/turnReasoning';
 import { TurnReasoningCache, attachCanonicalTurn } from '../../../shared/api/turnReasoningState';
@@ -265,7 +267,7 @@ function entriesToMsgs(dateStr: string, entries: ChatLogEntry[], rawFallback: bo
       msgs.push({ id: newId(), role: 'user', text: entry.user, time: ts, turnId: entry.turn_id });
     }
     if (entry.assistant) {
-      const segments = splitReply(entry.assistant);
+      const segments = splitReply(entry.assistant_display_text || entry.assistant);
       segments.forEach((seg) => {
         msgs.push({ id: newId(), role: 'assistant', text: seg, time: ts, turnId: entry.turn_id });
       });
@@ -412,7 +414,7 @@ function BreathingAvatar({
   );
 }
 
-const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, youVisible, assistantFontSize, userFontSize, ttsEnabled, showEmotionAccent, showEmotionLabel, onBubbleContextMenu, reasoningCache }: any) {
+const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, youVisible, assistantFontSize, userFontSize, ttsEnabled, showEmotionAccent, showEmotionLabel, onBubbleContextMenu }: any) {
   const fromUser = msg.role === 'user';
   const hue = msg.moodHue ?? currentHue;
   const time = msg.time ? new Date(msg.time).toLocaleTimeString('zh', { hour: '2-digit', minute: '2-digit' }) : '';
@@ -515,7 +517,6 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
             <VoiceMessageBar text={displayText} emotion={msg.moodLabel?.toLowerCase() ?? 'neutral'} fontSize={assistantFontSize} autoPlay={Boolean(msg.autoPlayTts)} scene="chat" />
           </div>
         )}
-        {msg.turnId && !msg.isStreaming && <TurnReasoningPanel key={msg.turnId} turnId={msg.turnId} cache={reasoningCache} />}
         {msg.sticker && (
           <div
             onContextMenu={e => {
@@ -590,6 +591,8 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
   useEffect(() => avatarStore.subscribe(setAvatars), []);
 
   const [messages, setMessages] = useState<ChatMsg[]>([]);
+  const reasoningVisible = useReasoningVisible();
+  const reasoningStarts = useMemo(() => reasoningAnchors(messages), [messages]);
   const [reasoningCache] = useState(() => new TurnReasoningCache(loadTurnReasoning));
   const canonicalTurnsRef = useRef(new Map<string, string>());
   useEffect(() => () => { reasoningCache.clear(); canonicalTurnsRef.current.clear(); }, [reasoningCache]);
@@ -2050,9 +2053,9 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
 
         {messages.map((m: ChatMsg) => (
           <div key={m.id} className={m.role === 'user' || m.role === 'assistant' ? 'msg-enter' : undefined}>
+            {reasoningVisible && reasoningStarts.has(m.id) && <TurnReasoningPanel key={m.turnId} turnId={m.turnId!} cache={reasoningCache} />}
             <Bubble
               msg={m}
-              reasoningCache={reasoningCache}
               currentHue={currentHue}
               herDataUrl={herDataUrl}
               youDataUrl={youDataUrl}

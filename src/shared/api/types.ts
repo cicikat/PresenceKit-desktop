@@ -180,6 +180,7 @@ export interface ChatLogEntry {
   time: string;
   user: string;
   assistant: string;
+  assistant_display_text?: string;
   ts?: number;
   turn_id?: string;
 }

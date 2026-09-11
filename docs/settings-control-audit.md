@@ -28,8 +28,10 @@ chess.pieceStyle 与 activity.debug 五个原 key。Activity 的 `open-activity-
 ## API 思考存档与展示（Brief 244，2026-09-11，partial）
 
 后端默认归档实际返回的思考；thinking.enabled 仍仅控制生成，管理面独立维护。
-桌面 Reality assistant 气泡新增“模型返回思考”只读入口，默认收起、点击加载，
-不新增全局设置或存储开关，不编辑生成策略、effective state 或权限。
+桌面 Reality 每次回复前有一个居中“展开思考”旁白入口，默认收起、点击加载。
+设置 → 角色与对话 → 显示思考入口，本地 chat.reasoningVisible 默认 true，经 uiPreferences
+持久化。关闭只隐藏入口，卸载面板，阻止新增读取；不编辑生成策略、归档、effective state 或权限。
+展开只展示动态角色名与正文，隐藏模型/调用/来源/协议字段。
 GET /chat/turns/{turn_id}/reasoning 要求 memory.read；标准 desktop/mobile profile 已含。
 401 沿用连接门禁，403 提示缺少权限；不升级 admin 凭据。管理员全局归档接口保持独立。
 手机 lib/models/app_models.dart 已独立保存 canonical turnId，但尚无 reasoning 展开 UI；
@@ -135,3 +137,10 @@ The backend admin Preset editor owns force_stream (default false, Chat Completio
 Admin-only preset test now uses 256 output tokens, a 30-second total budget and zero SDK retries. It returns category, safe error/hint, HTTP status, error type, declared protocol and request path. Provider bodies and credentials are never echoed; UI uses textContent. Empty visible output is a warning rather than evidence of working conversation. Network/TLS/timeout, authentication, quota, endpoint/model, rejected parameters and response schema are distinguished.
 
 Validation: 69 related tests passed; cache-cleared Chromium Model Routing test rendered quota/protocol/status guidance. Live bounded probes succeeded for the configured Grok Responses and Gemini Chat Completions presets; another relay returned HTTP 403 INSUFFICIENT_BALANCE. No protocol/routing setting was changed. This is unrelated to desktop/device WS protocols. Native clients continue to open the backend management UI; no new local settings or secrets.
+
+
+## Proactive history and inline display (2026-09-11)
+
+current: talk_owner stamps the trigger write envelope; autonomy is conversational. The existing capture/slow pipeline records assistant-only history and trigger-aware memory with existing provenance. No candidate signal is represented as a user message. New trigger event-log blocks have timestamps and the reader handles assistant-only entries and canonical turn_id. The canonical ledger keeps inline display markup separately from sanitized memory text. /chat-log/{date} adds optional assistant_display_text by scope and turn ID; desktop replays it through the existing inline renderer with plain-text fallback. No new store, scope, notification or ack policy.
+
+Validation: 48 related regressions plus 3 focused persistence/reload tests passed; desktop TypeScript and production build passed. observe: native desktop restart/phone rendering has not been tested; mobile optional styled history consumption remains roadmap. Historical stripped styles and previously unrecorded proactive messages cannot be reconstructed.
