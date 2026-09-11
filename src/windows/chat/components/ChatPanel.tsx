@@ -2257,9 +2257,6 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
           </button>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
-          <span className="mono" style={{ fontSize: chatThemeFontSize(9.5), color: 'var(--ink-4)', letterSpacing: 1.2 }}>
-            ENTER 发送 · SHIFT+ENTER 换行
-          </span>
           {state.wantToSpeak && (
             <span className="mono" style={{ fontSize: chatThemeFontSize(9.5), color: `oklch(0.45 0.12 ${currentHue})`, letterSpacing: 1.2 }}>
               · 他想说什么…

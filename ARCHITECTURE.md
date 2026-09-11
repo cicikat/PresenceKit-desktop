@@ -585,3 +585,7 @@ it is not a reason to restore the retired client surface.
 LayoutHost 在 ≤640px 时将侧栏呈现为可关闭浮层。视频通话增加 RoomWindow.css
 环境视觉；3D/Live2D 设置分组，桌宠直接选择共用 Live2D 模型。
 实现、验证和跨端 open 项见 `docs/client-fixes-2026-09-11.md`。
+
+## 桌宠逐段对话（2026-09-12）
+PetWindow 复用视频通话 turnIngest 分段规则，将最终消息按换行排队逐段显示。
+主窗口仍持有 WS；按 msg_id 去重，贴纸只附首段。验收 open 见 docs/pet-window-reference.md。

@@ -10,11 +10,13 @@ import { VoiceMessageBar } from '../chat/components/VoiceMessageBar';
 import { PetStage } from './components/PetStage';
 import { usePetMouse } from './usePetMouse';
 import { usePetRoam } from './usePetRoam';
-import type { StickerPayload } from '../../shared/api/types';
+import { splitPetDialogue, type PetDialogue } from './petDialogue';
 
 export function PetWindow() {
   const [snapshot, setSnapshot] = useState<PetSnapshot>(DEFAULT_PET_SNAPSHOT);
-  const [turnBubble, setTurnBubble] = useState<{ id: string; text: string; sticker?: StickerPayload; autoPlayTts?: boolean } | null>(null);
+  const [dialogue, setDialogue] = useState<PetDialogue[]>([]);
+  const turnBubble = dialogue[0] ?? null;
+  const seenTurns = useRef(new Set<string>());
   const [chatInput, setChatInput] = useState('');
   const [sending, setSending] = useState(false);
   const [inputFocused, setInputFocused] = useState(false);
@@ -99,12 +101,16 @@ export function PetWindow() {
     let unlisten: (() => void) | undefined;
     listenPetTurn(turn => {
       if (disposed || turn.kind !== 'channel_message') return;
-      setTurnBubble({
+      if (seenTurns.current.has(turn.msg_id)) return;
+      seenTurns.current.add(turn.msg_id);
+      if (seenTurns.current.size > 200) seenTurns.current.delete(seenTurns.current.values().next().value!);
+      const parts = splitPetDialogue({
         id: turn.msg_id,
         text: turn.content,
         sticker: turn.sticker,
         autoPlayTts: ttsEnabledRef.current && ttsAutoPlayRef.current.desktop_pet,
       });
+      setDialogue(previous => [...previous, ...parts]);
     }).then(fn => {
       if (disposed) fn();
       else unlisten = fn;
@@ -118,7 +124,7 @@ export function PetWindow() {
   useEffect(() => {
     if (!turnBubble) return;
     const ms = Math.max(6000, turnBubble.text.length * 80, turnBubble.sticker ? 8000 : 0);
-    const timer = window.setTimeout(() => setTurnBubble(null), ms);
+    const timer = window.setTimeout(() => setDialogue(previous => previous.slice(1)), ms);
     return () => window.clearTimeout(timer);
   }, [turnBubble]);
 

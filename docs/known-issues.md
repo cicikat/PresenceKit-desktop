@@ -450,3 +450,7 @@ useEffect(() => {
 群聊隔离、加载占位、思考宽度、窄栏输入、活动偏好、视频视觉和 Live2D 入口的施工与验证
 见 `docs/client-fixes-2026-09-11.md`。真实 Tauri 窗口、模型渲染、手机后台 relay 联调及
 后端 three-repo-interface-catalog 总账同步仍 open；不将编译/纯逻辑测试作为完整验收。
+
+### 桌宠分段（2026-09-12，partial/open）
+换行队列、重投去重、贴纸首段规则已实现并有纯逻辑回归。
+open：真实 Tauri 分段停留、TTS 时长与切换角色后的队列清理体验待验证。

@@ -8,6 +8,8 @@ import { loadPetRippleSettings, savePetRippleSettings, subscribePetRippleSetting
 import { isPlayModeEnabled, setPlayModeEnabled } from '../../../shared/playMode';
 import { getUIPref, setUIPref } from '../../../shared/uiPreferences';
 import { wsClient } from '../../../shared/api/ws';
+import { isSingleRealityMessage } from '../../../shared/api/realityMessageScope';
+import { getActiveCharacterInfo } from '../../../shared/activeCharacter';
 
 export function usePetController(engine: StateEngine, onToyOpen?: () => void) {
   const [petVisible, setPetVisible] = useState(false);
@@ -63,7 +65,9 @@ export function usePetController(engine: StateEngine, onToyOpen?: () => void) {
   // Keep pet forwarding outside ChatPanel so its dedup/fallback guards cannot swallow a pet turn.
   useEffect(() => {
     const offs = [
-      wsClient.on('channel_message', payload => { void emitPetTurn({ kind: 'channel_message', ...payload }); }),
+      wsClient.on('channel_message', payload => {
+        if (isSingleRealityMessage(payload, getActiveCharacterInfo().id)) void emitPetTurn({ kind: 'channel_message', ...payload });
+      }),
       wsClient.on('message_segments', payload => { void emitPetTurn({ kind: 'message_segments', ...payload }); }),
       wsClient.on('message_stream_start', payload => { void emitPetTurn({ kind: 'message_stream_start', ...payload }); }),
       wsClient.on('message_stream_delta', payload => { void emitPetTurn({ kind: 'message_stream_delta', ...payload }); }),

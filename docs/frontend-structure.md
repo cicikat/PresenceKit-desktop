@@ -871,3 +871,7 @@ ChatPanel 流式入口使用单聊范围过滤，首个可见段落到达后关�
 TurnReasoningPanel 不再限制 640px。输入区基于容器宽度换行，隐藏文本滚动条，
 LayoutHost 窄窗侧栏改为浮层，偏好 Grid 从顶部排列。
 验收记录见 `docs/client-fixes-2026-09-11.md`，真实 Tauri/手机验收 open。
+
+## 桌宠与输入栏（2026-09-12）
+桌宠使用 petDialogue 将最终消息按视频通话规则分段排队；聊天输入栏移除快捷键提示。
+输入快捷键不变；真实窗口/语音验收 open，见 pet-window-reference.md。
