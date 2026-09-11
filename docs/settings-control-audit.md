@@ -128,3 +128,10 @@ dependent on its own VPN, DIRECT/PAC, or working system network path.
 ## Preset forced streaming compatibility (2026-09-09)
 
 The backend admin Preset editor owns force_stream (default false, Chat Completions only) for generation and tool decisions. Desktop keeps selecting backend routing profiles with no additional setting or permission. Mobile still receives complete HTTP JSON. Browser and real gateway verification remain observe in the backend interface catalog.
+
+
+## Model probe diagnostics (2026-09-11)
+
+Admin-only preset test now uses 256 output tokens, a 30-second total budget and zero SDK retries. It returns category, safe error/hint, HTTP status, error type, declared protocol and request path. Provider bodies and credentials are never echoed; UI uses textContent. Empty visible output is a warning rather than evidence of working conversation. Network/TLS/timeout, authentication, quota, endpoint/model, rejected parameters and response schema are distinguished.
+
+Validation: 69 related tests passed; cache-cleared Chromium Model Routing test rendered quota/protocol/status guidance. Live bounded probes succeeded for the configured Grok Responses and Gemini Chat Completions presets; another relay returned HTTP 403 INSUFFICIENT_BALANCE. No protocol/routing setting was changed. This is unrelated to desktop/device WS protocols. Native clients continue to open the backend management UI; no new local settings or secrets.
