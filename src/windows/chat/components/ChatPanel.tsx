@@ -16,6 +16,9 @@ import { sendChat, uploadDocument, previewChatAttachment, desktopWake } from '..
 import { shouldSkipDesktopWake, markDesktopWakeFired } from '../../../shared/desktopWakeGate';
 import { useVoiceInput } from '../../../shared/voice/useVoiceInput';
 import { getDesktopTtsEnabled, getTtsAutoPlay, type TtsAutoPlaySettings } from '../../../shared/api/runtimeSettings';
+import { TurnReasoningPanel } from './TurnReasoningPanel';
+import { loadTurnReasoning } from '../../../shared/api/turnReasoning';
+import { TurnReasoningCache, attachCanonicalTurn } from '../../../shared/api/turnReasoningState';
 import { VoiceMessageBar } from './VoiceMessageBar';
 import { loadChatLogDates, loadChatLogDay } from '../../../shared/api/backend';
 import { getClientConfig } from '../../../shared/api/config';
@@ -409,7 +412,7 @@ function BreathingAvatar({
   );
 }
 
-const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, youVisible, assistantFontSize, userFontSize, ttsEnabled, showEmotionAccent, showEmotionLabel, onBubbleContextMenu }: any) {
+const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, youVisible, assistantFontSize, userFontSize, ttsEnabled, showEmotionAccent, showEmotionLabel, onBubbleContextMenu, reasoningCache }: any) {
   const fromUser = msg.role === 'user';
   const hue = msg.moodHue ?? currentHue;
   const time = msg.time ? new Date(msg.time).toLocaleTimeString('zh', { hour: '2-digit', minute: '2-digit' }) : '';
@@ -512,6 +515,7 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
             <VoiceMessageBar text={displayText} emotion={msg.moodLabel?.toLowerCase() ?? 'neutral'} fontSize={assistantFontSize} autoPlay={Boolean(msg.autoPlayTts)} scene="chat" />
           </div>
         )}
+        {msg.turnId && !msg.isStreaming && <TurnReasoningPanel key={msg.turnId} turnId={msg.turnId} cache={reasoningCache} />}
         {msg.sticker && (
           <div
             onContextMenu={e => {
@@ -586,6 +590,9 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
   useEffect(() => avatarStore.subscribe(setAvatars), []);
 
   const [messages, setMessages] = useState<ChatMsg[]>([]);
+  const [reasoningCache] = useState(() => new TurnReasoningCache(loadTurnReasoning));
+  const canonicalTurnsRef = useRef(new Map<string, string>());
+  useEffect(() => () => { reasoningCache.clear(); canonicalTurnsRef.current.clear(); }, [reasoningCache]);
   const [input, setInput] = useState('');
   const [typing, setTyping] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -1170,7 +1177,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
     };
   }, []);
 
-  const scheduleAssistantSegments = useCallback((fullText: string, wsMsgId?: string, preGeneratedIds?: string[], sticker?: StickerPayload) => {
+  const scheduleAssistantSegments = useCallback((fullText: string, wsMsgId?: string, preGeneratedIds?: string[], sticker?: StickerPayload, canonicalTurnId?: string) => {
     const textParts = splitReply(fullText);
     if (textParts.length === 0 && !sticker) return;
     const parts = textParts.length > 0 ? textParts : [''];
@@ -1228,6 +1235,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         moodLabel,
         time: Date.now(),
         wsMsgId: wsMsgId && idx === 0 ? wsMsgId : undefined,
+        turnId: canonicalTurnId ?? (wsMsgId ? canonicalTurnsRef.current.get(wsMsgId) : undefined),
         segments: pending?.segments,
         segmentedContent,
         sticker: idx === 0 ? sticker : undefined,
@@ -1308,6 +1316,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
           isStreaming: false,
           streamingDone: false,
           wsMsgId: msgId && i === 0 ? msgId : undefined,
+          turnId: msgId ? canonicalTurnsRef.current.get(msgId) : undefined,
           segments: segMatch ? pending!.segments : liveById.get(localIds[i])?.segments,
           segmentedContent: segMatch ? strippedParts![i] : undefined,
           autoPlayTts: ttsEnabledRef.current && ttsAutoPlayRef.current.chat,
@@ -1695,8 +1704,15 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
     setLoading(true);
     try {
       const response = await sendChat(t, replyTo);
+      if (!mountedRef.current) return;
       const { reply } = response;
       const msgId = responseMsgId(response);
+      const canonicalTurnId = response.turn_id?.trim() ? response.turn_id : undefined;
+      if (canonicalTurnId && msgId) {
+        setBoundedMapEntry(canonicalTurnsRef.current, msgId, canonicalTurnId, MAX_WS_MSG_ID_MAPPINGS);
+        const localIds = wsMsgIdToLocalIdsRef.current.get(msgId) ?? streamingLocalIdRef.current.get(msgId) ?? [];
+        setMessages(previous => attachCanonicalTurn(previous, localIds, canonicalTurnId));
+      }
       // Do NOT render directly — WS channel_message is the primary render path.
       // Store as fallback; render only if WS never delivers within 3s.
       const contentHash = reply.slice(0, 32).replace(/\s+/g, ' ');
@@ -1740,7 +1756,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
         if (msgId) setBoundedMapEntry(wsMsgIdToLocalIdsRef.current, msgId, fallbackIds, MAX_WS_MSG_ID_MAPPINGS);
         console.log('[chat] appendSource: fallback | loadingSource: send | msg_id:', msgId ?? '(none)', '| contentHash:', contentHash, '| normalizedHash:', normalizedHash, '| partsCount:', parts.length, '| renderedMsgIds:', fallbackIds, '| timestamp:', now);
         setLoading(false);
-        scheduleAssistantSegments(reply, undefined, fallbackIds);
+        scheduleAssistantSegments(reply, undefined, fallbackIds, undefined, canonicalTurnId);
       }, 3000);
       pendingSendReplyRef.current = { timerId, reply, msgId };
       console.log('[chat] httpDone | loadingSource: send | waitingForWs: true | msg_id:', msgId ?? '(none)', '| contentHash:', contentHash, '| partsCount:', reply.split(/\n+/).filter(Boolean).length, '| timestamp:', Date.now());
@@ -2036,6 +2052,7 @@ export function ChatPanel({ engine, chatRectRef, headerVisible = true, chatFontS
           <div key={m.id} className={m.role === 'user' || m.role === 'assistant' ? 'msg-enter' : undefined}>
             <Bubble
               msg={m}
+              reasoningCache={reasoningCache}
               currentHue={currentHue}
               herDataUrl={herDataUrl}
               youDataUrl={youDataUrl}

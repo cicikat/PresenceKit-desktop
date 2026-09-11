@@ -24,13 +24,20 @@ chess.pieceStyle 与 activity.debug 五个原 key。Activity 的 `open-activity-
 `observe`：真实 Tauri 原生窗口与真实后端/手机设备联调未完成；夹具 IPC 不代表实机。
 
 
-## API 思考存档（2026-09-09）
+## API 思考存档与回合读取（Brief 244，2026-09-11）
 
-后端已默认独立保存 API 返回的思考，提供 admin-only
-`GET /observability/llm-reasoning`（limit/before/model 元数据分页）与
-`GET /observability/llm-reasoning/{call_id}`（parts 正文）。desktop token 无权访问，
-本客户端尚无 IPC/展开 UI。call_id 表示一次模型请求，尚不关联聊天 turn_id；后续展示
-需要受限读取契约和明确关联，不能按时间猜测。现有聊天 HTTP/WS 和 ack 不变。
+桌面新增 shared/api/turnReasoning.ts 的 loadTurnReasoning(turnId)，经 invokeGated
+调用 Tauri load_turn_reasoning({ turnId })。Rust 使用配置中的标准 desktop Bearer，
+http_client() 显式 no_proxy 和 15 秒超时；GET /chat/turns/{turn_id}/reasoning 要求
+memory.read，不需要也不申请 admin token。回合 ID 作为 URL path segment 编码。
+响应保留 turn_id、available、entries；每次调用保留 seq/call_id/created_at/preset/model/
+protocol/status/reasoning_chars/parts，parts 含 source/text，不覆盖为最后一次调用。
+HTTP 错误仅透传状态码：401 接入原 authGate，403/404/503 分别展示权限不足、版本不支持、
+稍后重试；空记录不代表模型没有思考，允许手动重新读取。没有自动轮询或新增落盘。
+canonical turn_id 来自 send_chat 成功响应或已有历史显式字段，msg_id 仅对账；
+缺 canonical ID 的 WS-only、历史、主动/Dream/Stage 消息不推测关联。
+admin-only /observability/llm-reasoning 列表/详情仍属于管理员全局归档，本客户端不调用。
+详情及跨仓总账待同步项见 brief-244-reasoning.md。
 
 本文档记录本仓当前和 `Emerald-presence` 的连接方式。三仓接口总账见
 `Emerald-presence/docs/three-repo-interface-catalog.md`；桌面消息细节统一见

@@ -1,9 +1,16 @@
 # docs/known-issues.md — 已知问题与技术债
 
-### API 思考可选展开（2026-09-09，roadmap）
+### API 思考展开验收与跨端关联（Brief 244，2026-09-11，partial/open）
 
-后端默认存档思考并提供 admin-only API；桌面展开 UI、IPC 与聊天 turn_id 关联尚未
-实现。不得给桌面增加 admin 凭据来替代受限读取契约。真实窗口验收未完成。
+桌面 IPC、canonical 关联、懒加载面板和回归已实现；详情见 brief-244-reasoning.md。
+open：真实 Tauri WebView + 真实后端 desktop token/模型归档联调、release 验收未完成；
+浏览器 IPC 夹具不代表实机通过。手机无展开 UI，保留 roadmap。
+仅收到 WS 的另一端没有 canonical turn_id（当前 WS 只有 transport msg_id），不提供
+猜测入口；后端若补明确关联契约再接入。无关联旧归档、QQ/主动/Dream/Stage 仍 roadmap。
+本单限定本仓，未修改 ../Emerald-presence/docs/three-repo-interface-catalog.md；
+后端总账仍写客户端 roadmap，待后端仓按本仓验收文档同步 current/partial。
+窄至 480px 且保留默认宽侧栏时，原布局会挤压整个聊天区；本单窄屏面板验收先收起侧栏，
+全局小窗口布局适配保留 open，不以面板换行修复冒充整窗适配。
 
 ### Agent Runtime 浏览器旧后端 compatibility 路由待发布迁移确认（Brief 72，observe）
 

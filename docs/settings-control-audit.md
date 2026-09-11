@@ -25,11 +25,16 @@ chess.pieceStyle 与 activity.debug 五个原 key。Activity 的 `open-activity-
 `observe`：真实 Tauri 原生窗口与真实后端/手机设备联调未完成；夹具 IPC 不代表实机。
 
 
-## API 思考存档（2026-09-09，roadmap）
+## API 思考存档与展示（Brief 244，2026-09-11，partial）
 
-后端默认存档 API 已返回的思考，与 `thinking.enabled` 生成开关独立；没有客户端存储
-开关。admin-only `/observability/llm-reasoning` 提供列表/详情，标准 desktop token
-不可读。未来展开 UI 是展示偏好，须先补 turn_id 关联和受限读取接口；当前未实现。
+后端默认归档实际返回的思考；thinking.enabled 仍仅控制生成，管理面独立维护。
+桌面 Reality assistant 气泡新增“模型返回思考”只读入口，默认收起、点击加载，
+不新增全局设置或存储开关，不编辑生成策略、effective state 或权限。
+GET /chat/turns/{turn_id}/reasoning 要求 memory.read；标准 desktop/mobile profile 已含。
+401 沿用连接门禁，403 提示缺少权限；不升级 admin 凭据。管理员全局归档接口保持独立。
+手机 lib/models/app_models.dart 已独立保存 canonical turnId，但尚无 reasoning 展开 UI；
+手机实现与真机验收为 roadmap，poll/ack、后台服务、relay、TTL 和通知未改。
+详情、验收和跨仓总账待同步项见 brief-244-reasoning.md。
 
 ## 桌面偏好归类（2026-07-30）
 

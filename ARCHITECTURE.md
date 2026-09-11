@@ -1,5 +1,16 @@
 # ARCHITECTURE.md — PresenceKit-desktop 架构总览
 
+## Brief 244：按回合展开模型返回思考（2026-09-11，partial）
+
+Reality Chat 的 assistant 气泡保存显式 canonical turn_id；HTTP msg_id 只用于对账，
+流式 msg_id 不等于 canonical turn_id。ChatPanel 将 HTTP 关联补到已展示分段和后续分段，
+TurnReasoningPanel 默认收起，经 shared/api/turnReasoning → load_turn_reasoning →
+GET /chat/turns/{turn_id}/reasoning 懒加载，只作文本渲染，不进入 TTS、工具或聊天正文。
+TurnReasoningCache 按 turn_id 缓存，属于单个 ChatPanel 生命周期；角色切换订阅重建
+ChatPanel，清空缓存并忽略迟到结果。头像 revision 不重建会话。
+实现、三面检查与真实窗口 open 项见 docs/brief-244-reasoning.md。
+
+
 ## 偏好与视觉小说式舞台（2026-09-11，partial）
 
 `CurrentCharacterAvatar` 在偏好「角色与对话」提供当前角色头像预览和裁剪上传，复用
@@ -344,7 +355,7 @@ ChatPanel.send()
 
 这条路径是当前正式路径。曾记录的 WS `user_message` / `assistant_message` 只是未排期的后续设计，
 不是产品 v1 的协议承诺；产品 v1 继续使用 `docs/protocol-v0.md` 的冻结 v0.1 契约。
-后端当前 assistant correlation ID 对齐为 `HTTP turn_id = HTTP msg_id = WS channel_message.msg_id = WS message_segments.msg_id`。
+非流式这些 ID 可相同；流式 HTTP msg_id 与 WS msg_id 对齐，但 canonical HTTP turn_id 可能不同，思考查询必须使用 turn_id。
 
 ### 后端主动消息
 

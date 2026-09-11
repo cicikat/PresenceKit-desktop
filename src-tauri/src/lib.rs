@@ -955,6 +955,26 @@ async fn send_chat(
 }
 
 #[tauri::command]
+async fn load_turn_reasoning(app: tauri::AppHandle, turn_id: String) -> Result<serde_json::Value, String> {
+    if turn_id.trim().is_empty() || turn_id.chars().count() > 128 {
+        return Err("HTTP 422".to_string());
+    }
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let mut url = reqwest::Url::parse(&backend_url(&cfg, "/chat/turns/"))
+        .map_err(|_| "Invalid backend URL".to_string())?;
+    url.path_segments_mut().map_err(|_| "Invalid backend URL".to_string())?
+        .pop_if_empty().push(&turn_id).push("reasoning");
+    let response = authorized_request(&cfg, client.get(url)).send().await
+        .map_err(|_| "Reasoning request failed".to_string())?;
+    if !response.status().is_success() {
+        // Only status crosses IPC; backend error bodies may contain private data.
+        return Err(format!("HTTP {}", response.status().as_u16()));
+    }
+    response.json::<serde_json::Value>().await.map_err(|_| "Invalid reasoning response".to_string())
+}
+
+#[tauri::command]
 async fn load_garden_state(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
     let client = http_client()?;
@@ -3223,6 +3243,7 @@ pub fn run() {
             list_room_props,
             list_live2d_models,
             send_chat,
+            load_turn_reasoning,
             load_garden_state,
             coplay_state,
             coplay_arm,

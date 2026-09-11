@@ -1,5 +1,14 @@
 # PresenceKit-desktop 协议 v0.1
 
+## Brief 244：思考读取与消息标识（2026-09-11）
+
+本单不新增/修改 WS 帧、正文、ack、TTL 或去重规则。HTTP /desktop/chat 的 canonical
+turn_id 用于 GET /chat/turns/{turn_id}/reasoning（memory.read）；HTTP msg_id 只与
+WS channel_message/message_segments/message_stream_* 的传输 ID 对账。
+流式 msg_id 可以不同于 turn_id，禁止互换或按时间/内容猜测。当前 WS 未传 canonical
+turn_id，因此 WS-only 消费端无明确关联时不展示入口。具体 IPC 与降级见 backend-integration.md。
+
+
 MCP 调用仍只在后端执行；桌面端只能收到不含远端工具细节的本地瞬态状态。
 
 本文件是本仓与 `Emerald-presence` 当前桌面通信协议的单一权威。v0.1 将现有 legacy 协议冻结为正式协议：不实现 v1，不协商 capabilities，不允许任一端单边新增 action。
@@ -53,7 +62,7 @@ v0.1 只允许以下 9 类：
 
 ## HTTP 发送与 WS 回复
 
-`POST /desktop/chat` 是 v0.1 正式发送路径，不是过渡态。assistant 回复可能先从 HTTP 响应到达，也可能从 WS `channel_message` 到达；同一回复的 HTTP `turn_id` / `msg_id` 与 WS `channel_message.msg_id` / `message_segments.msg_id` 对齐。
+`POST /desktop/chat` 是 v0.1 正式发送路径，不是过渡态。assistant 回复可能先从 HTTP 响应到达，也可能从 WS `channel_message` 到达；同一回复的 HTTP `msg_id` 与 WS `channel_message.msg_id` / `message_segments.msg_id` 对齐。流式传输 ID 可能不同于 canonical `turn_id`，不得互换。
 
 ChatPanel 以 WS 为主路径、HTTP 为延时 fallback；精确去重、早到 segments、TTL 与容量上限见 [chat-correlation.md](chat-correlation.md)。
 

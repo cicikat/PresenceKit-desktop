@@ -1,6 +1,19 @@
 import type { MessageKey } from './zh-CN';
 
+
 export const enUS: Record<MessageKey, string> = {
+  'chat.reasoning.title': "Model-returned reasoning",
+  'chat.reasoning.loading': "Loading…",
+  'chat.reasoning.empty': "No model reasoning record is available for this turn.",
+  'chat.reasoning.unauthorized': "Connection expired. Please reconnect.",
+  'chat.reasoning.forbidden': "Permission denied. The memory.read scope is required.",
+  'chat.reasoning.unsupported': "This backend version does not support turn reasoning.",
+  'chat.reasoning.unavailable': "Reasoning records are temporarily unavailable. Retry later.",
+  'chat.reasoning.failed': "Could not load reasoning. Check your connection and retry.",
+  'chat.reasoning.call': "Call",
+  'chat.reasoning.interrupted': "Interrupted",
+  'chat.reasoning.completed': "Protocol completed (may have reached the token limit)",
+  'chat.reasoning.retry': "Reload",
   'settings.avatar.title': "Current character avatar",
   'settings.avatar.hint': "Used for this character in chat and dreams. PNG, JPEG or WebP, up to 10 MB.",
   'settings.avatar.change': "Change avatar",

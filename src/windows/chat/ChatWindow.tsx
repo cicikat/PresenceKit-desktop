@@ -120,7 +120,14 @@ export function ChatWindow({ onActivityOpen, onToyOpen, onRoomOpen, isCovered = 
   }, []);
 
   useEffect(() => {
-    const unsubscribe = subscribeActiveCharacter(info => { void loadCharacterAvatar(info.id || null); });
+    let characterId = getActiveCharacterInfo().id;
+    const unsubscribe = subscribeActiveCharacter(info => {
+      if (info.id !== characterId) {
+        characterId = info.id;
+        setCharSwitchKey(key => key + 1);
+      }
+      void loadCharacterAvatar(info.id || null);
+    });
     void getPromptAssets({ force: true })
       .then(assets => updateActiveCharacterFromAssets(assets))
       .then(info => loadCharacterAvatar(info.id || null))
