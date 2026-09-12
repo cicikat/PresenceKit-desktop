@@ -1,5 +1,10 @@
 # PresenceKit-desktop 协议 v0.1
 
+## Conversation calendar (2026-09-12)
+
+Current: GET /chat-log/stats/calendar requires memory.read + state.read. All four metrics are scoped to owner + character; period=day/week/month/year with date, or start/end (up to 366 days). Missing history is null, never zero. Coverage and totals_partial disclose incomplete data. See backend docs/conversation-calendar.md.
+Roadmap: native desktop/mobile heatmap and day detail UI. Observe: real provider streaming usage and independent automation transport coverage. Existing history, WS/poll/ack/TTL remain unchanged.
+
 ## Brief 244：思考读取与消息标识（2026-09-11）
 
 本单不新增/修改 WS 帧、正文、ack、TTL 或去重规则。HTTP /desktop/chat 的 canonical
