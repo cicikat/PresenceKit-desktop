@@ -1,5 +1,13 @@
 # 设置与功能开关审计（P0–P2）
 
+## Admin image connections and owner profile (2026-09-12)
+
+Admin now separates image connections from purpose routing, uses expandable editors and a saved-connection
+synthetic-image probe (admin-only). The global owner is edited once in setup; scheduler saves no longer
+include duplicate owner/signature fields. Native client remains a consumer and opens the existing admin
+panel; no local feature gate, API credential, WS/IPC/ack/TTL change. Browser fixture validation passed;
+native container and real provider verification remain observe. See backend docs/admin-settings-visual-review.md.
+
 ## IME awareness (2026-09-11)
 
 Backend-owned `ime_ingest` / `ime_awareness` flags and `ime_judge` routing are managed in the admin UI.
