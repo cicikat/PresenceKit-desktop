@@ -1192,3 +1192,7 @@ origin=chat|autonomy、tool_name、status、ts。status 为 running/success/erro
 管理面提供全局开关、effective state 与 `/perception/screen/status` 无正文观测；电脑视觉观察页、手机系统配置页各有独立本地授权，默认关闭。全局开启时自主工具继承启用，显式工具禁用优先；角色消息继续走原通知/免打扰链路。桌面 IPC 新增可选 onDemandEnabled；手机使用专用 screen_observation 通道与无障碍 worker，不改 mobile poll/ack/relay。
 
 实现及构建/定向测试通过，真实双设备、锁屏、OEM 后台及 VLM/消息联合验收保持 open。管理面既有国际化测试 3 项失败保持 open，详见施工记录，不能将静态检查作为真实设备验收。
+
+## Life records additive contract (2026-09-12)
+
+Backend /life-records/capabilities and /settings/life-records expose recognition_routes by category. Record recognition_description/recognition_format/recognition_route are server-owned optional JSON fields; owner/scope/revision/operation_id and existing channels are unchanged. Desktop edits connections and switches through admin; native records UI remains roadmap. Mobile consumes descriptions separately from user notes. See backend docs/life-records.md for precedence and incomplete device/OCR verification.
