@@ -473,3 +473,7 @@ open：真实后端重启/Tauri 联调；手机工具链 roadmap；仅近期 30 
 手机按需截图开关移到 SettingsPage 的系统配置分组，复用 SettingsRow + Switch；能力权限页仅显示 CapabilityRow 状态标记，不再显示灰色禁用开关。系统配置中的权限操作子页不重复放置截图开关。桌面按需截图使用与“允许视觉观察”一致的左侧标题/说明、右侧滑动开关布局。两端 AGENTS.md 已写入复用周围 UI 风格约定，手机额外明确设置与权限观测边界。
 
 三面检查：后端管理开关、effective state、观测端点、截图请求/TTL/去重和原生授权闸门不变。本次仅移动本机设置入口和统一控件；手机可先保存本地授权，实际截图仍须 Android 11+、无障碍及未锁屏。真实手机更新安装后的交互验收仍 open。
+
+## Admin visual decisions (2026-09-12, observe)
+
+Backend admin static styling and configuration disclosure were verified in Chromium using synthetic APIs. Native admin bridge container and physical mobile validation remain observe; no native UI or IPC changed. Full request/queue/send/ack tracing remains roadmap in backend docs/admin-design-implementation.md and docs/three-repo-interface-catalog.md.

@@ -223,3 +223,7 @@ mobile offers a text snapshot, not this requested on-demand image capture. See d
 ## Life records (2026-09-12)
 
 Backend admin owns life-record settings and connections. Food/cart use generic vision; bills use independent OCR. Service configuration shows per-category effective state, tasks and retry controls. Read-only character access includes separate recognition_description with user corrections taking priority. Desktop continues opening backend admin; no new native toggle, IPC/WS, scope or local secret. Native life-record list remains roadmap; mobile physical-device/OCR verification remains observe.
+
+## Admin visual decisions (2026-09-12)
+
+Admin now uses neutral controls, state-only emerald accents, collapsible parameter forms and an advanced JSON-to-form preset import. Observation and tools share the existing state.read effective-state table; import does not submit until Save. ConnectionSettingsPage still opens the native admin bridge, without new native settings or credentials. No REST/WS/IPC contract changed. Browser fixture checks passed; native bridge/device verification remains observe. Per-request queue/send/ack stages remain roadmap, not represented by a passing global row. See backend docs/admin-design-implementation.md.
