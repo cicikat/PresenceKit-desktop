@@ -1,5 +1,11 @@
 # docs/known-issues.md — 已知问题与技术债
 
+## 资料接续联合验收（2026-09-13，observe）
+
+后端图片/文档回读、生活记录待评估投递和静默工具结果接续已实现；管理面隔离实测与定向回归通过。
+桌面无需新包，上传/WS/通知和本机截图授权不变。运行中后端需重启，真实桌面/手机/模型联合验证未完成。
+设置职责见 settings-control-audit.md；后端详情见 docs/media-continuity-2026-09-13.md。
+
 ### 聊天交互修整验收（2026-09-11，partial/open）
 
 实现与浏览器夹具验证见 ui-refinements-2026-09-11.md。活动/群聊标准壳及 Design Mod

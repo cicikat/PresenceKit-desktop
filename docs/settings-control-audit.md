@@ -1,5 +1,14 @@
 # 设置与功能开关审计（P0–P2）
 
+## 资料回读与主动接续（2026-09-13）
+
+后端管理面继续拥有生活记录角色可读、工具权限与模型连接；图片 cached/vision/ocr 是角色单次工具参数。
+未读资料随 owner 对话/主动机会提供，静默主动工具结果保留 24 小时，不产生额外通知或第二套客户端开关。
+服务配置卡新增待评估数量；GET /settings/life-records.continuity 与 state.read 的
+GET /observability/context-continuity 是无正文观测。桌面沿用 /upload/ingest 与原聊天/WS 路径，
+不改本机截图授权、IPC、ack 或展示配置，无需客户端发版。后端浏览器隔离实测通过；真实三端/模型联合验收 observe。
+范围与限制以后台 docs/media-continuity-2026-09-13.md 为准。
+
 ## Admin image connections and owner profile (2026-09-12)
 
 Admin now separates image connections from purpose routing, uses expandable editors and a saved-connection
