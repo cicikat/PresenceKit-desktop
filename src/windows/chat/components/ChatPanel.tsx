@@ -126,6 +126,7 @@ interface ChatMsg {
   narration?: boolean;
   id: string;
   role: 'user' | 'assistant' | 'system' | 'divider' | 'raw_fallback' | 'no_more';
+  attachmentPreview?: string;
   text: string;
   time: number;
   speakerId?: string; // char_id; absent = owner (right bubble)
@@ -490,7 +491,7 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
                   borderRadius: 'var(--radius-sm)',
                   marginBottom: attachNote ? 6 : 0,
                 }}>
-                  <Icon name={iconForFilename(attachFilename!)} size={16} />
+                  {msg.attachmentPreview ? <img src={msg.attachmentPreview} alt={attachFilename!} style={{ width: 140, maxHeight: 140, objectFit: 'contain', borderRadius: 4 }} /> : <Icon name={iconForFilename(attachFilename!)} size={16} />}
                   <span style={{ fontSize: userFontSize - 1, fontWeight: 500, opacity: 0.9 }}>{attachFilename}</span>
                 </div>
                 {attachNote && <div style={{ fontSize: userFontSize }}>{normalizeChatDisplayText(attachNote)}</div>}
@@ -1840,7 +1841,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       ? `📎 ${filename}\n${userMessage}`
       : `📎 ${filename}`;
     setMessages(prev => [...prev, {
-      id: newId(), role: 'user', text: placeholderText, time: Date.now(), replyTo: quote ?? undefined,
+      id: newId(), role: 'user', text: placeholderText, time: Date.now(), replyTo: quote ?? undefined, attachmentPreview: submitted.length === 1 ? submitted[0].preview : undefined,
     }]);
     setInput('');
     setDraftError(null);
@@ -1850,6 +1851,8 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
     try {
       const message = quote ? t('chat.attachments.replyPrefix') + '\n' + truncateForReplyTo(quote.text) + '\n\n' + userMessage : userMessage;
       const resp = await uploadDocument(submitted.map(({ filePath, filename, dataB64 }) => ({ filePath, filename, dataB64 })), message);
+      setAttachments([]);
+      attachmentsRef.current = [];
       setAttachments(current => current.filter(item => !submitted.some(sent => sent.id === item.id)));
       setReplyTarget(current => current === quote ? null : current);
       // Defer render same as send() — WS channel_message is primary path.

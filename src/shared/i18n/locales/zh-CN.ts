@@ -56,6 +56,7 @@ export const zhCN = {
   "chat.attachments.sizeLimit": "图片最大 10MB，文档最大 5MB。",
   "chat.attachments.readFailed": "无法读取附件，请检查文件类型、大小和访问权限。",
   "chat.attachments.sendFailed": "发送未确认，附件已保留。请先确认是否收到回复，再重试，避免重复发送。",
+  "chat.attachments.dismiss": "关闭提示",
   "chat.attachments.replyPrefix": "回复以下消息：",
   "chat.attachments.images": "图片",
   "chat.attachments.documents": "文档",
