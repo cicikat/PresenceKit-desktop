@@ -14,6 +14,7 @@ const PET_TURN_EVENT = 'pet://turn';
 export interface PetPrefsPatch {
   model3dZoom?: number;
   live2dZoom?: number;
+  windowScale?: number;
 }
 
 export interface PetWindowState {

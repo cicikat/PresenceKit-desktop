@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
-import { listenPetSnapshots, listenPetTurn } from '../../shared/pet/bridge';
+import { getCurrentWindow } from '@tauri-apps/api/window';
+import { listenPetSnapshots, listenPetTurn, listenPetPrefs } from '../../shared/pet/bridge';
 import { DEFAULT_PET_SNAPSHOT, type PetSnapshot } from '../../shared/pet/types';
 import { sendChat } from '../../shared/api/backend';
 import { getDesktopTtsEnabled, getTtsAutoPlay, type TtsAutoPlaySettings } from '../../shared/api/runtimeSettings';
@@ -58,6 +59,7 @@ export function PetWindow() {
       unlistenEnabled?.();
     };
   }, []);
+  useEffect(() => { let off: (() => void) | undefined; listenPetPrefs(patch => { if (typeof patch.windowScale === 'number') void getCurrentWindow().setSize({ type: 'Logical', width: 340 * patch.windowScale, height: 400 * patch.windowScale } as any); }).then(fn => { off = fn; }); return () => off?.(); }, []);
 
   // Alt+1 global hotkey → toggle voice recording; on stop, auto-send transcribed text
   useEffect(() => {
