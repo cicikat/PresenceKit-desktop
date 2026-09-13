@@ -1196,3 +1196,20 @@ origin=chat|autonomy、tool_name、status、ts。status 为 running/success/erro
 ## Life records additive contract (2026-09-12)
 
 Backend /life-records/capabilities and /settings/life-records expose recognition_routes by category. Record recognition_description/recognition_format/recognition_route are server-owned optional JSON fields; owner/scope/revision/operation_id and existing channels are unchanged. Desktop edits connections and switches through admin; native records UI remains roadmap. Mobile consumes descriptions separately from user notes. See backend docs/life-records.md for precedence and incomplete device/OCR verification.
+
+
+## Chat tool category discovery (2026-09-13)
+
+The shared backend Path C now starts with authorized nonempty category gateways.
+Selecting a category loads its concrete schemas for the next model request;
+discovery never executes business actions or emits tool activity/confirmation.
+Existing backend tool permissions, character overrides, model tool presets, MCP
+authorization and confirmation gates remain authoritative. No native setting,
+permission, REST/WS/IPC field, poll/ack/TTL, notification or relay change is needed.
+Tool Loop configuration stays in the admin panel. Its max_steps budget receives
+at most nine additional category-discovery rounds under the same total_timeout_s.
+The existing state.read /observability/runtime-signals endpoint exposes aggregate
+tool_loop_discovery counters and schema counts. No new persistent state.
+Native devices and real model gateway verification remain observe; backend
+mocked regressions do not claim device acceptance. Design and validation:
+backend docs/tool-discovery.md and docs/three-repo-interface-catalog.md.

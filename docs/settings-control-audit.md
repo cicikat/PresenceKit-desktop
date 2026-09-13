@@ -227,3 +227,20 @@ Backend admin owns life-record settings and connections. Food/cart use generic v
 ## Admin visual decisions (2026-09-12)
 
 Admin now uses neutral controls, state-only emerald accents, collapsible parameter forms and an advanced JSON-to-form preset import. Observation and tools share the existing state.read effective-state table; import does not submit until Save. ConnectionSettingsPage still opens the native admin bridge, without new native settings or credentials. No REST/WS/IPC contract changed. Browser fixture checks passed; native bridge/device verification remains observe. Per-request queue/send/ack stages remain roadmap, not represented by a passing global row. See backend docs/admin-design-implementation.md.
+
+
+## Chat tool category discovery (2026-09-13)
+
+The shared backend Path C now starts with authorized nonempty category gateways.
+Selecting a category loads its concrete schemas for the next model request;
+discovery never executes business actions or emits tool activity/confirmation.
+Existing backend tool permissions, character overrides, model tool presets, MCP
+authorization and confirmation gates remain authoritative. No native setting,
+permission, REST/WS/IPC field, poll/ack/TTL, notification or relay change is needed.
+Tool Loop configuration stays in the admin panel. Its max_steps budget receives
+at most nine additional category-discovery rounds under the same total_timeout_s.
+The existing state.read /observability/runtime-signals endpoint exposes aggregate
+tool_loop_discovery counters and schema counts. No new persistent state.
+Native devices and real model gateway verification remain observe; backend
+mocked regressions do not claim device acceptance. Design and validation:
+backend docs/tool-discovery.md and docs/three-repo-interface-catalog.md.
