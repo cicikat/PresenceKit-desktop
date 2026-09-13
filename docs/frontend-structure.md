@@ -1,5 +1,12 @@
 # docs/frontend-structure.md — 前端结构指南
 
+## YOU 头像右对齐（2026-09-13）
+
+ChatPanel transcript 始终保留左右 28px 内边距。YOU 头像是用户行内 36px 的 flex
+子项，已自行占位；显示头像时不再额外增加右侧 28px 留白。开关与头像存储不变。
+浏览器夹具在 1280/800px 验证对称边距、头像贴齐行尾且无横向溢出，并完成截图目检。
+真实 Tauri 窗口验收仍 open。
+
 ## 梦境广播隔离（2026-09-13）
 
 ChatPanel 用 shared/api/realityMessageScope 的独立 stream 判定拒绝旧 Dream/活动动画；

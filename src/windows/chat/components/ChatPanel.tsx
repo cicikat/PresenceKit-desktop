@@ -2051,7 +2051,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
         ref={scrollRef}
         data-chat-region="transcript"
         onScroll={onScroll}
-        style={{ gridArea: 'transcript', minHeight: 0, overflowY: 'auto', padding: `8px ${youVisible ? 56 : 28}px 12px 28px`, background: avatars.chatBackground?.dataUrl ? 'transparent' : 'var(--paper)', ...(isHud ? { borderLeft: '1px solid var(--paper-edge)' } : {}) }}
+        style={{ gridArea: 'transcript', minHeight: 0, overflowY: 'auto', padding: '8px 28px 12px', background: avatars.chatBackground?.dataUrl ? 'transparent' : 'var(--paper)', ...(isHud ? { borderLeft: '1px solid var(--paper-edge)' } : {}) }}
       >
         {/* 初始加载中占位 */}
         {historyStatus.kind === 'loading' && messages.length === 0 && (

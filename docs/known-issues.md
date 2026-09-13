@@ -1,5 +1,12 @@
 # docs/known-issues.md — 已知问题与技术债
 
+## YOU 头像布局验收（2026-09-13，partial）
+
+移除 transcript 对 YOU 头像重复预留的右边距；浏览器 1280/800px 几何断言及截图通过。
+原头像开关与本地存储不变，无后端/手机设置、协议、权限或队列变化。
+复验：设置 CHECK_YOU_LAYOUT=1 后运行 scripts/dream-isolation-browser.mjs。
+真实 Tauri 窗口仍 open，后端跨仓总账待其仓同步；本单只修改客户端。
+
 ## 手机梦境广播 UI 隔离（2026-09-13，partial/open）
 
 现实窗口误收旧 Dream 打字机流已修复，纯逻辑与浏览器 IPC 夹具回归通过；见
