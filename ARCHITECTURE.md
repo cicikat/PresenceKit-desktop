@@ -1,5 +1,12 @@
 # ARCHITECTURE.md — PresenceKit-desktop 架构总览
 
+## 梦境流式 UI 隔离（2026-09-13，partial）
+
+现实 ChatPanel 在 stream-start 使用 `isSingleRealityStream`：带 char_id、缺 domain 的
+旧 HTTP 梦境/活动动画不能进入现实消息 buffer，即使传输层标了 source=reality。
+delta/end 只消费已接受的 msg_id；canonical 现实消息保留原作用域检查与去重。
+Dream HTTP 回复仍由独立 useDreamChat 消费，详见 `docs/dream-isolation-2026-09-13.md`。
+
 ## 聊天交互修整（2026-09-11，partial）
 
 ActivityWindow 改为 ChatWindow 主区域，保留主 ChatPanel 实例；活动/群聊二次点击返回，

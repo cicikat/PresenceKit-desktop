@@ -1,5 +1,12 @@
 # docs/frontend-structure.md — 前端结构指南
 
+## 梦境广播隔离（2026-09-13）
+
+ChatPanel 用 shared/api/realityMessageScope 的独立 stream 判定拒绝旧 Dream/活动动画；
+拒绝的 start 不注册 msg_id，后续 delta/end 不修改现实气泡、加载态或通知。
+此边界不依赖本机是否打开 Dream overlay。canonical 与历史路径不变。
+实现、测试与实机 open 项见 dream-isolation-2026-09-13.md。
+
 ## 聊天交互修整（2026-09-11，partial）
 
 最新覆盖见 ui-refinements-2026-09-11.md：ActivityWindow 不再由 AppRoot 全屏挂载，

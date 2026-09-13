@@ -1,5 +1,13 @@
 # docs/known-issues.md — 已知问题与技术债
 
+## 手机梦境广播 UI 隔离（2026-09-13，partial/open）
+
+现实窗口误收旧 Dream 打字机流已修复，纯逻辑与浏览器 IPC 夹具回归通过；见
+dream-isolation-2026-09-13.md。真实手机 + Tauri 联合验收仍 open。
+后端无 domain 的旧动画缺完整请求归属；跨设备同时发 Dream/活动时的动画关联仍 open，
+建议后端另单补 domain/request 归属。本单不修改其他仓库，后端 three-repo-interface-catalog.md
+同步待后端仓处理，不能把客户端过滤视为后端协议已升级。
+
 ## 资料接续联合验收（2026-09-13，observe）
 
 后端图片/文档回读、生活记录待评估投递和静默工具结果接续已实现；管理面隔离实测与定向回归通过。

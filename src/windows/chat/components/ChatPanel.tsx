@@ -32,7 +32,7 @@ import { dreamGetState } from '../../../shared/api/dream';
 import { wsClient } from '../../../shared/api/ws';
 import { notifyOnMessage } from '../../../shared/api/notify';
 import { getActiveCharacterInfo, getActiveCharacterName } from '../../../shared/activeCharacter';
-import { isSingleRealityMessage, type RealityMessageScope } from '../../../shared/api/realityMessageScope';
+import { isSingleRealityMessage, isSingleRealityStream, type RealityMessageScope } from '../../../shared/api/realityMessageScope';
 import { chatThemeFontSize } from '../../../shared/chatAppearance';
 import { useI18n } from '../../../shared/i18n';
 import { useDesignMounts } from '../../../shared/design-mod/mounts';
@@ -1606,7 +1606,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
     // ── 流式事件订阅 ─────────────────────────────────────────────────────────
 
     const unsubStreamStart = wsClient.on('message_stream_start', (message) => {
-      if (!isSingleRealityMessage(message, getActiveCharacterInfo().id)) return;
+      if (!isSingleRealityStream(message, getActiveCharacterInfo().id)) return;
       const { msg_id } = message;
       if (dreamActiveRef.current) return;
       if (streamingLocalIdRef.current.has(msg_id) || wsMsgIdToLocalIdsRef.current.has(msg_id)) return;

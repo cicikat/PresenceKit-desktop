@@ -69,6 +69,11 @@ v0.1 只允许以下 9 类：
 
 ## HTTP 发送与 WS 回复
 
+旧 HTTP Dream/活动动画也复用 message_stream_*：start 可带 char_id 而无 domain/round_id，
+传输层 source=reality 不能证明它属于现实。现实 UI 拒绝这种未定域的角色动画；
+若 start 带 char_id，必须显式 domain=reality 并匹配当前角色才可接收，群聊轮次仍排除。
+delta/end 仅按已接收 start 的 msg_id 处理；不修改 wire 字段、ack 或 canonical 接收规则。
+
 `POST /desktop/chat` 是 v0.1 正式发送路径，不是过渡态。assistant 回复可能先从 HTTP 响应到达，也可能从 WS `channel_message` 到达；同一回复的 HTTP `msg_id` 与 WS `channel_message.msg_id` / `message_segments.msg_id` 对齐。流式传输 ID 可能不同于 canonical `turn_id`，不得互换。
 
 ChatPanel 以 WS 为主路径、HTTP 为延时 fallback；精确去重、早到 segments、TTL 与容量上限见 [chat-correlation.md](chat-correlation.md)。

@@ -1,5 +1,14 @@
 # docs/backend-integration.md — 后端接口与接入现状
 
+## 旧 Dream 动画广播隔离（2026-09-13）
+
+手机 `/dream/chat` → 后端 `pseudo_stream_push(profile=dream)` → desktop WS 的旧 start
+有 char_id、无 domain/round_id，且 desktop transport 会写 source=reality。
+因此现实 ChatPanel 的 stream-start 对带 char_id 的帧要求显式 domain=reality；
+群聊、Dream 和过期角色仍拒绝。普通 owner start 无 char_id，保持兼容。
+canonical message 继续使用原 scope 判断；HTTP fallback、ack 和历史无变更。
+详见 dream-isolation-2026-09-13.md（真实手机联合验收 open）。
+
 
 ## Brief 242：统一偏好与后端设置职责（2026-09-10，current）
 
