@@ -2,6 +2,9 @@ import type { MessageKey } from './zh-CN';
 
 
 export const enUS: Record<MessageKey, string> = {
+"chat.send.failed": "Send failed",
+"chat.send.retry": "Retry",
+"help.announcement.release": "PresenceKit v1.1.0 is now available.",
 "chat.attachments.dismiss": "Dismiss",
 "settings.visual.onDemand": "Allow character-requested screenshots",
 "settings.visual.onDemandHint": "Capture this unlocked PC only when requested. Send to your configured vision service for a privacy-filtered summary. Requires the backend screen observation switch; separate from periodic sampling.",

@@ -1,4 +1,7 @@
 export const zhCN = {
+"chat.send.failed": "发送失败",
+"chat.send.retry": "重试",
+"help.announcement.release": "PresenceKit v1.1.0 已发布。",
 "settings.visual.onDemand": "允许角色按需截图",
 "settings.visual.onDemandHint": "角色请求时截取本机未锁定的画面，发送到已配置的视觉服务，返回隐私过滤后的概括。需同时开启后端按需截图；与定时采样独立。",
 "settings.toolDisplay.title": "显示工具调用",

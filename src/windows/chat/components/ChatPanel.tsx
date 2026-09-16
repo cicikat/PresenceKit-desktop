@@ -43,6 +43,7 @@ import { TypingDots } from '../../../shared/ui/TypingDots';
 import type { ChatArtifactPayload, ChatLogEntry, NarrativeSegment, StickerPayload } from '../../../shared/api/types';
 import { normalizeChatDisplayText } from '../chatDisplay';
 import { renderInlineStyled } from '../inlineStyle';
+import { streamDisplayText } from '../streamDisplay';
 import type { MainLayoutId } from '../../../shared/layout/contract';
 import {
   findRenderedFallback,
@@ -128,6 +129,8 @@ interface ChatMsg {
   id: string;
   role: 'user' | 'assistant' | 'system' | 'divider' | 'raw_fallback' | 'no_more';
   attachmentPreview?: string;
+  failed?: boolean;
+  retryDraft?: { text: string; attachments: DraftAttachment[]; quote?: { text: string; time: number } };
   text: string;
   time: number;
   speakerId?: string; // char_id; absent = owner (right bubble)
@@ -333,37 +336,15 @@ function renderStreamingContent(text: string, isDone: boolean): ReactNode {
   if (!text) return isDone ? null : <TypingDots color="var(--ink-3)" />;
 
   const nodes: ReactNode[] = [];
-  let buf = '';
-  let inTag = false;
-  let tagBuf = '';
-  let key = 0;
-
-  for (const ch of text) {
-    if (!inTag && ch === '<') {
-      if (buf) { nodes.push(<span key={key++}>{buf}</span>); buf = ''; }
-      inTag = true; tagBuf = '<';
-    } else if (inTag && ch === '>') {
-      tagBuf += '>';
-      // Inline style tags (<hl>, <big>, <sm>) are absorbed into the text buffer
-      // rather than shown as badge widgets — they'll be styled after streaming ends.
-      const tagLabel = tagBuf.replace(/^<\/?/, '').replace(/>$/, '').toLowerCase();
-      if (tagLabel === 'hl' || tagLabel === 'big' || tagLabel === 'sm') {
-        buf += tagBuf;
-      } else {
-        nodes.push(<StreamTagBox key={key++} raw={tagBuf} done />);
-      }
-      inTag = false; tagBuf = '';
-    } else if (inTag) {
-      tagBuf += ch;
+  // Preserve narrative badges while rendering whitelisted styles as tokens arrive.
+  const parts = text.split(/(<\/?(?:say|do|think|narration)>)/g);
+  parts.forEach((part, index) => {
+    if (/^<\/?(?:say|do|think|narration)>$/.test(part)) {
+      nodes.push(<StreamTagBox key={index} raw={part} done />);
     } else {
-      buf += ch;
+      nodes.push(<span key={index}>{renderInlineStyled(normalizeChatDisplayText(streamDisplayText(part)))}</span>);
     }
-  }
-
-  // 未闭合 tag（流还在进行中）→ 待完成占位框
-  if (inTag && tagBuf) nodes.push(<StreamTagBox key={key++} raw={tagBuf} done={false} />);
-  if (buf) nodes.push(<span key={key++}>{buf}</span>);
-  // 流式光标
+  });
   if (!isDone) nodes.push(<span key="cur" style={{ opacity: 0.6, animation: 'streaming-cursor-blink 0.8s step-end infinite' }}>▌</span>);
 
   return nodes;
@@ -1812,24 +1793,26 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
 
   useEffect(() => () => inputTimer.current.cancel(), [engine]);
 
-  const send = async () => {
-    const t = input.trim();
+  const send = async (retry?: ChatMsg) => {
+    const t = retry?.retryDraft?.text ?? input.trim();
     if (loading || preparingRef.current || sendingRef.current) return;
-    if (attachments.length) { await doUpload(); return; }
+    if (retry?.retryDraft?.attachments.length || (!retry && attachments.length)) { await doUpload(retry); return; }
     if (!t) return;
     sendingRef.current = true;
-    const replyTo = replyTarget
-      ? { text: truncateForReplyTo(replyTarget.text), ts: replyTarget.time / 1000 }
+    const quote = retry?.retryDraft?.quote ?? (retry ? undefined : replyTarget);
+    const userId = retry?.id ?? newId();
+    const replyTo = quote
+      ? { text: truncateForReplyTo(quote.text), ts: quote.time / 1000 }
       : undefined;
-    setInput('');
-    setReplyTarget(null);
-    setMessages(m => [...m, { id: newId(), role: 'user', text: t, time: Date.now(), replyTo: replyTarget ?? undefined }]);
+    if (!retry) { setInput(''); setReplyTarget(null); }
+    setMessages(m => retry ? m.map(item => item.id === userId ? { ...item, failed: false } : item) : [...m, { id: userId, role: 'user', text: t, time: Date.now(), replyTo: quote ?? undefined, retryDraft: { text: t, attachments: [], quote: quote ?? undefined } }]);
     chatSessionMetrics.recordTurn();
     engine.setLocalFocus('想事情');
     setLoading(true);
     try {
       const response = await sendChat(t, replyTo);
       if (!mountedRef.current) return;
+      setMessages(prev => prev.map(item => item.id === userId ? { ...item, retryDraft: undefined } : item));
       const { reply } = response;
       const artifacts = normalizeChatArtifacts(response.artifacts);
       const msgId = responseMsgId(response);
@@ -1887,6 +1870,8 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       pendingSendReplyRef.current = { timerId, reply, msgId, artifacts };
       console.log('[chat] httpDone | loadingSource: send | waitingForWs: true | msg_id:', msgId ?? '(none)', '| contentHash:', contentHash, '| partsCount:', reply.split(/\n+/).filter(Boolean).length, '| timestamp:', Date.now());
     } catch (err) {
+      if (!mountedRef.current) return;
+      setMessages(prev => prev.map(item => item.id === userId ? { ...item, failed: true } : item));
       console.error('[chat] send 失败:', err);
       const is409 = /\b409\b/.test(err instanceof Error ? err.message : String(err));
       const text = is409 ? await describeDreamBlockedChat() : describeSendError(err);
@@ -1901,19 +1886,26 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
     } finally { sendingRef.current = false; }
   };
 
-  const doUpload = async () => {
+  const doUpload = async (retry?: ChatMsg) => {
     sendingRef.current = true;
-    const submitted = attachments;
-    const quote = replyTarget;
+    const submitted = retry?.retryDraft?.attachments ?? attachments;
+    const quote = retry?.retryDraft?.quote ?? (retry ? undefined : replyTarget);
+    const userId = retry?.id ?? newId();
     const filename = submitted.map(item => item.filename).join(', ');
-    const userMessage = input.trim();
+    const userMessage = retry?.retryDraft?.text ?? input.trim();
     const placeholderText = userMessage
       ? `📎 ${filename}\n${userMessage}`
       : `📎 ${filename}`;
-    setMessages(prev => [...prev, {
-      id: newId(), role: 'user', text: placeholderText, time: Date.now(), replyTo: quote ?? undefined, attachmentPreview: submitted.length === 1 ? submitted[0].preview : undefined,
+    setMessages(prev => retry ? prev.map(item => item.id === userId ? { ...item, failed: false } : item) : [...prev, {
+      retryDraft: { text: userMessage, attachments: submitted, quote: quote ?? undefined },
+      id: userId, role: 'user', text: placeholderText, time: Date.now(), replyTo: quote ?? undefined, attachmentPreview: submitted.length === 1 ? submitted[0].preview : undefined,
     }]);
-    setInput('');
+    if (!retry) {
+      setInput('');
+      setReplyTarget(null);
+      setAttachments([]);
+      attachmentsRef.current = [];
+    }
     setDraftError(null);
     chatSessionMetrics.recordTurn();
     engine.setLocalFocus('想事情');
@@ -1921,10 +1913,8 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
     try {
       const message = quote ? t('chat.attachments.replyPrefix') + '\n' + truncateForReplyTo(quote.text) + '\n\n' + userMessage : userMessage;
       const resp = await uploadDocument(submitted.map(({ filePath, filename, dataB64 }) => ({ filePath, filename, dataB64 })), message);
-      setAttachments([]);
-      attachmentsRef.current = [];
-      setAttachments(current => current.filter(item => !submitted.some(sent => sent.id === item.id)));
-      setReplyTarget(current => current === quote ? null : current);
+      if (!mountedRef.current) return;
+      setMessages(prev => prev.map(item => item.id === userId ? { ...item, retryDraft: undefined } : item));
       // Defer render same as send() — WS channel_message is primary path.
       const reply = resp.reply;
       const artifacts = normalizeChatArtifacts(resp.artifacts);
@@ -1973,8 +1963,8 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       pendingSendReplyRef.current = { timerId, reply, msgId, artifacts };
       console.log('[chat] httpDone | loadingSource: upload | waitingForWs: true | msg_id:', msgId ?? '(none)', '| contentHash:', contentHash, '| partsCount:', reply.split(/\n+/).filter(Boolean).length, '| timestamp:', Date.now());
     } catch (err: unknown) {
-      setDraftError(t('chat.attachments.sendFailed'));
-      setInput(current => current || userMessage);
+      if (!mountedRef.current) return;
+      setMessages(prev => prev.map(item => item.id === userId ? { ...item, failed: true } : item));
       setLoading(false);
     } finally { sendingRef.current = false; }
   };
@@ -2194,6 +2184,10 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
               onDownloadArtifact={onDownloadArtifact}
               onPreviewArtifact={onPreviewArtifact}
             />}
+            {m.failed && m.retryDraft && <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'center', color: 'var(--ink-3)' }}>
+              <span>{t('chat.send.failed')}</span>
+              <button disabled={loading || preparing || sendingRef.current} onClick={() => void send(m)} style={{ font: 'inherit', color: 'var(--ink)', background: 'var(--paper-2)', border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-sm)', padding: '5px 10px', cursor: 'pointer' }}>{t('chat.send.retry')}</button>
+            </div>}
           </div>
         ))}
 
@@ -2400,7 +2394,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
               outline: 'none', minHeight: 44, maxHeight: 120, lineHeight: 1.5,
             }}
           />
-          <button onClick={send} disabled={loading || preparing || (!input.trim() && !attachments.length)} style={{
+          <button onClick={() => void send()} disabled={loading || preparing || (!input.trim() && !attachments.length)} style={{
             height: 44, padding: '0 18px', borderRadius: 'var(--radius-md)',
             background: 'var(--accent)', color: 'var(--paper)',
             border: 'none', fontWeight: 600, cursor: 'pointer',

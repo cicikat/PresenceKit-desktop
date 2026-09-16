@@ -1,5 +1,13 @@
 # docs/frontend-structure.md — 前端结构指南
 
+## 发送与重试（2026-09-16，partial）
+
+ChatPanel 提交附件时立即清空输入区，快照随原用户气泡保存；失败显示重试按钮，
+复用该气泡，不重建用户消息、不覆盖随后编辑的草稿。成功释放附件重试数据。
+streamDisplay 仅补全白名单内联样式的流式尾部，renderInlineStyled 安全渲染，
+保留 WS/canonical 对账及原有叙事标签展示。公告使用语义 i18n key 显示 v1.1.0。
+验收见 `../cc-tasks/2026-09-16-chat-send-retry-render.md`。
+
 ## YOU 头像右对齐（2026-09-13）
 
 ChatPanel transcript 始终保留左右 28px 内边距。YOU 头像是用户行内 36px 的 flex

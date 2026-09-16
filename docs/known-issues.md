@@ -1,4 +1,15 @@
 # docs/known-issues.md — 已知问题与技术债
+
+## 聊天发送/重试/流式样式（2026-09-16，partial）
+
+current：附件提交立即清空；失败原消息可手动重试且保留新草稿；样式标签流式即时渲染。
+256 项测试、TypeScript、生产构建和隔离浏览器交互回归通过。
+observe：真实 Tauri 文件路径上传、网络中断后后端是否已接收、手机联合与 release 验收未完成。
+重试只复用本地气泡 ID；原 HTTP 契约无客户端幂等键，网络结果不明时不能保证后端恰好执行一次。
+失败快照只在当前页面内存保存，重启不恢复。未改后端/手机，权限、队列、ack/TTL 不变。
+open：后端 `three-repo-interface-catalog.md` 待其仓同步本条 current/observe 边界。
+详见 `../cc-tasks/2026-09-16-chat-send-retry-render.md`。
+
 ## 聊天产物文件卡（2026-09-16）
 
 current：桌面 ChatPanel 消费 live `artifacts[]` 文件卡；下载/预览走 Tauri Bearer，不新增 desktop action。历史接口尚未持久化该字段。
