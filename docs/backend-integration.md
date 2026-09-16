@@ -10,27 +10,16 @@ canonical message 继续使用原 scope 判断；HTTP fallback、ack 和历史�
 详见 dream-isolation-2026-09-13.md（真实手机联合验收 open）。
 
 
-## Brief 242：统一偏好与后端设置职责（2026-09-10，current）
+## Brief 242：统一偏好与后端设置职责（2026-09-10，见权威文档）
 
-此条目替代下文历史七分类/Activity 独立偏好的描述。Chat 偏好现为常规、界面、角色与
-对话、桌宠与互动、高级。模型方案、角色模型/资源绑定、对话风格、思考、工具循环、
-段落兜底和后端权限编辑迁往管理面板。Reality 世界书/提示词启用组合与角色头像由管理面
-创作页提供；本地外观头像与截图同意、语音播放、陪玩现场控制仍保留。
+后端设置归属、effective state、管理面入口和跨仓边界统一维护在
+[`Emerald-presence/docs/feature-control-surface.md`](../../Emerald-presence/docs/feature-control-surface.md)。
+本文件只保留 Desktop 调用后端时实际需要的 endpoint、字段、错误和 fallback；Desktop 的
+本地设置归属与验收见 [`settings-control-audit.md`](settings-control-audit.md)。
 
-`CurrentCharacterStatus` 使用现有 `get_prompt_assets`/`patch_prompt_assets`；只读展示
-`model_routing/effective_profile/resolved_chat_preset/resolved_chat_model/global_profile/
-binding_source/chat_configured`，缺字段显示未知。切换角色、聚焦或手动刷新重新读取；
-缓存按代次作废，旧响应不会覆盖切换后的角色。模型重置在管理面使用原有 null 语义。
-
-`ActivityAppearanceSettings` 合并活动外观，保留 reading.fontSize/maxWidth、board.theme、
-chess.pieceStyle 与 activity.debug 五个原 key。Activity 的 `open-activity-preferences`
-事件打开 Chat 偏好；Activity/Reading 继续挂载，不关闭会话或另开 WebView。
-移除无引用的旧模型/能力设置组件和独立 Activity 偏好，保留其他消费者需要的 API/IPC。
-本次未改 Rust、WS、scope、ack、TTL、手机或 relay；后端能力真值仍由后端维护。
-
-验收：相关 Vitest 40 项、TypeScript、生产构建通过；浏览器夹具实际挂载 React 页面，
-覆盖角色切换、缺字段、失败重试、聚焦刷新、活动中打开偏好和阅读第 2 页保持。
-`observe`：真实 Tauri 原生窗口与真实后端/手机设备联调未完成；夹具 IPC 不代表实机。
+Brief 242 的 Desktop 当前结论：模型方案、角色模型/资源绑定、对话风格、思考、工具循环、
+段落兜底和后端权限由管理面提供；本地外观、截图同意、语音播放和陪玩现场控制仍由 Desktop
+负责。不要在本节复制后端开关表或完整 UI 设计。
 
 
 ## API 思考存档与回合读取（Brief 244，2026-09-11）
