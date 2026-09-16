@@ -30,7 +30,7 @@ TurnReasoningPanel 默认收起，居中显示浅底“展开思考”；展开�
 不展示模型、调用序号、来源或协议状态。读取仍经原 memory.read IPC，纯文本、不进入 TTS。
 角色与对话设置新增“显示思考入口”，本地 chat.reasoningVisible 默认 true，使用 uiPreferences
 持久化并实时同步；不更改后端生成策略。缓存仍属于 ChatPanel 生命周期，角色切换清空。
-历史条目有显式 turn_id 即可恢复入口，但当前后端解析器丢弃该字段；用户指定后端另单处理，
+历史条目有显式 turn_id 即可恢复入口；2026-09-17 已核对后端解析实现，真实部署与恢复仍 open，
 交接见 cc-tasks/244-history-turn-id-backend-handoff.md。详情见 docs/brief-244-reasoning.md。
 
 ## 偏好与视觉小说式舞台（2026-09-11，partial）

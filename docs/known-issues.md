@@ -46,15 +46,16 @@ dream-isolation-2026-09-13.md。真实手机 + Tauri 联合验收仍 open。
 往返、气泡透明度、思考延迟占位与自动刷新、双端配色预览已实现。
 open：真实 Tauri / 模型归档延迟 / release 验收；未跨仓修改后端总账，待后端仓同步。
 思考空记录自动读取最多 30 次，缺 canonical ID 等待最多 60 秒；超时停止，不无限轮询。
-手机入口仍 roadmap，历史缺 turn_id 仍依赖后端修复。
+手机入口仍 roadmap；历史 turn_id 后端解析已实现，部署与真实重启联调仍 open。
 
 ### API 思考展开验收与跨端关联（Brief 244，2026-09-11，partial/open）
 
 桌面 IPC、canonical 关联、每次回复一个居中旁白入口、角色与对话展示开关已实现；
 详情见 brief-244-reasoning.md。展开不再显示模型/调用/来源字段。
-**open：历史恢复**。后端 chat_log._parse_day 忽略 > 元数据，实际不返回 turn_id；
-这使重启后的历史回复缺少思考入口。用户要求后端另单，未跨仓修复；具体施工和验收见
-../cc-tasks/244-history-turn-id-backend-handoff.md。带 ID 的历史夹具通过不等于真实后端已修复。
+**open：真实历史恢复验收**。2026-09-17 只读复核后端 chat_log._parse_day 已返回可信
+assistant 元数据的 turn_id，并有 test_chat_log_turn_id.py 测试源码；本次未运行后端测试。
+用户要求仅本仓，部署版本与真实重启恢复未确认；验收见
+../cc-tasks/244-history-turn-id-backend-handoff.md。源码和夹具不等于运行中服务已验收。
 open：真实 Tauri WebView + 真实后端 desktop token/模型归档联调、release 验收未完成；
 浏览器 IPC 夹具不代表实机通过。手机无展开 UI，保留 roadmap。
 仅收到 WS 的另一端没有 canonical turn_id（当前 WS 只有 transport msg_id），不提供

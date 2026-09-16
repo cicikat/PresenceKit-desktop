@@ -44,7 +44,8 @@ HTTP 错误仅透传状态码：401 接入原 authGate，403/404/503 分别展�
 canonical turn_id 来自 send_chat 成功响应或历史显式字段，msg_id 仅对账；
 缺 canonical ID 的 WS-only、历史、主动/Dream/Stage 消息不推测关联。
 admin-only /observability/llm-reasoning 列表/详情仍属于管理员全局归档，本客户端不调用。
-当前后端 chat_log._parse_day 实际未返回 turn_id（忽略元数据），所以重启后历史入口尚不能恢复。
+2026-09-17 只读复核：后端 chat_log._parse_day 已返回可信 assistant 元数据的可选 turn_id，
+且有 test_chat_log_turn_id.py 测试源码；本次未运行后端测试或确认部署，真实重启恢复仍 open。
 用户指定仅修改本仓；后端修复要求见 ../cc-tasks/244-history-turn-id-backend-handoff.md。
 前端已验证带显式 ID 的历史恢复，不按时间或正文猜测关联。展示为每次回复一个旁白，
 本地显示开关不新增 IPC 或 REST 契约。详情及跨仓总账待同步项见 brief-244-reasoning.md。

@@ -1,6 +1,6 @@
 # Brief 244：回复间的内心活动旁白
 
-2026-09-11 更新。状态：本仓实现完成，整体 **partial**；真实历史恢复和真实 Tauri/后端联调 **open**。
+2026-09-17 状态复核（原自动化证据为 2026-09-11）。本仓实现完成，整体 **partial**；真实历史恢复和真实 Tauri/后端联调 **open**。
 用户明确限定本仓，历史接口修复留后端工单。后端交接见
 `../cc-tasks/244-history-turn-id-backend-handoff.md`，未修改其他仓库。
 
@@ -25,10 +25,11 @@
 
 ## 历史恢复的真实边界
 
-后端日志确实可能已有 turn_id，但当前 `admin/routers/chat_log.py::_parse_day` 遇到
-`> ` 元数据仅跳过，最终没有把 ID 返回给前端，所以重启后仅靠当前真实历史接口无法恢复入口。
+2026-09-17 只读复核：`admin/routers/chat_log.py::_parse_day` 已解析可信 assistant
+尾部元数据并返回可选 turn_id，且有 `tests/test_chat_log_turn_id.py` 测试源码。
+本次未运行后端测试或确认运行中服务版本；此前“后端未实现”的结论已过时。
 前端一直支持 `ChatLogEntry.turn_id`；本次已验证带显式 ID 的历史回复只产生一个入口，
-刷新页面后可以重新展开读取。该验证使用假定后端已补字段的夹具，**不代表后端已修好**。
+刷新页面后可以重新展开读取。该验证使用 IPC 夹具，**不代表真实部署与联调通过**。
 不在前端解析后端文件、不按时间/正文推测、不另存一份聊天/思考正文做补丁。
 后端具体修复和回归要求见交接单，用户已指定后端另单实施。
 
@@ -38,7 +39,7 @@
 |---|---|
 | 管理与观测 | 回合 GET 已由 memory.read 授权；生成配置由 settings_thinking 与管理面维护。只读 UI 不新增后端配置/effective state/trace/队列；全局归档仍 admin-only。 |
 | 桌面设置与手机 | 新本地显示偏好位于角色与对话，默认 true，复用既有 load/save_ui_prefs。手机模型已分开解析 msgId/turnId，思考 UI 仍 roadmap；无 Flutter/Android/relay/poll/ack 改动。 |
-| 原链路与相邻路径 | HTTP msg_id 与 canonical turn_id 分离；分段对账、正文、ack、TTL、TTS 和通知保持原行为。历史字段遗漏由只读源码核对确认，scope/角色桶修复要求交接后端。 |
+| 原链路与相邻路径 | HTTP msg_id 与 canonical turn_id 分离；分段对账、正文、ack、TTL、TTS 和通知保持原行为。历史字段解析已有源码，scope/角色桶与真实恢复仍需后端联调。 |
 
 ## 验证
 
@@ -53,7 +54,7 @@
 
 ## Open / roadmap
 
-- **open**：真实后端历史 turn_id 返回修复；详见后端交接单。
+- **open**：确认部署版本并验证真实历史 turn_id 与思考恢复；详见后端交接单。
 - **open**：真实 Tauri/后端归档/release 联调，不能以 IPC 夹具代替。
 - **roadmap**：WS-only 另一端无 canonical ID；无关联旧日志、QQ、主动消息、Dream、Stage、手机 UI。
 - **open**：480px 默认宽侧栏挤压聊天流为已有全局布局问题；窄屏面板验证先收起侧栏。

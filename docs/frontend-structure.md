@@ -41,7 +41,7 @@ assistant 分段前渲染 TurnReasoningPanel；后续分段不会重复入口。
 ReasoningDisplaySettings 位于 PreferencesPanel 的角色与对话页，shared/reasoningDisplay.ts
 通过 uiPreferences 持久化 chat.reasoningVisible（默认 true），关闭卸载旁白、停止新增查询。
 缓存与在途请求仍按 turn_id、单会话隔离，失败和空结果可重试，不持久化思考正文。
-显式历史 turn_id 能恢复入口；当前后端历史缺字段留后端工单，详见 brief-244-reasoning.md。
+显式历史 turn_id 能恢复入口；后端解析已实现，部署与真实恢复联调仍 open，详见 brief-244-reasoning.md。
 
 ## 偏好与视觉小说式舞台（2026-09-11，partial）
 
