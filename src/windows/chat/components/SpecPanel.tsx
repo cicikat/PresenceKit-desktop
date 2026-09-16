@@ -3,7 +3,10 @@
  * Phase 2d.0: 原设计规范面板，改造为帮助 / 公告占位页
  * ============================================================ */
 
+import { useI18n } from '../../../shared/i18n';
+
 export function SpecPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { t } = useI18n();
   if (!open) return null;
 
   return (
@@ -56,7 +59,7 @@ export function SpecPanel({ open, onClose }: { open: boolean; onClose: () => voi
           </HelpSection>
           <HelpSection title="公告">
           <p>
-            PresenceKit v0.2 已发布。
+            {t('help.announcement.release')}
             <br />
             感谢参与测试。如日后更新需要迁移记忆数据，只需备份根目录下data/即可
           </p>

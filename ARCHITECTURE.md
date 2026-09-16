@@ -1,5 +1,12 @@
 # ARCHITECTURE.md — PresenceKit-desktop 架构总览
 
+## 聊天发送与即时样式（2026-09-16，partial）
+
+ChatPanel 提交时将附件、正文、引用快照移入原用户消息，并立即清空 composer。
+失败消息提供手动重试，复用本地消息 ID 与原请求内容，不覆盖新草稿；成功释放重试快照。
+流式 hl/big/sm 走既有安全 React 渲染器，不等待 canonical 才显示样式。
+施工、验证和真实设备 open 项见 `cc-tasks/2026-09-16-chat-send-retry-render.md`。
+
 ## 梦境流式 UI 隔离（2026-09-13，partial）
 
 现实 ChatPanel 在 stream-start 使用 `isSingleRealityStream`：带 char_id、缺 domain 的
