@@ -30,8 +30,8 @@
 - [ ] WO-05：native geometry 唯一写入口；明确旧 updateBounds 的兼容/退役语义，再修改 Host API / IPC 并验证 Rust。
 - [ ] WO-06：DesignRuntimeCoordinator 提取与清理顺序回归；依赖 WO-05，保持 portal、scene、snapshot 服务和 API 行为。
 - [ ] WO-07：真实 Windows DPI/多屏/睡眠/热重载/主窗关闭验收；依赖 WO-05/06 与设备环境。未运行不勾选。
-- [ ] WO-08：根 ARCHITECTURE 仅保留当前结构、不变量及子系统链接，旧文档归档保留。
-- [ ] WO-09：UI preference 持久化边界与现存兼容例外文档；不删除用户偏好数据。
+- [x] WO-08：根 ARCHITECTURE 仅保留当前结构、不变量及子系统链接，旧文档归档保留。
+- [x] WO-09：UI preference 持久化边界与现存兼容例外文档；不删除用户偏好数据。
 
 可独立施工：WO-01、WO-02、WO-08、WO-09。代码主线：WO-04 → WO-03；WO-05 → WO-06 → WO-07。
 每个独立交付提交一次；测试/fixture/源码核对与真实运行证据分开登记。

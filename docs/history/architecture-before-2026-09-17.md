@@ -1,0 +1,634 @@
+# 历史快照：2026-09-17 架构整理前
+
+仅用于追溯，不代表当前实现。当前入口见 ../../ARCHITECTURE.md。
+旧相对路径保留原根文档语境；本快照不是新的契约来源。
+
+# ARCHITECTURE.md — PresenceKit-desktop 架构总览
+
+## 聊天发送与即时样式（2026-09-16，partial）
+
+ChatPanel 提交时将附件、正文、引用快照移入原用户消息，并立即清空 composer。
+失败消息提供手动重试，复用本地消息 ID 与原请求内容，不覆盖新草稿；成功释放重试快照。
+流式 hl/big/sm 走既有安全 React 渲染器，不等待 canonical 才显示样式。
+施工、验证和真实设备 open 项见 `cc-tasks/2026-09-16-chat-send-retry-render.md`。
+
+## 梦境流式 UI 隔离（2026-09-13，partial）
+
+现实 ChatPanel 在 stream-start 使用 `isSingleRealityStream`：带 char_id、缺 domain 的
+旧 HTTP 梦境/活动动画不能进入现实消息 buffer，即使传输层标了 source=reality。
+delta/end 只消费已接受的 msg_id；canonical 现实消息保留原作用域检查与去重。
+Dream HTTP 回复仍由独立 useDreamChat 消费，详见 `docs/dream-isolation-2026-09-13.md`。
+
+## 聊天交互修整（2026-09-11，partial）
+
+ActivityWindow 改为 ChatWindow 主区域，保留主 ChatPanel 实例；活动/群聊二次点击返回，
+Design Mod 通过局部 portal suspension 临时呈现标准壳。透明度仅影响气泡底色。
+思考入口在首个本机回复到达时占位，canonical ID 到达后展开自动读取，不重新挂载入口。
+Chat/Dream 共用 AppearancePreview 和主题注册中心，但不共用布局。
+当前事实、验证与跨仓 open 项见 docs/ui-refinements-2026-09-11.md；以下同日旧描述以本节为准。
+
+## Brief 244：按回复展开内心活动（2026-09-11，partial）
+
+Reality Chat 保留显式 canonical turn_id；HTTP msg_id 仅用于 WS 对账。
+reasoningAnchors 在完整回复的第一个 assistant 分段前放置唯一旁白入口，不在 Bubble 内重复。
+TurnReasoningPanel 默认收起，居中显示浅底“展开思考”；展开只显示动态角色名与全部思考正文，
+不展示模型、调用序号、来源或协议状态。读取仍经原 memory.read IPC，纯文本、不进入 TTS。
+角色与对话设置新增“显示思考入口”，本地 chat.reasoningVisible 默认 true，使用 uiPreferences
+持久化并实时同步；不更改后端生成策略。缓存仍属于 ChatPanel 生命周期，角色切换清空。
+历史条目有显式 turn_id 即可恢复入口；2026-09-17 已核对后端解析实现，真实部署与恢复仍 open，
+交接见 cc-tasks/244-history-turn-id-backend-handoff.md。详情见 docs/brief-244-reasoning.md。
+
+## 偏好与视觉小说式舞台（2026-09-11，partial）
+
+`CurrentCharacterAvatar` 在偏好「角色与对话」提供当前角色头像预览和裁剪上传，复用
+角色头像 API、prompt-assets 缓存失效与 activeCharacter revision 通知；角色切换关闭
+未提交裁剪，读取取消过期响应。界面页 HER/YOU 仍为本地外观后备头像。
+一起做事和角色状态共用 `SettingsSections.css` 的横向标签/控件比例。
+
+自由合成能力样架 1.2 改为单窗口视觉小说式舞台，真实 Ribbon、聊天三块和侧栏能力
+仍由宿主 portal。Flow/Status 使用 subregions，Garden/Diary 使用完整官方 renderer
+以保留加载/错误/重试态；默认不创建 native surfaces。连线只在几何和滚动变化时重画。
+实现、浏览器回归和真实窗口 open 项见 `docs/ui-polish-2026-09-11.md`。
+
+
+## Brief 242：统一偏好与后端设置职责（2026-09-10，current）
+
+此条目替代下文历史七分类/Activity 独立偏好的描述。Chat 偏好现为常规、界面、角色与
+对话、桌宠与互动、高级。模型方案、角色模型/资源绑定、对话风格、思考、工具循环、
+段落兜底和后端权限编辑迁往管理面板。Reality 世界书/提示词启用组合与角色头像由管理面
+创作页提供；本地外观头像与截图同意、语音播放、陪玩现场控制仍保留。
+
+`CurrentCharacterStatus` 使用现有 `get_prompt_assets`/`patch_prompt_assets`；只读展示
+`model_routing/effective_profile/resolved_chat_preset/resolved_chat_model/global_profile/
+binding_source/chat_configured`，缺字段显示未知。切换角色、聚焦或手动刷新重新读取；
+缓存按代次作废，旧响应不会覆盖切换后的角色。模型重置在管理面使用原有 null 语义。
+
+`ActivityAppearanceSettings` 合并活动外观，保留 reading.fontSize/maxWidth、board.theme、
+chess.pieceStyle 与 activity.debug 五个原 key。Activity 的 `open-activity-preferences`
+事件打开 Chat 偏好；Activity/Reading 继续挂载，不关闭会话或另开 WebView。
+移除无引用的旧模型/能力设置组件和独立 Activity 偏好，保留其他消费者需要的 API/IPC。
+本次未改 Rust、WS、scope、ack、TTL、手机或 relay；后端能力真值仍由后端维护。
+
+验收：相关 Vitest 40 项、TypeScript、生产构建通过；浏览器夹具实际挂载 React 页面，
+覆盖角色切换、缺字段、失败重试、聚焦刷新、活动中打开偏好和阅读第 2 页保持。
+`observe`：真实 Tauri 原生窗口与真实后端/手机设备联调未完成；夹具 IPC 不代表实机。
+
+
+## Runtime performance boundary (work order 60)
+
+`DesignSatelliteBridge` owns one shared 20 Hz snapshot budget. It batches all
+surfaces, drops oversized frames, and publishes diagnostics at a one-second
+cadence so snapshot traffic cannot re-render the ChatWindow tree. Geometry is
+cached and invalidated by native motion/viewport changes; hidden, covered,
+dream, activity, toy, room and minimized states stop the satellite loop.
+`runtimeDiagnostics` is local-only and disabled by default. Window lifecycle
+coordination owns open/show/hide/destroy state and retryable errors; WS, HTTP,
+StateEngine and presenters remain main-window owners.
+
+Windows WebView2 requires `ensure_design_satellites` to be an async command:
+synchronous window creation can deadlock the invoking WebView. Satellites are
+owned top-level windows rather than parented child windows so physical bounds
+can extend outside the main window. Their lightweight route skips main-window
+preferences/theme/voice bootstrap and only owns renderer resources and the
+cross-window bridge.
+
+## Client-visible regression closure (work order 61)
+
+Ribbon tooltips render through a document-body portal with viewport clamping;
+the ribbon scroll column owns only vertical overflow, so tooltip content cannot
+create a horizontal scrollbar or hide adjacent controls. Pet visibility is
+read back from the native window, toggle requests are deduplicated, failures
+are retained as retryable UI state, and the main window remains the sole WS/HTTP
+owner. Onboarding token checks are cancellable and time-bounded; a timeout is a
+recoverable error rather than an indefinitely mounted checking screen.
+
+## Design Mod visual and lifecycle closure (work order 62)
+
+Native surface manifests may reserve `visualBleed` outside their content and a
+separate `contentInset`; Rust applies those values to physical bounds and
+reports both the outer bounds and the content rect in every satellite snapshot.
+The WebView remains a hard physical edge, so effects that need to extend beyond
+it must use a native surface. Freeform component placement now owns only layout
+and geometry, while a single transform controller composes drag, window motion,
+physics and visual transforms once per frame. Official diary consumption follows
+the active character only. Avatar mutations invalidate prompt-assets, emit an
+active-character avatar revision, and discard late reads. Restoring the default
+design awaits the main-owner satellite teardown acknowledgement before React
+portals, style tags and blob URLs are removed.
+
+## Design Mod freeform primitives and edge ornaments (work order 63)
+
+Host API v2 makes sidebar composition explicit per capability: a Mod selects an
+`official-renderer`, independent `subregions`, or `presenter-only` data path.
+The semantic primitives include Status mood/activity/timeline, Flow now/timeline,
+Garden visual/summary/controls, and Diary identity/entries. The old
+`chat.sidebar.diary.characters` name remains a schema-v2 compatibility alias;
+new renderers use `diary.identity` and do not reintroduce character management.
+`host.scene` owns one on-demand frame scheduler and composes every node through
+`TransformController`; `host.edges` exposes versioned, DPI-aware page/component
+edges for local, bounded ornaments. These APIs only consume existing desktop
+presenters and signals: no new backend, mobile, IPC, WS, or persistent state
+contract is introduced.
+
+## Design Mod lifecycle and content rect fix (work order 64)
+
+`SceneNode.dispose()` unregisters through its owning `SceneScheduler`, making
+same-id rebuilds valid while preserving idempotent cleanup of DOM, transforms,
+pointer capture and the shared frame. A disposed scheduler rejects new nodes.
+Native surface layout computes unexpanded content bounds first, applies
+`visualBleed` only to physical window bounds, and applies `contentInset` only
+inward to the content rectangle reported in satellite snapshots. Work orders
+62 and 63 remain `partial/open` pending real Windows multi-DPI/multi-monitor
+fixture acceptance; this repair adds no backend or mobile contract.
+
+## Chat 偏好与 controller（2026-07-30）
+
+`PreferencesPanel` 保持 modal 形式，按作用域分为「常规、模型、能力与权限、界面、角色与对话、桌宠与互动、高级」。Chat 和 Activity 的日间 / 夜间入口继续复用 `ThemePicker` 与同一 theme registry，分别读写 `chat.theme.day` / `chat.theme.night`。电脑操作安全 / 危险模式是全局能力，只在 Chat「能力与权限」中展示；Activity 仅保留外观与活动调试偏好。
+
+`ChatWindow` 仍是编排根节点：`useChatAppearanceController` 负责主题、布局、聊天外观和字体生命周期；`usePetController` 负责桌宠窗口、桌宠偏好和消息转发；`useChatWindowNavigation` 负责偏好 / Spec / Dream / 群聊视图状态。`ChatPanel` 的消息发送、去重和 fallback 仍留在原组件。
+
+PresenceKit-desktop（仓库目录名可为 Emerald-client 等）是 `Emerald-presence` 的新桌面客户端。它不拥有角色记忆、调度、工具、情绪判断等核心数据；这些都属于 `Emerald-presence` 仓库（通常与本仓库同级）。客户端负责把后端的陪伴系统可视化：聊天窗口、桌宠形象、用户交互、桌面动作执行和未来的感知 UI。
+
+---
+
+## 系统边界
+
+```text
+┌──────────────────────────┐
+│ Emerald-presence                │
+│ 记忆 / prompt / LLM       │
+│ 调度 / 工具 / 情绪状态     │
+│ HTTP + WebSocket          │
+└────────────┬─────────────┘
+             │
+             │ HTTP / WS on 127.0.0.1:8080
+             ▼
+┌──────────────────────────┐
+│ PresenceKit-desktop       │
+│ Tauri shell               │
+│ React chat + pet windows  │
+│ shared StateEngine mirror │
+└────────────┬─────────────┘
+             │
+             │ HTTP POST /sensor/realtime (本机或内网穿透)
+             ▼
+┌──────────────────────────┐
+│ PresenceKit-desktop       │
+│ src-tauri/src/sensor/     │
+│ Rust 嵌入式键鼠/焦点采集    │
+│ 已实施并随 Tauri 运行       │
+└──────────────────────────┘
+```
+
+原则：后端是 single source of truth，客户端只显示和执行。客户端可以有本地 UI 状态，但不能把 mood、activity、presence 变成第二套业务真值。
+
+### 鉴权：三类 token
+
+后端（Emerald-presence）鉴权已升级为多 token + scope 分层（SEC-AUTH-2），default-deny，legacy
+admin secret 永远等价于 `admin` scope（零破坏迁移）。本仓触达的三类持有者：
+
+- **桌面 Tauri 客户端**（本仓 `src-tauri/`）：`desktop` profile token（`emt_…`），字段仍叫
+  `admin_token` / env `EMERALD_ADMIN_TOKEN`，不改名。
+- **历史 sensor 客户端**：旧 Python 独立进程方案已从本仓删除；其历史 `sensor` profile token 仅有`r`n  `sensor.write` 权限，不得复用桌面/admin token。当前感知运行于 `src-tauri/src/sensor/`。
+- **设备侧**（仓外，ESP32 固件等）：各自最小 scope token。
+
+Token 由后端 `POST /auth/tokens` 签发；scope 表、profile 表、管理操作见后端仓
+`docs/security.md`。
+
+---
+
+## 当前实现快照
+
+入口是 `src/main.tsx`：
+
+- 初始化头像 / Dream 背景 store：`avatarStore.init()`。
+- 挂载全局样式：`src/shared/theme/globals.css`。
+- 默认渲染 `<ChatWindow />`；`?window=pet`、`?window=presence-nag`、`?window=diary-detail` 和
+  `?window=design-satellite` 分别进入对应的独立 Webview view；native satellite 不初始化 Chat 树。
+- 聊天与桌宠的 TTS 音频可并行合成；主 Webview 通过 Tauri window event 持有播放租约队列，保证任一窗口播放结束后才授权下一条音频输出。
+- 在默认主 view 中由 `activeWindow` 在保持 `<ChatWindow />` 挂载的前提下覆盖
+  `<ActivityWindow />`、`<ToyWindow />` 或 `<RoomWindow />`，避免卸载 ChatPanel 和 WS 订阅。
+
+主窗口是 `src/windows/chat/ChatWindow.tsx`：
+
+- 创建单个 `StateEngine` 实例。
+- 创建 `ToolStatusOverlayController`，将 WS `tool_status` 作为只影响 Sidebar NOW 的内存覆盖态；它不写入 `StateEngine`、聊天历史或本地偏好。
+- 通过三个 controller hook 管理外观/布局、桌宠和导航 UI 状态；Sidebar 的当前 tab 全局持久化，展开/收起状态按布局持久化，首次使用仍服从 layout manifest 的默认显隐。
+- 通过 `src/shared/layout/registry.ts` 的声明式 LayoutHost 排布 Ribbon、Sidebar 和主内容区；偏好「界面」中的布局预览器可立即切换已发现的布局。布局 mod 还能用受控 `mainLayout` 模板重排 ChatPanel 内的标题、消息流、输入框；它不能替换或执行区域组件。
+- `DesignModHost` 是独立的可信自由合成路线：`public/design-mods/`（debug）或 `resource_dir/design-mods/`（release）中的单文件 ESM 通过固定 viewport 的 underlay/components/overlay 三层运行。Host 根、default shell、LayoutHost、slot 和 ChatPanel 共享 `width/height: 100%`、`min-width/min-height: 0` 尺寸契约；active 只切换可见性和事件接管，不改变默认树的尺寸语义。真实 Ribbon、Chat header/transcript/composer 和四个 Sidebar capability 由 React portal 挂到 Mod 创建的容器，ChatPanel 的消息、输入、WS/history/TTS owner 不复制。Preferences 与管理面板入口由高于 Mod 舞台的 system overlay 保底；builtin-default 恢复仍通过偏好「界面」中的 Design Mod 设置完成，diagnostics 记录阶段、shell/layer 可见性、挂载、viewport 和入口状态。
+- ChatWindow 创建一份 `SidebarPresenters`，由 `src/shared/design-mod/presenters/` 统一承载 Status、Flow、Garden、Diary 的快照、命令、共享状态轮询和消费者生命周期。官方 Sidebar 与可信 Design Mod 都消费这份 presenter；Mod 可声明整块 capability 或其子视觉区域，但注册表拒绝父子 ownership 同时挂载。Status 官方 renderer 将 mood、activity+presence、telemetry+timeline 分别 portal 到三个子区，并把同一份 `--status-*` hook 变量写到每个 mount；Host 只为实际 attach 官方 renderer 的 capability 创建隐藏源树，`presenter-only` 不启动隐藏官方 consumer。官方 renderer 保留 `data-*` 语义钩子，诊断会记录 presenter consumer/timer/lastUpdated。
+- Design Mod 的主舞台覆盖 Chat Webview 内部；v2 native satellite 由 Rust coordinator 创建主窗口 owned 的透明 Halo/紧凑 Island，主窗口仍是唯一 WS/HTTP/history/TTS/StateEngine/presenter owner。高频 session、pointer、viewport、native-window motion 和 geometry 走 `src/shared/design-mod/` 外部 store，Activity/Toy/Room/Dream 覆盖或窗口隐藏时暂停 satellite 与 rAF。作者施工契约见 `docs/design-mod-authoring.md`，运行时内部与历史兼容见 `docs/design-mods.md`。
+- 使用 `src/shared/chatAppearance.ts` 保存 Chat 聊天字号、主题字号和字体包；Sidebar 宽度仅通过界面分隔条拖拽调整。
+- 偏好面板的「角色与对话」页通过 `getPromptAssets()` / `patchPromptAssets()` 管理 Reality Prompt Assets：角色卡单选、世界书多选和破限多选。可用选项来自后端，客户端不展示文件路径。
+- 把 engine 传给 `ChatPanel`。
+- Activity 打开时保持 ChatWindow / ChatPanel 挂载，ActivityWindow 只作为覆盖层显示。ToyWindow（玩耍模式）与 ActivityWindow 同级，由 `main.tsx` 的 `activeWindow` 切换挂载，ChatWindow 传入 `onToyOpen`。
+- 管理正式 Dream overlay 的本地开关；Ribbon 月亮按钮和 WS `dream_invite` UI 事件共用该入口，DreamWindow 自己接入 Dream API 和窗口状态机。
+- `GroupChatPanel` 的「入梦」入口将 `mode=group`、`group_id` 与 roster 交给同一个 DreamWindow；群梦不另建窗口组件族。现实群聊常驻并每 8 秒读取群梦 state，在 `blocks_chat` 的 dreaming / cooldown 阶段锁定输入。群梦轮次在 WS `group_round_end` 漏失或连接恢复时由 state 的 `round_status` 校准；现实轮次采用同一 120 秒可见超时兜底。
+- 玩耍模式：偏好「桌宠与互动」页开关（`shared/playMode.ts`，localStorage `playMode.enabled`，默认关闭）；开启后 WS `toy_invite` 自动开窗、Ribbon 显示手动入口。ToyWindow 侧栏经 `hardware_get_devices` 轮询设备/连接状态，聊天经 `sendChat` 走 `/desktop/chat`。
+- 将当前 Reality 激活角色卡头像传给 DreamWindow；Dream 内控制栏、动向侧栏和消息区优先显示该头像，无角色头像时回退到本地 HER 头像。
+- Ribbon 桌宠开关通过 `src/shared/pet/bridge.ts` 显隐独立透明置顶 `PetWindow`，并将
+  StateEngine 的 mood / presence / activity 快照广播给桌宠。
+- 成长、视觉、支出、群聊仲裁和记忆五类运维观测已迁入 PresenceKit 后端管理面；桌面客户端不再
+  代理这些请求、不在 Chat Ribbon 暴露运维入口，也不把观测数据写入 StateEngine。
+
+桌宠窗口是 `src/windows/pet/PetWindow.tsx`：
+
+- `ParticleCanvas` 按 mood / presence / thinking 渲染持续粒子呼吸和交互脉冲。
+- `usePetMouse` 使用 Tauri 全局光标、窗口位置和显示器 work area API 驱动鼠标交互。
+- 当前 `惊讶` mood 作为害羞状态：光标接近时窗口缓动躲避；随机间隔会朝光标轻移并触发
+  蹭的粒子反应。
+- 按住 Ctrl 或拖拽期间暂停自动移动；所有目标位置夹在当前显示器可视工作区内。
+- 鼠标交互开关和随机蹭间隔是本地 UI 偏好，不写入 StateEngine 或后端。
+- 「粒子风格」偏好新增 `live2d`：`Live2DStage` 复用 `src/shared/live2d/useLive2DStage.ts` 驱动层，
+  `transparent` 强制开启（无视 Live2DSettings.bgKind），缩放走独立 `pet.live2d.zoom` UI 偏好；
+  害羞 / 蹭反应触发一次性衰减姿态脉冲（`useLive2DStage` 返回的 `pulse()`）。
+
+视频通话窗口是 `src/windows/room/RoomWindow.tsx`：
+
+- 顶栏 / VN 气泡（`VnBubble` + `useVnPresenter`）/ 输入栏 / 麦克风 / 挂断在两种渲染模式间共用；
+  `setupAvatarDirectiveListener` 在 RoomWindow 层挂载，`avatarDirective.ts` 的 TTL 指令
+  （表情 / 注视 / 手势 / 说话）两种渲染模式语义一致。
+- `roomSettings.renderMode`（`model3d` | `live2d`，Chat 偏好「6 视频通话」页切换）决定挂载
+  `ThreeCallStage`（现有 Three.js GLB 角色 + `useRoomScene`，含摆放模式 / 自由视角 / 保存视角）
+  还是 `Live2DCallStage`（`src/shared/live2d/useLive2DStage.ts`，pixi.js + pixi-live2d-display）。
+  两者互斥挂载，不能同时启用 hook，切换即时黑一帧无过渡。
+- `src/shared/live2d/` 是 3D 侧 `useCharacterRig` 的平行驱动层：模型加载（Cubism Core 动态注入 +
+  `Live2DModel.from`）、mood → 表情/参数映射（`live2dExpressions.ts`，表情命名匹配优先，
+  核心参数直写兜底）、眨眼 / 口型 / 注视 / 手势通过 monkey-patch `motionManager.update` 逐帧叠加。
+  Live2D 模型资产（Cubism 4/5，`.model3.json`）放 `public/live2d/models/<名>/`，一模型一目录；
+  Cubism Core 运行时（`live2dcubismcore.min.js`）放 `public/live2d/core/`，Live2D 专有许可不入
+  git，需手动下载，见 `docs/live2d-model-import-guide.md`。
+
+存在感弹窗是 `src/windows/presence-nag/PresenceNagWindow.tsx`：
+
+- 独立透明置顶 `presence-nag` Tauri 窗口，默认隐藏且单实例；重复 action 只更新内容，不叠加刷屏。
+- Chat 偏好「角色与对话」中的「允许存在感弹窗」默认关闭；关闭时 WS action 静默跳过，并立即隐藏已显示窗口。
+- `Esc`、标题栏关闭、「别理我了」、「确定」和「全部关闭」均调用 `presence_nag_close_all`，保证可彻底关闭。
+- 内容只消费后端 `presence_nag` action 的 LLM 台词；头像使用本地 HER 头像，角色标识用于显示角色名。
+
+Dream 窗口是 `src/windows/dream/DreamWindow.tsx`：
+
+- 管理 Dream overlay、左侧 Ribbon、信息 Sidebar 和对话区域。
+- 动向 / 状态 / 潜意识使用 Dream 左侧 Sidebar；偏好 / 帮助使用独立居中 modal，避免设置项挤在窄侧栏中。
+- 动向 Sidebar 的「梦境流动」优先读取 `/dream/state` 可选 flow/event 摘要，旧后端缺失时从当前 dream state 派生短文案；不展示 chat transcript。
+- 状态 Sidebar 展示 `/dream/state` 的 Dream HUD v1.1 字段；文本以状态 pill 展示，数值缺失时显示空值，Dream 未激活时显示空态。`physiological_arousal` 仅在 `/dream/settings` 的 `display.physiological_arousal === true` 时展示。
+- 偏好窗口通过 `src/shared/api/dream.ts` 读写 `/dream/settings`，顶部横栏分为当前状态、梦境上下文、系统设置、世界和其他。世界页保存 `world_layer` 世界卡和 Dream 独立 `jailbreak_preset`；系统设置额外使用 `src/shared/dreamAppearance.ts` 持久化本地字体、配色和模糊度，并通过 `avatarStore` 分别保存日间 / 夜间聊天背景；底部开发者模式开关写入 `display.physiological_arousal`。帮助窗口只展示本地说明。
+- `DreamGlowPanel` / `DreamGlowBubble` 复用 `features/dream/DreamTokens.css` 的玻璃发光 token，分别承载 Sidebar 状态卡和 Dream 对话气泡；Dream 潜意识页挂载只读 hidden state 面板。
+- `mode=group` 时状态、发送、退出与设置分别切到 `/group/{id}/dream/*`；群梦回复由 dream-domain WS round / stream / channel 帧驱动，气泡按 `char_id` 署名、头像和稳定角色色渲染。WAKE 与 Esc 直接硬退出，不经过单人软挽留。
+
+聊天区是 `src/windows/chat/components/ChatPanel.tsx`：
+
+- 启动时通过 Tauri command 加载短期历史。
+- 用户发送消息时调用 `sendChat()`，走 Tauri Rust command 再打后端 HTTP。
+- 订阅 `wsClient` 的 `channel_message` / `message_segments`，接收后端主动推送并按 assistant `msg_id` 关联；content hash 只用于旧后端或异常响应 fallback。
+- `pending message_segments` 使用 5 分钟 TTL 和 50 条上限，`msg_id` 到本地消息的映射只保留最近 200 条。
+- 用本地 engine 的 mood/activity/presence 渲染 header 标签和头像呼吸。
+
+花园面板是 `src/windows/chat/components/SubGarden.tsx`：
+
+- 由 `Sidebar.tsx` 在 `garden` tab 下挂载。
+- 通过 `loadGardenState()` 调 Tauri command `load_garden_state`。
+- Rust 侧 GET `http://127.0.0.1:8080/garden/state`，使用 Bearer token 和 `reqwest.no_proxy()`。
+- 当前只读展示五个花槽、阶段进度、收获数和花瓶数。
+
+日记面板是 `src/windows/chat/components/SubDiary.tsx`：
+
+- 由 `Sidebar.tsx` 在 `diary` tab 下挂载。
+- 挂载时通过 `loadDiaryList()` 调 Tauri command `load_diary_list`，拉轻量列表。
+- 点击 entry 时通过 `loadDiaryEntry(date)` 调 `load_diary_entry`，懒加载正文。
+- Rust 侧分别 GET `http://127.0.0.1:8080/diary/list` 和 `/diary/{date}`，Bearer token + `reqwest.no_proxy()`。
+- 只读展示，不轮询，不写文件。
+
+DreamWindow 内的梦境回放由 `src/windows/dream/components/DreamReplaySidebar.tsx` 与
+`DreamReplayTranscript.tsx` 组成：
+
+- Dream Sidebar 的回放 tab 分页列出已关闭的单人 Dream；列表请求复用 archive API，当前 `tmp/current_dream*` 不属于读取范围。
+- 点击场次由 DreamWindow 持有选择和详情请求状态，主 Dream 聊天区切换为只读回放；详情直接复用 DreamChatPanel / DreamGlowBubble 的气泡和滚动视觉。
+- 回放模式隐藏 WAKE、续留和输入区；返回当前 Dream 后保留侧栏列表。详情请求带请求序号校验，旧请求不能覆盖新选择。
+- 只读内容不订阅 WS、不写 StateEngine、不注册当前聊天去重、不触发 Reality/Dream pipeline、TTS 或逐字动画；运维状态仍留在 Presence 后端管理面。
+
+成长、视觉、支出、群聊仲裁和记忆摘要的观测面已迁入 PresenceKit 后端管理面。桌面端原
+`ObservabilityPanel`、`observability-api` 与 Tauri `observability_get` command 已移除；接口、
+鉴权和当前入口以 `docs/backend-integration.md` 的「五类观测面板」为准。
+
+潜意识面板是 `src/windows/dream/components/SubHiddenStatePanel.tsx`：
+
+- 由 `DreamWindow.tsx` 在 Dream `subconscious` tab 下挂载，Ribbon 正式入口显示为「潜意识」，不再使用 `DEV: Hidden State`，也不挂在 Chat 侧栏。
+- 挂载时只调用 `loadHiddenStateDebug()`，经 Tauri command `load_hidden_state_debug` 读取后端 `GET /debug/user-hidden-state`。
+- 常态展示 `embodied_ease`（身体放松度）、`body_memory`（身体记忆线索）、`dream_snapshot`（梦境读取到的状态）和最近来源 badge；空 `body_memory` 显示「暂无身体记忆线索」。
+- `sensitivity` 和 `touch_need` 等较细 raw 数值只在 Dream 系统设置的开发者模式打开时展示；该模式复用 `/dream/settings` 的 `display.physiological_arousal` 开关，由 Rust command 只读合并到返回值。
+- Phase 4.5 UI 已从 debug-only 入口提升为单用户状态面板；仍然只读，没有新增写接口，也不把 hidden state 注入现实 prompt 或 memory。
+
+WebSocket 在 `src/shared/api/ws.ts`：
+
+- 前端通过 Tauri commands / events 调用 `src-tauri/src/ws_bridge.rs` 的原生 WebSocket client。
+- Rust 从本地 client config 读取 admin token，并在握手请求中设置 `Authorization: Bearer ...`；token 不进入 URL 或 WebView。
+- 支持 legacy `hello_ack`、`channel_message`、`message_segments`、`action`、`ping`，以及只覆盖 Sidebar NOW 的 `tool_status`。
+- `action` 保持 legacy envelope，不改协议；收到后异步 dispatch 到 Tauri action commands，并按执行结果回 `ack`。
+- 自动重连，指数退避最大 30 秒。
+- 当前没有实现 v1 envelope，也没有发送 `user_message` / `client_event`。
+
+Tauri Rust 在 `src-tauri/src/lib.rs`：
+
+- `send_chat`：POST `/desktop/chat`，使用 `reqwest.no_proxy()`；响应保留 assistant `turn_id` / `msg_id`。
+- HTTP client 普通请求超时为 15 秒，chat / wake / Dream 等 LLM 请求超时为 120 秒；401（token 无效）与 403（scope 不足，detail 含所需 scope）分开报错，文案均不含 token 值，见 `safe_http_error`。
+- `ws_bridge.rs`：原生 WebSocket Bearer 鉴权、收发桥接和 URL query token 清洗。
+- `load_garden_state`：GET `/garden/state`，使用 Bearer token。
+- `load_sensor_realtime`：GET `/sensor/realtime`，使用 Bearer token；无数据响应归一为 `_no_data`。
+- `sensor/visual.rs`：仅 Windows 启动的视觉观察采样器。每次内存截屏前先 GET `/perception/visual/config`，再检查本地 opt-in 与锁屏；主屏 dHash 显著变化时才将内存 JPEG（长边 ≤1280）POST `/perception/visual`，图片不落盘。
+- `get_prompt_assets` / `patch_prompt_assets`：GET / PATCH `/settings/prompt-assets`，使用 Bearer token 和 `reqwest.no_proxy()`；仅服务 Chat 的 Reality Prompt Assets 设置。
+- `load_hidden_state_debug`：GET `/debug/user-hidden-state`，并只读参考 `/dream/settings.display.physiological_arousal` 作为潜意识面板开发者字段显隐；不写 hidden state。
+- `src-tauri/src/actions.rs`：执行基础 desktop action，并负责单实例 `presence_nag` 窗口显示与 `presence_nag_close_all` 强制全关。
+- `save_avatar` / `load_avatar` / `read_avatars_json` / `write_avatars_json`：本地头像和 Dream 背景持久化。
+- `list_dream_fonts`：打包后优先扫描 `resource_dir/fonts`，debug/dev 模式回退源码 `public/fonts/`；目录不可用时返回明确错误。
+- `list_themes` / `read_theme_css`：debug / `npm run tauri dev` 只读源码 `public/themes/`，release / 安装包只读 `resource_dir/themes/`；两个 command 共用同一主题根解析器，前端注册中心负责契约校验和内置主题合并。`target/**` 与 `dist/**` 不参与扫描。
+- `list_layouts` / `read_layout_css`：debug / `npm run tauri dev` 只读源码 `public/layouts/`，release / 安装包只读 `resource_dir/layouts/`；两个 command 共用同一布局根解析器。缺失当前模式目录时明确报错，不跨模式 fallback。
+- `list_design_mods` / `read_design_mod_file` / `read_design_mod_asset`：debug 只读 `public/design-mods/`，release 只读 `resource_dir/design-mods/`；manifest、文本入口和 assets 共用同一资源根，canonical 路径检查拒绝穿越与 symlink 逃逸，前端负责 schema/CSS/主题/布局校验。
+- sensor `title_sanitizer` 采用保守默认：Browser 仅返回域名，Editor 仅返回安全 basename，Chat / Other / 未知及文件查看类应用不返回 `title_hint`。
+- 视觉观察的默认 5 分钟是本地采样/比对周期，不是上传周期；预检失败、后端关闭、锁屏/无桌面会话或画面不变时均不上传。
+
+---
+
+## 状态模型
+
+`src/shared/state/store.ts` 定义客户端状态镜像：
+
+- `mood`：`平静` / `开心` / `低落` / `病娇` / `分心`
+- `focus`：`看你` / `发呆` / `想事情` / `看屏幕` / `看你打字` / `偷看` / `注意到了什么`
+- `activity`：后端 activity manager 返回的身体动作
+- `presence`：`active` / `idle` / `away`
+- `mode`：`companion` / `chat-only`
+- `wantToSpeak`、`behaviorId`、`bodyTiltOverride` 等视觉信号
+
+当前 engine 是前端本地对象。`STATE_FIELD_OWNERSHIP` 明确字段当前 owner；`useBackendStatePolling()` 是 mood/activity 后端轮询的唯一入口，ChatWindow 常驻低频轮询（120s/180s），Sidebar flow/status tab 叠加原有高频轮询，并统一通过 `applyBackendState(source, patch)` 写入；本地 focus 推断走 `setLocalFocus()`。WS `state_update` 尚未接入，`state-update` source 仅作为未来入口保留。sensor 快照当前不写入 engine，只在 `SubStatus` 内派生信号。
+
+旧原型 `Emerald-desktopUI` 仓库（通常与本仓库同级）的 `state-engine.js` 里有完整 behavior loop；当前 TypeScript 版删掉了 mock 行为循环，等待后端状态推送。
+
+---
+
+## 通信路径
+
+### 用户发消息
+
+```text
+ChatPanel.send()
+  → src/shared/api/backend.ts sendChat()
+  → Tauri invoke("send_chat")
+  → src-tauri/src/lib.rs reqwest POST /desktop/chat
+  → Emerald-presence pipeline
+  ← HTTP JSON { reply, emotion, turn_id, msg_id }
+  → ChatPanel 优先按 msg_id 与 WS channel_message / message_segments 对账
+```
+
+这条路径是当前正式路径。曾记录的 WS `user_message` / `assistant_message` 只是未排期的后续设计，
+不是产品 v1 的协议承诺；产品 v1 继续使用 `docs/protocol-v0.md` 的冻结 v0.1 契约。
+非流式这些 ID 可相同；流式 HTTP msg_id 与 WS msg_id 对齐，但 canonical HTTP turn_id 可能不同，思考查询必须使用 turn_id。
+
+### 后端主动消息
+
+```text
+Emerald-presence DesktopChannel
+  → channels/desktop_ws.py push_message()
+  → WS { type: "channel_message", content, msg_id }
+  → src/shared/api/ws.ts
+  → ChatPanel 追加 assistant bubble
+```
+
+### 桌面动作
+
+```text
+Emerald-presence push_action_and_wait()
+  → WS { type: "action", action, msg_id }
+  → src/shared/api/ws.ts
+  → 根据 action_type/type 调 Tauri command
+  → src-tauri/src/actions.rs 执行动作
+  → 成功/失败后回 ack
+```
+
+当前接入 9 类 desktop action：`minimize_window`、`open_url`、`show_notify`、`media_play_pause`、`play_netease`、`dream_invite`、`toy_invite`、`presence_nag`、`avatar_directive`。未知 action 不执行，并回 `ok:false`；完整字段和 ack 语义见 `docs/protocol-v0.md`。
+
+### 聊天历史按日懒加载（Phase 2c+）
+
+```text
+ChatPanel mount
+  → loadChatLogDates()
+  → invoke("load_chat_log_dates", { token })
+  → src-tauri/src/lib.rs reqwest GET /chat-log/dates
+  ← { dates: [...], count: N }   // 倒序，最新在前
+
+启动 / 滚顶触发
+  → loadChatLogDay(date)
+  → invoke("load_chat_log_day", { date, token })
+  → src-tauri/src/lib.rs reqwest GET /chat-log/{date}
+  ← { date, entries: [...], raw_fallback: bool }
+  → ChatPanel prepend / append 消息列表
+```
+
+数据源由后端 `DataPaths` 管理：当前规范位置为 `data/runtime/memory/{char_id}/{uid}/event_log/{date}.md`，
+迁移窗口内可只读兼容旧日文件；客户端只通过后端 API 读取，不能假定或访问文件布局。
+
+### 日记列表和详情
+
+```text
+Sidebar diary tab → SubDiary mount
+  → loadDiaryList()
+  → invoke("load_diary_list", { token })
+  → src-tauri/src/lib.rs reqwest GET /diary/list
+  ← { entries: [...], count: N }
+  → SubDiary 渲染列表
+
+点击 entry
+  → loadDiaryEntry(date)
+  → invoke("load_diary_entry", { date, token })
+  → src-tauri/src/lib.rs reqwest GET /diary/{date}
+  ← { date, title, emotion, body }
+  → panesApi.openPane() 打开浮动详情窗
+```
+
+数据源由后端 `DataPaths` 管理的角色 inner diary（当前规范根为
+`data/runtime/characters/{char_id}/inner/diary/`）；客户端只读 API，不依赖固定角色名或旧路径。
+
+### 头像和 Dream 背景存储
+
+```text
+AvatarCropper / DreamBackgroundCropper
+  → shared/images/cropImageToBlob.ts
+  → avatarStore.setAvatar() / setDreamBackground(tone)
+  → Tauri save_avatar()
+  → app_data_dir()/avatars/*.png
+  → app_data_dir()/avatars.json
+```
+
+Dream 背景按 `day` / `night` 分开记录。旧版单字段 `dream_background` 读取时兼容迁移为夜间背景。
+
+---
+
+## 目录职责
+
+| 路径 | 职责 |
+|---|---|
+| `src/main.tsx` | React 入口 |
+| `src/windows/chat/` | 主聊天窗口 |
+| `src/windows/activity/` | 全屏活动空间（阅读、棋类、梦种） |
+| `src/windows/diary-detail/` | 单篇日记独立 Webview 窗口 |
+| `src/windows/dream/` | Dream overlay、HUD、潜意识只读面板 |
+| `src/windows/pet/` | 独立桌宠窗口、粒子视觉和鼠标交互 |
+| `src/windows/presence-nag/` | 单实例存在感提醒透明窗口 |
+| `src/windows/room/` | 视频通话 3D/Live2D 场景和 VN 呈现 |
+| `src/windows/toy/` | 玩耍模式窗口 |
+| `src/shared/pet/` | Chat/Pet 窗口快照桥和桌宠本地设置 |
+| `src/windows/chat/components/` | Ribbon、Sidebar、ChatPanel、浮动 pane、偏好/帮助等 UI |
+| `src/features/dream/` | Dream UI v2 纯前端 preview：tokens、overlay、入口按钮、afterglow |
+| `src/shared/state/store.ts` | 客户端状态 engine |
+| `src/shared/api/` | 后端 HTTP/WS 包装 |
+| `src/shared/avatars/store.ts` | 头像配置和 data URL 缓存 |
+| `src/shared/chatAppearance.ts` | Chat 本地字号、字体包偏好和动态字体清单 |
+| `src/shared/dreamAppearance.ts` | Dream 本地外观偏好、动态字体清单 |
+| `src/shared/fontAppearance.ts` | Chat / Dream 共用字体扫描、family 和 URL helper |
+| `src/shared/images/cropImageToBlob.ts` | 头像和 Dream 背景共用 canvas 裁剪 helper |
+| `src/shared/ui/TypingDots.tsx` / `TypingDots.css` | Chat / Dream 共用输入中视觉组件 |
+| `src/shared/i18n/` | `zh-CN` / `en-US` 语言包、持久化语言选择与 React 订阅 API |
+| `src/shared/theme/globals.css` | 全局主题变量 |
+| `src/shared/theme/contract.ts` / `registry.ts` | 主题 Mod token 契约、内置与磁盘主题注册、运行期注入；磁盘 CSS 经 Tauri `read_theme_css` 读取并在前端安检 |
+| `src/shared/layout/registry.ts` | 布局 Mod manifest 合并、校验与运行期 CSS 注入；磁盘资源经 Tauri `list_layouts` / `read_layout_css` 读取 |
+| `src-tauri/src/lib.rs` | Tauri command 和 Rust HTTP 桥 |
+| `src-tauri/src/sensor/` | sensor 感知模块，嵌入 Tauri Rust 进程；Windows 视觉观察仅内存采样、比对与变化上传 |
+
+---
+
+## 迁移关系
+
+本仓主要从两个来源迁移：
+
+- `Emerald-desktopUI` 仓库（通常与本仓库同级）：HTML/JSX UI 原型。
+- `Emerald-desktop` 仓库（通常与本仓库同级）：旧 PyQt 桌宠和 Python 感知/行为层。
+
+已迁：
+
+- `chat.jsx` → `ChatPanel.tsx`
+- `ribbon.jsx` → `Ribbon.tsx`
+- `sidebar.jsx` → 当前 `Sidebar.tsx`；legacy 存档已删除，历史由 Git 保留
+- `panes.jsx` → `Panes.tsx`
+- `ui-kit.jsx` → `UIKit.tsx`
+- `state-engine.js` 的状态表 → `shared/state/store.ts`
+- 花园只读 panel → `SubGarden.tsx`
+- 日记只读 panel → `SubDiary.tsx`
+- sensor 感知模块 → `src-tauri/src/sensor/`，已嵌入 Tauri Rust 进程
+
+未迁或未完成：
+
+- `pet.jsx` 的具象角色渲染与更完整行为；当前已落地抽象粒子桌宠、窗口桥和鼠标交互。
+- 未排期的后续 WebSocket 协议设计（不属于产品 v1）。
+- Sidebar flow/status tab 的真实数据接入。
+- 花园交互能力和 harvest/vase 详情展示。
+- 日记 emotion 字段（后端未产出，当前全为 null）。
+
+旧的逐项迁移状态专档已移除；仍未完成的迁移缺口以上表和 `docs/known-issues.md` 为准。
+
+---
+
+## 设计判断
+
+- HTTP 不从浏览器 `fetch` 直连后端，而是走 Tauri command，避免 CORS 和代理问题。
+- Rust HTTP client 必须 `no_proxy()`。
+- WS 使用 Tauri Rust 原生 bridge，以 Bearer header 连接本机 `127.0.0.1`，前端不持有 token。
+- 业务数据以 `Emerald-presence` 为准；客户端状态只是 UI 镜像。
+- 冻结 v0.1 协议和未排期的后续协议设计要在文档里明确区分，不能混写。
+
+---
+
+## 当前主要风险
+
+最高优先级风险集中在后端协议对齐：
+
+- 客户端和后端当前正式使用冻结的 v0.1 WS 协议。
+- `assistant_message` / `state_update` / `user_message` / `client_event` 是未排期的后续设计，当前未实现且不阻塞产品 v1。
+- action executor 当前覆盖 v0.1 的 9 类 allowlist 动作，尚未接入 v1 capabilities。
+- P-02 已将 backend base、WebSocket base、admin token 和 sensor config 外化到 client config；`config/client.local.json` 不提交。Brief 72 已删除无调用者的 `bot_user_id` 与短期历史兼容 bridge；token 默认值仅为不可用占位符 `CHANGE_ME`。
+
+完整列表见 `docs/known-issues.md`。
+
+---
+
+## Dream 模式状态显示
+
+Dream 模式只在正式 Dream 系统内显示，不进入 Chat 侧边栏。当前实现位于
+`src/windows/dream/components/DreamPrefsPane.tsx` 的“偏好 / 世界”页，复用
+`DreamWindow` 中 `useDreamState()` 对 `GET /dream/state` 的既有刷新结果。
+
+- “入梦模式”提供沙盒 / 剧本 / 镜像按钮；选择结果保存在本地 UI 偏好中，并在下一次
+  `POST /dream/enter` 时作为 `dream_mode` 提交。剧本模式额外提交 `script_id`。梦境进行中不可切换。
+- 只有 `dream_mode ?? mode` 等于 `scenario` 时才渲染“剧本模式状态”分组。
+- 优先读取 `scenario` 嵌套字段，并兼容同名平铺字段。
+- 缺失字段显示 `—`；`ending_state === "completed"` 仅显示“剧本已完成”，不自动关闭 Dream。
+- Scenario progress 和 stage transition 完全由后端负责；客户端只读展示 dev/debug 信息。
+- 只有 `dream_mode ?? mode` 等于 `mirror` 时才渲染“镜像模式状态”分组；优先读取
+  `mirror_core`，并兼容 `mirror`。MirrorCore、hidden state snapshot、afterglow 和 impression
+  均由后端负责，客户端只读显示 version/source/buckets/hints。
+
+
+## P0–P2 设置控制面
+
+桌面设置、管理面板、权限边界和降级路径的当前事实以 docs/settings-control-audit.md 为准。模型密钥只在后端管理面维护；桌面只切已有 routing profile。
+## Brief 171: Obsidian diary mirror
+
+`DiarySyncSettingsPage` is deliberately separate from `SubDiary`: the latter
+reads the backend's character-inner diary display, while the former owns the
+user-authored Obsidian mirror flow. The native Rust module
+`src-tauri/src/diary_sync.rs` selects a local directory, recursively scans only
+exact `YYYY-MM-DD.md` files, computes SHA-256/revision deltas, batches at the
+backend limits, and posts through `reqwest::Client::no_proxy()`. It stores the
+path and local manifest in `config/client.local.json`; the request body contains
+logical dates and authored text but never filesystem paths. Deletion is a
+server-side tombstone and never mutates the local vault.
+## Agent Runtime Browser retirement (Brief 72)
+
+Browser policy, allowlist, worker and task receipt are backend-admin-owned. The desktop
+client has no Browser Runtime preferences entry, shared API, Tauri bridge, task lifecycle
+state, or `bot_user_id` configuration. It never submits browser URLs/operations/params and
+never receives browser credentials, cookies, profiles, local paths, page content, or raw task
+results. The earlier Brief 71 real Tauri/Chromium evidence remains historical `partial/open`;
+it is not a reason to restore the retired client surface.
+
+
+## 桌面聊天交互修复（2026-09-10，partial）
+
+实现与跨仓边界见 `docs/chat-usability-2026-09-10.md`（本目录中为同名文档）。聊天/上传使用 600 秒总等待与 15 秒连接预算；桌宠创建/销毁采用 async command；子页面懒加载独立 Suspense。
+界面新增不透明度、情绪色条/标签开关；附件先暂存后发送，用户与角色均可引用。真实窗口/慢请求验收及历史引用恢复仍 open；跨仓总账同步待后端仓处理。
+
+聊天区域透明度由 applyChatRegionOpacity 处理 ReactNode；保存隐藏顶部栏时 false/null 区域保持隐藏，不访问 props。启动回归与真实 Tauri 复验见 docs/chat-usability-2026-09-10.md（2026-09-10 修复）。
+## 通话与聊天七项修复（2026-09-11，partial）
+
+单聊/通话使用 shared/api/realityMessageScope 过滤群聊、梦境和非当前角色事件；
+加载气泡等待首个可见正文后再交接。思考正文占满聊天区，窄输入区使用整行文本框，
+LayoutHost 在 ≤640px 时将侧栏呈现为可关闭浮层。视频通话增加 RoomWindow.css
+环境视觉；3D/Live2D 设置分组，桌宠直接选择共用 Live2D 模型。
+实现、验证和跨端 open 项见 `docs/client-fixes-2026-09-11.md`。
+
+## 桌宠逐段对话（2026-09-12）
+PetWindow 复用视频通话 turnIngest 分段规则，将最终消息按换行排队逐段显示。
+主窗口仍持有 WS；按 msg_id 去重，贴纸只附首段。验收 open 见 docs/pet-window-reference.md。
+
+## 工具链与动作旁白（2026-09-12，partial）
+新增 tool_activity WS 展示事件；字段为 event_id、chain_id、char_id、source=reality、
+origin=chat|autonomy、tool_name、status、ts。status 为 running/success/error/unknown/pending_confirmation。
+无 ack、不进发言/TTS、不携带参数结果；ChatPanel 按角色过滤、按调用去重、同链连接。
+历史 /chat-log 增加可选 entry_kind=narration 和 tool_activity；近期工具回执复用既有 30 条 action_trace，
+与同 event_id 旧旁白对账。设置 chat.toolActivityVisible 仅控制本地展示，默认 true。
+实现、验证及原生/手机 open 边界见 docs/tool-activity-2026-09-12.md（本文在 docs 时为同目录）。
+
+
+## 按需截图三端接入（2026-09-12，partial）
+
+详见仓库 `docs/screen-observation-2026-09-12.md`。后端 `observe_user_screen` 通过独立 HTTP poll/result 请求活跃电脑或手机的新截图，UUID/凭据绑定、20 秒 TTL、30 秒设备新鲜度和本地授权均参与门控；图像只在内存中处理。
+
+管理面提供全局开关、effective state 与 `/perception/screen/status` 无正文观测；电脑视觉观察页、手机系统配置页各有独立本地授权，默认关闭。全局开启时自主工具继承启用，显式工具禁用优先；角色消息继续走原通知/免打扰链路。桌面 IPC 新增可选 onDemandEnabled；手机使用专用 screen_observation 通道与无障碍 worker，不改 mobile poll/ack/relay。
+
+实现及构建/定向测试通过，真实双设备、锁屏、OEM 后台及 VLM/消息联合验收保持 open。管理面既有国际化测试 3 项失败保持 open，详见施工记录，不能将静态检查作为真实设备验收。
+
+## 截图设置位置与样式修正（2026-09-12，partial）
+
+手机按需截图开关移到 SettingsPage 的系统配置分组，复用 SettingsRow + Switch；能力权限页仅显示 CapabilityRow 状态标记，不再显示灰色禁用开关。系统配置中的权限操作子页不重复放置截图开关。桌面按需截图使用与“允许视觉观察”一致的左侧标题/说明、右侧滑动开关布局。两端 AGENTS.md 已写入复用周围 UI 风格约定，手机额外明确设置与权限观测边界。
+
+三面检查：后端管理开关、effective state、观测端点、截图请求/TTL/去重和原生授权闸门不变。本次仅移动本机设置入口和统一控件；手机可先保存本地授权，实际截图仍须 Android 11+、无障碍及未锁屏。真实手机更新安装后的交互验收仍 open。
+
