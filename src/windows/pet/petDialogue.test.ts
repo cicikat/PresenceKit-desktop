@@ -12,4 +12,9 @@ describe('pet dialogue', () => {
     expect(splitPetDialogue({ id: 's', text: 'one\ntwo', sticker })[1].sticker).toBeUndefined();
     expect(splitPetDialogue({ id: 'empty', text: ' \n ' })).toEqual([]);
   });
+  it('keeps chat artifacts only on the first bubble', () => {
+    const artifacts = [{ id: 'aa'.repeat(16), filename: 'note.md', mime: 'text/markdown', size: 4 }];
+    expect(splitPetDialogue({ id: 'f', text: 'one\ntwo', artifacts })[0]?.artifacts).toEqual(artifacts);
+    expect(splitPetDialogue({ id: 'f', text: 'one\ntwo', artifacts })[1].artifacts).toBeUndefined();
+  });
 });

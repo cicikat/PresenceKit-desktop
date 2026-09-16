@@ -334,6 +334,7 @@ src/windows/toy/
 - 滚到顶时懒加载更早一天，保持滚动位置不跳。
 - 用户发送时调用 `sendChat()`。
 - 订阅 WS `channel_message` / `message_segments`，优先按 assistant `msg_id` 与 HTTP 回复对账；content hash 只作为旧后端或异常路径 fallback。
+- live `channel_message` / HTTP 回包可带 `artifacts[]`；ChatPanel 在首条气泡显示文件卡，下载/预览经 Tauri Bearer，不新增 WS 帧。
 - `message_segments` 只更新同 `msg_id` 的既有气泡，不单独追加消息；提前到达时暂存，使用 5 分钟 TTL 和 50 条上限。
 - WS `msg_id` 到本地消息 id 的映射只保留最近 200 条，避免长会话无限增长。
 - 根据 engine mood/activity/presence 渲染 header 标签、头像呼吸和 typing 指示。

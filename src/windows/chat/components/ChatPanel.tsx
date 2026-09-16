@@ -10,7 +10,7 @@ import { Tag, Icon, Btn } from './UIKit';
 import { MOOD_HUE, MOOD_LABEL_EN, FOCUS_LABEL_EN } from './UIKit';
 import { MOOD_TABLE } from '../../../shared/state/store';
 import { avatarStore } from '../../../shared/avatars/store';
-import { open } from '@tauri-apps/plugin-dialog';
+import { open, save } from '@tauri-apps/plugin-dialog';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { sendChat, uploadDocument, previewChatAttachment, desktopWake } from '../../../shared/api/backend';
 import { shouldSkipDesktopWake, markDesktopWakeFired } from '../../../shared/desktopWakeGate';
@@ -23,6 +23,7 @@ import { ToolActivityChain } from './ToolActivityChain';
 import { reasoningAnchors } from '../reasoningNarration';
 import { TurnReasoningPanel } from './TurnReasoningPanel';
 import { loadTurnReasoning } from '../../../shared/api/turnReasoning';
+import { downloadChatArtifact, normalizeChatArtifacts, previewChatArtifact } from '../../../shared/api/chatArtifacts';
 import { TurnReasoningCache, attachCanonicalTurn } from '../../../shared/api/turnReasoningState';
 import { VoiceMessageBar } from './VoiceMessageBar';
 import { loadChatLogDates, loadChatLogDay } from '../../../shared/api/backend';
@@ -39,7 +40,7 @@ import { useDesignMounts } from '../../../shared/design-mod/mounts';
 import { chatSessionMetrics } from '../../../shared/design-mod/metrics';
 import { publishPetSnapshot } from '../../../shared/pet/bridge';
 import { TypingDots } from '../../../shared/ui/TypingDots';
-import type { ChatLogEntry, NarrativeSegment, StickerPayload } from '../../../shared/api/types';
+import type { ChatArtifactPayload, ChatLogEntry, NarrativeSegment, StickerPayload } from '../../../shared/api/types';
 import { normalizeChatDisplayText } from '../chatDisplay';
 import { renderInlineStyled } from '../inlineStyle';
 import type { MainLayoutId } from '../../../shared/layout/contract';
@@ -141,8 +142,9 @@ interface ChatMsg {
   reasoningPending?: boolean;
   segments?: NarrativeSegment[];
   segmentedContent?: string;
-  // 仅 live channel_message 携带；历史接口尚未持久化 sticker。
+  // 仅 live channel_message / HTTP 回包携带；历史接口尚未持久化 sticker / artifacts。
   sticker?: StickerPayload;
+  artifacts?: ChatArtifactPayload[];
   // Snapshot at live-message arrival. History and previously rendered turns
   // deliberately keep this false, even if the user later enables auto-play.
   autoPlayTts?: boolean;
@@ -165,6 +167,7 @@ interface RealityChannelMessage extends RealityMessageScope {
   msg_id: string;
   source?: string;
   sticker?: StickerPayload;
+  artifacts?: ChatArtifactPayload[];
 }
 
 interface PendingRealitySegments {
@@ -428,12 +431,14 @@ function BreathingAvatar({
   );
 }
 
-const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, youVisible, assistantFontSize, userFontSize, ttsEnabled, showEmotionAccent, showEmotionLabel, chatOpacity = 1, onBubbleContextMenu }: any) {
+const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, youVisible, assistantFontSize, userFontSize, ttsEnabled, showEmotionAccent, showEmotionLabel, chatOpacity = 1, onBubbleContextMenu, onDownloadArtifact, onPreviewArtifact }: any) {
+  const { t } = useI18n();
   const fromUser = msg.role === 'user';
   const hue = msg.moodHue ?? currentHue;
   const time = msg.time ? new Date(msg.time).toLocaleTimeString('zh', { hour: '2-digit', minute: '2-digit' }) : '';
   const displayText = normalizeChatDisplayText(msg.segmentedContent ?? msg.text);
-  const stickerOnly = Boolean(msg.sticker && !msg.text.trim());
+  const hasText = Boolean(displayText.trim());
+  const stickerOnly = Boolean(msg.sticker && !hasText && !msg.artifacts?.length);
 
   if (msg.role === 'divider') {
     return (
@@ -526,7 +531,7 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
           <span className="mono" style={{ fontSize: chatThemeFontSize(9.5), letterSpacing: 1.4, color: 'var(--ink-3)' }}>HIM · {time}</span>
           {showEmotionLabel && msg.moodLabel && <Tag hue={hue}>{msg.moodLabel}</Tag>}
         </div>
-        {!stickerOnly && ttsEnabled && !msg.isStreaming && (
+        {hasText && ttsEnabled && !msg.isStreaming && (
           <div style={{ marginBottom: 8 }}>
             <VoiceMessageBar text={displayText} emotion={msg.moodLabel?.toLowerCase() ?? 'neutral'} fontSize={assistantFontSize} autoPlay={Boolean(msg.autoPlayTts)} scene="chat" />
           </div>
@@ -559,7 +564,35 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
             />
           </div>
         )}
-        {!stickerOnly && !(ttsEnabled && !msg.isStreaming) && (
+        {Array.isArray(msg.artifacts) && msg.artifacts.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: hasText || msg.sticker ? 8 : 0, maxWidth: '100%' }}>
+            {msg.artifacts.map((item: ChatArtifactPayload) => (
+              <div
+                key={item.id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '8px 10px',
+                  background: 'var(--paper)',
+                  border: '1px solid var(--paper-edge)',
+                  borderRadius: 'var(--radius-sm)',
+                }}
+              >
+                <Icon name={iconForFilename(item.filename)} size={16} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: assistantFontSize - 1, fontWeight: 500, overflowWrap: 'anywhere' }}>{item.filename}</div>
+                  <div className="mono" style={{ fontSize: chatThemeFontSize(9.5), color: 'var(--ink-3)', letterSpacing: 0.6 }}>{item.size} B</div>
+                </div>
+                {item.previewable && (
+                  <button type="button" className="mono" onClick={() => onPreviewArtifact?.(item)} style={{ fontSize: chatThemeFontSize(10), padding: '3px 8px', borderRadius: 'var(--radius-xs)', cursor: 'pointer', background: 'transparent', border: '1px solid var(--paper-edge)', color: 'var(--ink-3)' }}>{t('chat.artifacts.preview')}</button>
+                )}
+                <button type="button" className="mono" onClick={() => onDownloadArtifact?.(item)} style={{ fontSize: chatThemeFontSize(10), padding: '3px 8px', borderRadius: 'var(--radius-xs)', cursor: 'pointer', background: 'transparent', border: '1px solid var(--paper-edge)', color: 'var(--ink-3)' }}>{t('chat.artifacts.download')}</button>
+              </div>
+            ))}
+          </div>
+        )}
+        {hasText && !(ttsEnabled && !msg.isStreaming) && (
           <div
             onContextMenu={e => {
               e.preventDefault();
@@ -647,6 +680,8 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
   const preparingRef = useRef(false);
   const sendingRef = useRef(false);
   const [replyTarget, setReplyTarget] = useState<{ text: string; time: number } | null>(null);
+  const [artifactPreview, setArtifactPreview] = useState<{ filename: string; html: string } | null>(null);
+  const [artifactNotice, setArtifactNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!ctxMenu) return;
@@ -659,6 +694,13 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       window.removeEventListener('keydown', onKey);
     };
   }, [ctxMenu]);
+
+  useEffect(() => {
+    if (!artifactPreview) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setArtifactPreview(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [artifactPreview]);
 
   const onBubbleContextMenu = useCallback((msg: ChatMsg, x: number, y: number) => {
     setCtxMenu({ msg, x, y });
@@ -674,6 +716,27 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
     navigator.clipboard?.writeText(text).catch(() => {});
     setCtxMenu(null);
   }, []);
+
+  const onDownloadArtifact = useCallback(async (item: ChatArtifactPayload) => {
+    setArtifactNotice(null);
+    try {
+      const destPath = await save({ defaultPath: item.filename });
+      if (!destPath) return;
+      await downloadChatArtifact(item.id, destPath);
+    } catch {
+      setArtifactNotice(t('chat.artifacts.downloadFailed'));
+    }
+  }, [t]);
+
+  const onPreviewArtifact = useCallback(async (item: ChatArtifactPayload) => {
+    setArtifactNotice(null);
+    try {
+      const html = await previewChatArtifact(item.id);
+      setArtifactPreview({ filename: item.filename, html });
+    } catch {
+      setArtifactNotice(t('chat.artifacts.previewFailed'));
+    }
+  }, [t]);
 
   const voice = useVoiceInput();
   const [ttsEnabled, setTtsEnabled] = useState(false);
@@ -741,7 +804,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
   // earlier so it can be reused by both the mount effect and the WS reconnect effect.
   // Route through a ref (kept in sync on every render, below) instead of a direct closure
   // reference to avoid a TDZ error in init's useCallback dependency array.
-  const scheduleAssistantSegmentsRef = useRef<((fullText: string, wsMsgId?: string, preGeneratedIds?: string[]) => void) | null>(null);
+  const scheduleAssistantSegmentsRef = useRef<((fullText: string, wsMsgId?: string, preGeneratedIds?: string[], sticker?: StickerPayload, canonicalTurnId?: string, artifacts?: ChatArtifactPayload[]) => void) | null>(null);
 
   useEffect(() => {
     if (historyStatus.kind === 'loading') return;
@@ -810,7 +873,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
 
   // send() / uploadDocument HTTP fallback: same pattern as desktopWake.
   // WS channel_message supersedes the HTTP reply; HTTP only renders if WS never arrives.
-  const pendingSendReplyRef = useRef<{ timerId: ReturnType<typeof setTimeout>; reply: string; msgId?: string } | null>(null);
+  const pendingSendReplyRef = useRef<{ timerId: ReturnType<typeof setTimeout>; reply: string; msgId?: string; artifacts?: ChatArtifactPayload[] } | null>(null);
 
   // Tracks fallbacks that already rendered (timer fired before WS arrived).
   // Allows late-arriving channel_message to replace/skip rather than double-append.
@@ -1219,11 +1282,11 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
     };
   }, []);
 
-  const scheduleAssistantSegments = useCallback((fullText: string, wsMsgId?: string, preGeneratedIds?: string[], sticker?: StickerPayload, canonicalTurnId?: string) => {
+  const scheduleAssistantSegments = useCallback((fullText: string, wsMsgId?: string, preGeneratedIds?: string[], sticker?: StickerPayload, canonicalTurnId?: string, artifacts?: ChatArtifactPayload[]) => {
     const textParts = splitReply(fullText);
-    if (textParts.length === 0 && !sticker) return;
+    if (textParts.length === 0 && !sticker && !artifacts?.length) return;
     const parts = textParts.length > 0 ? textParts : [''];
-    const dedupContent = fullText || sticker?.data_url || '';
+    const dedupContent = fullText || sticker?.data_url || artifacts?.[0]?.id || '';
     const contentHashRaw = dedupContent.slice(0, 32).replace(/\s+/g, ' ');
     const contentHashNormalized = normalizeForDedup(dedupContent);
     const appendSource = wsMsgId ? 'ws' : 'fallback';
@@ -1282,6 +1345,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
         segments: pending?.segments,
         segmentedContent,
         sticker: idx === 0 ? sticker : undefined,
+        artifacts: idx === 0 ? artifacts : undefined,
         autoPlayTts: ttsEnabledRef.current && ttsAutoPlayRef.current.chat,
       }]);
     };
@@ -1313,6 +1377,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
     msgId: string | undefined,
     content: string,
     normalizedHash: string,
+    artifacts?: ChatArtifactPayload[],
   ): void => {
     const liveIds = (msgId ? streamingLocalIdRef.current.get(msgId) : undefined) ?? [];
     if (liveIds.length === 0) return;
@@ -1323,13 +1388,15 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
     }
     recentWSContentHashesRef.current.set(normalizedHash, Date.now());
 
-    const parts = splitReply(content);
-    // Canonical empty after scrub → drop all live bubbles.
-    if (parts.length === 0) {
+    const textParts = splitReply(content);
+    // Canonical empty after scrub → drop all live bubbles, unless this turn
+    // still has a live sidecar (sticker/artifacts) that must remain visible.
+    if (textParts.length === 0 && !artifacts?.length) {
       setMessages(prev => prev.filter(m => !liveIds.includes(m.id)));
       console.log('[chat] stream-replace-empty | msg_id:', msgId ?? '(none)', '| liveBubbles:', liveIds.length);
       return;
     }
+    const parts = textParts.length > 0 ? textParts : [''];
 
     // Reuse the live bubble ids in order; the canonical split may have a
     // different paragraph count than what streamed (scrub can merge/strip),
@@ -1363,6 +1430,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
           segments: segMatch ? pending!.segments : liveById.get(localIds[i])?.segments,
           segmentedContent: segMatch ? strippedParts![i] : undefined,
           autoPlayTts: ttsEnabledRef.current && ttsAutoPlayRef.current.chat,
+          artifacts: i === 0 ? artifacts : undefined,
         };
       });
       // Remove all old live bubbles, then splice the rebuilt run back in at the
@@ -1425,12 +1493,13 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
     const processRealityChannelMessage = (message: RealityChannelMessage) => {
       if (!isSingleRealityMessage(message, getActiveCharacterInfo().id)) return;
       const { content, msg_id, source, sticker } = message;
+      const artifacts = normalizeChatArtifacts(message.artifacts);
       // Defense: only consume reality messages (source field added P0; old server = no source = reality).
       if (source && source !== 'reality') return;
       pruneStalePendingSegments(pendingSegmentsByMsgIdRef.current);
 
       let duplicateDropped = false;
-      const normalizedHash = normalizeForDedup(content || sticker?.data_url || '');
+      const normalizedHash = normalizeForDedup(content || sticker?.data_url || artifacts?.[0]?.id || '');
 
       // Cancel desktopWake HTTP fallback — WS is the primary render path.
       // Important: we do NOT return here; we fall through to scheduleAssistantSegments
@@ -1525,12 +1594,12 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
         setLoading(false);
         // Reconcile the live streamed bubbles with the canonical (scrubbed)
         // split. Also maps any already-parked message_segments per-index.
-        replaceStreamingBubbleWithParts(msg_id, content, normalizedHash);
+        replaceStreamingBubbleWithParts(msg_id, content, normalizedHash, artifacts);
         console.log('[chat] appendSource: stream-replace | msg_id:', msg_id, '| contentHash:', contentHashRaw);
         return;
       }
 
-      scheduleAssistantSegments(content, msg_id, undefined, sticker);
+      scheduleAssistantSegments(content, msg_id, undefined, sticker, undefined, artifacts);
     };
 
     processRealityChannelMessageRef.current = processRealityChannelMessage;
@@ -1762,6 +1831,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       const response = await sendChat(t, replyTo);
       if (!mountedRef.current) return;
       const { reply } = response;
+      const artifacts = normalizeChatArtifacts(response.artifacts);
       const msgId = responseMsgId(response);
       const canonicalTurnId = response.turn_id?.trim() ? response.turn_id : undefined;
       if (canonicalTurnId && msgId) {
@@ -1795,7 +1865,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
         }
         // 流式气泡存在（WS 流中途断开，canonical 未到达）→ 用完整 HTTP 文本替换临时气泡
         if (msgId && streamingLocalIdRef.current.has(msgId)) {
-          replaceStreamingBubbleWithParts(msgId, reply, normalizedHash);
+          replaceStreamingBubbleWithParts(msgId, reply, normalizedHash, artifacts);
           pendingSendReplyRef.current = null;
           setLoading(false);
           console.log('[chat] appendSource: stream-fallback-replace | loadingSource: send | msg_id:', msgId);
@@ -1812,9 +1882,9 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
         if (msgId) setBoundedMapEntry(wsMsgIdToLocalIdsRef.current, msgId, fallbackIds, MAX_WS_MSG_ID_MAPPINGS);
         console.log('[chat] appendSource: fallback | loadingSource: send | msg_id:', msgId ?? '(none)', '| contentHash:', contentHash, '| normalizedHash:', normalizedHash, '| partsCount:', parts.length, '| renderedMsgIds:', fallbackIds, '| timestamp:', now);
         setLoading(false);
-        scheduleAssistantSegments(reply, undefined, fallbackIds, undefined, canonicalTurnId);
+        scheduleAssistantSegments(reply, undefined, fallbackIds, undefined, canonicalTurnId, artifacts);
       }, 3000);
-      pendingSendReplyRef.current = { timerId, reply, msgId };
+      pendingSendReplyRef.current = { timerId, reply, msgId, artifacts };
       console.log('[chat] httpDone | loadingSource: send | waitingForWs: true | msg_id:', msgId ?? '(none)', '| contentHash:', contentHash, '| partsCount:', reply.split(/\n+/).filter(Boolean).length, '| timestamp:', Date.now());
     } catch (err) {
       console.error('[chat] send 失败:', err);
@@ -1857,6 +1927,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       setReplyTarget(current => current === quote ? null : current);
       // Defer render same as send() — WS channel_message is primary path.
       const reply = resp.reply;
+      const artifacts = normalizeChatArtifacts(resp.artifacts);
       const msgId = responseMsgId(resp);
       const contentHash = reply.slice(0, 32).replace(/\s+/g, ' ');
       if (pendingSendReplyRef.current) {
@@ -1880,7 +1951,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
         }
         // 流式气泡存在（WS 流中途断开）→ 用完整 HTTP 文本替换临时气泡
         if (msgId && streamingLocalIdRef.current.has(msgId)) {
-          replaceStreamingBubbleWithParts(msgId, reply, normalizedHash);
+          replaceStreamingBubbleWithParts(msgId, reply, normalizedHash, artifacts);
           pendingSendReplyRef.current = null;
           setLoading(false);
           console.log('[chat] appendSource: stream-fallback-replace | loadingSource: upload | msg_id:', msgId);
@@ -1897,9 +1968,9 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
         if (msgId) setBoundedMapEntry(wsMsgIdToLocalIdsRef.current, msgId, fallbackIds, MAX_WS_MSG_ID_MAPPINGS);
         console.log('[chat] appendSource: fallback | loadingSource: upload | msg_id:', msgId ?? '(none)', '| contentHash:', contentHash, '| normalizedHash:', normalizedHash, '| partsCount:', parts.length, '| renderedMsgIds:', fallbackIds, '| timestamp:', now);
         setLoading(false);
-        scheduleAssistantSegments(reply, undefined, fallbackIds);
+        scheduleAssistantSegments(reply, undefined, fallbackIds, undefined, undefined, artifacts);
       }, 3000);
-      pendingSendReplyRef.current = { timerId, reply, msgId };
+      pendingSendReplyRef.current = { timerId, reply, msgId, artifacts };
       console.log('[chat] httpDone | loadingSource: upload | waitingForWs: true | msg_id:', msgId ?? '(none)', '| contentHash:', contentHash, '| partsCount:', reply.split(/\n+/).filter(Boolean).length, '| timestamp:', Date.now());
     } catch (err: unknown) {
       setDraftError(t('chat.attachments.sendFailed'));
@@ -2120,6 +2191,8 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
               userFontSize={fontSizes.user}
               showEmotionAccent={showEmotionAccent} showEmotionLabel={showEmotionLabel} ttsEnabled={ttsEnabled}
               onBubbleContextMenu={onBubbleContextMenu}
+              onDownloadArtifact={onDownloadArtifact}
+              onPreviewArtifact={onPreviewArtifact}
             />}
           </div>
         ))}
@@ -2141,7 +2214,49 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
             </div>
           </div>
         )}
+        {artifactNotice && (
+          <div role="alert" className="mono" style={{ textAlign: 'center', padding: '8px 0', fontSize: chatThemeFontSize(10), color: 'oklch(0.52 0.14 20)' }}>
+            {artifactNotice}
+          </div>
+        )}
       </div>)}
+
+      {artifactPreview && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={artifactPreview.filename}
+          onClick={() => setArtifactPreview(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 80,
+            background: 'oklch(0.20 0.02 60 / 0.45)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 24,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: 'min(760px, 100%)', maxHeight: '80vh',
+              background: 'var(--paper)', border: '1px solid var(--paper-edge)',
+              borderRadius: 'var(--radius-md)', display: 'flex', flexDirection: 'column',
+              boxShadow: '0 18px 48px oklch(0.30 0.04 60 / 0.28)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderBottom: '1px solid var(--paper-edge)' }}>
+              <span className="mono" style={{ flex: 1, fontSize: chatThemeFontSize(11), color: 'var(--ink-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{artifactPreview.filename}</span>
+              <button type="button" onClick={() => setArtifactPreview(null)} style={{ background: 'transparent', border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-xs)', cursor: 'pointer', color: 'var(--ink-3)', padding: '2px 8px' }}>{t('chat.artifacts.close')}</button>
+            </div>
+            <iframe
+              sandbox=""
+              referrerPolicy="no-referrer"
+              title={artifactPreview.filename}
+              srcDoc={artifactPreview.html}
+              style={{ width: '100%', flex: 1, minHeight: 320, border: 'none', background: '#fff' }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* 气泡右键菜单：cc-tasks/36，全局单例，onMouseDown stopPropagation 避免点击项时被外部关闭逻辑抢先卸载 */}
       {ctxMenu && (

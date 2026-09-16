@@ -7,7 +7,8 @@
 // /activity/reading/…(5)、/activity/gomoku/…(5)、/activity/chess/…(5)、
 // /group/list|create|{id}|{id}/send|{id}/history|{id}/settings|{id}/roster(7)、
 // /system/meta-mode、/lorebook(4)、/jailbreak-entries(4)、/settings/tool-loop、
-// /settings/thinking、/dream/archive(2)，共 56 个不同路径）均为字面量硬编码。
+// /settings/thinking、/dream/archive(2)、/chat/artifacts/{id}、/chat/artifacts/{id}/preview，
+// 共 58 个不同路径）均为字面量硬编码。
 // publisher.rs 另有 /sensor/realtime。后端路由变更时需手动同步这两个文件。
 mod actions;
 mod admin_bridge;
@@ -974,6 +975,88 @@ async fn load_turn_reasoning(app: tauri::AppHandle, turn_id: String) -> Result<s
         return Err(format!("HTTP {}", response.status().as_u16()));
     }
     response.json::<serde_json::Value>().await.map_err(|_| "Invalid reasoning response".to_string())
+}
+
+fn is_chat_artifact_id(artifact_id: &str) -> bool {
+    artifact_id.len() == 32 && artifact_id.chars().all(|c| c.is_ascii_hexdigit())
+}
+
+fn chat_artifact_url(
+    cfg: &crate::client_config::ClientConfig,
+    artifact_id: &str,
+    preview: bool,
+) -> Result<reqwest::Url, String> {
+    let mut url = reqwest::Url::parse(&backend_url(cfg, "/chat/artifacts/"))
+        .map_err(|_| "Invalid backend URL".to_string())?;
+    url.path_segments_mut()
+        .map_err(|_| "Invalid backend URL".to_string())?
+        .pop_if_empty()
+        .push(artifact_id);
+    if preview {
+        url.path_segments_mut()
+            .map_err(|_| "Invalid backend URL".to_string())?
+            .push("preview");
+    }
+    Ok(url)
+}
+
+#[tauri::command]
+async fn download_chat_artifact(
+    app: tauri::AppHandle,
+    artifact_id: String,
+    dest_path: String,
+) -> Result<(), String> {
+    if !is_chat_artifact_id(&artifact_id) {
+        return Err("HTTP 422".to_string());
+    }
+    let dest = PathBuf::from(dest_path.trim());
+    if dest_path.trim().is_empty()
+        || dest.components().any(|c| matches!(c, Component::ParentDir))
+        || dest.as_os_str().is_empty()
+    {
+        return Err("Invalid destination path".to_string());
+    }
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let url = chat_artifact_url(&cfg, &artifact_id, false)?;
+    let response = authorized_request(&cfg, client.get(url))
+        .send()
+        .await
+        .map_err(|_| "Artifact download failed".to_string())?;
+    if !response.status().is_success() {
+        return Err(format!("HTTP {}", response.status().as_u16()));
+    }
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|_| "Invalid artifact response".to_string())?;
+    if let Some(parent) = dest.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent).map_err(|e| format!("无法创建保存目录: {e}"))?;
+        }
+    }
+    fs::write(&dest, bytes).map_err(|e| format!("写入失败: {e}"))
+}
+
+#[tauri::command]
+async fn preview_chat_artifact(app: tauri::AppHandle, artifact_id: String) -> Result<String, String> {
+    if !is_chat_artifact_id(&artifact_id) {
+        return Err("HTTP 422".to_string());
+    }
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let url = chat_artifact_url(&cfg, &artifact_id, true)?;
+    let response = authorized_request(&cfg, client.get(url))
+        .send()
+        .await
+        .map_err(|_| "Artifact preview failed".to_string())?;
+    if !response.status().is_success() {
+        return Err(format!("HTTP {}", response.status().as_u16()));
+    }
+    response
+        .text()
+        .await
+        .map_err(|_| "Invalid artifact preview".to_string())
 }
 
 #[tauri::command]
@@ -3246,6 +3329,8 @@ pub fn run() {
             list_live2d_models,
             send_chat,
             load_turn_reasoning,
+            download_chat_artifact,
+            preview_chat_artifact,
             load_garden_state,
             coplay_state,
             coplay_arm,

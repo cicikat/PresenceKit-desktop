@@ -25,6 +25,17 @@ export interface StickerPayload {
   data_url: string;
 }
 
+/** Live channel_message / HTTP reply sidecar. History does not persist this. */
+export interface ChatArtifactPayload {
+  id: string;
+  filename: string;
+  mime: string;
+  size: number;
+  previewable?: boolean;
+  download_url?: string;
+  preview_url?: string;
+}
+
 export type ToolEphemeralKind =
   | 'pending_confirmation'
   | 'queued'
@@ -47,7 +58,7 @@ export interface ToolStatusPayload {
 export type ServerMessage =
   | import('./toolActivity').ToolActivity
   | { type: 'hello_ack'; server_version: string }
-  | { type: 'channel_message'; content: string; msg_id: string; source?: string; domain?: GroupDomain; char_id?: string; round_id?: string; sticker?: StickerPayload }
+  | { type: 'channel_message'; content: string; msg_id: string; source?: string; domain?: GroupDomain; char_id?: string; round_id?: string; sticker?: StickerPayload; artifacts?: ChatArtifactPayload[] }
   | { type: 'message_segments'; content: string; segments: NarrativeSegment[]; msg_id: string; source?: string; domain?: GroupDomain; char_id?: string; round_id?: string }
   | { type: 'action'; action: DesktopActionPayload; msg_id: string }
   | { type: 'ping' }
@@ -103,6 +114,7 @@ export interface ChatResponse {
   msg_id?: string;
   // Phase 1 reserved field — not yet populated by the HTTP API
   segments?: NarrativeSegment[];
+  artifacts?: ChatArtifactPayload[];
 }
 
 // 引用回复：见 Emerald-presence docs/backend-integration.md「reply_to」；
@@ -223,6 +235,7 @@ export interface UploadIngestResponse {
   msg_id?: string;
   critical_written: boolean;
   stored_path: string;
+  artifacts?: ChatArtifactPayload[];
 }
 
 export interface UploadError {

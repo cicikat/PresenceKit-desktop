@@ -1,4 +1,9 @@
 # docs/known-issues.md — 已知问题与技术债
+## 聊天产物文件卡（2026-09-16）
+
+current：桌面 ChatPanel 消费 live `artifacts[]` 文件卡；下载/预览走 Tauri Bearer，不新增 desktop action。历史接口尚未持久化该字段。
+observe：真实 Path C 写出 html 后的端到端预览仍待运行中后端联调。
+roadmap：手机产物卡 UI。
 
 ## YOU 头像布局验收（2026-09-13，partial）
 

@@ -110,6 +110,7 @@ export function PetWindow() {
         id: turn.msg_id,
         text: turn.content,
         sticker: turn.sticker,
+        artifacts: turn.artifacts,
         autoPlayTts: ttsEnabledRef.current && ttsAutoPlayRef.current.desktop_pet,
       });
       setDialogue(previous => [...previous, ...parts]);
