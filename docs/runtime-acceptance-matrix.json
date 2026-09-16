@@ -17,7 +17,7 @@
       "area": "automated",
       "scenario": "Latest input timer cancels stale callbacks across replacement, engine switch, and unmount.",
       "status": "passed",
-      "evidence": "tests/chatTimer.test.ts"
+      "evidence": "src/windows/chat/chatTimer.test.ts"
     },
     {
       "id": "protocol-fixture-consumer",
@@ -95,6 +95,102 @@
       "scenario": "Verify macOS permission prompts, reconnect behavior, and graceful shutdown/restart on the target release artifact.",
       "status": "not-run",
       "evidence": ""
+    },
+    {
+      "id": "native-dpi-100",
+      "area": "windows",
+      "scenario": "Windows native satellite at 100% DPI; verify bounds, content inset and pointer hit testing.",
+      "status": "not-run",
+      "evidence": "",
+      "requirements": "cc-tasks/2026-09-17-audit-work-orders.md"
+    },
+    {
+      "id": "native-dpi-125",
+      "area": "windows",
+      "scenario": "Windows native satellite at 125% DPI; verify bounds, content inset and pointer hit testing.",
+      "status": "not-run",
+      "evidence": "",
+      "requirements": "cc-tasks/2026-09-17-audit-work-orders.md"
+    },
+    {
+      "id": "native-dpi-150",
+      "area": "windows",
+      "scenario": "Windows native satellite at 150% DPI; verify bounds, content inset and pointer hit testing.",
+      "status": "not-run",
+      "evidence": "",
+      "requirements": "cc-tasks/2026-09-17-audit-work-orders.md"
+    },
+    {
+      "id": "native-dpi-200",
+      "area": "windows",
+      "scenario": "Windows native satellite at 200% DPI; verify bounds, content inset and pointer hit testing.",
+      "status": "not-run",
+      "evidence": "",
+      "requirements": "cc-tasks/2026-09-17-audit-work-orders.md"
+    },
+    {
+      "id": "native-mixed-monitor",
+      "area": "windows",
+      "scenario": "Drag main window across mixed-DPI monitors, including a negative-coordinate monitor; verify anchored surfaces.",
+      "status": "not-run",
+      "evidence": "",
+      "requirements": "cc-tasks/2026-09-17-audit-work-orders.md"
+    },
+    {
+      "id": "native-primary-monitor-switch",
+      "area": "windows",
+      "scenario": "Change primary monitor with native surfaces open; verify geometry and visibility.",
+      "status": "not-run",
+      "evidence": "",
+      "requirements": "cc-tasks/2026-09-17-audit-work-orders.md"
+    },
+    {
+      "id": "native-sleep-wake",
+      "area": "windows",
+      "scenario": "Sleep and resume with native surfaces open; verify geometry, snapshot delivery and input.",
+      "status": "not-run",
+      "evidence": "",
+      "requirements": "cc-tasks/2026-09-17-audit-work-orders.md"
+    },
+    {
+      "id": "native-generation-reload-close",
+      "area": "windows",
+      "scenario": "Reload Mod generation then close main window; verify no stale surface, listener or command remains.",
+      "status": "not-run",
+      "evidence": "",
+      "requirements": "cc-tasks/2026-09-17-audit-work-orders.md"
+    },
+    {
+      "id": "dream-concurrent-ownership",
+      "area": "windows",
+      "scenario": "Concurrent desktop/mobile Dream and Activity requests must not claim each other streams; requires scoped request protocol.",
+      "status": "not-run",
+      "evidence": "",
+      "requirements": "cc-tasks/2026-09-17-audit-work-orders.md"
+    },
+    {
+      "id": "chat-retry-real-ipc",
+      "area": "windows",
+      "scenario": "Real Tauri attachments, send failure and retry preserve the original bubble and new draft; record ambiguous server completion.",
+      "status": "not-run",
+      "evidence": "",
+      "requirements": "cc-tasks/2026-09-17-audit-work-orders.md"
+    },
+    {
+      "id": "chat-history-canonical-restart",
+      "area": "windows",
+      "scenario": "Real backend conversation then desktop restart restores canonical turn reasoning once per reply.",
+      "status": "not-run",
+      "evidence": "",
+      "requirements": "cc-tasks/2026-09-17-audit-work-orders.md"
+    },
+    {
+      "id": "chat-local-character-session",
+      "area": "windows",
+      "scenario": "Another device changes global active character while desktop sends and reads history; desktop retains its own session character.",
+      "status": "not-run",
+      "evidence": "",
+      "requirements": "cc-tasks/2026-09-17-audit-work-orders.md"
     }
   ]
 }

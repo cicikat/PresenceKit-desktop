@@ -518,3 +518,11 @@ open：真实后端重启/Tauri 联调；手机工具链 roadmap；仅近期 30 
 ## Admin visual decisions (2026-09-12, observe)
 
 Backend admin static styling and configuration disclosure were verified in Chromium using synthetic APIs. Native admin bridge container and physical mobile validation remain observe; no native UI or IPC changed. Full request/queue/send/ack tracing remains roadmap in backend docs/admin-design-implementation.md and docs/three-repo-interface-catalog.md.
+
+## 9.17 审计施工（partial）
+
+逐项判断和依赖见 `../cc-tasks/2026-09-17-audit-work-orders.md`。
+真实运行验收统一登记于 `runtime-acceptance-matrix.json`，新增项均为 not-run。
+用户确认本机固定会话角色、其他设备切换不影响本机；现有发送/历史 IPC 未显式绑定角色，
+不能通过停止刷新 UI cache 达成此语义。请求归属、会话角色协议及三仓总账同步须后端另单。
+Chat 对账集中化和 native geometry 收口仍待本次后续施工，不因文档完成而关单。

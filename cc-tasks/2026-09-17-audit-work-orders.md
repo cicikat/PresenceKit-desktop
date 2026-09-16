@@ -24,7 +24,7 @@
 
 - [x] WO-00：逐条复核，区分真实风险、过时事实、设计建议；完成本工单。
 - [x] WO-01：修正历史 turn_id 实现状态；保留真实部署/重启/思考恢复 open。无代码契约变更。
-- [ ] WO-02：扩充 runtime-acceptance-matrix.json，登记 Design Mod、Dream 请求隔离、Chat 重试/恢复实机项，验证台账。
+- [x] WO-02：扩充 runtime-acceptance-matrix.json，登记 Design Mod、Dream 请求隔离、Chat 重试/恢复实机项，验证台账；runtime-acceptance-matrix.test.ts 通过（1 项）。
 - [ ] WO-03：ChatTurnReconciler 接入 HTTP/WS/stream/history/fallback；loading 和 alias 生命周期由同一 owner 管理；事件矩阵回归。依赖 WO-04 的角色语义决策，协议缺字段须保留兼容边界。
 - [ ] WO-04：明确角色与请求作用域、旧请求归属、跨仓范围；定义 capability 上线及 shim 删除条件。未确认前不改契约或扩大仓库。
 - [ ] WO-05：native geometry 唯一写入口；明确旧 updateBounds 的兼容/退役语义，再修改 Host API / IPC 并验证 Rust。
