@@ -1,8 +1,15 @@
 import { invokeGated } from './authGate';
 import type { ChatResponse, DesktopWakeResponse, GardenState, CoplayState, DiaryListResponse, DiaryEntry, ChatLogDatesResponse, ChatLogDay, MoodState, ActivityState, SensorRealtimeResponse, UploadIngestResponse, UploadError, PromptAssetsResponse, PromptAssetsPatch, PromptAssetsPatchResponse, HiddenStateDebugResponse, PromptAssetCharacter, PromptAssetOption, ActivePromptAssets, GroupSummary, GroupDetail, GroupSendResponse, GroupSettings, ReplyToPayload } from './types';
 
+let pendingVoice: { text: string; id: string; expires: number } | undefined;
+
 export async function sendChat(message: string, replyTo?: ReplyToPayload): Promise<ChatResponse> {
-  return invokeGated<ChatResponse>('send_chat', replyTo ? { message, replyTo } : { message });
+  const voice = pendingVoice;
+  pendingVoice = undefined;
+  const audioPerceptionId = voice && voice.expires > Date.now() && voice.text.trim() === message.trim() ? voice.id : undefined;
+  return invokeGated<ChatResponse>('send_chat', {
+    message, ...(replyTo ? { replyTo } : {}), ...(audioPerceptionId ? { audioPerceptionId } : {}),
+  });
 }
 
 export async function loadGardenState(): Promise<GardenState> {
@@ -286,7 +293,12 @@ export async function patchGroupSettings(id: string, settings: Partial<GroupSett
 }
 
 export async function transcribeAudio(audioB64: string): Promise<{ text: string }> {
-  return invokeGated<{ text: string }>('transcribe_audio', { audioB64 });
+  pendingVoice = undefined;
+  const result = await invokeGated<{ text: string; audio_perception_id?: string }>('transcribe_audio', { audioB64 });
+  if (result.audio_perception_id) pendingVoice = {
+    text: result.text, id: result.audio_perception_id, expires: Date.now() + 300_000,
+  };
+  return result;
 }
 
 export interface UploadAttachment { filePath?: string; filename?: string; dataB64?: string }

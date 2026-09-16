@@ -1,5 +1,9 @@
 # PresenceKit-desktop 协议 v0.1
 
+Brief 253.6 兼容扩展：POST /transcribe 保留 text，可返回 tone/audio_perception_id。
+POST /desktop/chat 可附带 audio_perception_id，仅关联原样转写的语调；后端按 owner/char/channel/text
+校验，5 分钟、一次性，失效时仅丢语调。send_chat IPC 对应 audioPerceptionId 可选参数；无新 WS 帧。
+
 ## Conversation calendar (2026-09-12)
 
 Current: GET /chat-log/stats/calendar requires memory.read + state.read. All four metrics are scoped to owner + character; period=day/week/month/year with date, or start/end (up to 366 days). Missing history is null, never zero. Coverage and totals_partial disclose incomplete data. See backend docs/conversation-calendar.md.

@@ -935,11 +935,15 @@ async fn send_chat(
     app: tauri::AppHandle,
     message: String,
     reply_to: Option<ReplyToPayload>,
+    audio_perception_id: Option<String>,
 ) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
     let client = chat_http_client()?;
 
     let mut body = serde_json::json!({ "message": message });
+    if let Some(id) = audio_perception_id.filter(|value| value.len() <= 128) {
+        body["audio_perception_id"] = serde_json::json!(id);
+    }
     if let Some(reply_to) = reply_to {
         body["reply_to"] = serde_json::json!({ "text": reply_to.text, "ts": reply_to.ts });
     }

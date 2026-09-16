@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { uploadDocument, sendChat, deleteCharacterAvatar, getPromptAssets, invalidatePromptAssetsCache, patchPromptAssets, uploadCharacterAvatar } from './backend';
+import { uploadDocument, sendChat, transcribeAudio, deleteCharacterAvatar, getPromptAssets, invalidatePromptAssetsCache, patchPromptAssets, uploadCharacterAvatar } from './backend';
 
 const { invokeGated } = vi.hoisted(() => ({ invokeGated: vi.fn() }));
 vi.mock('./authGate', () => ({ invokeGated }));
@@ -80,4 +80,18 @@ describe('chat transport compatibility', () => {
     await sendChat('reply', { text: 'my own message', ts: 123 });
     expect(invokeGated).toHaveBeenLastCalledWith('send_chat', { message: 'reply', replyTo: { text: 'my own message', ts: 123 } });
   });
+});
+
+it('forwards a voice receipt once and drops it when transcript is edited', async () => {
+  invokeGated.mockReset();
+  invokeGated.mockResolvedValueOnce({ text: 'hello', audio_perception_id: 'fixture-receipt' });
+  await transcribeAudio('fixture-audio');
+  await sendChat('hello');
+  expect(invokeGated).toHaveBeenLastCalledWith('send_chat', { message: 'hello', audioPerceptionId: 'fixture-receipt' });
+  await sendChat('hello');
+  expect(invokeGated).toHaveBeenLastCalledWith('send_chat', { message: 'hello' });
+  invokeGated.mockResolvedValueOnce({ text: 'hello', audio_perception_id: 'fixture-receipt' });
+  await transcribeAudio('fixture-audio');
+  await sendChat('edited');
+  expect(invokeGated).toHaveBeenLastCalledWith('send_chat', { message: 'edited' });
 });

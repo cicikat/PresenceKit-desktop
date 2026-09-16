@@ -1,5 +1,14 @@
 # docs/backend-integration.md — 后端接口与接入现状
 
+## Brief 253.6：语音感知
+
+原 transcribe_audio 仍上传录音到 chat scope 的 POST /transcribe。新增可选 audio_perception_id；
+前端内存最多保留当前一次转写 5 分钟，下一条 sendChat 仅在文本未编辑时携带该凭据，随后清除。
+send_chat IPC 新增可选 audioPerceptionId，Rust 转为 POST /desktop/chat 的 audio_perception_id。
+后端再校验 owner、角色、通道、文本、TTL 与单次消费；旧后端缺字段时继续只发文字。
+STT 配置由管理面维护，语调仅是后端印象；不改 WS、通知、ack 或授权范围。
+定向请求测试和 cargo check 通过；真实麦克风/远端 STT 联调 observe。
+
 ## 旧 Dream 动画广播隔离（2026-09-13）
 
 手机 `/dream/chat` → 后端 `pseudo_stream_push(profile=dream)` → desktop WS 的旧 start

@@ -1,5 +1,9 @@
 # 设置与功能开关审计（P0–P2）
 
+Brief 253.6：STT 命名连接、用途、默认关闭的开关与 effective state 统一在后端语音页维护。
+桌面无新设置，继续使用原麦克风权限和录音入口；只对下一条未编辑的转写文本发送一次性语调凭据。
+真实录音与 STT 服务联调 observe，协议见 [backend-integration.md](backend-integration.md)。
+
 ## 资料回读与主动接续（2026-09-13）
 
 后端管理面继续拥有生活记录角色可读、工具权限与模型连接；图片 cached/vision/ocr 是角色单次工具参数。
