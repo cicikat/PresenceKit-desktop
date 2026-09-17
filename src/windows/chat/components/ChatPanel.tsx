@@ -3,7 +3,7 @@
  * Phase 2c+: 按日文件懒加载历史，滚顶继续往前拉
  * ============================================================ */
 
-import { useState, useEffect, useRef, useCallback, useMemo, memo, type CSSProperties, type ReactNode } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, useSyncExternalStore, memo, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { format, subDays, parseISO } from 'date-fns';
 import { Tag, Icon, Btn } from './UIKit';
@@ -57,6 +57,7 @@ import { mergeAttachments, fileToDraft, type DraftAttachment } from '../draftAtt
 import { createLatestTimer } from '../chatTimer';
 import { bindHttpReplyIdentity, matchesHistoryReplay } from '../httpReplyIdentity';
 import { ChatReplyFallbacks, type ReplySource } from '../chatReplyFallbacks';
+import { ChatRequests, type ChatRequestToken } from '../chatRequests';
 
 function splitReply(text: string): string[] {
   return text.split(/\n+/).map(s => s.trim()).filter(s => s.length > 0);
@@ -640,7 +641,9 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
   useEffect(() => () => { reasoningCache.clear(); canonicalTurnsRef.current.clear(); }, [reasoningCache]);
   const [input, setInput] = useState('');
   const [typing, setTyping] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [chatRequests] = useState(() => new ChatRequests());
+  const requestRevision = useSyncExternalStore(chatRequests.subscribe, chatRequests.snapshot, chatRequests.snapshot);
+  const loading = requestRevision >= 0 && (chatRequests.has() || chatRequests.waitingForStream);
   const [wakeLoading, setWakeLoading] = useState(false);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
@@ -656,7 +659,6 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
   const [draftError, setDraftError] = useState<string | null>(null);
   const [preparing, setPreparing] = useState(false);
   const preparingRef = useRef(false);
-  const sendingRef = useRef(false);
   const [replyTarget, setReplyTarget] = useState<{ text: string; time: number } | null>(null);
   const [artifactPreview, setArtifactPreview] = useState<{ filename: string; html: string } | null>(null);
   const [artifactNotice, setArtifactNotice] = useState<string | null>(null);
@@ -870,6 +872,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
   const [replyFallbacks] = useState(() => new ChatReplyFallbacks<{
     reply: string; msgId?: string; canonicalTurnId?: string;
     normalizedHash: string; artifacts?: ChatArtifactPayload[];
+    token: ChatRequestToken;
   }>());
   const replaceStreamRef = useRef<((msgId: string, content: string, normalizedHash: string, artifacts?: ChatArtifactPayload[]) => void) | null>(null);
 
@@ -887,18 +890,36 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
   // and the old/abnormal HTTP response has no msg_id.
   const recentWSContentHashesRef = useRef<Map<string, number>>(new Map());
 
-  // All three HTTP paths share one fallback settlement adapter. The lifecycle
-  // owner cancels/replaces timers before this callback can touch rendered state.
-  const queueHttpReply = useCallback((response: { reply: string; msg_id?: string; turn_id?: string; artifacts?: ChatArtifactPayload[] }, source: ReplySource) => {
+  // HTTP send/upload/wake share one fallback adapter. Each local request keeps
+  // its own slot; the owner cancels/replaces timers before render runs.
+  const queueHttpReply = useCallback((
+    response: { reply: string; msg_id?: string; turn_id?: string; artifacts?: ChatArtifactPayload[] },
+    source: ReplySource,
+    token?: ChatRequestToken,
+  ) => {
     const { msgId, canonicalTurnId } = bindHttpReply(response);
+    if (token) {
+      if (!chatRequests.isCurrent(token)) return;
+      chatRequests.bind(token, msgId);
+      if (chatRequests.size > 1) replyFallbacks.disableLegacySendMatching();
+    }
     const artifacts = normalizeChatArtifacts(response.artifacts);
     const normalizedHash = normalizeForDedup(response.reply);
-    replyFallbacks.defer(source, { msgId, normalizedHash }, {
-      reply: response.reply, msgId, canonicalTurnId, normalizedHash, artifacts,
+    const allowLegacyHash = token ? chatRequests.allowsLegacyHash(token) : true;
+    if (msgId && hasRegisteredMessage(wsMsgIdToLocalIdsRef.current, msgId)) {
+      if (source === 'wake') setWakeLoading(false);
+      else if (token) chatRequests.settle(token);
+      return;
+    }
+    replyFallbacks.defer(source, { msgId, normalizedHash, allowLegacyHash }, {
+      reply: response.reply, msgId, canonicalTurnId, normalizedHash, artifacts, token,
     }, source === 'wake' ? 5000 : 3000, (pending, sourceKind) => {
       if (!mountedRef.current) return;
-      const { reply, msgId, canonicalTurnId, normalizedHash, artifacts } = pending;
-      const clearWaiting = () => sourceKind === 'wake' ? setWakeLoading(false) : setLoading(false);
+      const { reply, msgId, canonicalTurnId, normalizedHash, artifacts, token } = pending;
+      const clearWaiting = () => {
+        if (sourceKind === 'wake') setWakeLoading(false);
+        else if (token) chatRequests.settle(token);
+      };
       const wsRenderedAt = recentWSContentHashesRef.current.get(normalizedHash);
       const alreadyRendered = msgId
         ? hasRegisteredMessage(wsMsgIdToLocalIdsRef.current, msgId)
@@ -920,8 +941,8 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       clearWaiting();
       scheduleAssistantSegmentsRef.current?.(reply, undefined, fallbackIds, undefined, canonicalTurnId, artifacts);
       console.log('[chat] appendSource: fallback | loadingSource:', sourceKind, '| msg_id:', msgId ?? '(none)');
-    });
-  }, [bindHttpReply, replyFallbacks]);
+    }, token?.id);
+  }, [bindHttpReply, chatRequests, replyFallbacks]);
 
   // Dream 打开期间屏蔽 channel_message
   const dreamActiveRef = useRef(dreamActive);
@@ -1091,6 +1112,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
     return () => {
       mountedRef.current = false;
       replyFallbacks.clear();
+      chatRequests.clear();
     };
   }, [init]);
 
@@ -1330,7 +1352,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
         moodHue,
         moodLabel,
         time: Date.now(),
-        reasoningPending: idx === 0 && sendingRef.current,
+        reasoningPending: idx === 0 && (wsMsgId ? chatRequests.owns(wsMsgId) : chatRequests.has()),
         wsMsgId: wsMsgId && idx === 0 ? wsMsgId : undefined,
         turnId: canonicalTurnId ?? (wsMsgId ? canonicalTurnsRef.current.get(wsMsgId) : undefined),
         segments: pending?.segments,
@@ -1495,11 +1517,12 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       let duplicateDropped = false;
       const normalizedHash = normalizeForDedup(content || sticker?.data_url || artifacts?.[0]?.id || '');
 
-      for (const source of replyFallbacks.canonical(msg_id, normalizedHash)) {
+      for (const settled of replyFallbacks.canonical(msg_id, normalizedHash)) {
         duplicateDropped = true;
-        if (source === 'wake') setWakeLoading(false);
-        else setLoading(false);
+        if (settled.source === 'wake') setWakeLoading(false);
+        else if (settled.payload.token) chatRequests.settle(settled.payload.token);
       }
+      chatRequests.canonical(msg_id);
 
       // Check if a fallback was already rendered (timer fired before WS arrived).
       // In that case, wire the fallback bubble IDs to this msg_id and return early —
@@ -1552,7 +1575,8 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       // 注意：必须在 scheduleAssistantSegments 之前处理，否则 wsMsgIdToLocalIdsRef 里
       // 已存的 msg_id 会触发 duplicate-skip guard 而跳过渲染。
       if (streamingLocalIdRef.current.has(msg_id)) {
-        setLoading(false);
+        chatRequests.streamVisible(msg_id);
+        chatRequests.canonical(msg_id);
         // Reconcile the live streamed bubbles with the canonical (scrubbed)
         // split. Also maps any already-parked message_segments per-index.
         replaceStreamingBubbleWithParts(msg_id, content, normalizedHash, artifacts);
@@ -1642,7 +1666,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       if (dreamActiveRef.current) return;
       if (streamingLocalIdRef.current.has(msg_id) || wsMsgIdToLocalIdsRef.current.has(msg_id)) return;
       // Keep the waiting indicator until the first visible paragraph arrives.
-      setLoading(true);
+      chatRequests.streamStart(msg_id);
       const firstId = newId();
       streamingLocalIdRef.current.set(msg_id, [firstId]);
       streamingTextRef.current.set(msg_id, '');
@@ -1655,7 +1679,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
         moodLabel: MOOD_LABEL_EN[m.mood],
         time: Date.now(),
         wsMsgId: msg_id,
-        reasoningPending: sendingRef.current,
+        reasoningPending: chatRequests.owns(msg_id) || chatRequests.has(),
         isStreaming: true,
         streamingDone: false,
       }]);
@@ -1671,7 +1695,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       const acc = (streamingTextRef.current.get(msg_id) ?? '') + delta;
       streamingTextRef.current.set(msg_id, acc);
       const parts = splitReply(acc);
-      if (parts.length > 0) setLoading(false);
+      if (parts.length > 0) chatRequests.streamVisible(msg_id);
       const effParts = parts.length === 0 ? [''] : parts;
       while (ids.length < effParts.length) ids.push(newId());
       streamingLocalIdRef.current.set(msg_id, ids);
@@ -1715,9 +1739,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       // 流结束：关闭所有气泡的打字光标，等待 canonical channel_message 替换
       const ids = streamingLocalIdRef.current.get(msg_id);
       if (!ids) return;
-      if (!sendingRef.current && !replyFallbacks.has('send') && !streamingTextRef.current.get(msg_id)?.trim()) {
-        setLoading(false);
-      }
+      if (!streamingTextRef.current.get(msg_id)?.trim()) chatRequests.streamEnd(msg_id);
       setMessages(prev => prev.map(m => ids.includes(m.id) ? { ...m, streamingDone: true } : m));
       void notifyOnMessage(msg_id, getActiveCharacterName(), streamingTextRef.current.get(msg_id) ?? '');
       console.log('[chat] stream-end | msg_id:', msg_id, '| bubbles:', ids.length);
@@ -1775,12 +1797,14 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
 
   const send = async (retry?: ChatMsg) => {
     const t = retry?.retryDraft?.text ?? input.trim();
-    if (loading || preparingRef.current || sendingRef.current) return;
+    if (preparingRef.current) return;
     if (retry?.retryDraft?.attachments.length || (!retry && attachments.length)) { await doUpload(retry); return; }
     if (!t) return;
-    sendingRef.current = true;
     const quote = retry?.retryDraft?.quote ?? (retry ? undefined : replyTarget);
     const userId = retry?.id ?? newId();
+    const token = chatRequests.begin(userId);
+    if (!token) return;
+    if (chatRequests.size > 1) replyFallbacks.disableLegacySendMatching();
     const replyTo = quote
       ? { text: truncateForReplyTo(quote.text), ts: quote.time / 1000 }
       : undefined;
@@ -1788,14 +1812,13 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
     setMessages(m => retry ? m.map(item => item.id === userId ? { ...item, failed: false } : item) : [...m, { id: userId, role: 'user', text: t, time: Date.now(), replyTo: quote ?? undefined, retryDraft: { text: t, attachments: [], quote: quote ?? undefined } }]);
     chatSessionMetrics.recordTurn();
     engine.setLocalFocus('想事情');
-    setLoading(true);
     try {
       const response = await sendChat(t, replyTo);
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || !chatRequests.isCurrent(token)) return;
       setMessages(prev => prev.map(item => item.id === userId ? { ...item, retryDraft: undefined } : item));
-      queueHttpReply(response, 'send');
+      queueHttpReply(response, 'send', token);
     } catch (err) {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || !chatRequests.settle(token)) return;
       setMessages(prev => prev.map(item => item.id === userId ? { ...item, failed: true } : item));
       console.error('[chat] send 失败:', err);
       const is409 = /\b409\b/.test(err instanceof Error ? err.message : String(err));
@@ -1806,16 +1829,17 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
         text,
         time: Date.now(),
       }]);
-      setLoading(false);
       console.log('[chat] loadingClearedBy: error | loadingSource: send');
-    } finally { sendingRef.current = false; }
+    }
   };
 
   const doUpload = async (retry?: ChatMsg) => {
-    sendingRef.current = true;
     const submitted = retry?.retryDraft?.attachments ?? attachments;
     const quote = retry?.retryDraft?.quote ?? (retry ? undefined : replyTarget);
     const userId = retry?.id ?? newId();
+    const token = chatRequests.begin(userId);
+    if (!token) return;
+    if (chatRequests.size > 1) replyFallbacks.disableLegacySendMatching();
     const filename = submitted.map(item => item.filename).join(', ');
     const userMessage = retry?.retryDraft?.text ?? input.trim();
     const placeholderText = userMessage
@@ -1834,18 +1858,16 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
     setDraftError(null);
     chatSessionMetrics.recordTurn();
     engine.setLocalFocus('想事情');
-    setLoading(true);
     try {
       const message = quote ? t('chat.attachments.replyPrefix') + '\n' + truncateForReplyTo(quote.text) + '\n\n' + userMessage : userMessage;
       const resp = await uploadDocument(submitted.map(({ filePath, filename, dataB64 }) => ({ filePath, filename, dataB64 })), message);
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || !chatRequests.isCurrent(token)) return;
       setMessages(prev => prev.map(item => item.id === userId ? { ...item, retryDraft: undefined } : item));
-      queueHttpReply(resp, 'upload');
+      queueHttpReply(resp, 'upload', token);
     } catch (err: unknown) {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || !chatRequests.settle(token)) return;
       setMessages(prev => prev.map(item => item.id === userId ? { ...item, failed: true } : item));
-      setLoading(false);
-    } finally { sendingRef.current = false; }
+    }
   };
 
   const addDrafts = (added: DraftAttachment[]) => {
@@ -1857,7 +1879,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
   };
 
   const stagePaths = async (paths: string[]) => {
-    if (preparingRef.current || sendingRef.current) return;
+    if (preparingRef.current) return;
     preparingRef.current = true;
     setPreparing(true);
     setDraftError(null);
@@ -1886,7 +1908,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
   const handleDropPaths = (paths: string[]) => { void stagePaths(paths); };
 
   const pasteAttachments = async (files: File[]) => {
-    if (preparingRef.current || sendingRef.current) return;
+    if (preparingRef.current) return;
     preparingRef.current = true;
     setPreparing(true);
     setDraftError(null);
@@ -2065,7 +2087,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
             />}
             {m.failed && m.retryDraft && <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'center', color: 'var(--ink-3)' }}>
               <span>{t('chat.send.failed')}</span>
-              <button disabled={loading || preparing || sendingRef.current} onClick={() => void send(m)} style={{ font: 'inherit', color: 'var(--ink)', background: 'var(--paper-2)', border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-sm)', padding: '5px 10px', cursor: 'pointer' }}>{t('chat.send.retry')}</button>
+              <button disabled={preparing || chatRequests.has(m.id)} onClick={() => void send(m)} style={{ font: 'inherit', color: 'var(--ink)', background: 'var(--paper-2)', border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-sm)', padding: '5px 10px', cursor: 'pointer' }}>{t('chat.send.retry')}</button>
             </div>}
           </div>
         ))}
@@ -2172,7 +2194,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
           {attachments.map(item => <div key={item.id} className="chat-attachment-card">
             {item.preview ? <img src={item.preview} alt={item.filename} /> : <Icon name="attach" size={24} />}
             <span title={item.filename}>{item.filename}</span>
-            <button disabled={loading || sendingRef.current} onClick={() => setAttachments(current => current.filter(draft => draft.id !== item.id))} aria-label={t('chat.attachments.remove')} title={t('chat.attachments.remove')}>×</button>
+            <button onClick={() => setAttachments(current => current.filter(draft => draft.id !== item.id))} aria-label={t('chat.attachments.remove')} title={t('chat.attachments.remove')}>×</button>
           </div>)}
           {preparing && <span role="status">{t('common.loading')}</span>}
           {draftError && <span role="alert">{draftError}</span>}
@@ -2273,7 +2295,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
               outline: 'none', minHeight: 44, maxHeight: 120, lineHeight: 1.5,
             }}
           />
-          <button onClick={() => void send()} disabled={loading || preparing || (!input.trim() && !attachments.length)} style={{
+          <button onClick={() => void send()} disabled={preparing || (!input.trim() && !attachments.length)} style={{
             height: 44, padding: '0 18px', borderRadius: 'var(--radius-md)',
             background: 'var(--accent)', color: 'var(--paper)',
             border: 'none', fontWeight: 600, cursor: 'pointer',

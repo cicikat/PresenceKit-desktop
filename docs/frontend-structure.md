@@ -4,6 +4,7 @@
 
 ChatPanel 提交附件时立即清空输入区，快照随原用户气泡保存；失败显示重试按钮，
 复用该气泡，不重建用户消息、不覆盖随后编辑的草稿。成功释放附件重试数据。
+允许并行发送：每条本地用户气泡独立等待和重试，不共享发送槽；同一条消息不能重复提交。
 streamDisplay 仅补全白名单内联样式的流式尾部，renderInlineStyled 安全渲染，
 保留 WS/canonical 对账及原有叙事标签展示。公告使用语义 i18n key 显示 v1.1.0。
 验收见 `../cc-tasks/2026-09-16-chat-send-retry-render.md`。
@@ -912,7 +913,7 @@ origin=chat|autonomy、tool_name、status、ts。status 为 running/success/erro
 
 ## 9.17 HTTP 回复关联收口
 
-ChatPanel 的发送/附件/wake 共用 queueHttpReply、ChatReplyFallbacks 和 httpReplyIdentity，
-修复附件与 wake 的显式 canonical turn_id 丢失；不改变 HTTP/WS/IPC 字段或后端权限。
-UI 仍按段显示多个气泡，每条完整回复一个思考入口。历史 hash 和完整 loading 状态机迁移仍 open。
+ChatPanel 的发送/附件/wake 共用 queueHttpReply、ChatReplyFallbacks、ChatRequests 和 httpReplyIdentity。
+每条本地请求独立等待；loading 从 pending 与空流等待派生。不改变 HTTP/WS/IPC 字段或后端权限。
+UI 仍按段显示多个气泡，每条完整回复一个思考入口。历史 hash 退役与完整 reconciler 仍 open。
 实施细节见 chat-correlation.md，验证与待办见 ../cc-tasks/2026-09-17-audit-work-orders.md。

@@ -527,11 +527,13 @@ Backend admin static styling and configuration disclosure were verified in Chrom
 不能通过停止刷新 UI cache 达成此语义。请求归属、会话角色协议及三仓总账同步须后端另单。
 Chat 对账集中化和 native geometry 收口仍待本次后续施工，不因文档完成而关单。
 DesignRuntimeCoordinator 已提取激活代次/lifecycle/ledger，portal 与 Host API 仍由 React Host
-构造；updateBounds 兼容与真实 Windows 验收仍 open。
+构造；updateBounds 兼容与真实 Windows 验收仍 open。并行本地发送槽已接入，无 request_id 的
+早期 WS 仍不猜归属；显示顺序与完整 reconciler 仍 open。
 
 ### 9.17 Chat 局部收口（partial）
 
 current：HTTP 三来源统一兜底定时器、canonical 绑定；附件与 wake 不再遗漏明确回合 ID。
-open：完整 reconciler/loading、history hash 兼容退役、跨设备请求 ownership 和固定本机会话角色；
+并行本地请求独立等待/重试，loading 从 ChatRequests 派生。
+open：完整 reconciler、history hash 兼容退役、跨设备请求 ownership 和固定本机会话角色；
 不能将 helper/定时器提取写成 P0 已解决。无新增后端状态或配置，手机现有思考 API/设置不变，
 relay 仍只唤醒并回源 poll；后端总账待其仓同步。验证见 9.17 工单。

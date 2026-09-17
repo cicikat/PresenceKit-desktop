@@ -20,15 +20,17 @@ message_segments 先到 → 停靠 ── channel_message 到达 → 领取并�
 
 ## 2026-09-17：HTTP 兜底生命周期收口（partial）
 
-ChatReplyFallbacks 统一持有 send/upload 共用槽及独立 wake 槽的定时器；canonical 事件取消匹配槽，
-替换和卸载使旧回调失效。ChatPanel 的单个 queueHttpReply adapter 负责判断已渲染/stream 替换/首次追加。
-不改变 3 秒/5 秒等待、现有 hash 兼容、通知、TTS 或消息分段语义。
+ChatReplyFallbacks 按本地请求 ID 持有 send/upload 定时器，wake 仍独立。并行发送互不等待；
+canonical 只结算精确 msg_id，或在仅一条无 ID 且允许 hash 时使用兼容匹配。重叠请求关闭 hash
+归属。ChatPanel 的单个 queueHttpReply adapter 负责判断已渲染/stream 替换/首次追加。
+不改变 3 秒/5 秒等待、通知、TTS 或消息分段语义。
 
 httpReplyIdentity 是明确命名的绑定 helper，不是完整状态机。普通发送、附件和 wake 都绑定显式
 canonical turn_id；WS 先到时补到已有分段，HTTP 先到时供后续呈现读取。仅 msg_id 不生成思考身份。
 附件 fallback 现在保留 canonical ID；wake 有明确 ID 时也保留。只有文件卡无正文时仍分配真实本地气泡 ID。
 
-仍未完成：全链路 reconciler、loading 派生、history/stream/canonical 唯一身份注册与旧 hash 退役。
+本地并行请求槽和 waiting 派生已接入 ChatPanel；仍未完成全链路 reconciler、
+history/stream/canonical 唯一身份注册与旧 hash 退役。显示顺序仍按到达时间追加，未另做重排。
 带 canonical ID 的历史当前仍参与旧 hash 兼容；不能声称不同同文回复已得到完整隔离。
 Legacy turn-only HTTP 仍保留原 responseMsgId 兼容，不把该传输别名当成新增 canonical 来源。
 完整请求归属等待 9.17 后端交接契约，客户端不猜造 request_id。

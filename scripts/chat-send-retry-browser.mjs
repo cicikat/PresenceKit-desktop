@@ -62,9 +62,21 @@ try {
    wsClient._handleMessage(JSON.stringify({msg_id:'style',...event}));
  });
  check(await live.count()===1,'canonical duplicated stream');
+ await input.fill('parallel-a');await input.press('Enter');
+ await page.waitForFunction(()=>window.pending.length===1);
+ await input.fill('parallel-b');await input.press('Enter');
+ await page.waitForFunction(()=>window.pending.length===2);
+ check(await page.getByText('parallel-a',{exact:true}).count()===1,'first parallel bubble missing');
+ check(await page.getByText('parallel-b',{exact:true}).count()===1,'second parallel bubble missing');
+ await page.evaluate(()=>window.pending.pop().resolve({reply:'reply-b',msg_id:'wire-b'}));
+ await page.getByText('reply-b',{exact:true}).waitFor();
+ check(await page.locator('.shared-typing-dots').count()===1,'settling B cleared waiting for A');
+ await page.evaluate(()=>window.pending.shift().resolve({reply:'reply-a',msg_id:'wire-a'}));
+ await page.getByText('reply-a',{exact:true}).waitFor();
+ await page.locator('.shared-typing-dots').waitFor({state:'detached'});
  await page.screenshot({path:'.tmp/chat-send-retry.png'});
  check(errors.length===0,'Browser errors: '+errors.join('; '));
- console.log('PASS: immediate draft clearing, text/upload retry payloads, no duplicate bubbles, newer draft preserved, live styling and canonical dedup');
+ console.log('PASS: immediate draft clearing, text/upload retry payloads, no duplicate bubbles, newer draft preserved, live styling, canonical dedup and independent parallel waits');
 } finally {await browser.close();}
 `;
 await import('data:text/javascript;base64,'+Buffer.from(setup+checks).toString('base64'));

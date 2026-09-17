@@ -66,8 +66,9 @@ WO-01/02/08/09 是文档与验收元数据变更，不改变管理面、桌面/�
 
 WO-03a 自动化：fallback 生命周期 7 项、HTTP identity 9 项；相关原路径 reasoning/correlation 回归通过。
 全仓 65 文件、276 项单测通过；check:naming 通过；生产构建包含 TypeScript；chat-send-retry、turn-reasoning、client-fixes 和新增 chat-history-correlation（7 场景）浏览器夹具通过；均无真实后端写入。
+WO-03c 自动化：chatRequests 5 项、fallback 9 项；全仓 66 文件、284 项单测通过；check:naming 与 tsc 通过；chat-send-retry（含并行等待）、client-fixes、chat-history-correlation 浏览器夹具通过；无真实后端写入。未改后端/手机，无设置、队列或幂等契约变化。
 三面只读核对：手机 backend_client.dart::loadTurnReasoning、reasoning_widgets.dart、settings_widgets.dart
 已实现思考入口；relay-publish-contract.md 保持 signal-only → /mobile/poll。后端 chat_log 已解析 canonical ID。
 此前本仓“手机无思考 UI”的表述已纠正；未运行手机/后端测试，不声明设备验收。
 - [x] WO-03b：history canonical/transport 两个身份空间分离；HTTP 显式关联复用历史、清除临时流；已知新回合不按同文合并。7 个浏览器排列场景通过。
-- [ ] WO-03c：用户确认允许并行发送；每条本地请求独立等待/重试，不能共享发送槽。显示顺序待确认；无 request_id 的早期 WS 不猜归属。
+- [x] WO-03c：用户确认允许并行发送；每条本地请求独立等待/重试，不能共享发送槽。显示顺序按到达追加，未另做重排；无 request_id 的早期 WS 不猜归属。
