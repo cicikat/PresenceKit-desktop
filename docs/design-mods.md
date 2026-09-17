@@ -167,6 +167,11 @@ ChatWindow → `DesignModHost` → default shell → `LayoutHost` → layout slo
 `width/height: 100%`、`min-width/min-height: 0`。active Mod 只改变 default shell 与 Mod layer 的
 可见性/事件接管，不得改变这份尺寸语义；加载中、激活失败或 fallback 时标准布局继续可见。
 
+`DesignRuntimeCoordinator` 在 React 外持有激活代次、Mod lifecycle 和资源 ledger。
+Host 仍负责 portal、公开 Host API、scene/satellite/snapshot 服务构造；切换或卸载时
+先作废旧代次，再按既有 disposer-before-service 顺序清理。`cleanup()` 不增加代次，
+避免 activate 开头的资源释放把当前请求判成过期。公开 `updateBounds` 行为不变。
+
 宿主另有一个 click-through 的 system overlay，层级高于 Mod 舞台，提供打开 Preferences 和管理面板的轻量入口。
 它不是强制系统栏，不遮挡正常聊天或 Mod 交互；Mod 不得成为唯一的设置入口。
 

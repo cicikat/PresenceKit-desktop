@@ -526,6 +526,8 @@ Backend admin static styling and configuration disclosure were verified in Chrom
 用户确认本机固定会话角色、其他设备切换不影响本机；现有发送/历史 IPC 未显式绑定角色，
 不能通过停止刷新 UI cache 达成此语义。请求归属、会话角色协议及三仓总账同步须后端另单。
 Chat 对账集中化和 native geometry 收口仍待本次后续施工，不因文档完成而关单。
+DesignRuntimeCoordinator 已提取激活代次/lifecycle/ledger，portal 与 Host API 仍由 React Host
+构造；updateBounds 兼容与真实 Windows 验收仍 open。
 
 ### 9.17 Chat 局部收口（partial）
 

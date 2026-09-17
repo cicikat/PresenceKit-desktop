@@ -62,7 +62,7 @@ WO-01/02/08/09 是文档与验收元数据变更，不改变管理面、桌面/�
 - [x] WO-03a：HTTP 三来源共用 fallback 生命周期和 canonical 绑定；修复附件/wake ID 丢失；不把局部提取称为完整 reconciler。
 - [x] WO-04a：用户确认本机固定角色与仅本仓范围，跨仓交接单已写出；服务端契约实施仍 open。
 - [x] WO-05a：保留 updateBounds 行为，单独列版本化迁移、兼容 adapter 与退出条件；实际迁移仍 open。
-- [ ] WO-06a：非 React 激活代次/生命周期/资源 ledger 提取与异步过期拦截；待本次验证记录完成。
+- [x] WO-06a：非 React 激活代次/生命周期/资源 ledger 提取与异步过期拦截；Host 仍构造 portal 与公开 API。
 
 WO-03a 自动化：fallback 生命周期 7 项、HTTP identity 9 项；相关原路径 reasoning/correlation 回归通过。
 全仓 65 文件、276 项单测通过；check:naming 通过；生产构建包含 TypeScript；chat-send-retry、turn-reasoning、client-fixes 和新增 chat-history-correlation（7 场景）浏览器夹具通过；均无真实后端写入。

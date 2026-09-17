@@ -11,8 +11,6 @@ import { nativeMotionStore, pointerStore, viewportStore, listenNativeWindowMotio
 import { DESIGN_COMPONENT_IDS, type DesignComponentId } from '../../../shared/design-mod/contract';
 import {
   applyDesignModPackage,
-  createDesignModHostLedger,
-  DesignModLifecycle,
   designModReadApi,
   formatDiagnostic,
   getSelectedDesignModId,
@@ -34,6 +32,7 @@ import { DesignSatelliteBridge, cropSatellitePresenterSnapshot, type DesignSatel
 import { runtimeDiagnostics } from '../../../shared/runtimeDiagnostics';
 import { canReuseSatellitePayload } from '../../../shared/design-mod/satellitePayload';
 import { TransformController } from '../../../shared/design-mod/transform';
+import { DesignRuntimeCoordinator } from '../../../shared/design-mod/coordinator';
 
 interface DesignModHostProps {
   nativePage?: boolean;
@@ -140,8 +139,7 @@ export function DesignModHost({ nativePage = false, engine, presenters, toolStat
   const [active, setActive] = useState(false);
   const [fps, setFps] = useState(0);
   const [recoveryOpen, setRecoveryOpen] = useState(false);
-  const lifecycleRef = useRef(new DesignModLifecycle());
-  const ledgerRef = useRef(createDesignModHostLedger());
+  const [coordinator] = useState(() => new DesignRuntimeCoordinator());
   const attachmentsRef = useRef(new ComponentAttachmentRegistry());
   const geometryRef = useRef(new GeometryRegistry());
   const edgeObserversRef = useRef<EdgeObserverRegistry | null>(null);
@@ -157,8 +155,6 @@ export function DesignModHost({ nativePage = false, engine, presenters, toolStat
   const nativeSnapshotRef = useRef<NativeMainSnapshot | null>(null);
   const nativeSnapshotInFlightRef = useRef<Promise<NativeMainSnapshot> | null>(null);
   const satellitePayloadRef = useRef<{ generation: number; modId: string; sequence: number; state: unknown; chat: unknown; navigation: unknown; presenters: { status: unknown; flow: unknown } } | null>(null);
-  const mountedRef = useRef(true);
-  const activationRequestRef = useRef(0);
   const runtimePaused = isCovered || dreamActive || document.hidden;
   useViewportSignals(isCovered, runtimePaused);
 
@@ -247,8 +243,7 @@ export function DesignModHost({ nativePage = false, engine, presenters, toolStat
       else release();
     }
     setSurfaceDiagnostics([]);
-    lifecycleRef.current.dispose();
-    ledgerRef.current.clear();
+    coordinator.cleanup();
     attachmentsRef.current.clear();
     for (const id of DESIGN_COMPONENT_IDS) setDesignMount(id, null);
     setAttached([]);
@@ -262,14 +257,14 @@ export function DesignModHost({ nativePage = false, engine, presenters, toolStat
     componentLayerRef.current?.replaceChildren();
     overlayRef.current?.replaceChildren();
     restoreDefaultDesign();
-  }, []);
+  }, [coordinator]);
 
   const activate = useCallback(async (requestedId: string) => {
-    const requestId = activationRequestRef.current + 1;
-    activationRequestRef.current = requestId;
+    const isCurrentRequest = coordinator.beginActivation();
+    const requestId = coordinator.activeRequest;
     await cleanupRuntime();
+    if (!isCurrentRequest()) return;
     setSelectedId(requestedId);
-    const isCurrentRequest = () => mountedRef.current && activationRequestRef.current === requestId;
     if (requestedId === 'builtin-default') {
       setDiagnostic(formatDiagnostic('idle', t('designMod.default')));
       publishDesignModDiagnostics({ manifest: null, diagnostic: formatDiagnostic('idle', 'builtin-default'), attached: [], nativeCapabilities: [] });
@@ -413,10 +408,12 @@ export function DesignModHost({ nativePage = false, engine, presenters, toolStat
       satelliteBridgeRef.current = satelliteBridge;
       if (satelliteBridge) {
         const unsubscribe = satelliteBridge.api.subscribe(() => setSurfaceDiagnostics([...satelliteBridge.api.get()]));
-        ledgerRef.current.add(unsubscribe);
+        coordinator.ledger.add(unsubscribe);
         await satelliteBridge.start();
+        if (!isCurrentRequest()) return;
         setSurfaceDiagnostics([...satelliteBridge.api.get()]);
         await satelliteBridge.api.setVisible(!runtimePaused);
+        if (!isCurrentRequest()) return;
       }
       const geometryCleanups = new Map<DesignComponentId, () => void>();
       const edgeObservers = new EdgeObserverRegistry();
@@ -444,10 +441,10 @@ export function DesignModHost({ nativePage = false, engine, presenters, toolStat
         viewport: () => viewportStore.get(),
         component: id => geometryRef.current.get(id),
       });
-      ledgerRef.current.add(() => scene.dispose());
-      ledgerRef.current.add(geometryRef.current.subscribeDirty(publishGeometry));
-      ledgerRef.current.add(viewportStore.subscribe(() => { edgeObservers.publish(pageEdge()); scene.schedule(); }));
-      ledgerRef.current.add(() => { if (edgeObserversRef.current === edgeObservers) edgeObserversRef.current = null; });
+      coordinator.ledger.add(() => scene.dispose());
+      coordinator.ledger.add(geometryRef.current.subscribeDirty(publishGeometry));
+      coordinator.ledger.add(viewportStore.subscribe(() => { edgeObservers.publish(pageEdge()); scene.schedule(); }));
+      coordinator.ledger.add(() => { if (edgeObserversRef.current === edgeObservers) edgeObserversRef.current = null; });
       const componentApi = {
         setComposition: (capability: DesignCapability, mode: DesignCompositionMode) => attachmentsRef.current.setComposition(capability, mode),
         getComposition: (capability: DesignCapability) => attachmentsRef.current.getComposition(capability),
@@ -455,7 +452,7 @@ export function DesignModHost({ nativePage = false, engine, presenters, toolStat
           const attachment = attachmentsRef.current.attach(id, mount);
           setDesignMount(id, mount);
           const unregisterGeometry = geometryRef.current.register(id, mount);
-          const removeGeometryLedger = ledgerRef.current.add(unregisterGeometry);
+          const removeGeometryLedger = coordinator.ledger.add(unregisterGeometry);
           geometryCleanups.set(id, () => { unregisterGeometry(); removeGeometryLedger(); });
           publishGeometry();
           setAttached(attachmentsRef.current.list());
@@ -480,7 +477,7 @@ export function DesignModHost({ nativePage = false, engine, presenters, toolStat
         subscribe: (listener: () => void) => {
           const unsubscribe = presenter.subscribe(listener);
           let active = true;
-          const remove = ledgerRef.current.add(() => { if (active) { active = false; unsubscribe(); } });
+          const remove = coordinator.ledger.add(() => { if (active) { active = false; unsubscribe(); } });
           return () => { if (!active) return; active = false; unsubscribe(); remove(); };
         },
         select: <T,>(selector: (snapshot: any) => T, listener: () => void, equal?: (first: T, second: T) => boolean) => selectPresenterSnapshot(
@@ -490,7 +487,7 @@ export function DesignModHost({ nativePage = false, engine, presenters, toolStat
         acquire: (consumerId: string) => {
           const release = presenter.acquire(`mod:${pkg.manifest.id}:${name}:${consumerId}`);
           let active = true;
-          const remove = ledgerRef.current.add(() => { if (active) { active = false; release(); } });
+          const remove = coordinator.ledger.add(() => { if (active) { active = false; release(); } });
           return () => { if (!active) return; active = false; release(); remove(); };
         },
         getDiagnostics: () => presenter.getDiagnostics(),
@@ -545,7 +542,7 @@ export function DesignModHost({ nativePage = false, engine, presenters, toolStat
             if (!layer) throw new Error('Scene layer is unavailable');
             layer.appendChild(element);
             const node = scene.create(element, options);
-            ledgerRef.current.add(() => node.dispose());
+            coordinator.ledger.add(() => node.dispose());
             return node;
           },
           schedule: () => scene.schedule(),
@@ -566,10 +563,10 @@ export function DesignModHost({ nativePage = false, engine, presenters, toolStat
           updateBounds: async () => {},
           destroy: async () => {},
         },
-        assets: { url: (path: string) => designModReadApi.assetUrl(pkg.assetRootId, `assets/${path.replace(/^assets\//, '')}`, url => ledgerRef.current.add(() => URL.revokeObjectURL(url))) },
+        assets: { url: (path: string) => designModReadApi.assetUrl(pkg.assetRootId, `assets/${path.replace(/^assets\//, '')}`, url => coordinator.ledger.add(() => URL.revokeObjectURL(url))) },
         diagnostics: { add: (message: string) => setDiagnostic(formatDiagnostic('active', message)) },
       };
-      const ok = await lifecycleRef.current.activate(context => (module.activate as (host: any, context?: ActivationContext) => void | (() => void) | Promise<void | (() => void)>)(host, context), error => {
+      const ok = await coordinator.lifecycle.activate(context => (module.activate as (host: any, context?: ActivationContext) => void | (() => void) | Promise<void | (() => void)>)(host, context), error => {
         const next = formatDiagnostic('error', t('designMod.fallback'), error);
         setDiagnostic(next); publishDesignModDiagnostics({ diagnostic: next });
       });
@@ -584,16 +581,16 @@ export function DesignModHost({ nativePage = false, engine, presenters, toolStat
       const next = formatDiagnostic('error', t('designMod.fallback'), error);
       setDiagnostic(next); publishDesignModDiagnostics({ diagnostic: next });
     }
-  }, [cleanupRuntime, engine, navigation, presenters, records, t, commands]);
+  }, [cleanupRuntime, coordinator, engine, navigation, presenters, records, t, commands]);
 
   useEffect(() => {
     // React StrictMode runs effect cleanup/setup once during development. The
     // cleanup must not leave the async activation path permanently marked as
     // unmounted, otherwise portal mounts move into the hidden layer while the
     // host never switches to active.
-    mountedRef.current = true;
+    coordinator.mount();
     return () => {
-      mountedRef.current = false;
+      coordinator.unmount();
       cleanupRuntime();
       clearDesignMounts();
     };
@@ -639,7 +636,7 @@ export function DesignModHost({ nativePage = false, engine, presenters, toolStat
   }, [runtimePaused, selectedId, active]);
 
   useEffect(() => {
-    publishDesignModDiagnostics({ diagnostic, attached, fps, activeSubscriptions: ledgerRef.current.size(), surfaces: surfaceDiagnostics, snapshotMetrics: satelliteBridgeRef.current?.api.getMetrics(), runtime: runtimeDiagnostics.snapshot() });
+    publishDesignModDiagnostics({ diagnostic, attached, fps, activeSubscriptions: coordinator.ledger.size(), surfaces: surfaceDiagnostics, snapshotMetrics: satelliteBridgeRef.current?.api.getMetrics(), runtime: runtimeDiagnostics.snapshot() });
   }, [attached, diagnostic, fps, surfaceDiagnostics]);
 
   useEffect(() => {

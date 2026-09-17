@@ -46,7 +46,8 @@ Reality/Dream/Activity 的旧 pseudo-stream 缺 request_id，当前启发式过�
 
 可信本地 Mod 通过官方 portal/presenter 使用能力，不建立第二份 HTTP/WS/history/TTS/StateEngine owner。
 主窗口保留偏好与管理面入口；隐藏、Dream 或覆盖时暂停相应运行时工作。
-scene、satellite、snapshot transport 保持独立服务，当前 React Host 仍承担协调职责。
+scene、satellite、snapshot transport 保持独立服务。激活代次、lifecycle 与资源 ledger
+由非 React 的 DesignRuntimeCoordinator 持有；Host 负责 mount/portal 与公开 API 构造。
 Rust 根据 manifest 和主窗计算 native bounds；公开 updateBounds 兼容入口仍存在，尚未完成单一写入口迁移。
 用户要求保留旧调用兼容，不能擅自移除。原生 DPI/多屏验收状态仅见统一台账。
 
