@@ -1223,3 +1223,9 @@ tool_loop_discovery counters and schema counts. No new persistent state.
 Native devices and real model gateway verification remain observe; backend
 mocked regressions do not claim device acceptance. Design and validation:
 backend docs/tool-discovery.md and docs/three-repo-interface-catalog.md.
+
+## 9.17 本仓 HTTP 关联修正
+
+send_chat、upload_document 与 desktop_wake 返回的显式 turn_id 统一挂接到回复；传输 msg_id
+只用于对账。HTTP/WS/IPC 契约、scope、ack、TTL 与后端生成保持原值，未修改其他仓库。
+固定本机会话角色仍需后端显式作用域，交接见 ../cc-tasks/2026-09-17-session-scope-backend-handoff.md。

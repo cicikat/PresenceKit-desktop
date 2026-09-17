@@ -909,3 +909,10 @@ origin=chat|autonomy、tool_name、status、ts。status 为 running/success/erro
 手机按需截图开关移到 SettingsPage 的系统配置分组，复用 SettingsRow + Switch；能力权限页仅显示 CapabilityRow 状态标记，不再显示灰色禁用开关。系统配置中的权限操作子页不重复放置截图开关。桌面按需截图使用与“允许视觉观察”一致的左侧标题/说明、右侧滑动开关布局。两端 AGENTS.md 已写入复用周围 UI 风格约定，手机额外明确设置与权限观测边界。
 
 三面检查：后端管理开关、effective state、观测端点、截图请求/TTL/去重和原生授权闸门不变。本次仅移动本机设置入口和统一控件；手机可先保存本地授权，实际截图仍须 Android 11+、无障碍及未锁屏。真实手机更新安装后的交互验收仍 open。
+
+## 9.17 HTTP 回复关联收口
+
+ChatPanel 的发送/附件/wake 共用 queueHttpReply、ChatReplyFallbacks 和 httpReplyIdentity，
+修复附件与 wake 的显式 canonical turn_id 丢失；不改变 HTTP/WS/IPC 字段或后端权限。
+UI 仍按段显示多个气泡，每条完整回复一个思考入口。历史 hash 和完整 loading 状态机迁移仍 open。
+实施细节见 chat-correlation.md，验证与待办见 ../cc-tasks/2026-09-17-audit-work-orders.md。

@@ -33,7 +33,8 @@ HTTP 经 `src/shared/api/` → Tauri command → Rust reqwest（显式 no_proxy�
 WS 经 `ws_bridge.rs` 原生 Bearer 握手与 Tauri 事件，token 不进入 URL 或 WebView。
 协议以 [protocol-v0](docs/protocol-v0.md) 为准，不因产品版本叫 v1 而推定已实现 v1 envelope。
 
-ChatPanel 当前协调发送、流式临时消息、canonical channel、分段补充、HTTP fallback 和按日历史。
+ChatPanel 当前协调发送、流式临时消息、canonical channel、分段补充和按日历史。
+HTTP fallback 定时器由 ChatReplyFallbacks 统一持有，呈现仍经 ChatPanel 单个 adapter；完整 reconciler 尚未完成。
 `msg_id` 是传输关联，`turn_id` 是可信回合身份，本地气泡 ID 是呈现身份；一回合允许多个分段气泡。
 思考读取仅接受明确 canonical turn_id。后端历史解析已有可选 turn_id，真实部署/重启恢复仍需验收。
 提交立即清空 composer，失败重试保留原消息与快照，不覆盖新草稿；无服务端幂等契约时不承诺只执行一次。

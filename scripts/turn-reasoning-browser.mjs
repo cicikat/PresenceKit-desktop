@@ -132,7 +132,7 @@ try {
  await page.getByText('Unassociated reply',{exact:true}).waitFor();
  check(await page.locator('.turn-reasoning').count()===0,'Guessed canonical ID from WS transport ID');
  console.log('PASS status, empty retry, text safety, narrow layout and character switch');
- // The frontend is ready for explicit historical IDs; the current backend omits them.
+ // Explicit historical IDs restore reasoning; this fixture does not verify backend deployment.
  await page.evaluate(()=>localStorage.setItem('fixture.historyWithTurns','true'));
  await page.reload();
  await page.getByText('Archived second paragraph',{exact:true}).waitFor();

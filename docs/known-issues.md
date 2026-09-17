@@ -46,7 +46,7 @@ dream-isolation-2026-09-13.md。真实手机 + Tauri 联合验收仍 open。
 往返、气泡透明度、思考延迟占位与自动刷新、双端配色预览已实现。
 open：真实 Tauri / 模型归档延迟 / release 验收；未跨仓修改后端总账，待后端仓同步。
 思考空记录自动读取最多 30 次，缺 canonical ID 等待最多 60 秒；超时停止，不无限轮询。
-手机入口仍 roadmap；历史 turn_id 后端解析已实现，部署与真实重启联调仍 open。
+手机思考入口已有源码（2026-09-17 只读核对），设备验收未执行；历史 turn_id 后端解析已实现，部署与真实重启联调仍 open。
 
 ### API 思考展开验收与跨端关联（Brief 244，2026-09-11，partial/open）
 
@@ -57,7 +57,7 @@ assistant 元数据的 turn_id，并有 test_chat_log_turn_id.py 测试源码；
 用户要求仅本仓，部署版本与真实重启恢复未确认；验收见
 ../cc-tasks/244-history-turn-id-backend-handoff.md。源码和夹具不等于运行中服务已验收。
 open：真实 Tauri WebView + 真实后端 desktop token/模型归档联调、release 验收未完成；
-浏览器 IPC 夹具不代表实机通过。手机无展开 UI，保留 roadmap。
+浏览器 IPC 夹具不代表实机通过。手机已有 reasoning_widgets、showReasoning 设置和 loadTurnReasoning API（2026-09-17 只读核对），设备验收未执行。
 仅收到 WS 的另一端没有 canonical turn_id（当前 WS 只有 transport msg_id），不提供
 猜测入口；后端若补明确关联契约再接入。无关联旧归档、QQ/主动/Dream/Stage 仍 roadmap。
 本单限定本仓，未修改 ../Emerald-presence/docs/three-repo-interface-catalog.md；
@@ -526,3 +526,10 @@ Backend admin static styling and configuration disclosure were verified in Chrom
 用户确认本机固定会话角色、其他设备切换不影响本机；现有发送/历史 IPC 未显式绑定角色，
 不能通过停止刷新 UI cache 达成此语义。请求归属、会话角色协议及三仓总账同步须后端另单。
 Chat 对账集中化和 native geometry 收口仍待本次后续施工，不因文档完成而关单。
+
+### 9.17 Chat 局部收口（partial）
+
+current：HTTP 三来源统一兜底定时器、canonical 绑定；附件与 wake 不再遗漏明确回合 ID。
+open：完整 reconciler/loading、history hash 兼容退役、跨设备请求 ownership 和固定本机会话角色；
+不能将 helper/定时器提取写成 P0 已解决。无新增后端状态或配置，手机现有思考 API/设置不变，
+relay 仍只唤醒并回源 poll；后端总账待其仓同步。验证见 9.17 工单。

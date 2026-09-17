@@ -45,8 +45,9 @@ try {
  await page.waitForFunction(()=>window.pending.length===1);
  check(await input.inputValue()==='next draft','upload retry overwrote new draft');
  check(await page.evaluate(()=>JSON.stringify(window.sent[2].args)===JSON.stringify(window.sent[3].args)),'upload retry lost payload');
- await page.evaluate(()=>window.pending.shift().resolve({reply:'upload success',msg_id:'upload-success'}));
+ await page.evaluate(()=>window.pending.shift().resolve({reply:'upload success',msg_id:'upload-success',turn_id:'upload-canonical'}));
  await page.getByText('upload success',{exact:true}).waitFor();
+ check(await page.locator('.turn-reasoning').count()===1,'upload canonical reasoning identity lost');
  check(await retry.count()===0,'successful retry still shown');
  await page.evaluate(async()=>{
   const {wsClient}=await import('/src/shared/api/ws.ts');

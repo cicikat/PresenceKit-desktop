@@ -38,7 +38,7 @@
 | 检查面 | 当前结论 |
 |---|---|
 | 管理与观测 | 回合 GET 已由 memory.read 授权；生成配置由 settings_thinking 与管理面维护。只读 UI 不新增后端配置/effective state/trace/队列；全局归档仍 admin-only。 |
-| 桌面设置与手机 | 新本地显示偏好位于角色与对话，默认 true，复用既有 load/save_ui_prefs。手机模型已分开解析 msgId/turnId，思考 UI 仍 roadmap；无 Flutter/Android/relay/poll/ack 改动。 |
+| 桌面设置与手机 | 新本地显示偏好位于角色与对话，默认 true，复用既有 load/save_ui_prefs。2026-09-17 只读核对手机已具备 loadTurnReasoning、reasoning_widgets 与显示设置；未运行手机验收；无 Flutter/Android/relay/poll/ack 改动。 |
 | 原链路与相邻路径 | HTTP msg_id 与 canonical turn_id 分离；分段对账、正文、ack、TTL、TTS 和通知保持原行为。历史字段解析已有源码，scope/角色桶与真实恢复仍需后端联调。 |
 
 ## 验证
@@ -56,6 +56,6 @@
 
 - **open**：确认部署版本并验证真实历史 turn_id 与思考恢复；详见后端交接单。
 - **open**：真实 Tauri/后端归档/release 联调，不能以 IPC 夹具代替。
-- **roadmap**：WS-only 另一端无 canonical ID；无关联旧日志、QQ、主动消息、Dream、Stage、手机 UI。
+- **roadmap**：WS-only 另一端无 canonical ID；无关联旧日志、QQ、主动消息、Dream、Stage。手机思考 UI 已有实现，真实联调另验。
 - **open**：480px 默认宽侧栏挤压聊天流为已有全局布局问题；窄屏面板验证先收起侧栏。
 - **open**：后端三仓总账仍待其仓同步，本单不越过用户明确的仓库范围。

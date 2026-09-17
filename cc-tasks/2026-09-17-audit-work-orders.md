@@ -51,3 +51,23 @@
 WO-01/02/08/09 是文档与验收元数据变更，不改变管理面、桌面/手机设置、scope、队列、ack、TTL 或 fallback。
 涉及 WO-03/04 的手机、relay、后台服务及请求入口还需定向核对；目前不声称跨端闭环。
 跨仓总账同步待范围确认；只改本仓时以本单作为后端交接。实机结果以现有 JSON 台账为准。
+
+## 用户已确认的语义与交接
+
+- 固定本机会话角色；其他设备切换不影响本机。仅修改本仓。协议交接见 2026-09-17-session-scope-backend-handoff.md；WO-04 契约实施保持 open。
+- 保留仓外 Mod updateBounds 兼容；本轮不改旧行为。WO-05 迁移方案见 2026-09-17-native-geometry-migration.md，实施保持 open。WO-06 的纯内部提取不依赖破坏性迁移。
+
+## 分阶段交付记录
+
+- [x] WO-03a：HTTP 三来源共用 fallback 生命周期和 canonical 绑定；修复附件/wake ID 丢失；不把局部提取称为完整 reconciler。
+- [x] WO-04a：用户确认本机固定角色与仅本仓范围，跨仓交接单已写出；服务端契约实施仍 open。
+- [x] WO-05a：保留 updateBounds 行为，单独列版本化迁移、兼容 adapter 与退出条件；实际迁移仍 open。
+- [ ] WO-06a：非 React 激活代次/生命周期/资源 ledger 提取与异步过期拦截；待本次验证记录完成。
+
+WO-03a 自动化：fallback 生命周期 7 项、HTTP identity 9 项；相关原路径 reasoning/correlation 回归通过。
+全仓 65 文件、276 项单测通过；check:naming 通过；生产构建包含 TypeScript；chat-send-retry、turn-reasoning、client-fixes 和新增 chat-history-correlation（7 场景）浏览器夹具通过；均无真实后端写入。
+三面只读核对：手机 backend_client.dart::loadTurnReasoning、reasoning_widgets.dart、settings_widgets.dart
+已实现思考入口；relay-publish-contract.md 保持 signal-only → /mobile/poll。后端 chat_log 已解析 canonical ID。
+此前本仓“手机无思考 UI”的表述已纠正；未运行手机/后端测试，不声明设备验收。
+- [x] WO-03b：history canonical/transport 两个身份空间分离；HTTP 显式关联复用历史、清除临时流；已知新回合不按同文合并。7 个浏览器排列场景通过。
+- [ ] WO-03c：用户确认允许并行发送；每条本地请求独立等待/重试，不能共享发送槽。显示顺序待确认；无 request_id 的早期 WS 不猜归属。

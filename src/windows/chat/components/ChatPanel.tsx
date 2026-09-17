@@ -48,7 +48,6 @@ import type { MainLayoutId } from '../../../shared/layout/contract';
 import {
   findRenderedFallback,
   hasRegisteredMessage,
-  matchesCorrelation,
   prunePendingSegments,
   pruneRenderedFallbacks,
   setBoundedMapEntry,
@@ -56,6 +55,8 @@ import {
 import { mergeAttachments, fileToDraft, type DraftAttachment } from '../draftAttachments';
 
 import { createLatestTimer } from '../chatTimer';
+import { bindHttpReplyIdentity, matchesHistoryReplay } from '../httpReplyIdentity';
+import { ChatReplyFallbacks, type ReplySource } from '../chatReplyFallbacks';
 
 function splitReply(text: string): string[] {
   return text.split(/\n+/).map(s => s.trim()).filter(s => s.length > 0);
@@ -192,10 +193,6 @@ function pruneStalePendingSegments(map: Map<string, PendingRealitySegments>, now
 
 let _msgIdCounter = 0;
 function newId() { return `m-${Date.now()}-${++_msgIdCounter}`; }
-
-function responseMsgId(response: { msg_id?: string; turn_id?: string }): string | undefined {
-  return response.msg_id || response.turn_id || undefined;
-}
 
 // Module-level session guard: ChatPanel can remount mid-session (e.g. when Dream opens/closes).
 // This flag ensures desktop_wake fires at most once per page/window session regardless of remounts.
@@ -822,6 +819,9 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
 
   // message_segments 关联：ws msg_id → 本地 ChatMsg id 列表
   const wsMsgIdToLocalIdsRef = useRef<Map<string, string[]>>(new Map());
+  // Canonical history identity is a separate namespace, never a guessed WS msg_id.
+  const historyLocalIdsByTurnRef = useRef<Map<string, string[]>>(new Map());
+  const retiredLocalIdsRef = useRef(new Set<string>());
   // message_segments 先于 channel_message 到达时的暂存
   const pendingSegmentsByMsgIdRef = useRef<Map<string, PendingRealitySegments>>(new Map());
 
@@ -829,6 +829,25 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
   const streamingLocalIdRef = useRef<Map<string, string[]>>(new Map());
   // 流式累计原始文本：msg_id → 已到达的 token 拼接（用于按 \n+ 实时切段）
   const streamingTextRef = useRef<Map<string, string>>(new Map());
+
+  const bindHttpReply = useCallback((response: { msg_id?: string; turn_id?: string }) => {
+    const binding = bindHttpReplyIdentity(response, canonicalTurnsRef.current,
+      wsMsgIdToLocalIdsRef.current, streamingLocalIdRef.current, MAX_WS_MSG_ID_MAPPINGS,
+      historyLocalIdsByTurnRef.current);
+    if (binding.fromHistory && binding.msgId) {
+      streamingLocalIdRef.current.delete(binding.msgId);
+      streamingTextRef.current.delete(binding.msgId);
+    }
+    if (pendingSegmentTimersRef.current.length) {
+      for (const id of binding.supersededLocalIds) retiredLocalIdsRef.current.add(id);
+    }
+    if (binding.canonicalTurnId && binding.localIds.length) {
+      setMessages(previous => attachCanonicalTurn(
+        previous.filter(item => !binding.supersededLocalIds.includes(item.id)),
+        binding.localIds, binding.canonicalTurnId));
+    }
+    return binding;
+  }, []);
 
   // 注入流式动画 keyframes（仅执行一次）
   useEffect(() => {
@@ -848,13 +867,11 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
   const parkedRealityMessagesRef = useRef<Map<string, ParkedRealityMessage>>(new Map());
   const processRealityChannelMessageRef = useRef<((message: RealityChannelMessage) => void) | null>(null);
 
-  // desktopWake HTTP fallback: store reply here instead of rendering immediately.
-  // WS channel_message is the primary render path; HTTP reply only renders if WS never arrives.
-  const pendingWakeReplyRef = useRef<{ timerId: ReturnType<typeof setTimeout>; parts: string[]; msgId?: string } | null>(null);
-
-  // send() / uploadDocument HTTP fallback: same pattern as desktopWake.
-  // WS channel_message supersedes the HTTP reply; HTTP only renders if WS never arrives.
-  const pendingSendReplyRef = useRef<{ timerId: ReturnType<typeof setTimeout>; reply: string; msgId?: string; artifacts?: ChatArtifactPayload[] } | null>(null);
+  const [replyFallbacks] = useState(() => new ChatReplyFallbacks<{
+    reply: string; msgId?: string; canonicalTurnId?: string;
+    normalizedHash: string; artifacts?: ChatArtifactPayload[];
+  }>());
+  const replaceStreamRef = useRef<((msgId: string, content: string, normalizedHash: string, artifacts?: ChatArtifactPayload[]) => void) | null>(null);
 
   // Tracks fallbacks that already rendered (timer fired before WS arrived).
   // Allows late-arriving channel_message to replace/skip rather than double-append.
@@ -869,6 +886,42 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
   // Prevents HTTP fallback timers from double-appending when WS arrived before pendingRef was set
   // and the old/abnormal HTTP response has no msg_id.
   const recentWSContentHashesRef = useRef<Map<string, number>>(new Map());
+
+  // All three HTTP paths share one fallback settlement adapter. The lifecycle
+  // owner cancels/replaces timers before this callback can touch rendered state.
+  const queueHttpReply = useCallback((response: { reply: string; msg_id?: string; turn_id?: string; artifacts?: ChatArtifactPayload[] }, source: ReplySource) => {
+    const { msgId, canonicalTurnId } = bindHttpReply(response);
+    const artifacts = normalizeChatArtifacts(response.artifacts);
+    const normalizedHash = normalizeForDedup(response.reply);
+    replyFallbacks.defer(source, { msgId, normalizedHash }, {
+      reply: response.reply, msgId, canonicalTurnId, normalizedHash, artifacts,
+    }, source === 'wake' ? 5000 : 3000, (pending, sourceKind) => {
+      if (!mountedRef.current) return;
+      const { reply, msgId, canonicalTurnId, normalizedHash, artifacts } = pending;
+      const clearWaiting = () => sourceKind === 'wake' ? setWakeLoading(false) : setLoading(false);
+      const wsRenderedAt = recentWSContentHashesRef.current.get(normalizedHash);
+      const alreadyRendered = msgId
+        ? hasRegisteredMessage(wsMsgIdToLocalIdsRef.current, msgId)
+        : wsRenderedAt !== undefined && Date.now() - wsRenderedAt < 30_000;
+      if (alreadyRendered) { clearWaiting(); return; }
+      if (msgId && streamingLocalIdRef.current.has(msgId)) {
+        replaceStreamRef.current?.(msgId, reply, normalizedHash, artifacts);
+        clearWaiting();
+        return;
+      }
+      const parts = splitReply(reply);
+      const fallbackIds = (parts.length ? parts : artifacts?.length ? [''] : []).map(() => newId());
+      const now = Date.now();
+      recentFallbacksRef.current = [
+        ...pruneRenderedFallbacks(recentFallbacksRef.current, now),
+        { sourceKind, msgId, normalizedHash, renderedAt: now, renderedMsgIds: fallbackIds },
+      ];
+      if (msgId) setBoundedMapEntry(wsMsgIdToLocalIdsRef.current, msgId, fallbackIds, MAX_WS_MSG_ID_MAPPINGS);
+      clearWaiting();
+      scheduleAssistantSegmentsRef.current?.(reply, undefined, fallbackIds, undefined, canonicalTurnId, artifacts);
+      console.log('[chat] appendSource: fallback | loadingSource:', sourceKind, '| msg_id:', msgId ?? '(none)');
+    });
+  }, [bindHttpReply, replyFallbacks]);
 
   // Dream 打开期间屏蔽 channel_message
   const dreamActiveRef = useRef(dreamActive);
@@ -989,7 +1042,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
         }
       }
       historyIdsByTurn.forEach((ids, turnId) => {
-        setBoundedMapEntry(wsMsgIdToLocalIdsRef.current, turnId, ids, MAX_WS_MSG_ID_MAPPINGS);
+        setBoundedMapEntry(historyLocalIdsByTurnRef.current, turnId, ids, MAX_WS_MSG_ID_MAPPINGS);
       });
 
       setHistoryStatus({ kind: 'ok' });
@@ -1013,48 +1066,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
             const wakeResp = await desktopWake(historyCursorSec);
             markDesktopWakeFired();
             if (mounted() && wakeResp.reply) {
-              const parts = wakeResp.reply.split(/\n+/).map(s => s.trim()).filter(Boolean);
-              const msgId = responseMsgId(wakeResp);
-              console.log('[wake] httpDone | loadingSource: wake | waitingForWs: true | wsState:', wsClient.getState(), '| source:', wakeResp.source, '| msg_id:', msgId ?? '(none)', '| segments:', parts.length);
-              // Do NOT render directly — WS channel_message is the primary render path.
-              // Store as fallback and render only if WS never delivers within 5s.
-              const timerId = setTimeout(() => {
-                // Identity check: bail if WS already cancelled this specific timer
-                // (ref set to null) or a new wake replaced it (different timerId).
-                if (pendingWakeReplyRef.current?.timerId !== timerId) {
-                  console.log('[chat] appendSource: fallback-skipped | loadingSource: wake');
-                  return;
-                }
-                // WS-before-wake-set guard: if WS channel_message arrived and rendered BEFORE
-                // desktopWake HTTP returned (so pendingWakeReplyRef was not yet set at WS arrival
-                // time and the WS handler could not cancel this timer), skip the fallback to
-                // prevent double-render.
-                const _wakeHash = normalizeForDedup(wakeResp.reply);
-                const _wsRenderedAt = recentWSContentHashesRef.current.get(_wakeHash);
-                const _wsAlreadyRendered = msgId
-                  ? hasRegisteredMessage(wsMsgIdToLocalIdsRef.current, msgId)
-                  : _wsRenderedAt !== undefined && Date.now() - _wsRenderedAt < 30_000;
-                if (_wsAlreadyRendered) {
-                  pendingWakeReplyRef.current = null;
-                  setWakeLoading(false);
-                  console.log('[chat] appendSource: fallback-skipped | loadingSource: wake | reason: ws-already-rendered | msg_id:', msgId ?? '(none)', '| hash:', _wakeHash);
-                  return;
-                }
-                pendingWakeReplyRef.current = null;
-                const fallbackIds = parts.map(() => newId());
-                const normalizedHash = normalizeForDedup(wakeResp.reply);
-                const contentHash = wakeResp.reply.slice(0, 32).replace(/\s+/g, ' ');
-                const now = Date.now();
-                recentFallbacksRef.current = [
-                  ...pruneRenderedFallbacks(recentFallbacksRef.current, now),
-                  { sourceKind: 'wake' as const, msgId, normalizedHash, renderedAt: now, renderedMsgIds: fallbackIds },
-                ];
-                if (msgId) setBoundedMapEntry(wsMsgIdToLocalIdsRef.current, msgId, fallbackIds, MAX_WS_MSG_ID_MAPPINGS);
-                console.log('[chat] appendSource: fallback | loadingSource: wake | msg_id:', msgId ?? '(none)', '| contentHash:', contentHash, '| normalizedHash:', normalizedHash, '| partsCount:', parts.length, '| renderedMsgIds:', fallbackIds, '| wsState:', wsClient.getState());
-                setWakeLoading(false);
-                scheduleAssistantSegmentsRef.current?.(wakeResp.reply, undefined, fallbackIds);
-              }, 5000);
-              pendingWakeReplyRef.current = { timerId, parts, msgId };
+              queueHttpReply({ ...wakeResp, reply: wakeResp.reply }, 'wake');
             } else if (mounted()) {
               console.log('[wake] HTTP response received, no reply, source:', wakeResp.source);
               setWakeLoading(false);
@@ -1078,14 +1090,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
     init();
     return () => {
       mountedRef.current = false;
-      if (pendingWakeReplyRef.current) {
-        clearTimeout(pendingWakeReplyRef.current.timerId);
-        pendingWakeReplyRef.current = null;
-      }
-      if (pendingSendReplyRef.current) {
-        clearTimeout(pendingSendReplyRef.current.timerId);
-        pendingSendReplyRef.current = null;
-      }
+      replyFallbacks.clear();
     };
   }, [init]);
 
@@ -1191,7 +1196,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
         }
       }
       historyIdsByTurn.forEach((ids, turnId) => {
-        setBoundedMapEntry(wsMsgIdToLocalIdsRef.current, turnId, ids, MAX_WS_MSG_ID_MAPPINGS);
+        setBoundedMapEntry(historyLocalIdsByTurnRef.current, turnId, ids, MAX_WS_MSG_ID_MAPPINGS);
       });
 
       // 补偿滚动位置
@@ -1260,6 +1265,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
     return () => {
       pendingSegmentTimersRef.current.forEach(clearTimeout);
       pendingSegmentTimersRef.current = [];
+      retiredLocalIdsRef.current.clear();
     };
   }, []);
 
@@ -1279,7 +1285,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       return;
     }
 
-    console.log('[chat] scheduleAssistantSegments | appendSource:', appendSource, '| msg_id:', wsMsgId ?? '(none)', '| partsCount:', textParts.length, '| contentHash:', contentHashRaw, '| normalizedHash:', contentHashNormalized, '| pendingWake:', !!pendingWakeReplyRef.current, '| pendingSend:', !!pendingSendReplyRef.current, '| timestamp:', Date.now());
+    console.log('[chat] scheduleAssistantSegments | appendSource:', appendSource, '| msg_id:', wsMsgId ?? '(none)', '| partsCount:', textParts.length, '| contentHash:', contentHashRaw, '| normalizedHash:', contentHashNormalized, '| pendingWake:', replyFallbacks.has('wake'), '| pendingSend:', replyFallbacks.has('send'), '| timestamp:', Date.now());
     publishPetSnapshot({ thinking: false });
 
     const m = engine.get();
@@ -1304,6 +1310,10 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
     }
 
     const pushSeg = (idx: number) => {
+      if (retiredLocalIdsRef.current.has(localIds[idx])) {
+        retiredLocalIdsRef.current.delete(localIds[idx]);
+        return;
+      }
       const text = parts[idx];
       // Per-index mapping is only valid when both sides split into the same number
       // of paragraphs. On mismatch, fall back to the raw bubble text — the old
@@ -1340,6 +1350,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       const timer = setTimeout(() => {
         pushSeg(segIdx);
         pendingSegmentTimersRef.current = pendingSegmentTimersRef.current.filter(t => t !== timer);
+        if (!pendingSegmentTimersRef.current.length) retiredLocalIdsRef.current.clear();
       }, cumDelay);
       pendingSegmentTimersRef.current.push(timer);
     }
@@ -1423,6 +1434,8 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
     console.log('[chat] stream-replace-split | msg_id:', msgId ?? '(none)', '| liveBubbles:', liveIds.length, '| finalParts:', parts.length, '| segMatch:', segMatch);
   }, []);
 
+  replaceStreamRef.current = replaceStreamingBubbleWithParts;
+
   useEffect(() => {
     publishPetSnapshot({ thinking: loading || wakeLoading });
   }, [loading, wakeLoading]);
@@ -1482,44 +1495,10 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       let duplicateDropped = false;
       const normalizedHash = normalizeForDedup(content || sticker?.data_url || artifacts?.[0]?.id || '');
 
-      // Cancel desktopWake HTTP fallback — WS is the primary render path.
-      // Important: we do NOT return here; we fall through to scheduleAssistantSegments
-      // below so the WS content is rendered exactly once. The cancel only prevents the
-      // 5s fallback timer from rendering a second copy after WS already delivered.
-      const pendingWakeHash = pendingWakeReplyRef.current
-        ? normalizeForDedup(pendingWakeReplyRef.current.parts.join('\n'))
-        : '';
-      const pendingWakeMatches = pendingWakeReplyRef.current
-        && matchesCorrelation(
-          { msgId: pendingWakeReplyRef.current.msgId, normalizedHash: pendingWakeHash },
-          msg_id,
-          normalizedHash,
-        );
-      if (pendingWakeMatches) {
-        clearTimeout(pendingWakeReplyRef.current.timerId);
-        pendingWakeReplyRef.current = null;
+      for (const source of replyFallbacks.canonical(msg_id, normalizedHash)) {
         duplicateDropped = true;
-        setWakeLoading(false);
-        console.log('[chat] wsMatchedPending: wake | loadingClearedBy: ws | fallbackCanceled: true | msg_id:', msg_id, '| pendingSend:', !!pendingSendReplyRef.current);
-      }
-
-      // Cancel send()/uploadDocument HTTP fallback — WS supersedes HTTP reply.
-      // Same no-return reasoning: WS content must still render via the shared path below.
-      const pendingSendHash = pendingSendReplyRef.current
-        ? normalizeForDedup(pendingSendReplyRef.current.reply)
-        : '';
-      const pendingSendMatches = pendingSendReplyRef.current
-        && matchesCorrelation(
-          { msgId: pendingSendReplyRef.current.msgId, normalizedHash: pendingSendHash },
-          msg_id,
-          normalizedHash,
-        );
-      if (pendingSendMatches) {
-        clearTimeout(pendingSendReplyRef.current.timerId);
-        pendingSendReplyRef.current = null;
-        duplicateDropped = true;
-        setLoading(false);
-        console.log('[chat] wsMatchedPending: send | loadingClearedBy: ws | fallbackCanceled: true | msg_id:', msg_id);
+        if (source === 'wake') setWakeLoading(false);
+        else setLoading(false);
       }
 
       // Check if a fallback was already rendered (timer fired before WS arrived).
@@ -1560,7 +1539,8 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       // Content hash remains a short-lived fallback for legacy entries without turn_id.
       const _wsNow = Date.now();
       recentHistoryHashesRef.current.forEach((ts, h) => { if (_wsNow - ts > 30_000) recentHistoryHashesRef.current.delete(h); });
-      if (recentHistoryHashesRef.current.has(normalizedHash)) {
+      if (matchesHistoryReplay(canonicalTurnsRef.current.get(msg_id), historyLocalIdsByTurnRef.current,
+        recentHistoryHashesRef.current.has(normalizedHash))) {
         pendingSegmentsByMsgIdRef.current.delete(msg_id);
         console.log('[chat] appendSource: history-ws-dedup | msg_id:', msg_id, '| normalizedHash:', normalizedHash, '| textPreview:', content.slice(0, 40));
         return;
@@ -1735,7 +1715,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       // 流结束：关闭所有气泡的打字光标，等待 canonical channel_message 替换
       const ids = streamingLocalIdRef.current.get(msg_id);
       if (!ids) return;
-      if (!sendingRef.current && !pendingSendReplyRef.current && !streamingTextRef.current.get(msg_id)?.trim()) {
+      if (!sendingRef.current && !replyFallbacks.has('send') && !streamingTextRef.current.get(msg_id)?.trim()) {
         setLoading(false);
       }
       setMessages(prev => prev.map(m => ids.includes(m.id) ? { ...m, streamingDone: true } : m));
@@ -1813,62 +1793,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       const response = await sendChat(t, replyTo);
       if (!mountedRef.current) return;
       setMessages(prev => prev.map(item => item.id === userId ? { ...item, retryDraft: undefined } : item));
-      const { reply } = response;
-      const artifacts = normalizeChatArtifacts(response.artifacts);
-      const msgId = responseMsgId(response);
-      const canonicalTurnId = response.turn_id?.trim() ? response.turn_id : undefined;
-      if (canonicalTurnId && msgId) {
-        setBoundedMapEntry(canonicalTurnsRef.current, msgId, canonicalTurnId, MAX_WS_MSG_ID_MAPPINGS);
-        const localIds = wsMsgIdToLocalIdsRef.current.get(msgId) ?? streamingLocalIdRef.current.get(msgId) ?? [];
-        setMessages(previous => attachCanonicalTurn(previous, localIds, canonicalTurnId));
-      }
-      // Do NOT render directly — WS channel_message is the primary render path.
-      // Store as fallback; render only if WS never delivers within 3s.
-      const contentHash = reply.slice(0, 32).replace(/\s+/g, ' ');
-      if (pendingSendReplyRef.current) {
-        clearTimeout(pendingSendReplyRef.current.timerId);
-      }
-      const timerId = setTimeout(() => {
-        // Identity check: WS may have cancelled this timer and nulled the ref,
-        // or a rapid second send may have replaced the ref with a newer timer.
-        if (pendingSendReplyRef.current?.timerId !== timerId) {
-          console.log('[chat] appendSource: fallback-skipped | loadingSource: send');
-          return;
-        }
-        const normalizedHash = normalizeForDedup(reply);
-        const wsRenderedAt = recentWSContentHashesRef.current.get(normalizedHash);
-        const wsAlreadyRendered = msgId
-          ? hasRegisteredMessage(wsMsgIdToLocalIdsRef.current, msgId)
-          : wsRenderedAt !== undefined && Date.now() - wsRenderedAt < 30_000;
-        if (wsAlreadyRendered) {
-          pendingSendReplyRef.current = null;
-          setLoading(false);
-          console.log('[chat] appendSource: fallback-skipped | loadingSource: send | reason: ws-already-rendered | msg_id:', msgId ?? '(none)', '| normalizedHash:', normalizedHash);
-          return;
-        }
-        // 流式气泡存在（WS 流中途断开，canonical 未到达）→ 用完整 HTTP 文本替换临时气泡
-        if (msgId && streamingLocalIdRef.current.has(msgId)) {
-          replaceStreamingBubbleWithParts(msgId, reply, normalizedHash, artifacts);
-          pendingSendReplyRef.current = null;
-          setLoading(false);
-          console.log('[chat] appendSource: stream-fallback-replace | loadingSource: send | msg_id:', msgId);
-          return;
-        }
-        pendingSendReplyRef.current = null;
-        const parts = splitReply(reply);
-        const fallbackIds = parts.map(() => newId());
-        const now = Date.now();
-        recentFallbacksRef.current = [
-          ...pruneRenderedFallbacks(recentFallbacksRef.current, now),
-          { sourceKind: 'send' as const, msgId, normalizedHash, renderedAt: now, renderedMsgIds: fallbackIds },
-        ];
-        if (msgId) setBoundedMapEntry(wsMsgIdToLocalIdsRef.current, msgId, fallbackIds, MAX_WS_MSG_ID_MAPPINGS);
-        console.log('[chat] appendSource: fallback | loadingSource: send | msg_id:', msgId ?? '(none)', '| contentHash:', contentHash, '| normalizedHash:', normalizedHash, '| partsCount:', parts.length, '| renderedMsgIds:', fallbackIds, '| timestamp:', now);
-        setLoading(false);
-        scheduleAssistantSegments(reply, undefined, fallbackIds, undefined, canonicalTurnId, artifacts);
-      }, 3000);
-      pendingSendReplyRef.current = { timerId, reply, msgId, artifacts };
-      console.log('[chat] httpDone | loadingSource: send | waitingForWs: true | msg_id:', msgId ?? '(none)', '| contentHash:', contentHash, '| partsCount:', reply.split(/\n+/).filter(Boolean).length, '| timestamp:', Date.now());
+      queueHttpReply(response, 'send');
     } catch (err) {
       if (!mountedRef.current) return;
       setMessages(prev => prev.map(item => item.id === userId ? { ...item, failed: true } : item));
@@ -1915,53 +1840,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       const resp = await uploadDocument(submitted.map(({ filePath, filename, dataB64 }) => ({ filePath, filename, dataB64 })), message);
       if (!mountedRef.current) return;
       setMessages(prev => prev.map(item => item.id === userId ? { ...item, retryDraft: undefined } : item));
-      // Defer render same as send() — WS channel_message is primary path.
-      const reply = resp.reply;
-      const artifacts = normalizeChatArtifacts(resp.artifacts);
-      const msgId = responseMsgId(resp);
-      const contentHash = reply.slice(0, 32).replace(/\s+/g, ' ');
-      if (pendingSendReplyRef.current) {
-        clearTimeout(pendingSendReplyRef.current.timerId);
-      }
-      const timerId = setTimeout(() => {
-        if (pendingSendReplyRef.current?.timerId !== timerId) {
-          console.log('[chat] appendSource: fallback-skipped | loadingSource: upload');
-          return;
-        }
-        const normalizedHash = normalizeForDedup(reply);
-        const wsRenderedAt = recentWSContentHashesRef.current.get(normalizedHash);
-        const wsAlreadyRendered = msgId
-          ? hasRegisteredMessage(wsMsgIdToLocalIdsRef.current, msgId)
-          : wsRenderedAt !== undefined && Date.now() - wsRenderedAt < 30_000;
-        if (wsAlreadyRendered) {
-          pendingSendReplyRef.current = null;
-          setLoading(false);
-          console.log('[chat] appendSource: fallback-skipped | loadingSource: upload | reason: ws-already-rendered | msg_id:', msgId ?? '(none)', '| normalizedHash:', normalizedHash);
-          return;
-        }
-        // 流式气泡存在（WS 流中途断开）→ 用完整 HTTP 文本替换临时气泡
-        if (msgId && streamingLocalIdRef.current.has(msgId)) {
-          replaceStreamingBubbleWithParts(msgId, reply, normalizedHash, artifacts);
-          pendingSendReplyRef.current = null;
-          setLoading(false);
-          console.log('[chat] appendSource: stream-fallback-replace | loadingSource: upload | msg_id:', msgId);
-          return;
-        }
-        pendingSendReplyRef.current = null;
-        const parts = splitReply(reply);
-        const fallbackIds = parts.map(() => newId());
-        const now = Date.now();
-        recentFallbacksRef.current = [
-          ...pruneRenderedFallbacks(recentFallbacksRef.current, now),
-          { sourceKind: 'upload' as const, msgId, normalizedHash, renderedAt: now, renderedMsgIds: fallbackIds },
-        ];
-        if (msgId) setBoundedMapEntry(wsMsgIdToLocalIdsRef.current, msgId, fallbackIds, MAX_WS_MSG_ID_MAPPINGS);
-        console.log('[chat] appendSource: fallback | loadingSource: upload | msg_id:', msgId ?? '(none)', '| contentHash:', contentHash, '| normalizedHash:', normalizedHash, '| partsCount:', parts.length, '| renderedMsgIds:', fallbackIds, '| timestamp:', now);
-        setLoading(false);
-        scheduleAssistantSegments(reply, undefined, fallbackIds, undefined, undefined, artifacts);
-      }, 3000);
-      pendingSendReplyRef.current = { timerId, reply, msgId, artifacts };
-      console.log('[chat] httpDone | loadingSource: upload | waitingForWs: true | msg_id:', msgId ?? '(none)', '| contentHash:', contentHash, '| partsCount:', reply.split(/\n+/).filter(Boolean).length, '| timestamp:', Date.now());
+      queueHttpReply(resp, 'upload');
     } catch (err: unknown) {
       if (!mountedRef.current) return;
       setMessages(prev => prev.map(item => item.id === userId ? { ...item, failed: true } : item));
