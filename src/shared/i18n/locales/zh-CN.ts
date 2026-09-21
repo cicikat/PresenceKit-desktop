@@ -131,6 +131,7 @@ export const zhCN = {
   'designMod.hostMenu': '打开宿主入口',
   'designMod.hostOpenPreferences': '打开偏好',
   'designMod.hostOpenAdminPanel': '打开管理面板',
+  'designMod.hostReloadPage': '刷新页面',
   'designMod.hostRecoveryHint': '宿主入口 · {status}',
   'designMod.noMods': '暂无可用设计 Mod',
   'designMod.diagnostics': '挂载 {attached} · 订阅 {subscriptions} · FPS {fps}',

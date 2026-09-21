@@ -134,6 +134,7 @@ export const enUS: Record<MessageKey, string> = {
   'designMod.hostMenu': 'Open host controls',
   'designMod.hostOpenPreferences': 'Open preferences',
   'designMod.hostOpenAdminPanel': 'Open admin panel',
+  'designMod.hostReloadPage': 'Reload page',
   'designMod.hostRecoveryHint': 'Host controls · {status}',
   'designMod.noMods': 'No design Mods available',
   'designMod.diagnostics': 'attached {attached} · subscriptions {subscriptions} · FPS {fps}',

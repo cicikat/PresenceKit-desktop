@@ -111,6 +111,9 @@ function DesignModRecoveryOverlay({
               <button type="button" className="design-mod-recovery__action" onClick={onOpenAdminPanel}>
                 {t('designMod.hostOpenAdminPanel')}
               </button>
+              <button type="button" className="design-mod-recovery__action" onClick={() => window.location.reload()}>
+                {t('designMod.hostReloadPage')}
+              </button>
             </div>
           </div>
         )}
