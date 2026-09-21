@@ -35,6 +35,7 @@ WS 经 `ws_bridge.rs` 原生 Bearer 握手与 Tauri 事件，token 不进入 URL
 
 ChatPanel 当前协调发送、流式临时消息、canonical channel、分段补充和按日历史。
 本地请求槽由 ChatRequests 按气泡 ID 独立持有，loading 从 pending/stream wait 派生；
+空流等待在本地请求全部结算后立即收起，无主空流另有 8 秒上限；
 HTTP fallback 定时器由 ChatReplyFallbacks 按同一本地 ID 持有。呈现仍经 ChatPanel adapter；
 完整 reconciler 尚未完成。无 request_id 的早期 WS 不猜归属。
 `msg_id` 是传输关联，`turn_id` 是可信回合身份，本地气泡 ID 是呈现身份；一回合允许多个分段气泡。

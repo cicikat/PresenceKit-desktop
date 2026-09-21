@@ -1,5 +1,11 @@
 export interface ChatRequestToken { readonly id: string; readonly attempt: number; }
 
+/** Empty stream_start with no visible tokens must not keep the waiting bubble forever.
+ * First-token latency can be a few seconds; skipped/failed main-chain streams never
+ * emit delta/end, so this bound hides the indicator without guessing request ownership.
+ */
+export const EMPTY_STREAM_WAIT_MS = 8_000;
+
 /** Local request ownership. A request is identified before HTTP has any server ID.
  * Unknown WS streams cannot settle it; an HTTP alias, canonical event or its own
  * fallback/error is required. No business identity is persisted here.
@@ -9,6 +15,7 @@ export class ChatRequests {
   private revision = 0;
   private pending = new Map<string, { token: ChatRequestToken; msgId?: string; legacyHash: boolean }>();
   private emptyStreams = new Set<string>();
+  private emptyStreamTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private listeners = new Set<() => void>();
 
   subscribe = (listener: () => void): (() => void) => {
@@ -42,6 +49,7 @@ export class ChatRequests {
   settle(token: ChatRequestToken): boolean {
     if (!this.isCurrent(token)) return false;
     this.pending.delete(token.id);
+    this.abandonOrphanEmptyStreams();
     this.publish();
     return true;
   }
@@ -56,8 +64,13 @@ export class ChatRequests {
     }
   }
 
-  streamStart(msgId: string): void { this.emptyStreams.add(msgId); this.publish(); }
+  streamStart(msgId: string): void {
+    this.emptyStreams.add(msgId);
+    this.armEmptyStreamTimeout(msgId);
+    this.publish();
+  }
   streamVisible(msgId: string): void {
+    this.clearEmptyStreamTimeout(msgId);
     let changed = this.emptyStreams.delete(msgId);
     for (const request of [...this.pending.values()]) {
       if (request.msgId !== msgId) continue;
@@ -69,7 +82,10 @@ export class ChatRequests {
   get waitingForStream(): boolean { return this.emptyStreams.size > 0; }
   get size(): number { return this.pending.size; }
 
-  streamEnd(msgId: string): void { if (this.emptyStreams.delete(msgId)) this.publish(); }
+  streamEnd(msgId: string): void {
+    this.clearEmptyStreamTimeout(msgId);
+    if (this.emptyStreams.delete(msgId)) this.publish();
+  }
 
   release(id: string): boolean {
     const request = this.pending.get(id);
@@ -77,8 +93,31 @@ export class ChatRequests {
   }
 
   clear(): void {
+    for (const msgId of [...this.emptyStreamTimers.keys()]) this.clearEmptyStreamTimeout(msgId);
     this.pending.clear();
     this.emptyStreams.clear();
     this.publish();
+  }
+
+  private abandonOrphanEmptyStreams(): boolean {
+    if (this.pending.size > 0 || this.emptyStreams.size === 0) return false;
+    for (const msgId of [...this.emptyStreams]) this.clearEmptyStreamTimeout(msgId);
+    this.emptyStreams.clear();
+    return true;
+  }
+
+  private armEmptyStreamTimeout(msgId: string): void {
+    this.clearEmptyStreamTimeout(msgId);
+    this.emptyStreamTimers.set(msgId, setTimeout(() => {
+      this.emptyStreamTimers.delete(msgId);
+      if (this.emptyStreams.delete(msgId)) this.publish();
+    }, EMPTY_STREAM_WAIT_MS));
+  }
+
+  private clearEmptyStreamTimeout(msgId: string): void {
+    const timer = this.emptyStreamTimers.get(msgId);
+    if (timer === undefined) return;
+    clearTimeout(timer);
+    this.emptyStreamTimers.delete(msgId);
   }
 }

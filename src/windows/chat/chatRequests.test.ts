@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest';
-import { ChatRequests } from './chatRequests';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ChatRequests, EMPTY_STREAM_WAIT_MS } from './chatRequests';
+
+afterEach(() => vi.useRealTimers());
 
 describe('parallel local chat requests', () => {
   it('settles B before A without clearing A or guessing from an unknown stream', () => {
@@ -72,6 +74,44 @@ describe('parallel local chat requests', () => {
     expect(state.waitingForStream).toBe(false);
     expect(state.isCurrent(a)).toBe(true);
     expect(state.release('A')).toBe(true);
+    expect(state.has()).toBe(false);
+  });
+
+  it('drops an empty stream wait after the timeout without settling local requests', () => {
+    vi.useFakeTimers();
+    const state = new ChatRequests();
+    const a = state.begin('A')!;
+    state.streamStart('unknown');
+    expect(state.waitingForStream).toBe(true);
+    vi.advanceTimersByTime(EMPTY_STREAM_WAIT_MS - 1);
+    expect(state.waitingForStream).toBe(true);
+    expect(state.isCurrent(a)).toBe(true);
+    vi.advanceTimersByTime(1);
+    expect(state.waitingForStream).toBe(false);
+    expect(state.isCurrent(a)).toBe(true);
+  });
+
+  it('cancels the empty-stream timeout once tokens or end arrive', () => {
+    vi.useFakeTimers();
+    const state = new ChatRequests();
+    state.streamStart('visible');
+    state.streamStart('ended');
+    state.streamVisible('visible');
+    state.streamEnd('ended');
+    expect(state.waitingForStream).toBe(false);
+    vi.advanceTimersByTime(EMPTY_STREAM_WAIT_MS);
+    expect(state.waitingForStream).toBe(false);
+  });
+
+  it('hides unbound empty-stream waits as soon as the last local request settles', () => {
+    const state = new ChatRequests();
+    const a = state.begin('A')!;
+    const b = state.begin('B')!;
+    state.streamStart('unknown');
+    expect(state.settle(a)).toBe(true);
+    expect(state.waitingForStream).toBe(true);
+    expect(state.settle(b)).toBe(true);
+    expect(state.waitingForStream).toBe(false);
     expect(state.has()).toBe(false);
   });
 });

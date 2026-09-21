@@ -904,6 +904,12 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       if (chatRequests.size > 1) replyFallbacks.disableLegacySendMatching();
     }
     const artifacts = normalizeChatArtifacts(response.artifacts);
+    if (!String(response.reply ?? '').trim() && !artifacts?.length) {
+      if (msgId) chatRequests.streamEnd(msgId);
+      if (source === 'wake') setWakeLoading(false);
+      else if (token) chatRequests.settle(token);
+      return;
+    }
     const normalizedHash = normalizeForDedup(response.reply);
     const allowLegacyHash = token ? chatRequests.allowsLegacyHash(token) : true;
     if (msgId && hasRegisteredMessage(wsMsgIdToLocalIdsRef.current, msgId)) {
@@ -1737,9 +1743,9 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
 
     const unsubStreamEnd = wsClient.on('message_stream_end', ({ msg_id }) => {
       // 流结束：关闭所有气泡的打字光标，等待 canonical channel_message 替换
+      chatRequests.streamEnd(msg_id);
       const ids = streamingLocalIdRef.current.get(msg_id);
       if (!ids) return;
-      if (!streamingTextRef.current.get(msg_id)?.trim()) chatRequests.streamEnd(msg_id);
       setMessages(prev => prev.map(m => ids.includes(m.id) ? { ...m, streamingDone: true } : m));
       void notifyOnMessage(msg_id, getActiveCharacterName(), streamingTextRef.current.get(msg_id) ?? '');
       console.log('[chat] stream-end | msg_id:', msg_id, '| bubbles:', ids.length);

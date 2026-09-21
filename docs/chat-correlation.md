@@ -29,8 +29,11 @@ httpReplyIdentity 是明确命名的绑定 helper，不是完整状态机。普�
 canonical turn_id；WS 先到时补到已有分段，HTTP 先到时供后续呈现读取。仅 msg_id 不生成思考身份。
 附件 fallback 现在保留 canonical ID；wake 有明确 ID 时也保留。只有文件卡无正文时仍分配真实本地气泡 ID。
 
-本地并行请求槽和 waiting 派生已接入 ChatPanel；仍未完成全链路 reconciler、
-history/stream/canonical 唯一身份注册与旧 hash 退役。显示顺序仍按到达时间追加，未另做重排。
+本地并行请求槽和 waiting 派生已接入 ChatPanel；空 `message_stream_start` 在
+首个可见段到达前保持等待气泡，但主聊天链跳过/失败导致 HTTP 空回复或请求结算后
+会立刻丢掉无主空流等待。无本地请求的主动空流仍以 8 秒为上限，避免永远转圈。
+仍未完成全链路 reconciler、history/stream/canonical 唯一身份注册与旧 hash 退役。
+显示顺序仍按到达时间追加，未另做重排。
 带 canonical ID 的历史当前仍参与旧 hash 兼容；不能声称不同同文回复已得到完整隔离。
 Legacy turn-only HTTP 仍保留原 responseMsgId 兼容，不把该传输别名当成新增 canonical 来源。
 完整请求归属等待 9.17 后端交接契约，客户端不猜造 request_id。
