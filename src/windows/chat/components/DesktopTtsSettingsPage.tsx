@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { getDesktopTtsEnabled, getTtsAutoPlay, setDesktopTtsEnabled, setTtsAutoPlay, type TtsAutoPlaySettings } from '../../../shared/api/runtimeSettings';
+import { useI18n } from '../../../shared/i18n';
 
 export function DesktopTtsSettingsPage() {
+  const { t } = useI18n();
   const [enabled, setEnabled] = useState(false);
   const [autoPlay, setAutoPlay] = useState<TtsAutoPlaySettings>({ chat: false, dream: false, video_call: false, desktop_pet: false, mobile: false });
   const [loading, setLoading] = useState(true);
@@ -37,6 +39,7 @@ export function DesktopTtsSettingsPage() {
   const autoPlayRows: Array<[keyof TtsAutoPlaySettings, string, string]> = [
     ['chat', '聊天窗口', '新消息生成语音后自动播放'],
     ['desktop_pet', '桌宠气泡', '桌宠收到回复后自动播放'],
+    ['video_call', t('settings.desktopTts.videoCall'), t('settings.desktopTts.videoCallHint')],
   ];
 
   return (
@@ -63,7 +66,7 @@ export function DesktopTtsSettingsPage() {
               <div style={{ fontSize: 12.5, color: 'var(--ink)' }}>{title}</div>
               <div className="mono" style={{ fontSize: 9, color: 'var(--ink-3)', marginTop: 2 }}>{description}</div>
             </div>
-            <button onClick={() => void toggleAutoPlay(key)} disabled={loading || saving || !enabled} aria-label={`${title}自动播放`} style={{
+            <button onClick={() => void toggleAutoPlay(key)} disabled={loading || saving || !enabled} aria-label={`${title}${t('settings.desktopTts.autoPlaySuffix')}`} style={{
               width: 42, height: 22, borderRadius: 11, padding: 0, position: 'relative', cursor: 'pointer',
               background: autoPlay[key] ? 'var(--accent-3)' : 'var(--paper-3)', border: '1px solid var(--paper-edge)', opacity: enabled ? 1 : .5,
             }}>

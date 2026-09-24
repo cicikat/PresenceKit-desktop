@@ -312,6 +312,7 @@ src/windows/toy/
   `useContinuousCallVoice` 一次开启后保持录音，每 6 秒完成一个 STT 分段，最多暂存 3 段；
   转写文字可与正在输入的文字合并发送。角色回复复用 VN 气泡和 `VoiceMessageBar`，
   按 `video_call` 的 TTS 自动播放设置决定是否出声。新增文案使用共享中英文 i18n 键。
+  偏好设置的桌面语音条提供视频电话自动播放开关；关闭时仍可手动播放或只看文字。
 - 资源浏览请求由 `roomAssets.ts` 调 Tauri `list_room_assets` / `list_room_props`，读取打包或开发期
   `public/room/` 资源；它们不是后端 HTTP 接口。
 
