@@ -43,3 +43,9 @@
 @keyframes call-wave { to { height: 15px; } }
 @media (prefers-reduced-motion: reduce) { .call-room *, .call-room *::before { animation: none !important; transition: none !important; } }
 @media (max-width: 540px) { .call-room__header { padding: 14px 16px !important; } .call-room__composer { padding-inline: 12px !important; } .call-room__presence { left: 12px; top: 12px; } }
+.call-room__voice-error {
+  padding: 6px 16px;
+  color: #ffd2ca;
+  background: #512a30;
+  font-size: 12px;
+}

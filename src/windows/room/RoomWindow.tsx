@@ -257,6 +257,7 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
       </div>
 
       {/* chat input bar */}
+      {voice.error && <div role="alert" className="call-room__voice-error">{voice.error}</div>}
       <div className="call-room__composer" style={{
         display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px',
         background: 'oklch(0.10 0.02 240 / 0.90)',

@@ -111,8 +111,9 @@ export function useVoiceInput(): VoiceInputHandle {
       const b64 = await blobToBase64(blob);
       const result = await transcribeAudio(b64);
       return result.text;
-    } catch {
-      setError('转写失败');
+    } catch (cause) {
+      const detail = cause instanceof Error ? cause.message : String(cause);
+      setError(detail && detail !== '[object Object]' ? `转写失败：${detail.slice(0, 200)}` : '转写失败，请重试或输入文字');
       return null;
     } finally {
       setTranscribing(false);
