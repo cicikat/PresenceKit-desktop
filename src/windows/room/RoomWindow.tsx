@@ -14,10 +14,13 @@ import type { RoomSettings } from '../../shared/room/roomSettings';
 import { setupAvatarDirectiveListener } from './avatarDirective';
 import { sendChat } from '../../shared/api/backend';
 import { wsClient } from '../../shared/api/ws';
-import { useVoiceInput } from '../../shared/voice/useVoiceInput';
+import { useContinuousCallVoice } from './useContinuousCallVoice';
 import { VnBubble } from './VnBubble';
 import { getActiveCharacterInfo, getActiveCharacterName, subscribeActiveCharacter } from '../../shared/activeCharacter';
 import { isSingleRealityMessage } from '../../shared/api/realityMessageScope';
+import { useVideoCallCamera } from './useVideoCallCamera';
+import { VoiceMessageBar } from '../chat/components/VoiceMessageBar';
+import { getDesktopTtsEnabled, getTtsAutoPlay } from '../../shared/api/runtimeSettings';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -66,13 +69,37 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
   // Chat input
   const [chatInput, setChatInput] = useState('');
   const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const speechDraftRef = useRef('');
+  const latestAudioRef = useRef<{ text: string; id: string } | undefined>(undefined);
+  const [speechDraft, setSpeechDraft] = useState('');
+  const onTranscript = useCallback((text: string, audioPerceptionId?: string) => {
+    speechDraftRef.current = [speechDraftRef.current, text].filter(Boolean).join(' ').slice(-12_000);
+    if (audioPerceptionId) latestAudioRef.current = { text, id: audioPerceptionId };
+    setSpeechDraft(speechDraftRef.current);
+  }, []);
 
   // User echo bubble
   const [userBubble, setUserBubble] = useState<{ text: string; visible: boolean }>({ text: '', visible: false });
   const userBubbleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const voice = useVoiceInput();
+  const voice = useContinuousCallVoice(onTranscript);
+  const camera = useVideoCallCamera();
+  const [ttsText, setTtsText] = useState('');
+  const [ttsAutoPlay, setTtsAutoPlay] = useState(false);
+  useEffect(() => {
+    void Promise.all([getDesktopTtsEnabled(), getTtsAutoPlay()])
+      .then(([enabled, auto]) => setTtsAutoPlay(enabled && auto.video_call)).catch(() => {});
+    const refresh = () => void Promise.all([getDesktopTtsEnabled(), getTtsAutoPlay()])
+      .then(([enabled, auto]) => setTtsAutoPlay(enabled && auto.video_call)).catch(() => {});
+    window.addEventListener('desktop-tts-settings', refresh);
+    window.addEventListener('tts-auto-play-settings', refresh);
+    return () => {
+      window.removeEventListener('desktop-tts-settings', refresh);
+      window.removeEventListener('tts-auto-play-settings', refresh);
+    };
+  }, []);
 
   // Assistant bubble: buffer/revealed VN presenter (see turnIngest.ts / useVnPresenter.ts)
   const presenter = useVnPresenter({ onWatchdogTimeout: () => setSending(false) });
@@ -82,15 +109,27 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
   // where the WS dies mid-stream and stream_end never arrives.
   useEffect(() => {
     const acceptedStreams = new Set<string>();
+    const voicedTurns = new Set<string>();
+    const offerTts = (message: { msg_id: string; content: string; source?: string; domain?: string; char_id?: string; round_id?: string }) => {
+      if (!isSingleRealityMessage(message, getActiveCharacterInfo().id) || !message.content.trim() || voicedTurns.has(message.msg_id)) return;
+      voicedTurns.add(message.msg_id);
+      if (voicedTurns.size > 64) voicedTurns.delete(voicedTurns.values().next().value!);
+      setTtsText(message.content.trim());
+    };
     const unStart = wsClient.on('message_stream_start', message => {
       if (!isSingleRealityMessage(message, getActiveCharacterInfo().id)) return;
       acceptedStreams.add(message.msg_id);
       setSending(true);
     });
     const unEnd = wsClient.on('message_stream_end', message => {
-      if (acceptedStreams.delete(message.msg_id) && acceptedStreams.size === 0) setSending(false);
+      if (acceptedStreams.delete(message.msg_id) && acceptedStreams.size === 0) {
+        sendingRef.current = false;
+        setSending(false);
+      }
     });
-    return () => { unStart(); unEnd(); };
+    const unMessage = wsClient.on('channel_message', offerTts);
+    const unSegments = wsClient.on('message_segments', offerTts);
+    return () => { unStart(); unEnd(); unMessage(); unSegments(); };
   }, []);
 
   // ── pet snapshot / settings ───────────────────────────────────────────────
@@ -114,9 +153,15 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
   // ── send ──────────────────────────────────────────────────────────────────
 
   const handleSend = useCallback(async (text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed || sending) return;
+    if (sendingRef.current) return;
+    const trimmed = [speechDraftRef.current, text].filter(Boolean).join(' ').trim().slice(0, 12_000);
+    if (!trimmed) return;
+    speechDraftRef.current = '';
+    const audioSource = latestAudioRef.current;
+    latestAudioRef.current = undefined;
+    setSpeechDraft('');
     setChatInput('');
+    sendingRef.current = true;
     setSending(true);
 
     // Show user bubble
@@ -128,11 +173,23 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
     );
 
     try {
-      await sendChat(trimmed);
+      await sendChat(trimmed, undefined, camera.takeLatestObservation(), audioSource);
+      sendingRef.current = false;
+      setSending(false);
     } catch {
+      setChatInput(trimmed);
+      sendingRef.current = false;
       setSending(false);
     }
-  }, [sending]);
+  }, [camera.takeLatestObservation]);
+
+  useEffect(() => {
+    if (sending || !speechDraft) return;
+    const timer = setTimeout(() => {
+      if (!sendingRef.current && speechDraftRef.current) void handleSend('');
+    }, 700);
+    return () => clearTimeout(timer);
+  }, [sending, speechDraft, handleSend]);
 
   const handleInputKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -142,13 +199,12 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
   }, [chatInput, handleSend]);
 
   const handleMicClick = useCallback(async () => {
-    if (voice.isRecording) {
-      const text = await voice.stop();
-      if (text) handleSend(text);
+    if (voice.recording) {
+      voice.stop();
     } else {
       await voice.start();
     }
-  }, [voice, handleSend]);
+  }, [voice]);
 
   // ── styles ────────────────────────────────────────────────────────────────
 
@@ -217,6 +273,10 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
         )}
 
         <div className="call-room__ambience" aria-hidden="true"><i /><i /><i /></div>
+        <div className="call-room__camera-preview" style={{ display: camera.on ? 'block' : 'none' }}>
+          <video ref={camera.videoRef} autoPlay playsInline muted aria-label={t('room.call.camera.preview')} />
+          <span>{camera.status}</span>
+        </div>
         <div className="call-room__presence" role="status">
           <span className="call-room__wave" aria-hidden="true"><i /><i /><i /><i /><i /></span>
           {t(presenter.talking ? 'room.call.speaking' : sending ? 'room.call.thinking' : 'room.call.listening')}
@@ -257,7 +317,8 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
       </div>
 
       {/* chat input bar */}
-      {voice.error && <div role="alert" className="call-room__voice-error">{voice.error}</div>}
+      {ttsText && <div className="call-room__tts"><VoiceMessageBar text={ttsText} autoPlay={ttsAutoPlay} scene="video_call" /></div>}
+      {(voice.error || speechDraft) && <div role={voice.error ? 'alert' : 'status'} className="call-room__voice-error">{voice.error || `${t('room.call.voice.heard')}: ${speechDraft}`}</div>}
       <div className="call-room__composer" style={{
         display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px',
         background: 'oklch(0.10 0.02 240 / 0.90)',
@@ -267,15 +328,15 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
       }}>
         {/* mic button */}
         <button
-          title={voice.isRecording ? '停止录音' : '语音输入'}
+          title={t(voice.recording ? 'room.call.voice.stop' : 'room.call.voice.start')}
           onClick={handleMicClick}
           style={{
             flexShrink: 0,
             width: 36, height: 36, borderRadius: '50%', border: 'none',
             cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: voice.isRecording ? 'oklch(0.50 0.22 25)' : 'oklch(0.18 0.03 240)',
-            color: voice.isRecording ? '#fff' : 'oklch(0.60 0.05 240)',
-            boxShadow: voice.isRecording ? '0 0 8px oklch(0.50 0.22 25 / 0.6)' : 'none',
+            background: voice.recording ? 'oklch(0.50 0.22 25)' : 'oklch(0.18 0.03 240)',
+            color: voice.recording ? '#fff' : 'oklch(0.60 0.05 240)',
+            boxShadow: voice.recording ? '0 0 8px oklch(0.50 0.22 25 / 0.6)' : 'none',
             transition: 'background 0.15s, box-shadow 0.15s',
           }}
         >
@@ -289,7 +350,7 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
           value={chatInput}
           onChange={e => setChatInput(e.target.value)}
           onKeyDown={handleInputKeyDown}
-          disabled={sending || voice.isRecording}
+          disabled={sending}
           style={{
             flex: 1, height: 36,
             background: 'oklch(0.15 0.02 240)',
@@ -299,7 +360,7 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
             fontSize: 13, padding: '0 12px',
             fontFamily: 'var(--font-ui, inherit)',
             outline: 'none',
-            opacity: (sending || voice.isRecording) ? 0.5 : 1,
+            opacity: sending ? 0.5 : 1,
           }}
         />
 
@@ -330,11 +391,11 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
         borderTop: '1px solid oklch(0.25 0.05 240 / 0.6)',
         flexShrink: 0,
       }}>
-        {/* camera — Phase 3 placeholder */}
         <button
-          title="摄像头（Phase 3 启用）"
-          disabled
-          style={{ ...btnBase, background: 'oklch(0.22 0.03 240)', color: 'oklch(0.50 0.03 240)', opacity: 0.5 }}
+          title={t(camera.on ? 'room.call.camera.close' : 'room.call.camera.open')}
+          aria-pressed={camera.on}
+          onClick={() => { if (camera.on) camera.stop(); else void camera.start(); }}
+          style={{ ...btnBase, background: camera.on ? 'oklch(0.42 0.15 250)' : 'oklch(0.22 0.03 240)', color: camera.on ? '#fff' : 'oklch(0.65 0.05 240)' }}
         >
           <Icon name="video" size={20} />
         </button>
@@ -384,7 +445,7 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
         {/* hang up */}
         <button
           title="挂断"
-          onClick={onClose}
+          onClick={() => { camera.stop(); voice.stop(true); onClose(); }}
           style={{ ...btnBase, width: 52, height: 52, background: 'oklch(0.52 0.22 25)', color: '#fff' }}
         >
           <Icon name="phone-off" size={22} />

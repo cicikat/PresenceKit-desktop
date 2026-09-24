@@ -9,6 +9,16 @@ send_chat IPC 新增可选 audioPerceptionId，Rust 转为 POST /desktop/chat �
 STT 配置由管理面维护，语调仅是后端印象；不改 WS、通知、ack 或授权范围。
 定向请求测试和 cargo check 通过；真实麦克风/远端 STT 联调 observe。
 
+## 工单 264：视频电话摄像头与连续语音
+
+Tauri `get_video_call_state` 通过 chat scope 读取 `/video-call/state`；
+`observe_video_call_frame` 只上传当前 JPEG 到 `/video-call/observe`，响应的一次性
+`observation_id` 最多保留 40 秒，随下一次 `send_chat` 作为 `video_observation_id`
+提交。无有效本机视觉路由时仍可本地预览，后端不接收帧。通话挂断释放媒体轨道。
+连续语音的 `transcribe_audio` 仍使用 `/transcribe`；合并多段转写和输入文字时，
+可随 `audio_perception_id` 传入对应的 `audio_perception_text`，由后端验证该段
+确实包含在本轮消息内。文字与语音失败互不阻断。真实设备、模型和 TTS 联调为 observe。
+
 ## 旧 Dream 动画广播隔离（2026-09-13）
 
 手机 `/dream/chat` → 后端 `pseudo_stream_push(profile=dream)` → desktop WS 的旧 start

@@ -49,3 +49,33 @@
   background: #512a30;
   font-size: 12px;
 }
+
+.call-room__camera-preview {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 12;
+  width: min(28vw, 240px);
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: #111;
+  color: white;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+.call-room__camera-preview video {
+  width: 100%;
+  display: block;
+  transform: scaleX(-1);
+}
+.call-room__camera-preview span {
+  display: block;
+  padding: 5px 7px;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.call-room__tts {
+  padding: 4px 16px;
+  background: rgba(18, 18, 28, 0.92);
+}

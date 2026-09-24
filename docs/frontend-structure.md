@@ -307,6 +307,11 @@ src/windows/toy/
   `avatarDirective.ts` 将角色动作指令分发给两种舞台。
 - 用户输入仍调用共享 `sendChat()` → Tauri `send_chat` → `POST /desktop/chat`；房间不另建会话协议。
   mood 从主窗口广播的 `pet://snapshot` 读取，当前角色名/房间设置经共享偏好跨窗口同步。
+- 工单 264：`useVideoCallCamera` 持有摄像头轨道与预览；先读取后端视觉路由状态，
+  路由有效时每 4 秒捕获至多一帧 640×360 JPEG，前一帧尚在处理时跳过，挂断即释放轨道。
+  `useContinuousCallVoice` 一次开启后保持录音，每 6 秒完成一个 STT 分段，最多暂存 3 段；
+  转写文字可与正在输入的文字合并发送。角色回复复用 VN 气泡和 `VoiceMessageBar`，
+  按 `video_call` 的 TTS 自动播放设置决定是否出声。新增文案使用共享中英文 i18n 键。
 - 资源浏览请求由 `roomAssets.ts` 调 Tauri `list_room_assets` / `list_room_props`，读取打包或开发期
   `public/room/` 资源；它们不是后端 HTTP 接口。
 

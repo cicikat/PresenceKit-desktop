@@ -3,13 +3,23 @@ import type { ChatResponse, DesktopWakeResponse, GardenState, CoplayState, Diary
 
 let pendingVoice: { text: string; id: string; expires: number } | undefined;
 
-export async function sendChat(message: string, replyTo?: ReplyToPayload): Promise<ChatResponse> {
+export async function sendChat(message: string, replyTo?: ReplyToPayload, videoObservationId?: string, audioSource?: { text: string; id: string }): Promise<ChatResponse> {
   const voice = pendingVoice;
   pendingVoice = undefined;
-  const audioPerceptionId = voice && voice.expires > Date.now() && voice.text.trim() === message.trim() ? voice.id : undefined;
+  const audioPerceptionId = audioSource?.id || (voice && voice.expires > Date.now() && voice.text.trim() === message.trim() ? voice.id : undefined);
   return invokeGated<ChatResponse>('send_chat', {
     message, ...(replyTo ? { replyTo } : {}), ...(audioPerceptionId ? { audioPerceptionId } : {}),
+    ...(audioSource ? { audioPerceptionText: audioSource.text } : {}),
+    ...(videoObservationId ? { videoObservationId } : {}),
   });
+}
+
+export async function getVideoCallState(): Promise<{ effective: boolean; blocking_reason: string }> {
+  return invokeGated('get_video_call_state');
+}
+
+export async function observeVideoCallFrame(frameB64: string): Promise<{ status: string; observation_id?: string }> {
+  return invokeGated('observe_video_call_frame', { frameB64 });
 }
 
 export async function loadGardenState(): Promise<GardenState> {
@@ -292,7 +302,7 @@ export async function patchGroupSettings(id: string, settings: Partial<GroupSett
   return invokeGated<GroupSettings>('group_settings_patch', { id, settings });
 }
 
-export async function transcribeAudio(audioB64: string): Promise<{ text: string }> {
+export async function transcribeAudio(audioB64: string): Promise<{ text: string; audio_perception_id?: string }> {
   pendingVoice = undefined;
   const result = await invokeGated<{ text: string; audio_perception_id?: string }>('transcribe_audio', { audioB64 });
   if (result.audio_perception_id) pendingVoice = {

@@ -936,6 +936,8 @@ async fn send_chat(
     message: String,
     reply_to: Option<ReplyToPayload>,
     audio_perception_id: Option<String>,
+    audio_perception_text: Option<String>,
+    video_observation_id: Option<String>,
 ) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
     let client = chat_http_client()?;
@@ -943,6 +945,12 @@ async fn send_chat(
     let mut body = serde_json::json!({ "message": message });
     if let Some(id) = audio_perception_id.filter(|value| value.len() <= 128) {
         body["audio_perception_id"] = serde_json::json!(id);
+        if let Some(text) = audio_perception_text.filter(|value| value.len() <= 12_000) {
+            body["audio_perception_text"] = serde_json::json!(text);
+        }
+    }
+    if let Some(id) = video_observation_id.filter(|value| value.len() <= 128) {
+        body["video_observation_id"] = serde_json::json!(id);
     }
     if let Some(reply_to) = reply_to {
         body["reply_to"] = serde_json::json!({ "text": reply_to.text, "ts": reply_to.ts });
@@ -1473,6 +1481,28 @@ async fn transcribe_audio(app: tauri::AppHandle, audio_b64: String) -> Result<se
         return Err(safe_http_error(resp).await);
     }
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_video_call_state(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let resp = authorized_request(&cfg, http_client()?.get(backend_url(&cfg, "/video-call/state")))
+        .send().await.map_err(|e| e.to_string())?;
+    require_success(resp).await?.json().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn observe_video_call_frame(app: tauri::AppHandle, frame_b64: String) -> Result<serde_json::Value, String> {
+    if frame_b64.len() > 1_100_000 { return Err("HTTP 413: camera frame too large".into()); }
+    let bytes = base64::engine::general_purpose::STANDARD.decode(&frame_b64)
+        .map_err(|_| "HTTP 422: invalid camera frame".to_string())?;
+    let part = reqwest::multipart::Part::bytes(bytes).file_name("camera.jpg")
+        .mime_str("image/jpeg").map_err(|e| e.to_string())?;
+    let form = reqwest::multipart::Form::new().part("file", part);
+    let cfg = load_client_config(&app);
+    let resp = authorized_request(&cfg, llm_http_client()?.post(backend_url(&cfg, "/video-call/observe")))
+        .multipart(form).send().await.map_err(|_| "Camera observation request failed".to_string())?;
+    require_success(resp).await?.json().await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -3352,6 +3382,8 @@ pub fn run() {
             upload_document,
             preview_chat_attachment,
             transcribe_audio,
+            get_video_call_state,
+            observe_video_call_frame,
             start_voice_hotkey_listener,
             save_avatar,
             load_avatar,
