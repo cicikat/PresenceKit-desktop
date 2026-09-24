@@ -74,6 +74,7 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
   const speechDraftRef = useRef('');
   const latestAudioRef = useRef<{ text: string; id: string } | undefined>(undefined);
   const [speechDraft, setSpeechDraft] = useState('');
+  const [audioStatus, setAudioStatus] = useState<string | null>(null);
   const onTranscript = useCallback((text: string, audioPerceptionId?: string) => {
     speechDraftRef.current = [speechDraftRef.current, text].filter(Boolean).join(' ').slice(-12_000);
     if (audioPerceptionId) latestAudioRef.current = { text, id: audioPerceptionId };
@@ -159,6 +160,7 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
     speechDraftRef.current = '';
     const audioSource = latestAudioRef.current;
     latestAudioRef.current = undefined;
+    if (audioSource) setAudioStatus(null);
     setSpeechDraft('');
     setChatInput('');
     sendingRef.current = true;
@@ -173,7 +175,8 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
     );
 
     try {
-      await sendChat(trimmed, undefined, camera.takeLatestObservation(), audioSource);
+      const result = await sendChat(trimmed, undefined, camera.takeLatestObservation(), audioSource);
+      if (audioSource) setAudioStatus(t(result.audio_perception_applied ? 'room.call.voice.acousticSent' : 'room.call.voice.textOnly'));
       sendingRef.current = false;
       setSending(false);
     } catch {
@@ -318,7 +321,8 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
 
       {/* chat input bar */}
       {ttsText && <div className="call-room__tts"><VoiceMessageBar text={ttsText} autoPlay={ttsAutoPlay} scene="video_call" /></div>}
-      {(voice.error || speechDraft) && <div role={voice.error ? 'alert' : 'status'} className="call-room__voice-error">{voice.error || `${t('room.call.voice.heard')}: ${speechDraft}`}</div>}
+      {(voice.error || speechDraft) && <div role={voice.error ? 'alert' : 'status'} className={voice.error ? 'call-room__voice-error' : 'call-room__voice-status'}>{voice.error || `${t('room.call.voice.heard')}: ${speechDraft}`}</div>}
+      {audioStatus && <div role="status" className="call-room__voice-status">{audioStatus}</div>}
       <div className="call-room__composer" style={{
         display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px',
         background: 'oklch(0.10 0.02 240 / 0.90)',

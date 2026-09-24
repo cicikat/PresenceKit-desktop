@@ -18,7 +18,7 @@ export async function getVideoCallState(): Promise<{ effective: boolean; blockin
   return invokeGated('get_video_call_state');
 }
 
-export async function observeVideoCallFrame(frameB64: string): Promise<{ status: string; observation_id?: string }> {
+export async function observeVideoCallFrame(frameB64: string): Promise<{ status: string; observation_id?: string; retry_after_seconds?: number }> {
   return invokeGated('observe_video_call_frame', { frameB64 });
 }
 

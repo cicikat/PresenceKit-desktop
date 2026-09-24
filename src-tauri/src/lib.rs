@@ -1478,6 +1478,14 @@ async fn transcribe_audio(app: tauri::AppHandle, audio_b64: String) -> Result<se
 
     let status = resp.status();
     if !status.is_success() {
+        if status.as_u16() == 422 {
+            let detail = resp.json::<serde_json::Value>().await.ok()
+                .and_then(|body| body.get("detail").and_then(|value| value.as_str()).map(str::to_owned));
+            if detail.as_deref().is_some_and(|value| value.contains("没有识别到语音")) {
+                return Err("NO_SPEECH".to_string());
+            }
+            return Err(format!("HTTP 422: {}", detail.unwrap_or_else(|| "语音转写失败".to_string())));
+        }
         return Err(safe_http_error(resp).await);
     }
     resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())

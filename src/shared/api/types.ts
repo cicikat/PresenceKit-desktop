@@ -110,6 +110,7 @@ export type DesktopActionPayload = {
 export interface ChatResponse {
   reply: string;
   emotion: string;
+  audio_perception_applied?: boolean;
   turn_id?: string;
   msg_id?: string;
   // Phase 1 reserved field — not yet populated by the HTTP API

@@ -49,6 +49,12 @@
   background: #512a30;
   font-size: 12px;
 }
+.call-room__voice-status {
+  padding: 6px 16px;
+  color: #c9dceb;
+  background: #243341;
+  font-size: 12px;
+}
 
 .call-room__camera-preview {
   position: absolute;

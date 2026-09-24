@@ -10,6 +10,7 @@ export function useVideoCallCamera() {
   const streamRef = useRef<MediaStream | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const busyRef = useRef(false);
+  const retryNotBeforeRef = useRef(0);
   const generationRef = useRef(0);
   const latestRef = useRef<{ id: string; receivedAt: number } | null>(null);
   const [on, setOn] = useState(false);
@@ -23,13 +24,14 @@ export function useVideoCallCamera() {
     streamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
     latestRef.current = null;
+    retryNotBeforeRef.current = 0;
     setOn(false);
     setStatus(t('room.call.camera.off'));
   }, []);
 
   const capture = useCallback(async (generation: number) => {
     // Keep at most one analysis in flight. The next tick takes a fresh frame.
-    if (busyRef.current || generation !== generationRef.current) return;
+    if (busyRef.current || generation !== generationRef.current || Date.now() < retryNotBeforeRef.current) return;
     const video = videoRef.current;
     if (!video || video.readyState < 2 || !streamRef.current?.active) return;
     const canvas = document.createElement('canvas');
@@ -47,6 +49,11 @@ export function useVideoCallCamera() {
       if (result.status === 'ready' && result.observation_id) {
         latestRef.current = { id: result.observation_id, receivedAt: Date.now() };
         setStatus(t('room.call.camera.ready'));
+      } else if (result.status === 'unavailable') {
+        retryNotBeforeRef.current = Date.now() + Math.max(1, result.retry_after_seconds || 15) * 1000;
+        setStatus(t('room.call.camera.unavailable'));
+      } else if (result.status === 'timeout') {
+        setStatus(t('room.call.camera.timeout'));
       } else {
         setStatus(t(result.status === 'busy' ? 'room.call.camera.busy' : 'room.call.camera.retry'));
       }

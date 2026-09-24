@@ -19,6 +19,11 @@ Tauri `get_video_call_state` 通过 chat scope 读取 `/video-call/state`；
 可随 `audio_perception_id` 传入对应的 `audio_perception_text`，由后端验证该段
 确实包含在本轮消息内。文字与语音失败互不阻断。真实设备、模型和 TTS 联调为 observe。
 
+复测修正：摄像头 `observe` 可返回 `unavailable`（本地服务不可达，短暂降频）
+或 `timeout`，前端显示不同状态。持续录音按有声和停顿切段，静音不上传；后端
+明确返回空语音时 Tauri 转为 `NO_SPEECH`，房间不画红色错误。`send_chat`
+可返回 `audio_perception_applied`，房间据此提示声学线索是否进入本轮提示构建。
+
 ## 旧 Dream 动画广播隔离（2026-09-13）
 
 手机 `/dream/chat` → 后端 `pseudo_stream_push(profile=dream)` → desktop WS 的旧 start
