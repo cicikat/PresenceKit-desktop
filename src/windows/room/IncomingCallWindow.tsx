@@ -15,6 +15,7 @@ export function IncomingCallWindow() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const settled = useRef(false);
+  const inFlight = useRef(false);
   const charName = getActiveCharacterName() || '角色';
 
   useEffect(() => {
@@ -27,7 +28,7 @@ export function IncomingCallWindow() {
       }
     }, 100);
     const unlisten = getCurrentWindow().onCloseRequested(event => {
-      if (settled.current) return;
+      if (settled.current || inFlight.current) return;
       event.preventDefault();
       void decide('declined');
     });
@@ -35,7 +36,8 @@ export function IncomingCallWindow() {
   }, []);
 
   async function decide(status: 'accepted' | 'declined') {
-    if (settled.current || busy || !inviteId || remaining <= 0) return;
+    if (settled.current || inFlight.current || !inviteId || Date.now() >= deadline) return;
+    inFlight.current = true;
     setBusy(true);
     try {
       await respondVideoCallInvite(inviteId, status);
@@ -50,6 +52,7 @@ export function IncomingCallWindow() {
         await getCurrentWindow().close();
       } else {
         setError(`来电操作失败：${String(cause).slice(0, 80)}`);
+        inFlight.current = false;
         setBusy(false);
       }
     }

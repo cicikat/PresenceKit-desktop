@@ -36,6 +36,7 @@ MCP 调用仍只在后端执行；桌面端只能收到不含远端工具细节�
 | `hello_ack` | S→C | `server_version: string` | 无 |
 | `channel_message` | S→C | `content`、`msg_id`；可选 `source`、`char_id`、`round_id`、`sticker`、`artifacts[]` | 客户端立即回 `ack ok:true` |
 | `message_segments` | S→C | `content`、`segments`、`msg_id`；可选 `source`、`char_id` | 无；只更新已有气泡 |
+| `video_call_invite` | S→C | `invite_id`、`char_id`、`expires_in_seconds=10` | 独立置顶来电窗口；经 scoped HTTP 回传选择，不走 action ack |
 | `action` | S→C | `action`、`msg_id` | 执行完成后回 ack/nack |
 | `ack` | C→S | `msg_id`、`ok`；失败可带 `error` | 无 |
 | `ping` / `pong` | S→C / C→S | 无额外字段 | 无 |
@@ -52,6 +53,8 @@ MCP 调用仍只在后端执行；桌面端只能收到不含远端工具细节�
 `segments[]` 为 `{ type, text, perform? }`。`type` 是 `say | do | env | feel | narration`；`perform` 可选包含 `expression`、`intensity`、`head`、`posture`、`gaze`、`energy`，未知或非法字段忽略。
 
 `channel_message` 可额外带 `sticker` 与有界 `artifacts[]`（id/filename/mime/size/download_url，可预览时加 preview_url）。这不是新的消息类型或 desktop action；旧客户端忽略未知字段。正文与本机绝对路径不在 payload 内。下载/预览走 HTTP `GET /chat/artifacts/{id}` 与 `/preview`（chat scope），由 Tauri 带 Bearer，不在 WebView 里裸 GET。
+
+工单 266 来电：桌面主窗口收到 `video_call_invite` 后仅在固定会话角色匹配时创建独立置顶窗口。接通/拒绝经 Tauri 代理 `POST /video-call/invite/respond`（chat scope）；后端 10 秒超时返回 `unanswered`，迟到或重复回执为 409。接通进入原视频通话页，不自动开启摄像头/麦克风。主人点击挂断，经 `POST /video-call/invite/hangup` 回传一次，后端产生单次主动候选。手机端不处理此事件。
 
 `tool_status` 仅覆盖侧栏“动向”NOW，不创建聊天气泡、不追加 timeline，也不写入 localStorage 或 `uiPreferences`。`ttl_ms` 从客户端接收时刻开始计算，过期事件直接丢弃、重连后不重放。相同 `status_id` 原位更新 `queued → waiting → terminal`；不同调用在本地串行展示，每项至少展示 1 秒。`pending_confirmation` 不显示在 NOW，确认交互仍由既有聊天流程承担。`label` 只能是后端本地 policy 配置的展示名；载荷不得包含远端工具名、description、参数或结果。旧客户端忽略未知类型即可。
 
