@@ -34,5 +34,8 @@ export async function showIncomingVideoCall(call: IncomingVideoCall): Promise<vo
     visible: true,
     skipTaskbar: false,
   });
+  window.once('tauri://created', () => {
+    void window.show().then(() => window.setFocus()).catch(error => console.warn('[video-call] focus failed', error));
+  });
   window.once('tauri://error', event => console.warn('[video-call] incoming window failed', event));
 }

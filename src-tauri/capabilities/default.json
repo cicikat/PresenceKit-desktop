@@ -9,6 +9,7 @@
     "core:window:allow-hide",
     "core:window:allow-request-user-attention",
     "core:window:allow-is-focused",
+    "core:window:allow-set-focus",
     "core:webview:allow-create-webview-window",
     "opener:default",
     "dialog:allow-open",

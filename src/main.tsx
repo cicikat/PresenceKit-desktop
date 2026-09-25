@@ -5,6 +5,7 @@ import { listen } from "@tauri-apps/api/event";
 import { wsClient } from "./shared/api/ws";
 import { getActiveCharacterInfo } from "./shared/activeCharacter";
 import { showIncomingVideoCall } from "./windows/room/incomingCall";
+import { hangupVideoCallInvite } from "./shared/api/backend";
 import "./shared/theme/globals.css";
 import { initTheme } from "./shared/theme/registry";
 import { initUIPrefs } from "./shared/uiPreferences";
@@ -58,6 +59,12 @@ class RoleLoadBoundary extends Component<{ children: ReactNode }, { error: Error
 function AppRoot() {
   const [activeWindow, setActiveWindow] = React.useState<"chat" | "toy" | "room">("chat");
   const [acceptedInviteId, setAcceptedInviteId] = React.useState<string | null>(null);
+  const closeRoom = () => {
+    const inviteId = acceptedInviteId;
+    setAcceptedInviteId(null);
+    setActiveWindow('chat');
+    if (inviteId) void hangupVideoCallInvite(inviteId).catch(error => console.warn('[video-call] hangup report failed', error));
+  };
   React.useEffect(() => {
     const stopInvite = wsClient.on('video_call_invite', call => {
       if (call.char_id !== getActiveCharacterInfo().id) return;
@@ -84,7 +91,7 @@ function AppRoot() {
       <Suspense fallback={<div style={{ position: 'fixed', inset: 0, zIndex: 110, background: 'var(--paper)' }}><LoadingView /></div>}>
 
         {activeWindow === "toy" && <ToyWindow onClose={() => setActiveWindow("chat")} />}
-        {activeWindow === "room" && <RoomWindow key={acceptedInviteId ?? 'manual'} onClose={() => setActiveWindow("chat")} />}
+        {activeWindow === "room" && <RoomWindow key={acceptedInviteId ?? 'manual'} onClose={closeRoom} />}
       </Suspense>
     </>
   );

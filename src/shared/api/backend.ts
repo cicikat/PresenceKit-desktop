@@ -38,6 +38,10 @@ export async function respondVideoCallInvite(inviteId: string, status: 'accepted
   await invokeGated('respond_video_call_invite', { inviteId, status });
 }
 
+export async function hangupVideoCallInvite(inviteId: string): Promise<void> {
+  await invokeGated('hangup_video_call_invite', { inviteId });
+}
+
 export async function loadGardenState(): Promise<GardenState> {
   return invokeGated<GardenState>('load_garden_state');
 }
