@@ -21,6 +21,7 @@ import { isSingleRealityMessage } from '../../shared/api/realityMessageScope';
 import { useVideoCallCamera } from './useVideoCallCamera';
 import { VoiceMessageBar } from '../chat/components/VoiceMessageBar';
 import { getDesktopTtsEnabled, getTtsAutoPlay } from '../../shared/api/runtimeSettings';
+import { CallSpeechPresenter } from './CallSpeechPresenter';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -89,6 +90,7 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
   const camera = useVideoCallCamera();
   const [ttsText, setTtsText] = useState('');
   const [ttsAutoPlay, setTtsAutoPlay] = useState(false);
+  const [audioTalking, setAudioTalking] = useState(false);
   useEffect(() => {
     void Promise.all([getDesktopTtsEnabled(), getTtsAutoPlay()])
       .then(([enabled, auto]) => setTtsAutoPlay(enabled && auto.video_call)).catch(() => {});
@@ -221,7 +223,7 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
   return (
     <div
       className="call-room"
-      data-talking={presenter.talking}
+      data-talking={ttsAutoPlay ? audioTalking : presenter.talking}
       role="dialog"
       aria-label={t('room.call.title')}
       aria-modal
@@ -264,12 +266,12 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
       {/* Character stage container — 3D (Three.js) or Live2D, picked by roomSettings.renderMode */}
       <div className="call-room__stage" style={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
         {renderMode === 'live2d' ? (
-          <Live2DCallStage mood={mood} talking={presenter.talking} />
+          <Live2DCallStage mood={mood} talking={ttsAutoPlay ? audioTalking : presenter.talking} />
         ) : (
           <ThreeCallStage
             ref={threeStageRef}
             mood={mood}
-            talking={presenter.talking}
+            talking={ttsAutoPlay ? audioTalking : presenter.talking}
             settings={roomSettings}
             onSceneStateChange={handleSceneStateChange}
           />
@@ -282,10 +284,10 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
         </div>
         <div className="call-room__presence" role="status">
           <span className="call-room__wave" aria-hidden="true"><i /><i /><i /><i /><i /></span>
-          {t(presenter.talking ? 'room.call.speaking' : sending ? 'room.call.thinking' : 'room.call.listening')}
+          {t((ttsAutoPlay ? audioTalking : presenter.talking) ? 'room.call.speaking' : sending ? 'room.call.thinking' : 'room.call.listening')}
         </div>
         {/* Assistant VN bubble — bottom center */}
-        {presenter.bubble && (
+        {ttsAutoPlay ? <CallSpeechPresenter name={charName} onPlayingChange={setAudioTalking} /> : presenter.bubble && (
           <VnBubble
             name={charName}
             text={presenter.bubble.text}
@@ -320,7 +322,7 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
       </div>
 
       {/* chat input bar */}
-      {ttsText && <div className="call-room__tts"><VoiceMessageBar text={ttsText} autoPlay={ttsAutoPlay} scene="video_call" /></div>}
+      {!ttsAutoPlay && ttsText && <div className="call-room__tts"><VoiceMessageBar text={ttsText} scene="video_call" /></div>}
       {(voice.error || speechDraft) && <div role={voice.error ? 'alert' : 'status'} className={voice.error ? 'call-room__voice-error' : 'call-room__voice-status'}>{voice.error || `${t('room.call.voice.heard')}: ${speechDraft}`}</div>}
       {audioStatus && <div role="status" className="call-room__voice-status">{audioStatus}</div>}
       <div className="call-room__composer" style={{

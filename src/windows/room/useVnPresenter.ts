@@ -24,7 +24,7 @@ const INTERRUPT_FADE_MS = 200;
 const HISTORY_SIZE = 2; // weak-ref window for late message_segments
 
 function dwellMs(segment: string): number {
-  return Math.max(2000, Math.min(8000, segment.length * 90));
+  return Math.max(3500, Math.min(12000, segment.length * 180));
 }
 
 type Status = 'idle' | 'revealing' | 'starved' | 'dwell' | 'fading';

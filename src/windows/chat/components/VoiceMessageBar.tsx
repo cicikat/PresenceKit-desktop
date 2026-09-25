@@ -9,7 +9,7 @@ function audioUrl(audioB64: string, mime: string): string {
   return URL.createObjectURL(new Blob([bytes], { type: mime || 'audio/wav' }));
 }
 
-export function VoiceMessageBar({ text, emotion = 'neutral', fontSize, autoPlay = false, scene = 'desktop_pet' }: { text: string; emotion?: string; fontSize?: number; autoPlay?: boolean; scene?: 'chat' | 'dream' | 'video_call' | 'desktop_pet' }) {
+export function VoiceMessageBar({ text, emotion = 'neutral', fontSize, autoPlay = false, scene = 'desktop_pet', onPlaybackStart, onPlaybackEnd }: { text: string; emotion?: string; fontSize?: number; autoPlay?: boolean; scene?: 'chat' | 'dream' | 'video_call' | 'desktop_pet'; onPlaybackStart?: () => void; onPlaybackEnd?: () => void }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const dataArrayRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
@@ -122,7 +122,10 @@ export function VoiceMessageBar({ text, emotion = 'neutral', fontSize, autoPlay 
         setUrl(nextUrl);
         return nextUrl;
       } catch (e) {
-        if (mountedRef.current) setError(String(e));
+        if (mountedRef.current) {
+          setError(String(e));
+          onPlaybackEnd?.();
+        }
         throw e;
       } finally {
         if (mountedRef.current) setLoading(false);
@@ -131,7 +134,7 @@ export function VoiceMessageBar({ text, emotion = 'neutral', fontSize, autoPlay 
     })();
     preparingRef.current = preparation;
     return preparation;
-  }, [emotion, scene, text, url]);
+  }, [emotion, scene, text, url, onPlaybackEnd]);
 
   const playPreparedAudio = useCallback((nextUrl: string): Promise<void> => new Promise(resolve => {
     if (!audioRef.current) audioRef.current = new Audio();
@@ -144,6 +147,7 @@ export function VoiceMessageBar({ text, emotion = 'neutral', fontSize, autoPlay 
       audio.removeEventListener('pause', finish);
       audio.removeEventListener('error', finish);
       if (mountedRef.current) setPlaying(false);
+      onPlaybackEnd?.();
       resolve();
     };
     audio.src = nextUrl;
@@ -151,12 +155,15 @@ export function VoiceMessageBar({ text, emotion = 'neutral', fontSize, autoPlay 
     audio.addEventListener('pause', finish);
     audio.addEventListener('error', finish);
     void audio.play().then(() => {
-      if (!settled && mountedRef.current) setPlaying(true);
+      if (!settled && mountedRef.current) {
+        setPlaying(true);
+        onPlaybackStart?.();
+      }
     }).catch(e => {
       if (mountedRef.current) setError(String(e));
       finish();
     });
-  }), []);
+  }), [onPlaybackStart, onPlaybackEnd]);
 
   const play = useCallback(() => {
     if (playing) {
