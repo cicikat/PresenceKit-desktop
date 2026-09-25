@@ -1514,6 +1514,36 @@ async fn observe_video_call_frame(app: tauri::AppHandle, frame_b64: String) -> R
 }
 
 #[tauri::command]
+async fn poll_video_call_camera(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let resp = authorized_request(&cfg, http_client()?.post(backend_url(&cfg, "/video-call/camera/poll")))
+        .send().await.map_err(|e| e.to_string())?;
+    require_success(resp).await?.json().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn submit_video_call_camera_frame(app: tauri::AppHandle, request_id: String, frame_b64: Option<String>) -> Result<(), String> {
+    if request_id.len() > 128 || frame_b64.as_ref().is_some_and(|value| value.len() > 1_100_000) {
+        return Err("HTTP 422: invalid camera request".into());
+    }
+    let cfg = load_client_config(&app);
+    let resp = authorized_request(&cfg, http_client()?.post(backend_url(&cfg, "/video-call/camera/result")))
+        .json(&serde_json::json!({"request_id": request_id, "frame_base64": frame_b64}))
+        .send().await.map_err(|e| e.to_string())?;
+    require_success(resp).await?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn close_video_call_camera(app: tauri::AppHandle) -> Result<(), String> {
+    let cfg = load_client_config(&app);
+    let resp = authorized_request(&cfg, http_client()?.post(backend_url(&cfg, "/video-call/close")))
+        .send().await.map_err(|e| e.to_string())?;
+    require_success(resp).await?;
+    Ok(())
+}
+
+#[tauri::command]
 async fn start_voice_hotkey_listener(app: tauri::AppHandle) -> Result<(), String> {
     use std::sync::atomic::Ordering;
     let state = app.state::<VoiceHotkeyState>();
@@ -3392,6 +3422,9 @@ pub fn run() {
             transcribe_audio,
             get_video_call_state,
             observe_video_call_frame,
+            poll_video_call_camera,
+            submit_video_call_camera_frame,
+            close_video_call_camera,
             start_voice_hotkey_listener,
             save_avatar,
             load_avatar,

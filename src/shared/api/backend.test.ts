@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { uploadDocument, sendChat, transcribeAudio, deleteCharacterAvatar, getPromptAssets, invalidatePromptAssetsCache, patchPromptAssets, uploadCharacterAvatar } from './backend';
+import { uploadDocument, sendChat, transcribeAudio, deleteCharacterAvatar, getPromptAssets, invalidatePromptAssetsCache, patchPromptAssets, uploadCharacterAvatar, pollVideoCallCamera, submitVideoCallCameraFrame, closeVideoCallCamera } from './backend';
 
 const { invokeGated } = vi.hoisted(() => ({ invokeGated: vi.fn() }));
 vi.mock('./authGate', () => ({ invokeGated }));
@@ -94,4 +94,17 @@ it('forwards a voice receipt once and drops it when transcript is edited', async
   await transcribeAudio('fixture-audio');
   await sendChat('edited');
   expect(invokeGated).toHaveBeenLastCalledWith('send_chat', { message: 'edited' });
+});
+
+it('keeps camera tool frame transport separate from chat and screen observation', async () => {
+  invokeGated.mockReset();
+  invokeGated.mockResolvedValue(undefined);
+  await pollVideoCallCamera();
+  await submitVideoCallCameraFrame('fresh-request', 'image-data');
+  await closeVideoCallCamera();
+  expect(invokeGated.mock.calls).toEqual([
+    ['poll_video_call_camera'],
+    ['submit_video_call_camera_frame', { requestId: 'fresh-request', frameB64: 'image-data' }],
+    ['close_video_call_camera'],
+  ]);
 });

@@ -22,6 +22,18 @@ export async function observeVideoCallFrame(frameB64: string): Promise<{ status:
   return invokeGated('observe_video_call_frame', { frameB64 });
 }
 
+export async function pollVideoCallCamera(): Promise<{ request: { request_id: string; ttl_seconds: number } | null }> {
+  return invokeGated('poll_video_call_camera');
+}
+
+export async function submitVideoCallCameraFrame(requestId: string, frameB64?: string): Promise<void> {
+  await invokeGated('submit_video_call_camera_frame', { requestId, frameB64: frameB64 ?? null });
+}
+
+export async function closeVideoCallCamera(): Promise<void> {
+  await invokeGated('close_video_call_camera');
+}
+
 export async function loadGardenState(): Promise<GardenState> {
   return invokeGated<GardenState>('load_garden_state');
 }
