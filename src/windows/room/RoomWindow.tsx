@@ -88,6 +88,14 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
 
   const voice = useContinuousCallVoice(onTranscript);
   const camera = useVideoCallCamera();
+  const cameraCharRef = useRef(getActiveCharacterInfo().id);
+  useEffect(() => subscribeActiveCharacter(() => {
+    const nextId = getActiveCharacterInfo().id;
+    if (nextId !== cameraCharRef.current) {
+      cameraCharRef.current = nextId;
+      camera.stop();
+    }
+  }), [camera.stop]);
   const [ttsText, setTtsText] = useState('');
   const [ttsAutoPlay, setTtsAutoPlay] = useState(false);
   const [audioTalking, setAudioTalking] = useState(false);
