@@ -1,0 +1,11 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "video-call-invite",
+  "description": "Incoming video call window",
+  "windows": ["video-call-invite"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-close",
+    "core:event:allow-emit-to"
+  ]
+}

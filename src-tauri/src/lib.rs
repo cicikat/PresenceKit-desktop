@@ -1544,6 +1544,19 @@ async fn close_video_call_camera(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn respond_video_call_invite(app: tauri::AppHandle, invite_id: String, status: String) -> Result<(), String> {
+    if invite_id.len() > 128 || !matches!(status.as_str(), "accepted" | "declined") {
+        return Err("HTTP 422: invalid video call decision".into());
+    }
+    let cfg = load_client_config(&app);
+    let resp = authorized_request(&cfg, http_client()?.post(backend_url(&cfg, "/video-call/invite/respond")))
+        .json(&serde_json::json!({"invite_id": invite_id, "status": status}))
+        .send().await.map_err(|e| e.to_string())?;
+    require_success(resp).await?;
+    Ok(())
+}
+
+#[tauri::command]
 async fn start_voice_hotkey_listener(app: tauri::AppHandle) -> Result<(), String> {
     use std::sync::atomic::Ordering;
     let state = app.state::<VoiceHotkeyState>();
@@ -3425,6 +3438,7 @@ pub fn run() {
             poll_video_call_camera,
             submit_video_call_camera_frame,
             close_video_call_camera,
+            respond_video_call_invite,
             start_voice_hotkey_listener,
             save_avatar,
             load_avatar,

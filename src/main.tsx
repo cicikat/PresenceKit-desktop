@@ -1,6 +1,10 @@
 import React, { Component, lazy, Suspense, type ErrorInfo, type ReactNode } from "react";
 import ReactDOM from "react-dom/client";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { listen } from "@tauri-apps/api/event";
+import { wsClient } from "./shared/api/ws";
+import { getActiveCharacterInfo } from "./shared/activeCharacter";
+import { showIncomingVideoCall } from "./windows/room/incomingCall";
 import "./shared/theme/globals.css";
 import { initTheme } from "./shared/theme/registry";
 import { initUIPrefs } from "./shared/uiPreferences";
@@ -8,7 +12,7 @@ import { initI18n, t } from "./shared/i18n";
 
 const windowView = new URLSearchParams(window.location.search).get("window");
 const isSatelliteWindow = windowView === "design-satellite";
-const isMainWindow = !isSatelliteWindow && windowView !== "pet" && windowView !== "presence-nag" && windowView !== "diary-detail";
+const isMainWindow = !isSatelliteWindow && windowView !== "pet" && windowView !== "presence-nag" && windowView !== "diary-detail" && windowView !== "video-call-invite";
 
 const ChatWindow = lazy(() => import("./windows/chat/ChatWindow").then(module => ({ default: module.ChatWindow })));
 const ToyWindow = lazy(() => import("./windows/toy").then(module => ({ default: module.ToyWindow })));
@@ -17,6 +21,7 @@ const PetWindow = lazy(() => import("./windows/pet/PetWindow").then(module => ({
 const PresenceNagWindow = lazy(() => import("./windows/presence-nag/PresenceNagWindow").then(module => ({ default: module.PresenceNagWindow })));
 const DiaryDetailWindow = lazy(() => import("./windows/diary-detail/DiaryDetailWindow").then(module => ({ default: module.DiaryDetailWindow })));
 const DesignSatelliteWindow = lazy(() => import("./windows/design-satellite/DesignSatelliteWindow").then(module => ({ default: module.DesignSatelliteWindow })));
+const IncomingCallWindow = lazy(() => import("./windows/room/IncomingCallWindow").then(module => ({ default: module.IncomingCallWindow })));
 const OnboardingGate = lazy(() => import("./features/onboarding/OnboardingGate").then(module => ({ default: module.OnboardingGate })));
 
 function LoadingView() {
@@ -52,11 +57,26 @@ class RoleLoadBoundary extends Component<{ children: ReactNode }, { error: Error
 
 function AppRoot() {
   const [activeWindow, setActiveWindow] = React.useState<"chat" | "toy" | "room">("chat");
+  const [acceptedInviteId, setAcceptedInviteId] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    const stopInvite = wsClient.on('video_call_invite', call => {
+      if (call.char_id !== getActiveCharacterInfo().id) return;
+      void showIncomingVideoCall(call);
+    });
+    let stopAccepted: (() => void) | undefined;
+    void listen<{ invite_id: string; char_id: string }>('video-call-invite-accepted', event => {
+      if (event.payload.char_id !== getActiveCharacterInfo().id) return;
+      setAcceptedInviteId(event.payload.invite_id);
+      setActiveWindow('room');
+      void getCurrentWindow().setFocus();
+    }).then(stop => { stopAccepted = stop; });
+    return () => { stopInvite(); stopAccepted?.(); };
+  }, []);
   return (
     <>
       <ChatWindow
         onToyOpen={() => setActiveWindow("toy")}
-        onRoomOpen={() => setActiveWindow("room")}
+        onRoomOpen={() => { setAcceptedInviteId(null); setActiveWindow("room"); }}
         isCovered={activeWindow !== "chat"}
       />
       {/* Keep first-load suspension inside the overlay. The auth gate and main
@@ -64,7 +84,7 @@ function AppRoot() {
       <Suspense fallback={<div style={{ position: 'fixed', inset: 0, zIndex: 110, background: 'var(--paper)' }}><LoadingView /></div>}>
 
         {activeWindow === "toy" && <ToyWindow onClose={() => setActiveWindow("chat")} />}
-        {activeWindow === "room" && <RoomWindow onClose={() => setActiveWindow("chat")} />}
+        {activeWindow === "room" && <RoomWindow key={acceptedInviteId ?? 'manual'} onClose={() => setActiveWindow("chat")} />}
       </Suspense>
     </>
   );
@@ -75,6 +95,7 @@ function RoleRoot() {
   if (windowView === "presence-nag") return <PresenceNagWindow />;
   if (windowView === "diary-detail") return <DiaryDetailWindow />;
   if (windowView === "design-satellite") return <DesignSatelliteWindow />;
+  if (windowView === "video-call-invite") return <IncomingCallWindow />;
   return (
     <OnboardingGate>
       <AppRoot />

@@ -31,6 +31,7 @@ type EventMap = {
   group_round_start: { round_id: string; group_id: string; domain?: 'reality' | 'dream' };
   group_round_end: { round_id: string; group_id: string; domain?: 'reality' | 'dream' };
   tool_status: ToolStatusPayload;
+  video_call_invite: { invite_id: string; char_id: string; expires_in_seconds: number };
 };
 
 type NativeMessageEvent = { connectionId: number; data: string };
@@ -190,6 +191,9 @@ class WSClient {
       case 'action':
         this.emit('action', msg.action);
         void this._handleAction(msg.msg_id, msg.action);
+        break;
+      case 'video_call_invite':
+        this.emit('video_call_invite', { invite_id: msg.invite_id, char_id: msg.char_id, expires_in_seconds: msg.expires_in_seconds });
         break;
       case 'ping':
         this._send({ type: 'pong' });

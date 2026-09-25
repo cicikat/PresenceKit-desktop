@@ -34,6 +34,10 @@ export async function closeVideoCallCamera(): Promise<void> {
   await invokeGated('close_video_call_camera');
 }
 
+export async function respondVideoCallInvite(inviteId: string, status: 'accepted' | 'declined'): Promise<void> {
+  await invokeGated('respond_video_call_invite', { inviteId, status });
+}
+
 export async function loadGardenState(): Promise<GardenState> {
   return invokeGated<GardenState>('load_garden_state');
 }

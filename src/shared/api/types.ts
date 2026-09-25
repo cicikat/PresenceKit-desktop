@@ -67,6 +67,7 @@ export type ServerMessage =
   | { type: 'message_stream_end'; msg_id: string; domain?: GroupDomain; char_id?: string; round_id?: string }
   | { type: 'group_round_start'; round_id: string; group_id: string; domain?: GroupDomain }
   | { type: 'group_round_end'; round_id: string; group_id: string; domain?: GroupDomain }
+  | { type: 'video_call_invite'; invite_id: string; char_id: string; expires_in_seconds: number }
   | ({ type: 'tool_status' } & ToolStatusPayload);
 
 export type ClientMessage =
