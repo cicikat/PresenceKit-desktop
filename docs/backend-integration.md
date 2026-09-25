@@ -11,6 +11,8 @@ STT 配置由管理面维护，语调仅是后端印象；不改 WS、通知、a
 
 ## 工单 264：视频电话摄像头与连续语音
 
+工单 265：摄像头开启且后端 `video_call` 路由有效时，窗口每秒调用一次 `poll_video_call_camera`；收到一次性请求才从当前媒体轨道抓取新 JPEG 并调用 `submit_video_call_camera_frame`，挂断/换角色调用 `close_video_call_camera`。此链用于角色 `observe_video_call_camera`，与原每 4 秒周期摄像头观察并行。周期观察可每隔至少 60 秒产生主动候选，即使画面不变。所有摄像头识别仍走后端 `image_presets.routes.video_call`，不接桌面屏幕截图或实验性视觉观察路由。真实摄像头、模型及主动消息验收未完成。
+
 Tauri `get_video_call_state` 通过 chat scope 读取 `/video-call/state`；
 `observe_video_call_frame` 只上传当前 JPEG 到 `/video-call/observe`，响应的一次性
 `observation_id` 最多保留 40 秒，随下一次 `send_chat` 作为 `video_observation_id`
