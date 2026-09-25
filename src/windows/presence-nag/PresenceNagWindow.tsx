@@ -4,6 +4,8 @@ import { listen } from '@tauri-apps/api/event';
 import { avatarStore } from '../../shared/avatars/store';
 import type { PresenceNagPayload } from '../../shared/presenceNag';
 import { getActiveCharacterInfo } from '../../shared/activeCharacter';
+import { normalizeChatDisplayText } from '../chat/chatDisplay';
+import { renderInlineStyled } from '../chat/inlineStyle';
 import './PresenceNagWindow.css';
 
 // The payload's `avatar` field is a raw char_id (see actions.rs::presence_nag), not a
@@ -87,7 +89,7 @@ export function PresenceNagWindow() {
           </div>
           <div className="presence-nag__content">
             <div className="presence-nag__name">{characterName(payload.avatar)}</div>
-            <p>{payload.text}</p>
+            <p>{renderInlineStyled(normalizeChatDisplayText(payload.text))}</p>
             <div className="presence-nag__code">ERROR: ATTENTION_NOT_FOUND</div>
           </div>
         </div>

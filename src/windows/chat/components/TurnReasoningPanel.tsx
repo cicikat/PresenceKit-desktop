@@ -3,6 +3,8 @@ import { useI18n } from '../../../shared/i18n';
 import { getActiveCharacterName, subscribeActiveCharacter } from '../../../shared/activeCharacter';
 import { reasoningErrorKey, type TurnReasoning, type TurnReasoningCache } from '../../../shared/api/turnReasoningState';
 import { reasoningNarrationText } from '../reasoningNarration';
+import { normalizeChatDisplayText } from '../chatDisplay';
+import { renderInlineStyled } from '../inlineStyle';
 import './TurnReasoningPanel.css';
 
 export function TurnReasoningPanel({ turnId, cache, pending = false }: { turnId?: string; cache: TurnReasoningCache; pending?: boolean }) {
@@ -54,7 +56,7 @@ export function TurnReasoningPanel({ turnId, cache, pending = false }: { turnId?
       {!loading && data && !text && <p>{t('chat.reasoning.empty')}</p>}
       {text && <>
         <p className="turn-reasoning-caption">{t('chat.reasoning.caption').replace('{name}', characterName || t('chat.reasoning.characterFallback'))}</p>
-        <pre>{text}</pre>
+        <pre>{renderInlineStyled(normalizeChatDisplayText(text))}</pre>
       </>}
     </div>}
   </section>;

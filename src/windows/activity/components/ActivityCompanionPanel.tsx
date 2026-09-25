@@ -7,6 +7,8 @@ import {
 } from '../../../shared/api/activity-api';
 import { getActiveCharacterName } from '../../../shared/activeCharacter';
 import { armHttpPseudoStream } from '../../../shared/api/pseudoStreamText';
+import { normalizeChatDisplayText } from '../../chat/chatDisplay';
+import { renderInlineStyled } from '../../chat/inlineStyle';
 
 let _msgId = 0;
 function newMsgId() { return `ac-${Date.now()}-${++_msgId}`; }
@@ -293,7 +295,7 @@ export function ActivityCompanionPanel({ activityId, sessionId, sessionActive, s
               fontSize: 12.5, lineHeight: 1.6,
               whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowWrap: 'anywhere',
             }}>
-              {msg.text}
+              {msg.role === 'assistant' ? renderInlineStyled(normalizeChatDisplayText(msg.text)) : msg.text}
             </div>
             {msg.role === 'assistant' && !msg.error && (
               <GroundingHint activityId={activityId} grounding={msg.grounding} />

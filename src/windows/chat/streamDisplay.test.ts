@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { streamDisplayText } from './streamDisplay';
-import { renderInlineStyled } from './inlineStyle';
+import { renderInlineStyled, spokenInlineText } from './inlineStyle';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 describe('live inline display', () => {
@@ -20,5 +20,9 @@ describe('live inline display', () => {
     expect(result).toContain('font-size:0.85em');
     expect(result).toContain('&lt;script&gt;');
     expect(result).not.toContain('<script>');
+  });
+  it('keeps display tags out of speech while leaving arbitrary text intact', () => {
+    expect(spokenInlineText('<hl>你好</hl><big>世界</big><script>x</script>'))
+      .toBe('你好世界<script>x</script>');
   });
 });

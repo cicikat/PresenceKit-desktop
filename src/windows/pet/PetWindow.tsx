@@ -8,6 +8,8 @@ import { sendChat } from '../../shared/api/backend';
 import { getDesktopTtsEnabled, getTtsAutoPlay, type TtsAutoPlaySettings } from '../../shared/api/runtimeSettings';
 import { useVoiceInput } from '../../shared/voice/useVoiceInput';
 import { VoiceMessageBar } from '../chat/components/VoiceMessageBar';
+import { normalizeChatDisplayText } from '../chat/chatDisplay';
+import { renderInlineStyled } from '../chat/inlineStyle';
 import { PetStage } from './components/PetStage';
 import { usePetMouse } from './usePetMouse';
 import { usePetRoam } from './usePetRoam';
@@ -221,7 +223,7 @@ export function PetWindow() {
                 style={{ display: 'block', maxWidth: '100%', maxHeight: 220, margin: turnBubble.text ? '0 0 8px' : '0 auto', borderRadius: 8, objectFit: 'contain' }}
               />
             )}
-            {turnBubble.text}
+            {renderInlineStyled(normalizeChatDisplayText(turnBubble.text))}
             {ttsEnabled && turnBubble.text && (
               <div style={{ marginTop: 9 }}>
                 <VoiceMessageBar key={turnBubble.id} text={turnBubble.text} autoPlay={Boolean(turnBubble.autoPlayTts)} />

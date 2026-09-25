@@ -8,6 +8,8 @@ import { useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent } from 'react';
 import { sendChat } from '../../../shared/api/backend';
 import { getActiveCharacterName } from '../../../shared/activeCharacter';
+import { normalizeChatDisplayText } from '../../chat/chatDisplay';
+import { renderInlineStyled } from '../../chat/inlineStyle';
 
 interface Msg {
   id: number;
@@ -97,7 +99,7 @@ export function ToyChatPanel({ chatFontSize = 14 }: { chatFontSize?: number }) {
               color: m.role === 'user' ? 'var(--on-forest)' : 'var(--ink)',
               border: m.role === 'user' ? 'none' : '1px solid var(--paper-edge)',
             }}>
-              {m.text}
+              {m.role === 'assistant' ? renderInlineStyled(normalizeChatDisplayText(m.text)) : m.text}
             </div>
           </div>
         ))}

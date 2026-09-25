@@ -46,3 +46,8 @@ export function renderInlineStyled(text: string): ReactNode {
   if (parts.every(p => typeof p === 'string')) return text;
   return <>{parts}</>;
 }
+
+/** Remove only supported display tags before sending text to speech. */
+export function spokenInlineText(text: string): string {
+  return text.replace(/<\/?(?:hl|big|sm)>/g, '');
+}

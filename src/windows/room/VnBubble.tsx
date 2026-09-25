@@ -1,4 +1,6 @@
 import type { CSSProperties } from 'react';
+import { normalizeChatDisplayText } from '../chat/chatDisplay';
+import { renderInlineStyled } from '../chat/inlineStyle';
 
 interface VnBubbleProps {
   name: string;
@@ -77,7 +79,7 @@ export function VnBubble({
           wordBreak: 'break-all',
           textAlign: isRight ? 'right' : 'left',
         }}>
-          {text}
+          {renderInlineStyled(normalizeChatDisplayText(text))}
           {streaming && (
             <span style={{
               display: 'inline-block',

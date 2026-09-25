@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { synthesizeDesktopVoice } from '../../../shared/api/runtimeSettings';
 import { audioPlaybackQueue, type PlaybackQueueHandle } from '../../../shared/voice/playbackQueue';
+import { normalizeChatDisplayText } from '../chatDisplay';
+import { renderInlineStyled, spokenInlineText } from '../inlineStyle';
 
 function audioUrl(audioB64: string, mime: string): string {
   const binary = atob(audioB64);
@@ -113,7 +115,7 @@ export function VoiceMessageBar({ text, emotion = 'neutral', fontSize, autoPlay 
     const preparation = (async () => {
       setLoading(true);
       try {
-        const result = await synthesizeDesktopVoice(text, emotion, scene);
+        const result = await synthesizeDesktopVoice(spokenInlineText(text), emotion, scene);
         const nextUrl = audioUrl(result.audio_b64, result.mime);
         if (!mountedRef.current) {
           URL.revokeObjectURL(nextUrl);
@@ -205,7 +207,7 @@ export function VoiceMessageBar({ text, emotion = 'neutral', fontSize, autoPlay 
           {showText ? '收起文字' : '转文字'}
         </button>
       </div>
-      {showText && <div style={{ padding: '8px 10px', borderRadius: 'var(--radius-sm)', background: 'var(--paper)', border: '1px solid var(--paper-edge)', fontSize: fontSize ?? 12.5, lineHeight: 1.65 }}>{text}</div>}
+      {showText && <div style={{ padding: '8px 10px', borderRadius: 'var(--radius-sm)', background: 'var(--paper)', border: '1px solid var(--paper-edge)', fontSize: fontSize ?? 12.5, lineHeight: 1.65 }}>{renderInlineStyled(normalizeChatDisplayText(text))}</div>}
       {error && <div className="mono" style={{ fontSize: 9.5, color: 'var(--danger)' }}>语音生成失败：{error}</div>}
     </div>
   );

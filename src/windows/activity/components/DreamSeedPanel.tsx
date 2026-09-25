@@ -1,6 +1,8 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { dreamSeedApi } from '../../../shared/api/activity-api';
 import { useI18n } from '../../../shared/i18n';
+import { normalizeChatDisplayText } from '../../chat/chatDisplay';
+import { renderInlineStyled } from '../../chat/inlineStyle';
 import './DreamSeedPanel.css';
 
 interface DreamSeedMessage {
@@ -154,7 +156,7 @@ export function DreamSeedPanel() {
         )}
         {messages.map(message => (
           <div key={message.id} className={`dream-seed-message dream-seed-message--${message.role}${message.failed ? ' is-failed' : ''}`}>
-            {message.text}
+            {message.role === 'assistant' ? renderInlineStyled(normalizeChatDisplayText(message.text)) : message.text}
           </div>
         ))}
         {working === 'send' && <div className="dream-seed-message dream-seed-message--assistant is-pending">{t('activity.dreamSeed.sending')}</div>}
