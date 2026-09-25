@@ -16,7 +16,6 @@ export function CallSpeechPresenter({ name, onPlayingChange }: { name: string; o
   const [lines, setLines] = useState<SpeechLine[]>([]);
   const [playing, setPlaying] = useState(false);
   const seenRef = useRef(new Set<string>());
-  const pendingRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
 
   useEffect(() => {
     const enqueue = (msgId: string, texts: string[]) => {
@@ -26,28 +25,14 @@ export function CallSpeechPresenter({ name, onPlayingChange }: { name: string; o
       const next = texts.flatMap(splitLines).map((text, index) => ({ id: `${msgId}:${index}`, text }));
       if (next.length) setLines(current => [...current, ...next]);
     };
-    const unSegments = wsClient.on('message_segments', message => {
-      if (!isSingleRealityMessage(message, getActiveCharacterInfo().id)) return;
-      const texts = (message.segments ?? []).map(segment => segment.text);
-      if (!texts.some(text => text.trim())) return;
-      const timer = pendingRef.current.get(message.msg_id);
-      if (timer) clearTimeout(timer);
-      pendingRef.current.delete(message.msg_id);
-      enqueue(message.msg_id, texts);
-    });
     const unMessage = wsClient.on('channel_message', message => {
       if (!isSingleRealityMessage(message, getActiveCharacterInfo().id) || !message.content.trim()) return;
-      if (pendingRef.current.has(message.msg_id) || seenRef.current.has(message.msg_id)) return;
-      pendingRef.current.set(message.msg_id, setTimeout(() => {
-        pendingRef.current.delete(message.msg_id);
-        enqueue(message.msg_id, [message.content]);
-      }, 300));
+      // Only the canonical event creates speech. Segments may arrive before or
+      // after it and are a text sidecar, never another turn to speak.
+      enqueue(message.msg_id, [message.content]);
     });
     return () => {
-      unSegments();
       unMessage();
-      for (const timer of pendingRef.current.values()) clearTimeout(timer);
-      pendingRef.current.clear();
     };
   }, []);
 

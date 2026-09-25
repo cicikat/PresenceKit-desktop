@@ -139,8 +139,7 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
       }
     });
     const unMessage = wsClient.on('channel_message', offerTts);
-    const unSegments = wsClient.on('message_segments', offerTts);
-    return () => { unStart(); unEnd(); unMessage(); unSegments(); };
+    return () => { unStart(); unEnd(); unMessage(); };
   }, []);
 
   // ── pet snapshot / settings ───────────────────────────────────────────────
