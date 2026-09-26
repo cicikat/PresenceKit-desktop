@@ -19,6 +19,7 @@ export const enUS: Record<MessageKey, string> = {
 "room.call.title": "Video call",
 "room.call.listening": "Here, listening to you",
 "room.call.sceneCameras.menu": "Scene camera presets",
+"room.call.bringCharacterToView": "Bring character to view",
 "room.call.sceneCameras.title": "Choose a starting camera",
 "room.call.sceneCameras.empty": "This GLB has no exported perspective cameras. Export cameras from Blender and replace the scene file.",
 "room.call.placementHint": "Left drag to orbit · right drag to pan · wheel to zoom · select an object to move · G/R/S tools · Esc to save the view and exit",

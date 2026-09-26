@@ -310,6 +310,8 @@ src/windows/toy/
   `sceneCameraByScene` 记住该场景选项，已有 `perPlacement` 继续保存场景×人物的后续手调。
   摆放模式开放 OrbitControls 旋转、平移、缩放，拖动 gizmo 时暂停轨道控制，退出时保存机位。
   场景包围盒决定远裁剪面与最大观察距离，不再固定 100/15 单位。
+  人物找回按钮用当前相机实际位置/朝向重新计算人物站位、面向和可见距离，并保存到
+  同一场景×人物组合；相机预设省略号采用主聊天页的右下角小型半透明浮动入口。
 - 用户输入仍调用共享 `sendChat()` → Tauri `send_chat` → `POST /desktop/chat`；房间不另建会话协议。
   mood 从主窗口广播的 `pet://snapshot` 读取，当前角色名/房间设置经共享偏好跨窗口同步。
 - 工单 264：`useVideoCallCamera` 持有摄像头轨道与预览；先读取后端视觉路由状态，

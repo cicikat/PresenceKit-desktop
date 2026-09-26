@@ -15,6 +15,7 @@ export const zhCN = {
 "room.call.title": "视频通话",
 "room.call.listening": "在这里，听你说",
 "room.call.sceneCameras.menu": "场景相机预设",
+"room.call.bringCharacterToView": "人物到镜头前",
 "room.call.sceneCameras.title": "选择场景初始机位",
 "room.call.sceneCameras.empty": "这个 GLB 没有导出透视相机。请在 Blender 导出相机后重新放入场景目录。",
 "room.call.placementHint": "左键旋转 · 右键平移 · 滚轮缩放 · 点选物体拖动 · G/R/S 操作 · Esc 退出并保存机位",

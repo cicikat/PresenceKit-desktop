@@ -10,6 +10,7 @@ export interface ThreeCallStageHandle {
   saveCurrentView: () => void;
   togglePlacementMode: () => void;
   applyCameraPreset: (id: string) => boolean;
+  bringCharacterToView: () => boolean;
 }
 
 interface ThreeCallStageProps {
@@ -24,13 +25,13 @@ export const ThreeCallStage = forwardRef<ThreeCallStageHandle, ThreeCallStagePro
   function ThreeCallStage({ mood, talking, settings, onSceneStateChange, onCameraPresetsChange }, ref) {
     const { t } = useI18n();
     const mountRef = useRef<HTMLDivElement>(null);
-    const { freeLook, toggleFreeLook, saveCurrentView, placementMode, togglePlacementMode, applyCameraPreset } =
+    const { freeLook, toggleFreeLook, saveCurrentView, placementMode, togglePlacementMode, applyCameraPreset, bringCharacterToView } =
       useRoomScene(mountRef, mood, talking, settings, onCameraPresetsChange);
 
     useImperativeHandle(
       ref,
-      () => ({ toggleFreeLook, saveCurrentView, togglePlacementMode, applyCameraPreset }),
-      [toggleFreeLook, saveCurrentView, togglePlacementMode, applyCameraPreset],
+      () => ({ toggleFreeLook, saveCurrentView, togglePlacementMode, applyCameraPreset, bringCharacterToView }),
+      [toggleFreeLook, saveCurrentView, togglePlacementMode, applyCameraPreset, bringCharacterToView],
     );
 
     useEffect(() => {

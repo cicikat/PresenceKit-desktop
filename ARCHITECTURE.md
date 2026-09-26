@@ -22,6 +22,8 @@ diary-detail、design-satellite。主窗口中 Room/Toy 覆盖 Chat；Activity/�
 Room 的 GLB 透视相机预设由 ThreeCallStage 的场景加载过程提取，经 RoomWindow 右下角菜单选择；
 所选机位与人物站位写入本机 RoomSettings，原有场景×人物组合记忆继续生效。
 摆放模式允许轨道视角调整，退出时保存相机；视频通话摄像头采集和后端视觉路由独立。
+大场景中人物离开视野时，Room 底栏可按当前实时镜头一键找回人物；相机预设菜单是右下角
+独立的低干扰浮动入口。
 
 ## 状态所有权
 

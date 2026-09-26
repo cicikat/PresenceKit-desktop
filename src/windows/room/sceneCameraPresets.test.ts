@@ -53,4 +53,13 @@ describe('scene camera presets', () => {
     expect(placement.customView.target).toEqual([0, 1, 2.5]);
     expect(placement.yawDeg).toBeCloseTo(0);
   });
+
+  it('keeps an enlarged character in frame when restoring it to a side view', () => {
+    const placement = placementFromSceneCamera({
+      id: 'current', name: 'current', position: [10, 3, 0], direction: [-1, 0, 0], fovDeg: 45,
+    }, 4.8);
+    expect(placement.offset[0]).toBeLessThan(4);
+    expect(placement.offset[1]).toBe(3);
+    expect(placement.yawDeg).toBeCloseTo(90);
+  });
 });

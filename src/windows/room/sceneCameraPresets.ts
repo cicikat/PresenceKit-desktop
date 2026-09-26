@@ -26,10 +26,10 @@ export function collectSceneCameraPresets(scene: THREE.Object3D): SceneCameraPre
   return presets;
 }
 
-export function placementFromSceneCamera(preset: SceneCameraPreset) {
+export function placementFromSceneCamera(preset: SceneCameraPreset, characterHeight = 1.6) {
   const camera = new THREE.Vector3(...preset.position);
   const forward = new THREE.Vector3(...preset.direction).normalize();
-  const distance = Math.max(2.5, 0.9 / Math.tan(THREE.MathUtils.degToRad(preset.fovDeg) / 2));
+  const distance = Math.max(2.5, characterHeight * 0.56 / Math.tan(THREE.MathUtils.degToRad(preset.fovDeg) / 2));
   const target = camera.clone().addScaledVector(forward, distance);
   const toCamera = camera.clone().sub(target);
   return {

@@ -303,6 +303,7 @@ export interface RoomSceneAPI {
   placementMode: boolean;
   togglePlacementMode: () => void;
   applyCameraPreset: (id: string) => boolean;
+  bringCharacterToView: () => boolean;
 }
 
 export function useRoomScene(
@@ -836,8 +837,9 @@ export function useRoomScene(
     // ── load room ──
     loadRoomModel(loader, 'scene', initSettings.sceneFile,
       (gltf) => {
+        if (disposedRef.current) return;
         roomGroup.add(gltf.scene);
-        glbSceneLightsRef.current = collectGlbLights(gltf.scene, initSettings.lights.useSceneLights);
+        glbSceneLightsRef.current = collectGlbLights(gltf.scene, settingsRef.current.lights.useSceneLights);
         registerSceneCameras(gltf.scene, refs);
         roomLoaded = true;
         maybeRemovePlaceholder();
@@ -850,14 +852,20 @@ export function useRoomScene(
     loadRoomModel(loader, 'character', initSettings.characterFile,
       (gltf) => {
         if (disposedRef.current) return;
+        if (settingsRef.current.characterFile !== initSettings.characterFile) {
+          charLoaded = true;
+          maybeRemovePlaceholder();
+          return;
+        }
+        const activeSettings = settingsRef.current;
         const model = gltf.scene;
-        normalizeAndPosition(model, initSettings);
+        normalizeAndPosition(model, activeSettings);
         enableCharLayer(model);
         charGroup.add(model);
         morphRef.current = new MorphController(model);
-        const sm = initSettings.scaleMul;
+        const sm = activeSettings.scaleMul;
         charBaseScaleRef.current = sm > 0 ? model.scale.x / sm : model.scale.x;
-        const charCfg = getCharacterCfg(initSettings, initSettings.characterFile);
+        const charCfg = getCharacterCfg(activeSettings, activeSettings.characterFile);
         boneResolverRef.current = new BoneResolver(model, charCfg.boneMap);
         const res = boneResolverRef.current.resolved;
         const hb = res.head ?? findHeadBone(model);
@@ -874,7 +882,7 @@ export function useRoomScene(
         );
         const clipSetup = setupIdleClip(
           model, gltf.animations, hb, res.leftEye ?? null, res.rightEye ?? null,
-          springChainsRef.current, initSettings.idleClip,
+          springChainsRef.current, activeSettings.idleClip,
         );
         mixerRef.current = clipSetup?.mixer ?? null;
         animatedBoneNamesRef.current = clipSetup?.animatedBoneNames ?? new Set();
@@ -882,7 +890,7 @@ export function useRoomScene(
           console.log('[room] morph keys:', morphRef.current.names(), '| bones:', boneResolverRef.current.names());
           console.log('[room] phys chains:', getSpringChainRootNames(springChainsRef.current));
         }
-        applyView(refs, initSettings);
+        applyView(refs, activeSettings);
         charLoaded = true;
         maybeRemovePlaceholder();
       },
@@ -1424,7 +1432,7 @@ export function useRoomScene(
     if (freeLookRef.current) toggleFreeLook();
     const next = {
       ...settingsRef.current,
-      ...placementFromSceneCamera(preset),
+      ...placementFromSceneCamera(preset, TARGET_H * settingsRef.current.scaleMul),
       sceneCameraByScene: { ...settingsRef.current.sceneCameraByScene, [settingsRef.current.sceneFile]: id },
     };
     settingsRef.current = next;
@@ -1433,5 +1441,29 @@ export function useRoomScene(
     return true;
   }, [togglePlacementMode, toggleFreeLook]);
 
-  return { freeLook, toggleFreeLook, saveCurrentView, placementMode, togglePlacementMode, applyCameraPreset };
+  const bringCharacterToView = useCallback((): boolean => {
+    const refs = refsRef.current;
+    if (!refs) return false;
+    const position = refs.camera.getWorldPosition(new THREE.Vector3());
+    const direction = refs.camera.getWorldDirection(new THREE.Vector3()).normalize();
+    const placement = placementFromSceneCamera({
+      id: 'current', name: 'current',
+      position: position.toArray() as [number, number, number],
+      direction: direction.toArray() as [number, number, number],
+      fovDeg: refs.camera.fov,
+    }, TARGET_H * settingsRef.current.scaleMul);
+    const next = { ...settingsRef.current, ...placement };
+    settingsRef.current = next;
+    const model = charGroupRef.current?.children[0];
+    if (model) {
+      resetModelTransform(model);
+      normalizeAndPosition(model, next);
+      resetSpringChains(model, springChainsRef.current);
+    }
+    applyView(refs, next);
+    saveRoomSettings(next);
+    return true;
+  }, []);
+
+  return { freeLook, toggleFreeLook, saveCurrentView, placementMode, togglePlacementMode, applyCameraPreset, bringCharacterToView };
 }

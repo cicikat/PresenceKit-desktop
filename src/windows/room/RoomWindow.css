@@ -38,7 +38,10 @@
 .call-room button:not(:disabled):hover { transform: translateY(-2px); box-shadow: 0 5px 18px #0004; }
 .call-room button:focus-visible { outline: 2px solid #b4deef; outline-offset: 3px; }
 .call-room__hangup { box-shadow: 0 5px 22px #e24b4533; }
-.call-room__camera-presets { position: absolute; right: 16px; bottom: 76px; z-index: 30; width: min(270px, calc(100vw - 32px)); padding: 12px; display: grid; gap: 6px; border: 1px solid #c3e7ff36; border-radius: 14px; background: #14202bea; box-shadow: 0 12px 36px #0009; backdrop-filter: blur(14px); }
+.call-room__camera-menu { position: absolute; right: 12px; bottom: 12px; z-index: 30; display: grid; justify-items: end; gap: 6px; }
+.call-room__camera-menu-trigger { width: 30px; height: 30px; padding: 0; border: 1px solid #c3e7ff45; border-radius: 50%; color: #d2e0eb; background: #14202bea; box-shadow: 0 8px 24px #0003; cursor: pointer; font: 500 11px var(--font-mono); opacity: .74; }
+.call-room__camera-menu-trigger:hover, .call-room__camera-menu-trigger:focus-visible { opacity: 1; }
+.call-room__camera-presets { width: min(236px, calc(100vw - 24px)); padding: 10px; display: grid; gap: 6px; border: 1px solid #c3e7ff36; border-radius: 14px; background: #14202bea; box-shadow: 0 12px 36px #0009; backdrop-filter: blur(14px); }
 .call-room__camera-presets-title { color: #e5f3fa; font-size: 13px; font-weight: 600; }
 .call-room__camera-presets-empty { color: #aab8c4; font-size: 11px; line-height: 1.5; }
 .call-room__camera-presets button { text-align: left; padding: 8px 10px; border: 1px solid #c3e7ff26; border-radius: 8px; background: #ffffff0a; color: #e4edf5; cursor: pointer; }

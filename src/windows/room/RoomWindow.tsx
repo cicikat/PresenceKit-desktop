@@ -457,6 +457,16 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
                 <Icon name="bookmark" size={20} />
               </button>
             )}
+
+            <button
+              type="button"
+              title={t('room.call.bringCharacterToView')}
+              aria-label={t('room.call.bringCharacterToView')}
+              onClick={() => threeStageRef.current?.bringCharacterToView()}
+              style={{ ...btnBase, width: 'auto', padding: '0 12px', borderRadius: 22,
+                background: 'oklch(0.22 0.03 240)', color: 'oklch(0.83 0.06 210)', fontSize: 11,
+                whiteSpace: 'nowrap' }}
+            >{t('room.call.bringCharacterToView')}</button>
           </>
         )}
 
@@ -469,16 +479,10 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
         >
           <Icon name="phone-off" size={22} />
         </button>
-        {renderMode === 'model3d' && (
-          <>
-            <button
-              type="button"
-              aria-label={t('room.call.sceneCameras.menu')}
-              aria-expanded={presetMenuOpen}
-              onClick={() => setPresetMenuOpen(open => !open)}
-              style={{ ...btnBase, background: 'oklch(0.22 0.03 240)', color: 'oklch(0.72 0.08 240)', fontSize: 24 }}
-            >···</button>
-            {presetMenuOpen && <div className="call-room__camera-presets" role="group" aria-label={t('room.call.sceneCameras.menu')}>
+      </div>
+      {renderMode === 'model3d' && (
+        <div className="call-room__camera-menu">
+          {presetMenuOpen && <div className="call-room__camera-presets" role="group" aria-label={t('room.call.sceneCameras.menu')}>
               <div className="call-room__camera-presets-title">{t('room.call.sceneCameras.title')}</div>
               {cameraPresets.length === 0 ? (
                 <div className="call-room__camera-presets-empty">{t('room.call.sceneCameras.empty')}</div>
@@ -492,10 +496,17 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
                   }}
                 >{preset.name}</button>
               ))}
-            </div>}
-          </>
-        )}
-      </div>
+          </div>}
+          <button
+            type="button"
+            className="call-room__camera-menu-trigger"
+            aria-label={t('room.call.sceneCameras.menu')}
+            aria-expanded={presetMenuOpen}
+            title={t('room.call.sceneCameras.menu')}
+            onClick={() => setPresetMenuOpen(open => !open)}
+          >{presetMenuOpen ? '×' : '⋯'}</button>
+        </div>
+      )}
     </div>
   );
 }
