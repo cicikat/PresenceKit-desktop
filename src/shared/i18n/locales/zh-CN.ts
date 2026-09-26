@@ -49,6 +49,7 @@ export const zhCN = {
 "room.call.voice.stop": "关闭持续录音",
 "settings.desktopTts.videoCall": "视频电话",
 "settings.desktopTts.videoCallHint": "角色回复后自动合成并播放语音",
+"settings.desktopTts.voiceBarHint": "控制聊天与桌宠语音条；视频电话只显示字幕，自动播放可单独设置",
 "settings.desktopTts.autoPlaySuffix": "自动播放",
 "settings.avatar.mode": "模型类型",
 "settings.avatar.model3d": "3D 模型",

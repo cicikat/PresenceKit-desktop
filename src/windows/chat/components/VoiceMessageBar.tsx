@@ -11,7 +11,7 @@ function audioUrl(audioB64: string, mime: string): string {
   return URL.createObjectURL(new Blob([bytes], { type: mime || 'audio/wav' }));
 }
 
-export function VoiceMessageBar({ text, emotion = 'neutral', fontSize, autoPlay = false, scene = 'desktop_pet', onPlaybackStart, onPlaybackEnd }: { text: string; emotion?: string; fontSize?: number; autoPlay?: boolean; scene?: 'chat' | 'dream' | 'video_call' | 'desktop_pet'; onPlaybackStart?: () => void; onPlaybackEnd?: () => void }) {
+export function VoiceMessageBar({ text, emotion = 'neutral', fontSize, autoPlay = false, scene = 'desktop_pet', controlsVisible = true, onPlaybackStart, onPlaybackEnd }: { text: string; emotion?: string; fontSize?: number; autoPlay?: boolean; scene?: 'chat' | 'dream' | 'video_call' | 'desktop_pet'; controlsVisible?: boolean; onPlaybackStart?: () => void; onPlaybackEnd?: () => void }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const dataArrayRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
@@ -189,6 +189,7 @@ export function VoiceMessageBar({ text, emotion = 'neutral', fontSize, autoPlay 
     play();
   }, [autoPlay, play]);
 
+  if (!controlsVisible) return null;
   return (
     <div style={{ display: 'grid', gap: 7 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

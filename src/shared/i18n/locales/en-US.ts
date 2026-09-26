@@ -53,6 +53,7 @@ export const enUS: Record<MessageKey, string> = {
 "room.call.voice.stop": "Stop continuous recording",
 "settings.desktopTts.videoCall": "Video call",
 "settings.desktopTts.videoCallHint": "Generate and play speech after the character replies",
+"settings.desktopTts.voiceBarHint": "Controls chat and pet voice bars; video calls show subtitles and have separate auto-play",
 "settings.desktopTts.autoPlaySuffix": " autoplay",
 "settings.avatar.mode": "Model type",
 "settings.avatar.model3d": "3D models",

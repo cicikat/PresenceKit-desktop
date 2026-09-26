@@ -48,7 +48,7 @@ export function DesktopTtsSettingsPage() {
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink)' }}>桌面语音条</div>
           <div className="mono" style={{ fontSize: 9.5, color: 'var(--ink-3)', letterSpacing: 1.1, marginTop: 2 }}>
-            开启后助手消息显示语音条；可分别设置各场景是否自动播放
+            {t('settings.desktopTts.voiceBarHint')}
           </div>
         </div>
         <button onClick={() => void toggle()} disabled={loading || saving} style={{
@@ -66,9 +66,9 @@ export function DesktopTtsSettingsPage() {
               <div style={{ fontSize: 12.5, color: 'var(--ink)' }}>{title}</div>
               <div className="mono" style={{ fontSize: 9, color: 'var(--ink-3)', marginTop: 2 }}>{description}</div>
             </div>
-            <button onClick={() => void toggleAutoPlay(key)} disabled={loading || saving || !enabled} aria-label={`${title}${t('settings.desktopTts.autoPlaySuffix')}`} style={{
+            <button onClick={() => void toggleAutoPlay(key)} disabled={loading || saving || (key !== 'video_call' && !enabled)} aria-label={`${title}${t('settings.desktopTts.autoPlaySuffix')}`} style={{
               width: 42, height: 22, borderRadius: 11, padding: 0, position: 'relative', cursor: 'pointer',
-              background: autoPlay[key] ? 'var(--accent-3)' : 'var(--paper-3)', border: '1px solid var(--paper-edge)', opacity: enabled ? 1 : .5,
+              background: autoPlay[key] ? 'var(--accent-3)' : 'var(--paper-3)', border: '1px solid var(--paper-edge)', opacity: enabled || key === 'video_call' ? 1 : .5,
             }}>
               <span style={{ position: 'absolute', top: 1, left: autoPlay[key] ? 21 : 1, width: 18, height: 18, borderRadius: '50%', background: 'var(--paper)', transition: 'left .2s' }} />
             </button>

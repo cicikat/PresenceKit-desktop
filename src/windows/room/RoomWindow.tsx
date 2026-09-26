@@ -19,8 +19,7 @@ import { VnBubble } from './VnBubble';
 import { getActiveCharacterInfo, getActiveCharacterName, subscribeActiveCharacter } from '../../shared/activeCharacter';
 import { isSingleRealityMessage } from '../../shared/api/realityMessageScope';
 import { useVideoCallCamera } from './useVideoCallCamera';
-import { VoiceMessageBar } from '../chat/components/VoiceMessageBar';
-import { getDesktopTtsEnabled, getTtsAutoPlay } from '../../shared/api/runtimeSettings';
+import { getTtsAutoPlay } from '../../shared/api/runtimeSettings';
 import { CallSpeechPresenter } from './CallSpeechPresenter';
 import type { SceneCameraPreset } from './sceneCameraPresets';
 
@@ -100,14 +99,11 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
       camera.stop();
     }
   }), [camera.stop]);
-  const [ttsText, setTtsText] = useState('');
   const [ttsAutoPlay, setTtsAutoPlay] = useState(false);
   const [audioTalking, setAudioTalking] = useState(false);
   useEffect(() => {
-    void Promise.all([getDesktopTtsEnabled(), getTtsAutoPlay()])
-      .then(([enabled, auto]) => setTtsAutoPlay(enabled && auto.video_call)).catch(() => {});
-    const refresh = () => void Promise.all([getDesktopTtsEnabled(), getTtsAutoPlay()])
-      .then(([enabled, auto]) => setTtsAutoPlay(enabled && auto.video_call)).catch(() => {});
+    void getTtsAutoPlay().then(auto => setTtsAutoPlay(auto.video_call)).catch(() => {});
+    const refresh = () => void getTtsAutoPlay().then(auto => setTtsAutoPlay(auto.video_call)).catch(() => {});
     window.addEventListener('desktop-tts-settings', refresh);
     window.addEventListener('tts-auto-play-settings', refresh);
     return () => {
@@ -124,13 +120,6 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
   // where the WS dies mid-stream and stream_end never arrives.
   useEffect(() => {
     const acceptedStreams = new Set<string>();
-    const voicedTurns = new Set<string>();
-    const offerTts = (message: { msg_id: string; content: string; source?: string; domain?: string; char_id?: string; round_id?: string }) => {
-      if (!isSingleRealityMessage(message, getActiveCharacterInfo().id) || !message.content.trim() || voicedTurns.has(message.msg_id)) return;
-      voicedTurns.add(message.msg_id);
-      if (voicedTurns.size > 64) voicedTurns.delete(voicedTurns.values().next().value!);
-      setTtsText(message.content.trim());
-    };
     const unStart = wsClient.on('message_stream_start', message => {
       if (!isSingleRealityMessage(message, getActiveCharacterInfo().id)) return;
       acceptedStreams.add(message.msg_id);
@@ -142,8 +131,7 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
         setSending(false);
       }
     });
-    const unMessage = wsClient.on('channel_message', offerTts);
-    return () => { unStart(); unEnd(); unMessage(); };
+    return () => { unStart(); unEnd(); };
   }, []);
 
   // ── pet snapshot / settings ───────────────────────────────────────────────
@@ -334,7 +322,6 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
       </div>
 
       {/* chat input bar */}
-      {!ttsAutoPlay && ttsText && <div className="call-room__tts"><VoiceMessageBar text={ttsText} scene="video_call" /></div>}
       {(voice.error || speechDraft) && <div role={voice.error ? 'alert' : 'status'} className={voice.error ? 'call-room__voice-error' : 'call-room__voice-status'}>{voice.error || `${t('room.call.voice.heard')}: ${speechDraft}`}</div>}
       {audioStatus && <div role="status" className="call-room__voice-status">{audioStatus}</div>}
       <div className="call-room__composer" style={{

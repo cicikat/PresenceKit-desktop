@@ -100,7 +100,7 @@ to use only the persona-scoped settings and runtime endpoints documented below.
 | 对话 mode / style / 多消息 | 设置 → 对话 | 即时写后端配置 |
 | 模型路由 | 设置 → 系统 → 模型路由 | 只能在管理员预建的 routing profile 之间切换；不下发 API key 或 base URL |
 | 角色 · 模型绑定 | 设置 → 系统 → 角色 · 模型绑定 | 按角色单独绑定 routing profile（不是裸 preset）；“跟随全局”发送 `null` 并明确展示当前全局 profile/chat，profile 列表中的 `default` 仍是固定绑定；行内展示解析后的 `resolved_chat_preset`；清除即回到全局默认；旧后端无 Brief 87 API 时区块整体隐藏 |
-| TTS 桌面语音条 | 设置 → 系统 → 桌面语音 | 独立总开关；聊天与桌宠气泡显示可播放语音条，可展开/收起文字；下方控制聊天与桌宠的自动播放，收到回复后并行合成，并在所有桌面窗口间按消息顺序逐条播放 |
+| TTS 桌面语音条 | 设置 → 系统 → 桌面语音 | 总开关控制聊天与桌宠语音条；视频电话独立自动播放开关始终可设置，通话里只显示与音频同步的 VN 字幕，不显示语音条；收到回复后并行合成，并在所有桌面窗口间按消息顺序逐条播放 |
 | Tool loop | 设置 → 系统 | 总开关、步数、总超时、允许类别、排除工具 |
 | Thinking | 设置 → 系统 | 总开关、模式、主动消息、独白 token 上限 |
 | 生成后段落兜底 | 设置 → 系统 | 默认关闭；热切换长篇单段回复的发送前空行兜底，当前阈值只读展示 |

@@ -42,11 +42,9 @@ export function CallSpeechPresenter({ name, onPlayingChange }: { name: string; o
     {current && <>
       <VnBubble name={name} text={current.text} nameAlign="left" visible={playing} streaming={false} canAdvance={false}
         style={{ position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)', maxWidth: '78%', minWidth: 200, zIndex: 10 }} />
-      <div className="call-room__tts" style={{ position: 'absolute', bottom: 100, left: 16, zIndex: 11, borderRadius: 8 }}>
-        <VoiceMessageBar key={current.id} text={current.text} autoPlay scene="video_call"
-          onPlaybackStart={() => setPlaying(true)}
-          onPlaybackEnd={() => { setPlaying(false); setLines(queue => queue.slice(1)); }} />
-      </div>
+      <VoiceMessageBar key={current.id} text={current.text} autoPlay scene="video_call" controlsVisible={false}
+        onPlaybackStart={() => setPlaying(true)}
+        onPlaybackEnd={() => { setPlaying(false); setLines(queue => queue.slice(1)); }} />
     </>}
   </>;
 }
