@@ -1,5 +1,13 @@
 # docs/known-issues.md — 已知问题与技术债
 
+## Room 模型目录即时扫描（2026-09-26，partial）
+
+current：开发版从 `public/room/`、发行版从设置页显示的本机可写 room 目录优先扫描和加载
+角色/场景 GLB，内置资源兜底；设置页每 3 秒及窗口聚焦时刷新。切换仍保存与恢复场景×角色
+机位站位。前端构建与 Rust `cargo check` 通过。
+observe：真实 Windows 发行包新增 GLB、Room/Pet 模型渲染、来回切换机位仍待人工验收。
+这是本机模型选择，不新增后端状态、管理面配置或手机消费路径；原视频通话服务调用链不变。
+
 ## 主聊天链跳过/失败后待机加载框（2026-09-21）
 
 current：角色等待气泡由 pending 请求或空 `message_stream_start` 派生。HTTP 空回复

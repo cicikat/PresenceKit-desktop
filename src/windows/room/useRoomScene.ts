@@ -10,6 +10,7 @@ import { MOOD_MORPHS, EXPR_KEYS } from './morphExpressions';
 import { getActiveDirective } from './avatarDirective';
 import { backendMoodToFrontend } from '../../shared/state/mood-mapping';
 import { saveRoomSettings, getCharacterCfg } from '../../shared/room/roomSettings';
+import { loadRoomModel } from '../../shared/room/roomAssets';
 import type { RoomSettings } from '../../shared/room/roomSettings';
 import { BoneResolver, microNoise } from './boneResolver';
 import {
@@ -437,8 +438,7 @@ export function useRoomScene(
     let cancelled = false;
     const loader = new GLTFLoader();
     const s = settingsRef.current;
-    loader.load(
-      `/room/character/${encodeURIComponent(s.characterFile)}`,
+    loadRoomModel(loader, 'character', s.characterFile,
       (gltf) => {
         if (cancelled || disposedRef.current) return;
         const model = gltf.scene;
@@ -502,8 +502,7 @@ export function useRoomScene(
 
     let cancelled = false;
     const loader = new GLTFLoader();
-    loader.load(
-      `/room/scene/${encodeURIComponent(settingsRef.current.sceneFile)}`,
+    loadRoomModel(loader, 'scene', settingsRef.current.sceneFile,
       (gltf) => {
         if (cancelled || disposedRef.current) return;
         roomGroup.add(gltf.scene);
@@ -807,8 +806,7 @@ export function useRoomScene(
     const loader = new GLTFLoader();
 
     // ── load room ──
-    loader.load(
-      `/room/scene/${encodeURIComponent(initSettings.sceneFile)}`,
+    loadRoomModel(loader, 'scene', initSettings.sceneFile,
       (gltf) => {
         roomGroup.add(gltf.scene);
         glbSceneLightsRef.current = collectGlbLights(gltf.scene, initSettings.lights.useSceneLights);
@@ -820,8 +818,7 @@ export function useRoomScene(
     );
 
     // ── load character ──
-    loader.load(
-      `/room/character/${encodeURIComponent(initSettings.characterFile)}`,
+    loadRoomModel(loader, 'character', initSettings.characterFile,
       (gltf) => {
         if (disposedRef.current) return;
         const model = gltf.scene;

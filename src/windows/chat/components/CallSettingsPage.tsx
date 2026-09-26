@@ -8,7 +8,7 @@ import {
   switchRoomPlacement,
 } from '../../../shared/room/roomSettings';
 import type { RoomSettings, Framing, LightCfg, RoomLights, RoomProp } from '../../../shared/room/roomSettings';
-import { listRoomCharacters, listRoomScenes, listRoomPropCategories, listRoomPropFiles } from '../../../shared/room/roomAssets';
+import { listRoomCharacters, listRoomScenes, listRoomPropCategories, listRoomPropFiles, roomAssetsLocation } from '../../../shared/room/roomAssets';
 import type { RoomAsset, RoomPropCategory, RoomPropFile } from '../../../shared/room/roomAssets';
 import {
   loadRoomPresets,
@@ -120,6 +120,7 @@ export function CallSettingsPage() {
   const [chars, setChars] = useState<RoomAsset[]>([]);
   const [scenes, setScenes] = useState<RoomAsset[]>([]);
   const [assetsError, setAssetsError] = useState<string | null>(null);
+  const [assetsLocation, setAssetsLocation] = useState('');
   const [presets, setPresets] = useState<RoomPreset[]>(loadRoomPresets);
   const [newPresetName, setNewPresetName] = useState('');
   const [lightsOpen, setLightsOpen] = useState(false);
@@ -134,9 +135,29 @@ export function CallSettingsPage() {
   }, []);
 
   useEffect(() => {
-    Promise.all([listRoomCharacters(), listRoomScenes()])
-      .then(([c, s]) => { setChars(c); setScenes(s); setAssetsError(null); })
-      .catch(e => setAssetsError(String(e)));
+    roomAssetsLocation().then(setAssetsLocation).catch(() => {});
+    let active = true;
+    let scanning = false;
+    const scan = async () => {
+      if (scanning) return;
+      scanning = true;
+      try {
+        const [c, s] = await Promise.all([listRoomCharacters(), listRoomScenes()]);
+        if (active) { setChars(c); setScenes(s); setAssetsError(null); }
+      } catch (e) {
+        if (active) setAssetsError(String(e));
+      } finally {
+        scanning = false;
+      }
+    };
+    void scan();
+    window.addEventListener('focus', scan);
+    const timer = window.setInterval(scan, 3000);
+    return () => {
+      active = false;
+      window.removeEventListener('focus', scan);
+      window.clearInterval(timer);
+    };
   }, []);
 
   useEffect(() => {
@@ -255,8 +276,9 @@ export function CallSettingsPage() {
       <div>
         <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink)', marginBottom: 2 }}>模型与场景</div>
         <div className="mono" style={{ fontSize: 9.5, color: 'var(--ink-3)', letterSpacing: 1.1 }}>
-          扫描 public/room/ 下的 glb 文件，选择后即时替换；机位/站位按「场景×模型」自动记忆，切回去自动复原
+          {t('settings.call.roomAssetsHint')}
         </div>
+        {assetsLocation && <div className="mono" style={{ fontSize: 10, color: 'var(--ink-3)', overflowWrap: 'anywhere', marginTop: 4 }}>{assetsLocation}</div>}
       </div>
 
       {assetsError && (
@@ -265,24 +287,24 @@ export function CallSettingsPage() {
         </div>
       )}
 
-      <Row label="角色模型" hint="public/room/character/ 下的 glb">
+      <Row label="角色模型" hint={t('settings.call.characterAssetsHint')}>
         <select
           value={settings.characterFile}
           onChange={e => switchPlacement({ characterFile: e.target.value })}
           style={{ ...selectStyle, width: 170 }}
         >
-          {chars.length === 0 && <option value={settings.characterFile}>{settings.characterFile}</option>}
+          {!chars.some(a => a.fileName === settings.characterFile) && <option value={settings.characterFile}>{settings.characterFile}</option>}
           {chars.map(a => <option key={a.fileName} value={a.fileName}>{a.label}</option>)}
         </select>
       </Row>
 
-      <Row label="场景模型" hint="public/room/scene/ 下的 glb">
+      <Row label="场景模型" hint={t('settings.call.sceneAssetsHint')}>
         <select
           value={settings.sceneFile}
           onChange={e => switchPlacement({ sceneFile: e.target.value })}
           style={{ ...selectStyle, width: 170 }}
         >
-          {scenes.length === 0 && <option value={settings.sceneFile}>{settings.sceneFile}</option>}
+          {!scenes.some(a => a.fileName === settings.sceneFile) && <option value={settings.sceneFile}>{settings.sceneFile}</option>}
           {scenes.map(a => <option key={a.fileName} value={a.fileName}>{a.label}</option>)}
         </select>
       </Row>

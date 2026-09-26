@@ -8,6 +8,7 @@ import { MOOD_MORPHS, EXPR_KEYS } from '../../windows/room/morphExpressions';
 import { BoneResolver, microNoise } from '../../windows/room/boneResolver';
 import { backendMoodToFrontend } from '../state/mood-mapping';
 import type { BoneMap } from '../room/roomSettings';
+import { loadRoomModel } from '../room/roomAssets';
 import type { ActiveDirective } from '../../windows/room/avatarDirective';
 
 export const RIG_TARGET_H = 1.6;
@@ -89,7 +90,7 @@ export function normalizeCharacter(model: THREE.Object3D, scaleMul = 1): void {
   model.position.z -= center.z;
 }
 
-export function useCharacterRig(characterUrl: string, boneMap?: BoneMap, onModelLoaded?: () => void): CharacterRigHandle {
+export function useCharacterRig(characterFile: string, boneMap?: BoneMap, onModelLoaded?: () => void): CharacterRigHandle {
   const charGroupRef = useRef<THREE.Group | null>(null);
   if (!charGroupRef.current) charGroupRef.current = new THREE.Group();
   const charGroup = charGroupRef.current;
@@ -121,8 +122,7 @@ export function useCharacterRig(characterUrl: string, boneMap?: BoneMap, onModel
     boneResolverRef.current = null;
 
     const loader = new GLTFLoader();
-    loader.load(
-      characterUrl,
+    loadRoomModel(loader, 'character', characterFile,
       (gltf) => {
         if (cancelled) return;
         const model = gltf.scene;
@@ -176,7 +176,7 @@ export function useCharacterRig(characterUrl: string, boneMap?: BoneMap, onModel
       boneResolverRef.current = null;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [characterUrl]);
+  }, [characterFile]);
 
   const onNewSpeech = useCallback((text: string) => {
     // Keep mouth-open duration in the same order of magnitude as the pet bubble's

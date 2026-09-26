@@ -685,17 +685,8 @@ fn read_design_mod_asset(app: tauri::AppHandle, id: String, file: String) -> Res
 fn room_assets_dir(app: &tauri::AppHandle, kind: &str) -> Result<PathBuf, String> {
     let mut checked = Vec::new();
 
-    match app.path().resource_dir() {
-        Ok(resource_dir) => {
-            let dir = resource_dir.join("room").join(kind);
-            if dir.is_dir() {
-                return Ok(dir);
-            }
-            checked.push(dir);
-        }
-        Err(error) => eprintln!("[room_assets] 无法定位运行期资源目录: {error}"),
-    }
-
+    // In dev, public/ is the live source. A prior bundle may also exist in
+    // resource_dir, but it must not hide files added to public/room/ later.
     if cfg!(debug_assertions) {
         let dev_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .parent()
@@ -709,12 +700,59 @@ fn room_assets_dir(app: &tauri::AppHandle, kind: &str) -> Result<PathBuf, String
         checked.push(dev_dir);
     }
 
+    match app.path().resource_dir() {
+        Ok(resource_dir) => {
+            let dir = resource_dir.join("room").join(kind);
+            if dir.is_dir() {
+                return Ok(dir);
+            }
+            checked.push(dir);
+        }
+        Err(error) => eprintln!("[room_assets] 无法定位运行期资源目录: {error}"),
+    }
+
     let checked_paths = checked
         .iter()
         .map(|p| p.display().to_string())
         .collect::<Vec<_>>()
         .join(", ");
     Err(format!("无法定位 room/{kind} 资源目录，已检查: {checked_paths}"))
+}
+
+// Writable assets take precedence over bundled defaults in release builds.
+// Keep the same source as Vite's public directory in development.
+fn room_live_dir(app: &tauri::AppHandle, kind: &str) -> Result<PathBuf, String> {
+    if cfg!(debug_assertions) {
+        return Ok(PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent().ok_or_else(|| "无法定位项目根目录".to_string())?
+            .join("public").join("room").join(kind));
+    }
+    app.path().app_local_data_dir()
+        .map(|dir| dir.join("room").join(kind))
+        .map_err(|e| format!("无法定位本机 room 目录: {e}"))
+}
+
+#[tauri::command]
+fn room_assets_location(app: tauri::AppHandle) -> Result<String, String> {
+    room_live_dir(&app, "character")?
+        .parent().map(|path| path.display().to_string())
+        .ok_or_else(|| "无法定位 room 目录".to_string())
+}
+
+#[tauri::command]
+fn read_room_asset(app: tauri::AppHandle, kind: String, file_name: String) -> Result<String, String> {
+    if kind != "character" && kind != "scene" {
+        return Err("无效的 room 资源类型".to_string());
+    }
+    if Path::new(&file_name).components().count() != 1
+        || file_name.starts_with('.')
+        || !file_name.to_ascii_lowercase().ends_with(".glb") {
+        return Err("无效的 GLB 文件名".to_string());
+    }
+    let live = room_live_dir(&app, &kind)?.join(&file_name);
+    let path = if live.is_file() { live } else { room_assets_dir(&app, &kind)?.join(&file_name) };
+    let bytes = fs::read(&path).map_err(|e| format!("读取 {} 失败: {e}", path.display()))?;
+    Ok(format!("data:model/gltf-binary;base64,{}", base64::engine::general_purpose::STANDARD.encode(bytes)))
 }
 
 #[tauri::command]
@@ -724,25 +762,29 @@ fn list_room_assets(app: tauri::AppHandle, kind: String) -> Result<serde_json::V
     }
     let dir = room_assets_dir(&app, &kind)?;
     let mut assets = Vec::new();
-    for entry in fs::read_dir(&dir)
-        .map_err(|e| format!("无法读取目录 {}: {e}", dir.display()))?
-    {
-        let entry = entry.map_err(|e| e.to_string())?;
-        let path = entry.path();
-        if !path.is_file() {
-            continue;
+    let live_dir = room_live_dir(&app, &kind)?;
+    let dirs = if live_dir == dir { vec![dir] } else { vec![dir, live_dir] };
+    for dir in dirs.into_iter().filter(|dir| dir.is_dir()) {
+        for entry in fs::read_dir(&dir).map_err(|e| format!("无法读取目录 {}: {e}", dir.display()))? {
+            let entry = entry.map_err(|e| e.to_string())?;
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+            let Some(ext) = path.extension().and_then(|v| v.to_str()) else {
+                continue;
+            };
+            if !ext.eq_ignore_ascii_case("glb") {
+                continue;
+            }
+            let Some(file_name) = path.file_name().and_then(|v| v.to_str()) else {
+                continue;
+            };
+            let label = path.file_stem().and_then(|v| v.to_str()).unwrap_or(file_name);
+            if !assets.iter().any(|a: &serde_json::Value| a["fileName"] == file_name) {
+                assets.push(serde_json::json!({ "fileName": file_name, "label": label }));
+            }
         }
-        let Some(ext) = path.extension().and_then(|v| v.to_str()) else {
-            continue;
-        };
-        if !matches!(ext.to_ascii_lowercase().as_str(), "glb" | "gltf") {
-            continue;
-        }
-        let Some(file_name) = path.file_name().and_then(|v| v.to_str()) else {
-            continue;
-        };
-        let label = path.file_stem().and_then(|v| v.to_str()).unwrap_or(file_name);
-        assets.push(serde_json::json!({ "fileName": file_name, "label": label }));
     }
     assets.sort_by(|a, b| {
         a["fileName"].as_str().unwrap_or_default()
@@ -3421,6 +3463,8 @@ pub fn run() {
             read_design_mod_file,
             read_design_mod_asset,
             list_room_assets,
+            room_assets_location,
+            read_room_asset,
             list_room_props,
             list_live2d_models,
             send_chat,

@@ -316,7 +316,11 @@ src/windows/toy/
   复测后连续录音采用有声/停顿切段，最多 12 秒一段；静音与“未识别到语音”不作为错误。
   摄像头区分本地模型连接失败和推理超时，失败不阻断对话。
 - 资源浏览请求由 `roomAssets.ts` 调 Tauri `list_room_assets` / `list_room_props`，读取打包或开发期
-  `public/room/` 资源；它们不是后端 HTTP 接口。
+  `public/room/` 资源；它们不是后端 HTTP 接口。开发版优先读取仓库的 `public/room/`，
+  模型与场景设置页挂载时、窗口重新获得焦点时及每 3 秒重扫角色和场景目录，新增 GLB
+  无需重新打开设置页即可出现在列表。发布版优先读取设置页显示的本机可写 room 目录
+  （`app_local_data_dir/room/character`、`scene`），再读取构建时打包的默认模型；
+  加载也经同一 Tauri 目录优先级，新增模型无需重新打包。
 
 ## DiaryDetailWindow（日记详情）
 

@@ -1246,3 +1246,11 @@ backend docs/tool-discovery.md and docs/three-repo-interface-catalog.md.
 send_chat、upload_document 与 desktop_wake 返回的显式 turn_id 统一挂接到回复；传输 msg_id
 只用于对账。HTTP/WS/IPC 契约、scope、ack、TTL 与后端生成保持原值，未修改其他仓库。
 固定本机会话角色仍需后端显式作用域，交接见 ../cc-tasks/2026-09-17-session-scope-backend-handoff.md。
+
+## 本机 Room 模型资源
+
+`list_room_assets` 扫描角色与场景 GLB；`room_assets_location` 返回用户可放置模型的
+本机 room 目录；`read_room_asset` 仅接受 `character|scene` 与单个 `.glb` 文件名，
+按开发期 `public/room/` 或发行版 `app_local_data_dir/room/` 优先、打包资源兜底读取。
+Room 与 Pet 舞台通过相同命令加载，文件内容不经后端 HTTP。设置页定时重扫；
+选择只保存文件名，场景×角色的机位站位仍由本机 `RoomSettings.perPlacement` 管理。

@@ -52,9 +52,8 @@ export function Model3DStage({ snapshot }: PetRendererProps) {
     applyFraming(zoomRef.current);
   }, [applyFraming]);
 
-  const characterUrl = `/room/character/${encodeURIComponent(settings.characterFile)}`;
   const { charGroup, animate, onNewSpeech } = useCharacterRig(
-    characterUrl,
+    settings.characterFile,
     getCharacterCfg(settings, settings.characterFile).boneMap,
     handleModelLoaded,
   );
