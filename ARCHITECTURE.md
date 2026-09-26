@@ -19,6 +19,10 @@ diary-detail、design-satellite。主窗口中 Room/Toy 覆盖 Chat；Activity/�
 | Theme / Layout / Design Mod | 主题 token、布局槽位、可信 ESM 合成与 native satellite | [主题](docs/ui-mods.md)、[布局](docs/layout-mods.md)、[Mod 作者入口](docs/design-mod-authoring.md) |
 | Tauri / sensor | HTTP/WS token、窗口、文件、动作及键鼠/视觉采集；截图本地授权默认关闭 | [后端接入](docs/backend-integration.md)、[设置边界](docs/settings-control-audit.md) |
 
+Room 的 GLB 透视相机预设由 ThreeCallStage 的场景加载过程提取，经 RoomWindow 右下角菜单选择；
+所选机位与人物站位写入本机 RoomSettings，原有场景×人物组合记忆继续生效。
+摆放模式允许轨道视角调整，退出时保存相机；视频通话摄像头采集和后端视觉路由独立。
+
 ## 状态所有权
 
 - `src/shared/state/store.ts` 的 `STATE_FIELD_OWNERSHIP` 区分 backend-polled、backend-pushed、local-derived、sensor-derived；所有 engine 修改走其明确入口。

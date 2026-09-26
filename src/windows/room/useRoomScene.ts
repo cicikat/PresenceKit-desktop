@@ -10,6 +10,8 @@ import { MOOD_MORPHS, EXPR_KEYS } from './morphExpressions';
 import { getActiveDirective } from './avatarDirective';
 import { backendMoodToFrontend } from '../../shared/state/mood-mapping';
 import { saveRoomSettings, getCharacterCfg } from '../../shared/room/roomSettings';
+import { collectSceneCameraPresets, placementFromSceneCamera } from './sceneCameraPresets';
+import type { SceneCameraPreset } from './sceneCameraPresets';
 import { loadRoomModel } from '../../shared/room/roomAssets';
 import type { RoomSettings } from '../../shared/room/roomSettings';
 import { BoneResolver, microNoise } from './boneResolver';
@@ -133,6 +135,16 @@ function applyView(refs: SceneRefs, settings: RoomSettings): void {
   refs.camBase.copy(refs.camera.position);
 }
 
+function fitSceneClipRange(camera: THREE.PerspectiveCamera, controls: OrbitControls, scene: THREE.Object3D): void {
+  const bounds = new THREE.Box3().setFromObject(scene);
+  if (bounds.isEmpty()) return;
+  const diagonal = bounds.getSize(new THREE.Vector3()).length();
+  const center = bounds.getCenter(new THREE.Vector3());
+  camera.far = Math.max(100, diagonal * 2, camera.position.distanceTo(center) + diagonal);
+  camera.updateProjectionMatrix();
+  controls.maxDistance = Math.max(15, diagonal * 2);
+}
+
 function lockControls(controls: OrbitControls): void {
   controls.enableRotate = false;
   controls.enableZoom   = false;
@@ -148,7 +160,7 @@ function unlockControls(controls: OrbitControls): void {
   controls.minPolarAngle   = 0;
   controls.maxPolarAngle   = Math.PI;
   controls.minDistance     = 0.3;
-  controls.maxDistance     = 15;
+  controls.maxDistance     = Math.max(15, controls.maxDistance);
 }
 
 function disposeModel(obj: THREE.Object3D): void {
@@ -290,6 +302,7 @@ export interface RoomSceneAPI {
   saveCurrentView: () => void;
   placementMode: boolean;
   togglePlacementMode: () => void;
+  applyCameraPreset: (id: string) => boolean;
 }
 
 export function useRoomScene(
@@ -297,6 +310,7 @@ export function useRoomScene(
   mood: Mood,
   talking: boolean,
   settings: RoomSettings,
+  onCameraPresetsChange: (presets: SceneCameraPreset[]) => void,
 ): RoomSceneAPI {
   const refsRef            = useRef<SceneRefs | null>(null);
   const moodRef            = useRef(mood);
@@ -308,6 +322,9 @@ export function useRoomScene(
   const roomGroupRef       = useRef<THREE.Group | null>(null);
   const propsGroupRef      = useRef<THREE.Group | null>(null);
   const glbSceneLightsRef  = useRef<THREE.Light[]>([]);
+  const cameraPresetsRef = useRef<SceneCameraPreset[]>([]);
+  const onCameraPresetsChangeRef = useRef(onCameraPresetsChange);
+  onCameraPresetsChangeRef.current = onCameraPresetsChange;
   const disposedRef        = useRef(false);
   const freeLookRef        = useRef(false);
   const [freeLook, setFreeLook] = useState(false);
@@ -331,6 +348,12 @@ export function useRoomScene(
   const charBaseScaleRef      = useRef<number>(1);
   const placementKeyHandlerRef = useRef<((e: KeyboardEvent) => void) | null>(null);
   const intensityLabelRef     = useRef<HTMLDivElement | null>(null);
+
+  const registerSceneCameras = useCallback((scene: THREE.Object3D, refs: SceneRefs) => {
+    cameraPresetsRef.current = collectSceneCameraPresets(scene);
+    onCameraPresetsChangeRef.current(cameraPresetsRef.current);
+    fitSceneClipRange(refs.camera, refs.controls, scene);
+  }, []);
 
   // keep settingsRef current
   useEffect(() => {
@@ -499,6 +522,10 @@ export function useRoomScene(
       disposeModel(child);
     }
     glbSceneLightsRef.current = [];
+    cameraPresetsRef.current = [];
+    onCameraPresetsChangeRef.current([]);
+    refs.camera.far = 100;
+    refs.camera.updateProjectionMatrix();
 
     let cancelled = false;
     const loader = new GLTFLoader();
@@ -507,6 +534,7 @@ export function useRoomScene(
         if (cancelled || disposedRef.current) return;
         roomGroup.add(gltf.scene);
         glbSceneLightsRef.current = collectGlbLights(gltf.scene, settingsRef.current.lights.useSceneLights);
+        registerSceneCameras(gltf.scene, refs);
       },
       undefined,
       () => {
@@ -810,6 +838,7 @@ export function useRoomScene(
       (gltf) => {
         roomGroup.add(gltf.scene);
         glbSceneLightsRef.current = collectGlbLights(gltf.scene, initSettings.lights.useSceneLights);
+        registerSceneCameras(gltf.scene, refs);
         roomLoaded = true;
         maybeRemovePlaceholder();
       },
@@ -1221,7 +1250,10 @@ export function useRoomScene(
       refs.controls.target.y,
       refs.controls.target.z,
     ];
-    saveRoomSettings({ ...settingsRef.current, customView: { pos, target } });
+    refs.camBase.copy(refs.camera.position);
+    const next = { ...settingsRef.current, customView: { pos, target } };
+    settingsRef.current = next;
+    saveRoomSettings(next);
   }, []);
 
   const togglePlacementMode = useCallback(() => {
@@ -1232,6 +1264,8 @@ export function useRoomScene(
       placementModeRef.current = false;
       setPlacementMode(false);
       if (refs) {
+        saveCurrentView();
+        lockControls(refs.controls);
         refs.proxyKey.visible = false;
         refs.proxyFill.visible = false;
         refs.transformCtl.detach();
@@ -1264,6 +1298,7 @@ export function useRoomScene(
       setPlacementMode(true);
 
       if (refs) {
+        unlockControls(refs.controls);
         refs.proxyKey.position.copy(refs.keyLight.position);
         refs.proxyFill.position.copy(refs.charFill.position);
         refs.proxyKey.visible  = true;
@@ -1355,6 +1390,8 @@ export function useRoomScene(
               // Exit placement mode
               placementModeRef.current = false;
               setPlacementMode(false);
+              saveCurrentView();
+              lockControls(refs.controls);
               refs.proxyKey.visible  = false;
               refs.proxyFill.visible = false;
               tc.detach();
@@ -1377,7 +1414,24 @@ export function useRoomScene(
       window.addEventListener('keydown', handler);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [saveCurrentView]);
 
-  return { freeLook, toggleFreeLook, saveCurrentView, placementMode, togglePlacementMode };
+  const applyCameraPreset = useCallback((id: string): boolean => {
+    const preset = cameraPresetsRef.current.find(item => item.id === id);
+    const refs = refsRef.current;
+    if (!preset || !refs) return false;
+    if (placementModeRef.current) togglePlacementMode();
+    if (freeLookRef.current) toggleFreeLook();
+    const next = {
+      ...settingsRef.current,
+      ...placementFromSceneCamera(preset),
+      sceneCameraByScene: { ...settingsRef.current.sceneCameraByScene, [settingsRef.current.sceneFile]: id },
+    };
+    settingsRef.current = next;
+    saveRoomSettings(next);
+    applyView(refs, next);
+    return true;
+  }, [togglePlacementMode, toggleFreeLook]);
+
+  return { freeLook, toggleFreeLook, saveCurrentView, placementMode, togglePlacementMode, applyCameraPreset };
 }

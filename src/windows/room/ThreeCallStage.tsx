@@ -2,11 +2,14 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import { useRoomScene } from './useRoomScene';
 import type { Mood } from '../../shared/state/store';
 import type { RoomSettings } from '../../shared/room/roomSettings';
+import type { SceneCameraPreset } from './sceneCameraPresets';
+import { useI18n } from '../../shared/i18n';
 
 export interface ThreeCallStageHandle {
   toggleFreeLook: () => void;
   saveCurrentView: () => void;
   togglePlacementMode: () => void;
+  applyCameraPreset: (id: string) => boolean;
 }
 
 interface ThreeCallStageProps {
@@ -14,18 +17,20 @@ interface ThreeCallStageProps {
   talking: boolean;
   settings: RoomSettings;
   onSceneStateChange: (freeLook: boolean, placementMode: boolean) => void;
+  onCameraPresetsChange: (presets: SceneCameraPreset[]) => void;
 }
 
 export const ThreeCallStage = forwardRef<ThreeCallStageHandle, ThreeCallStageProps>(
-  function ThreeCallStage({ mood, talking, settings, onSceneStateChange }, ref) {
+  function ThreeCallStage({ mood, talking, settings, onSceneStateChange, onCameraPresetsChange }, ref) {
+    const { t } = useI18n();
     const mountRef = useRef<HTMLDivElement>(null);
-    const { freeLook, toggleFreeLook, saveCurrentView, placementMode, togglePlacementMode } =
-      useRoomScene(mountRef, mood, talking, settings);
+    const { freeLook, toggleFreeLook, saveCurrentView, placementMode, togglePlacementMode, applyCameraPreset } =
+      useRoomScene(mountRef, mood, talking, settings, onCameraPresetsChange);
 
     useImperativeHandle(
       ref,
-      () => ({ toggleFreeLook, saveCurrentView, togglePlacementMode }),
-      [toggleFreeLook, saveCurrentView, togglePlacementMode],
+      () => ({ toggleFreeLook, saveCurrentView, togglePlacementMode, applyCameraPreset }),
+      [toggleFreeLook, saveCurrentView, togglePlacementMode, applyCameraPreset],
     );
 
     useEffect(() => {
@@ -53,7 +58,7 @@ export const ThreeCallStage = forwardRef<ThreeCallStageHandle, ThreeCallStagePro
             fontFamily: 'var(--font-mono, monospace)', letterSpacing: 0.8, zIndex: 5,
             backdropFilter: 'blur(4px)',
           }}>
-            点选角色/灯光/道具 · G移动 R旋转 S缩放 · X/Y/Z 锁轴 · ←→ 调灯强度 · Esc 退出
+            {t('room.call.placementHint')}
           </div>
         )}
       </div>

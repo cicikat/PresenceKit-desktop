@@ -80,6 +80,7 @@ export interface RoomSettings {
   // `${sceneFile}|${characterFile}` combo — see `switchRoomPlacement`/`saveRoomSettings`. A combo
   // with no entry yet just keeps whatever the top-level fields currently are (legacy fallback).
   perPlacement?: Record<string, PlacementCfg>;
+  sceneCameraByScene?: Record<string, string>;
 }
 
 // Rig config is keyed by characterFile so switching between models with incompatible
@@ -301,6 +302,10 @@ function validate(raw: unknown): RoomSettings {
     idleClip: typeof r.idleClip === 'string' && r.idleClip ? r.idleClip : undefined,
     renderMode: r.renderMode === 'live2d' ? 'live2d' : 'model3d',
     perPlacement: validatePerPlacement(r.perPlacement),
+    sceneCameraByScene: r.sceneCameraByScene && typeof r.sceneCameraByScene === 'object'
+      ? Object.fromEntries(Object.entries(r.sceneCameraByScene as Record<string, unknown>)
+          .filter(([scene, camera]) => scene.length > 0 && typeof camera === 'string')) as Record<string, string>
+      : undefined,
   };
 }
 

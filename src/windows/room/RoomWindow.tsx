@@ -22,6 +22,7 @@ import { useVideoCallCamera } from './useVideoCallCamera';
 import { VoiceMessageBar } from '../chat/components/VoiceMessageBar';
 import { getDesktopTtsEnabled, getTtsAutoPlay } from '../../shared/api/runtimeSettings';
 import { CallSpeechPresenter } from './CallSpeechPresenter';
+import type { SceneCameraPreset } from './sceneCameraPresets';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -54,6 +55,9 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
   const threeStageRef = useRef<ThreeCallStageHandle>(null);
   const [freeLook, setFreeLook] = useState(false);
   const [placementMode, setPlacementMode] = useState(false);
+  const [cameraPresets, setCameraPresets] = useState<SceneCameraPreset[]>([]);
+  const [presetMenuOpen, setPresetMenuOpen] = useState(false);
+  const handleCameraPresetsChange = useCallback((presets: SceneCameraPreset[]) => setCameraPresets(presets), []);
   const handleSceneStateChange = useCallback((fl: boolean, pm: boolean) => {
     setFreeLook(fl);
     setPlacementMode(pm);
@@ -281,6 +285,7 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
             talking={ttsAutoPlay ? audioTalking : presenter.talking}
             settings={roomSettings}
             onSceneStateChange={handleSceneStateChange}
+            onCameraPresetsChange={handleCameraPresetsChange}
           />
         )}
 
@@ -457,12 +462,39 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
 
         {/* hang up */}
         <button
+          className="call-room__hangup"
           title="挂断"
           onClick={() => { camera.stop(); voice.stop(true); onClose(); }}
           style={{ ...btnBase, width: 52, height: 52, background: 'oklch(0.52 0.22 25)', color: '#fff' }}
         >
           <Icon name="phone-off" size={22} />
         </button>
+        {renderMode === 'model3d' && (
+          <>
+            <button
+              type="button"
+              aria-label={t('room.call.sceneCameras.menu')}
+              aria-expanded={presetMenuOpen}
+              onClick={() => setPresetMenuOpen(open => !open)}
+              style={{ ...btnBase, background: 'oklch(0.22 0.03 240)', color: 'oklch(0.72 0.08 240)', fontSize: 24 }}
+            >···</button>
+            {presetMenuOpen && <div className="call-room__camera-presets" role="group" aria-label={t('room.call.sceneCameras.menu')}>
+              <div className="call-room__camera-presets-title">{t('room.call.sceneCameras.title')}</div>
+              {cameraPresets.length === 0 ? (
+                <div className="call-room__camera-presets-empty">{t('room.call.sceneCameras.empty')}</div>
+              ) : cameraPresets.map(preset => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  aria-pressed={roomSettings.sceneCameraByScene?.[roomSettings.sceneFile] === preset.id}
+                  onClick={() => {
+                    if (threeStageRef.current?.applyCameraPreset(preset.id)) setPresetMenuOpen(false);
+                  }}
+                >{preset.name}</button>
+              ))}
+            </div>}
+          </>
+        )}
       </div>
     </div>
   );
