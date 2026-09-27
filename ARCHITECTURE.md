@@ -20,6 +20,7 @@ diary-detail、design-satellite。主窗口中 Room/Toy 覆盖 Chat；Activity/�
 | Tauri / sensor | HTTP/WS token、窗口、文件、动作及键鼠/视觉采集；截图本地授权默认关闭 | [后端接入](docs/backend-integration.md)、[设置边界](docs/settings-control-audit.md) |
 
 Room 的 GLB 透视相机预设由 ThreeCallStage 的场景加载过程提取，经 RoomWindow 右下角菜单选择；
+主动视频来电由主窗口 WS 邀请创建独立窗口；来电窗口按邀请角色 ID 读取头像，拒绝立即关闭并异步回执，超时关闭有本地销毁兜底。接通仍回到主窗口 Room。
 所选机位与人物站位写入本机 RoomSettings，原有场景×人物组合记忆继续生效。
 摆放模式允许轨道视角调整，退出时保存相机；视频通话摄像头采集和后端视觉路由独立。
 大场景中人物离开视野时，Room 底栏可按当前实时镜头一键找回人物；相机预设菜单是右下角

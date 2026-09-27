@@ -1,5 +1,9 @@
 # docs/frontend-structure.md — 前端结构指南
 
+## 主动视频来电窗口（2026-09-27，partial）
+
+主窗口收到匹配当前角色的 `video_call_invite` 后打开独立来电窗口。该窗口按邀请的 `char_id` 读取角色头像；拒绝立即结束本地窗口并异步回执，超时关闭带销毁兜底。接通成功后通知主窗口打开 Room。真实 Tauri 窗口和后端回执待复测，见 `../cc-tasks/2026-09-27-video-call-invite-window.md`。
+
 ## 主聊天链跳过/失败后的等待气泡（2026-09-21）
 
 ChatPanel 底部角色待机框由 pending 请求或空 `message_stream_start` 派生。
