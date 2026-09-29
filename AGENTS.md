@@ -30,12 +30,16 @@ PresenceKit-desktop 是 `PresenceKit` AI 陪伴系统的新桌面客户端，技
 - 不修改 `Emerald-presence` 仓库（通常与本仓库同级），它是后端和核心数据项目。
 - 不修改 `Emerald-desktop` 仓库（通常与本仓库同级），它是旧桌宠客户端。
 - 不修改 `Emerald-desktopUI` 仓库（通常与本仓库同级），它是 UI 迁移参考原型，只读。
+- 例外：`Emerald-presence/docs/three-repo-interface-catalog.md` 等跨仓总账文档允许同步修改；
+  `Emerald-mobile` 仓库可读取检查，涉及同一功能的跨端改动按「三面闭环检查」执行。
 
 ---
 
-## 代码根目录
+## 开发环境
 
-本文件所在目录即仓库根。所有路径一律相对仓库根书写，不依赖盘符或上级目录名。
+开发环境是 **Windows**（PowerShell / cmd）。命令、脚本和文档一律按 Windows 写：
+`npm.cmd` / `npx.cmd`、`.bat` / `.ps1`、PowerShell 语法；不要写 bash / Linux / macOS 专用命令
+（如 `rm -rf`、`export`、`.sh` 脚本）。跨平台 Node 脚本（`.mjs`）可以。
 
 ---
 
@@ -44,11 +48,11 @@ PresenceKit-desktop 是 `PresenceKit` AI 陪伴系统的新桌面客户端，技
 本节同步 `CLAUDE.md` 的协作规则，使 Codex 在默认读取本 `AGENTS.md` 时也获得同一施工约定：
 
 1. 用中文回复；默认自主推进、替用户拍板，只在删数据、改契约、对外发布等不可逆决策前提问。
-2. 先按本文件和 `ARCHITECTURE.md` 定位，再做精确检索；检索排除 `node_modules/`、`dist/`、`src-tauri/gen/`、`src-tauri/target/`。
-3. 多个独立交付物一次性批量输出，并标明可并行项与前置依赖；每个独立修复验收后应小步 commit。
-4. 代码、脚本和文档不得写盘符绝对路径，统一相对仓库根；`start-dev.bat` 用 `%~dp0`。
+2. 先按本文件「任务关注点」定位，不够时再查 `ARCHITECTURE.md`，然后精确检索；检索排除 `node_modules/`、`dist/`、`src-tauri/gen/`、`src-tauri/target/`。
+3. 多个独立交付物一次性批量输出，并标明可并行项与前置依赖。
+4. 代码、脚本和文档不得写盘符绝对路径，统一相对仓库根（仓库可整体改名/移盘）；`start-dev.bat` 用 `%~dp0`。
 5. 本机密钥仅放在 gitignore 文件（`config/client.local.json`）；提交的仅为 `*.example.*` 占位文件。
-6. 每张施工单完成当前实现与验证后及时独立 commit；若仍有真实窗口、设备或 release 验收未完成，必须在工单和已知问题中保留明确的 open/partial 状态，不得把静态检查冒充完整验收。
+6. 小步 commit：每张施工单完成当前实现与验证后及时独立 commit；若仍有真实窗口、设备或 release 验收未完成，必须在工单和已知问题中保留明确的 open/partial 状态，不得把静态检查冒充完整验收。
 
 ---
 
@@ -56,7 +60,7 @@ PresenceKit-desktop 是 `PresenceKit` AI 陪伴系统的新桌面客户端，技
 
 | 任务类型 | 必读文档 |
 |---|---|
-| 理解客户端全貌 | `ARCHITECTURE.md` |
+| 「任务关注点」表定位不到时 | `ARCHITECTURE.md` |
 | 改聊天窗口、Ribbon、Sidebar、样式 | `docs/frontend-structure.md` |
 | 改后端通信、协议、Tauri IPC | `docs/backend-integration.md` |
 | 整理或修改三仓接口、跨端设置/观测、调用链 | `Emerald-presence/docs/three-repo-interface-catalog.md`；本仓细节仍见 `docs/backend-integration.md` |
@@ -64,14 +68,15 @@ PresenceKit-desktop 是 `PresenceKit` AI 陪伴系统的新桌面客户端，技
 | 改 Dream HUD / 梦境状态展示 | `docs/dream-hud.md` |
 | 改桌宠窗口、模型舞台或鼠标互动 | `docs/pet-window-reference.md` |
 | 创建/修改 Design Mod、Host API、primitive、native surface | `docs/design-mod-authoring.md`；运行时内部同读 `docs/design-mods.md` |
-| 改 Layout Registry / 布局排布 / Theme Mod | `docs/layout-mods.md`（主题 mod 同读 `docs/ui-mods.md`） |
+| 改 Layout Registry / 布局排布 / Theme Mod | `docs/layout-mods.md`（改 Theme Mod 时同读 `docs/ui-mods.md`） |
 | 改系统边界或跨 pipeline 行为 | `docs/design-constraints.md` |
 | 导入 Live2D / Room 模型 | `docs/人类说明书/` 下对应导入指南 |
 | 查 bug、技术债、迁移缺口 | `docs/known-issues.md` |
 
 后端系统本身的细节以 `Emerald-presence` 仓库（通常与本仓库同级）的 `AGENTS.md` 和它的 `ARCHITECTURE.md` / `docs/` 为准。
-在 Codex / Claude Code Windows 沙箱中运行 build、pytest、跨仓 git 或浏览器验证前，
-必须阅读 `Emerald-presence` 仓库的 `docs/dev-environment.md`。
+在 Codex / Claude Code Windows 沙箱中运行 build、pytest、跨仓 git 或浏览器验证时，若遇到 EPERM、
+dubious ownership、代理或端口类环境错误，先阅读 `Emerald-presence` 仓库的 `docs/dev-environment.md`
+（下方强制规则 10、11 为常见情况速查）。
 
 ---
 
@@ -103,8 +108,6 @@ src-tauri/
 └── capabilities/default.json
 ```
 
-注意：旧入口说明里写过 `src/shared/ws/`，但当前实现实际在 `src/shared/api/ws.ts`。
-
 ---
 
 ## 任务关注点
@@ -129,15 +132,15 @@ src-tauri/
 
 1. TypeScript 当前不是严格类型化项目，功能迁移优先；必要时可以用 `any` / `unknown`，但要加 `// TODO: type`。
 2. 不要简单改文件后缀。`.jsx` 到 `.tsx` 必须真正改造类型、导入和运行方式。
-3. WebSocket / 后端通信必须集中在 `src/shared/api/` 或未来统一迁移到 `src/shared/ws/`，不要把协议细节散进组件。
+3. WebSocket / 后端通信必须集中在 `src/shared/api/`，不要把协议细节散进组件。
 4. 本地状态修改必须走 `StateEngine`，不要在多个组件里复制一份 mood / activity / presence 真值。
 5. 桌宠窗口和聊天窗口未来必须共享同一份 engine 状态；如果拆成 Tauri 多窗口，需要明确 IPC / store 同步方案。
 6. 所有出站 HTTP 请求必须显式禁用代理。Rust 侧用 `reqwest::Client::builder().no_proxy()`。
 7. 不要用浏览器原生 `fetch` 直接打后端 HTTP；CORS 和代理规则都不稳定。HTTP 走 Tauri command。
 8. 浏览器原生 WebSocket API 不读系统代理环境变量，当前可以直接连 `ws://127.0.0.1:8080/ws/desktop`。
-9. 不要修改 `Emerald-presence`、`Emerald-desktop`、`Emerald-desktopUI` 仓库（通常与本仓库同级），除非用户明确改范围。
+9. 跨仓修改边界见「项目定位 → 不在本项目范围内的事」（含总账文档例外），超出范围才需用户明确授权。
 10. 沙箱中 `npm run build` 若因 `node_modules/.vite-temp` 写入报 `EPERM`，这是环境权限问题；
-    对原命令申请权限后重跑，不能只跑 `tsc` 就宣称 build 通过。
+    对原命令申请权限后重跑（仅限沙箱场景），不能只跑 `tsc` 就宣称 build 通过。
 11. 跨仓 git 遇到 `dubious ownership` 时使用单命令参数
     `git -c safe.directory=<仓库根> ...`，不要擅自修改全局 git 配置。
 12. 新增或修改用户可见文案必须通过 `src/shared/i18n/` 的语义 i18n key；禁止在组件中继续写死中文。`legacy.ts` 仅用于兼容迁移前的既有文案，不得向其中追加新功能文案。
@@ -176,7 +179,7 @@ npm run tauri dev
 # 生产构建
 npm run tauri build
 
-# Agent 验证：前端和 Rust 分开检查
+# Agent 验证（Windows，npm/npx 用 .cmd 后缀）：前端和 Rust 分开检查
 npx.cmd tsc --noEmit
 npm.cmd run build
 cd src-tauri
@@ -210,18 +213,19 @@ Tauri 开发启动通过 `scripts/tauri-dev-server.mjs` 守护 Vite：若 1420 �
 
 ## 当前阶段：每个小功能都要做三面闭环检查
 
-现在这个阶段，新增、删除或修改任何小功能都必须执行跨仓闭环检查，不能因为改动很小而跳过：
+现在这个阶段，凡新增、删除或修改的功能涉及设置项、落盘状态、IPC/REST/WS 契约或跨端行为，都必须执行跨仓闭环检查，不能因为改动很小而跳过。
+纯样式、布局、文案、本仓内部重构可免，但需在提交或交付说明中写明「无跨端影响」：
 
 1. 查后端管理面板：功能是否需要设置开关、默认值、effective state、只读观测、审计记录；新增落盘状态、trace、队列或台账时，观测端点必须同单提供。
 2. 查桌面设置面，并回查手机：是否已有对应功能设置、能力检查、权限/降级提示；手机消费同一功能时还要检查 Flutter/Android 设置、后台服务和 relay，不把后端配置字段误当成客户端 UI。
 3. 查原调用链和相邻功能：从触发器/输入 → 后端 router/pipeline → queue/WS → Tauri IPC/React 或 mobile channel → UI/通知，核对鉴权 scope、字段、关联键、去重、ack、TTL、锁、生命周期和 fallback，确认不会让原调用链失效或误伤其他功能。
-4. 为原路径和相邻路径补最小回归测试；未做全的部分必须记入本仓 `docs/known-issues.md`，并同步 `Emerald-presence/docs/three-repo-interface-catalog.md`，明确 `open`/`roadmap`/`observe`。
+4. 为原路径和相邻路径补最小回归测试；未做全的部分按「文档维护约定」记入 `docs/known-issues.md`；涉及跨仓接口时同步 `Emerald-presence/docs/three-repo-interface-catalog.md`，明确 `open`/`roadmap`/`observe`。
 
-三仓施工均适用本规则；接口、协议或 IPC 改动还必须更新本仓 `docs/backend-integration.md`、必要时的 `docs/protocol-v0.md`，以及后端总账。
+三仓施工均适用本规则；文档同步按「文档维护约定」执行，协议变更另需更新 `docs/protocol-v0.md`。
 
-## ����������߽�
+## 能力控制面边界
 
-������������á�effective state ��Ȩ��բ�ŵ�Ψһ��ʵ��Դ�������ֻչʾ��������ѵ����á��ϱ�����/����״̬����ִ���û�ȷ�Ϻ�ı��ض�������Ҫ��ǰ�˸��ƺ��Ȩ���߼���Ҳ��Ҫ�ѱ��ؿ��ص��ɺ���ܿ��ء���������������� capability ��۲� �� ���������� �� REST/WS ��Լ �� ��������/������ʾ��˳����롣
+后端是能力配置、effective state 和权限闸门的唯一真实来源。桌面端只展示桌面可消费的设置、上报连接/能力状态，并执行用户确认后的本地动作；不要在前端复制后端权限逻辑，也不要把本地开关当成后端总开关。新增能力按“后端 capability 与观测 → 管理面板控制 → REST/WS 契约 → 桌面设置/降级提示”顺序接入。
 
 
 ## UI consistency
