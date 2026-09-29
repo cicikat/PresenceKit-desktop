@@ -7,15 +7,21 @@
 > **本版并入了「物理骨骼链」规范（§4.5）**：头发/尾巴/飘带类摆动改为**运行时弹簧物理**驱动，不再依赖循环形态键；`boneMap` 收窄为纯语义控制骨。旧的 `hairSwayLeft/Right` 降级为「未绑骨兜底方案」。
 > （本文取代早前的 `角色_场景_道具_模型导入说明书_v2.md`，以此为单一事实来源。）
 
+> **CA-01 现状校正（2026-09-29）**：当前 Room/Pet 只从单个 GLB 与本机 RoomSettings 读取配置，
+> **不会读取本文提到的 `character.json`**；其 boneMap、expressions、physicsBones、idleClip
+> 示例均是历史拟议方案，不可当作已生效的操作步骤。眼骨虽可被识别，当前眼神只驱动
+> `eyeLook*` 形态键；Pet 还不播放 GLB idle clip。新角色包合同及 planned/current 边界见
+> [角色包协议](../character-package-contract.md)。CA-09 将按最终实现重写本操作指南并实际复现。
+
 ---
 
 ## 0. TL;DR（最少要知道的）
 1. 单位 **1 = 1 米**，角色直立、**面朝 +Z**、Y 轴向上。
 2. 文件丢进：角色 `public/room/character/`、场景 `public/room/scene/`、道具 `public/room/props/<类别>/`。
 3. 形态键**用规范英文名**（见 §3），做了就自动生效；只做了一部分也能跑。
-4. 想要"看你"的眼神：做 `eyeLookLeft/Right/Up/Down` 四个形态键；想要转头/呼吸/肩动，绑骨（Rigify / Auto-Rig Pro 均可）后在 `character.json` 的 `boneMap` 里把骨名映射给代码（见 §4，**不靠固定骨名**）。
+4. 当前想要“看你”的眼神须做 `eyeLookLeft/Right/Up/Down` 四个形态键；转头/呼吸/肩动的骨骼映射只通过 RoomSettings 生效。§4 的 `character.json` 示例尚未接入。
 5. **头发/尾巴/飘带这类会晃动的部位，优先做骨骼 + 打「物理链」标记（见 §4.5），不要用形态键做飘动**——形态键只能循环播放，物理链才会跟着转头/动作自然甩动、有惯性。
-6. 加了**规范内**的形态键 → **不用改代码**；加**全新自定义**表情 → 写一行 `character.json` 绑定即可，**仍不用改代码**（见 §6）。
+6. 加了当前代码识别的标准形态键 → 不用改代码；全新自定义表情尚无 `character.json` 运行时绑定入口，见 §6 的现状提示。
 
 ---
 
@@ -91,7 +97,9 @@ public/room/
 
 ## 4. 控制骨骼（视线转头 + 程序化微动）—— 用 `boneMap`，不靠固定骨名
 
-> **重要：代码不写死骨名。** 因为 Rigify(human) 导出的形变骨是 `DEF-` 前缀、且脊柱编号随版本变化。你**在 `character.json` 的 `boneMap` 里把"语义角色 → 你导出里的真实骨名"写一遍即可**，代码按映射找骨、找不到就跳过。怎么知道真实骨名？开发模式下打开通话，**控制台会打印 `[room] bones: [...]`** 列出角色全部骨名，照抄填进 boneMap。
+> **重要：代码不写死骨名。** 因为 Rigify(human) 导出的形变骨是 `DEF-` 前缀、且脊柱编号随版本变化。你需要把"语义角色 → 你导出里的真实骨名"映射一遍，代码按映射找骨、找不到就跳过。怎么知道真实骨名？开发模式下打开通话，**控制台会打印 `[room] bones: [...]`** 列出角色全部骨名。
+>
+> **当前唯一生效的写入口是设置面板（视频通话 → 设置）写入的 `RoomSettings.perCharacter[<glb 文件名>].boneMap`（localStorage）**，按 GLB 文件名隔离。本节下面的 `character.json` 示例只表示字段形状，**运行时不读取**，见 §4.2。
 >
 > `boneMap` 只负责**数量固定、语义单一、由系统主动驱动**的骨（头、胸、肩、眼）。**会晃动的辅助骨（头发/尾巴/飘带等，数量不固定）不走这里，走 §4.5。**
 
@@ -101,9 +109,11 @@ public/room/
 | `head` | Phase 3 看你转头 + 头部潜意识微转 | 想要看你/头微动则需要 |
 | `chest`（或 `spine`） | 程序化呼吸起伏 | 想要呼吸感则需要 |
 | `shoulderL` / `shoulderR` | 肩膀高低微动 | 可选锦上添花 |
-| `leftEye` / `rightEye` | 眼骨转眼（没有眼骨就用 §3.3 形态键 `eyeLook*`） | 可选 |
+| `leftEye` / `rightEye` | **当前不驱动眼球旋转**：映射后仅用于把 clip 里的眼骨轨道裁掉，眼神实际只走 §3.3 形态键 `eyeLook*`。骨骼注视是 CA-04 的交付物 | 可选 |
 
-### 4.2 `character.json` 里的 boneMap（示例）
+### 4.2 boneMap 字段形状（示例，`character.json` 未接入）
+
+> 下面的 JSON 只用来说明"语义角色 → 真实骨名"的字段形状。**运行时不会读取角色目录下的 `character.json`**；同样的键值请通过设置面板填入，它落在 `RoomSettings.perCharacter[<glb 文件名>].boneMap`。
 
 Rigify 命名：
 ```json
@@ -138,7 +148,7 @@ Auto-Rig Pro（ARP）命名（实测导出骨名，小写 `.x`/`.l`/`.r` 后缀�
 > 不写 boneMap 时，代码会按一组默认候选名尽力匹配——Rigify 候选（`DEF-spine.006/.005`、`DEF-spine.003`、`DEF-shoulder.L/R`、`DEF-eye.L/R` 及 `Head`/`Chest` 等常见名）在前，ARP 候选（`head.x`、`spine_02.x`/`spine_03.x`、`spine_01.x`、`shoulder.l/r`、`eye.l/r`、`c_eye.l/r`）追加在后，两套互不冲突；匹配不到的角色相关效果静默跳过，不报错。**最稳妥还是照控制台打印的真实骨名显式写 boneMap**——ARP 导出骨名以实际控制台打印为准，若与上表有出入按真实名补齐。
 
 ### 4.3 最小可用
-- 只想要"看你"：映射 `head`（+ 可选眼骨，或用 §3.3 眼形态键）即可。
+- 只想要"看你"：映射 `head`（转头），眼球偏移做 §3.3 的 `eyeLook*` 形态键；映射眼骨当前不会让眼球转动。
 - 想去"塑料站桩感"：再映射 `chest`（呼吸）和 `shoulderL/R`（肩微动）。
 - 这些骨**有就生效、没有就跳过**，可增量补；半身未绑骨时一切照旧运行。
 
@@ -168,7 +178,7 @@ Auto-Rig Pro（ARP）命名（实测导出骨名，小写 `.x`/`.l`/`.r` 后缀�
 - 如果角色**同时**有 `hairSwayLeft/Right` 形态键和物理链，**物理链优先生效，那两个形态键会被系统跳过**，不会叠加变形。
 - **排查：Rigify 用户务必只导出 deform 骨**（导出面板 Data → Armature → **Export Deformation Bones Only**）。如果 `ORG-`/`DEF-` 两套骨都导出，且自定义属性打在 metarig 上被同时带到两套骨，会出现两条重叠链每帧互相覆盖同一批骨（表现为抖动/错位）；运行时按「先到先得」丢弃重叠部分并在 DEV 控制台打印 `[room] phys chain overlap` 警告。确认方法：**DEV 控制台 `[room] phys chains` 数量应等于你实际标记的链数**，且没有 overlap 警告。
 
-**`character.json` 里的可选覆盖**（不想开 Blender 改属性时，也能在这一层调）：
+**可选覆盖的字段形状**（运行时从 `RoomSettings.perCharacter[<glb 文件名>].physicsBones` 读取；同名 `character.json` 文件不会被读取）：
 ```json
 {
   "physicsBones": {
@@ -182,7 +192,7 @@ Auto-Rig Pro（ARP）命名（实测导出骨名，小写 `.x`/`.l`/`.r` 后缀�
 ```
 > `overrides` 的 key 是链根骨在 glb 里的真实名字（跟 boneMap 一样，照控制台打印的骨名照抄）。不写就全部用 `default`。
 
-**设置面板里的"物理强度"总调节**（视频通话 → 设置 → 物理骨骼）：一个 0–1 的滑杆，直接写 `RoomSettings.physicsBones.default.gravity`（0 = 完全不摆）。这是目前唯一暴露的可视化调节，`stiffness`/`damping` 仍只能通过 Blender 自定义属性或（如果日后接入）`character.json` 调整。**这个滑杆读写的是 `RoomSettings`（本地存储），不是本节下面这份 `character.json`**——见下方提示。
+**设置面板里的"物理强度"总调节**（视频通话 → 设置 → 物理骨骼）：一个 0–1 的滑杆，直接写 `RoomSettings.physicsBones.default.gravity`（0 = 完全不摆）。这是目前唯一暴露的可视化调节，`stiffness`/`damping` 目前只能通过 Blender 自定义属性写死在模型里。**滑杆读写的是 `RoomSettings`（localStorage）**，没有任何 `character.json` 参与。
 
 **适用范围不止头发**：耳朵、尾巴、裙摆、挂饰等任何"跟主体有延迟地跟随摆动"的部位，都按同一套 `phys_chain` 标记法处理，以后加非人形角色（猫耳、兽尾）也复用这套，不用另开系统。
 
@@ -205,11 +215,9 @@ Auto-Rig Pro（ARP）命名（实测导出骨名，小写 `.x`/`.l`/`.r` 后缀�
 
 > **头/眼骨/物理链轨道会被运行时忽略，不用在 Blender 里手动删**——运行时按 `boneMap`/`phys_chain` 标记自动识别并从 clip 里裁掉这些骨的轨道，冲突由代码侧解决，建模端不用操心。
 
-**`character.json` / `RoomSettings` 可选覆盖**：
-```json
-{ "idleClip": "idle_calm" }
-```
-> 缺省走自动选择（`idle` 优先，否则第一个 clip）。设置面板暂不加可视化开关。
+**idle clip 选择**：缺省自动选择（名为 `idle` 的 clip 优先，否则取第一个 clip）。可覆盖的入口只有 `RoomSettings.idleClip`（localStorage，随机位一起记住），`character.json` 不被读取，设置面板暂无可视化开关。所以**不要把舞蹈等非待机动作当成唯一 clip 导出**，否则它会被当作 idle 循环播放。CA-03 将改为由角色包显式声明。
+
+另外，Pet（桌宠窗口）当前**不播放 GLB clip**，只有形态键和程序化微动；clip 相关内容目前只影响 Room。
 
 ### 4.7 句级表演层（意图映射）—— 对模型资产的要求：**零新增**
 
@@ -222,7 +230,7 @@ Auto-Rig Pro（ARP）命名（实测导出骨名，小写 `.x`/`.l`/`.r` 后缀�
 |---|---|---|
 | 句级表情（开心/低落/惊讶…） | §3.1 表情形态键 | 缺哪个表情键，哪个表情静默跳过（有 fallback 链） |
 | 点头/摇头/歪头（左右）/低头 | `boneMap.head` | 无头骨则头部手势全部跳过，其余照常 |
-| 视线（看你/移开/低垂/游移） | 眼骨或 §3.3 `eyeLook*` 形态键 | 都没有则视线不动 |
+| 视线（看你/移开/低垂/游移） | 当前只有 §3.3 `eyeLook*` 形态键（眼骨尚未驱动，见 §4.1） | 没有这四个键则视线不动 |
 | 前倾/后仰/蜷缩/挺直（posture） | `boneMap.chest`(或 `spine`) + `shoulderL/R` | 缺哪根骨该姿态少一分量，不报错 |
 | 动作能量（幅度/呼吸快慢缩放） | 上述同一批骨 | 同上 |
 
@@ -264,23 +272,17 @@ Auto-Rig Pro（ARP）命名（实测导出骨名，小写 `.x`/`.l`/`.r` 后缀�
    → **不用改代码**。代码按形态键名 / `boneMap` / `phys_chain` 属性读取，存在即自动生效。
 
 2. **加的是规范外的全新表情**（如自定义 `wink`、`dimple`、某专属脸）
-   → **不用改代码**，但要在角色目录放一个 `character.json` 写一行**绑定**，把新形态键挂到某个触发上：
+   → **当前无入口，做了也不会生效**。情绪 → 形态键的映射写在代码里（`src/windows/room/morphExpressions.ts`），既没有 `character.json` 读取，`RoomSettings` 也没有 expressions 字段。异名/自定义表情的语义映射是 CA-04 的交付物。字段形状预期如下，仅作规划参考：
    ```json
-   {
-     "expressions": {
-       "开心": { "smile": 0.85, "dimple": 0.4 },
-       "平静": { "calmBreath": 0.3 }
-     }
-   }
+   { "expressions": { "开心": { "smile": 0.85, "dimple": 0.4 } } }
    ```
-   代码会把 `character.json.expressions` **合并覆盖**到内置情绪映射上——于是新形态键随对应情绪触发，零代码。
 
 3. **加的是全新"触发通道/输入信号"**（如"听到音乐就摇摆""根据天气变化"这种前所未有的驱动源）
    → 这才需要动代码（新增一个驱动器）。因为这是新逻辑，不是新资源。
 
-> 一句话：**新资源（形态键/骨骼/物理链/道具）不用改代码**（标准名/标记自动生效，自定义名用 `character.json` 绑定）；只有**新逻辑/新输入源**才改代码。这就是"统一度量衡"的意义——把"内容"和"代码"解耦。
+> 一句话：**用标准名的新资源（形态键/骨骼/物理链/道具）不用改代码**；异名/自定义资源当前还需要代码或设置面板配合，语义映射由 CA-04～06 交付；**新逻辑/新输入源**始终要改代码。
 
-`character.json`（全部字段可选，缺失走默认）：
+以下为历史拟议的 `character.json` 字段形状，**运行时不读取**，保留只为便于将来迁移到角色包：
 ```json
 {
   "model": "character.glb",
@@ -295,17 +297,16 @@ Auto-Rig Pro（ARP）命名（实测导出骨名，小写 `.x`/`.l`/`.r` 后缀�
   "physicsBones": { "default": {}, "overrides": {} }
 }
 ```
-> 设置面板里的可视化调节最终也写进同一份设置/预设，`character.json` 作为模型自带默认。
 > `hairSwayLeft/Right` 兜底仅在角色**没有**物理链时才有意义，正常有骨骼的角色不用管。
 >
-> ⚠️ **现状**：`character.json` 目前只是本文档定义的**约定**，代码里还没有读取/合并它的实现（`src/` 与 `src-tauri/` 都没有对应逻辑）。真正生效的覆盖路径现在只有：Blender `phys_*` 自定义属性、以及设置面板（视频通话）写入的 `RoomSettings`（localStorage）。谁要落地 `character.json` 加载，需要另开一次改动。
+> ⚠️ **现状与决策（CA-01）**：`character.json` 不会成为第二份运行时真值，**不会为它新增加载器**。真正生效的覆盖路径只有：Blender `phys_*` 自定义属性、以及设置面板（视频通话）写入的 `RoomSettings`（localStorage，按 GLB 文件名分角色）。已经写了 `character.json` 的用户需把 `boneMap`/`physicsBones`/`idleClip` 手工转到设置面板，`expressions` 等字段暂无消费者。未来的模型自带默认由[角色包协议](../character-package-contract.md)承接。
 
 ---
 
 ## 7. 导出清单（Blender → glTF .glb）
 - [ ] 单位米制、面朝 +Z、Y 向上。
 - [ ] 勾选导出 **Shape Keys** 及名称；按 §3 命名。
-- [ ] 若做转头/呼吸/肩动：绑相应骨，并在 `character.json` 的 `boneMap` 映射真实骨名（见 §4；DEV 控制台会打印骨名供照抄）。
+- [ ] 若做转头/呼吸/肩动：绑相应骨，并在设置面板把真实骨名填入 boneMap（见 §4；DEV 控制台会打印骨名供照抄）。
 - [ ] 若头发/尾巴/飘带做了骨骼：链根骨打好 `phys_chain` 自定义属性（见 §4.5），导出时勾选 **Custom Properties**（并在 DEV 控制台确认 `[room] phys chains` 非空）。
 - [ ] 没做物理链的角色，可选做 `hairSwayLeft/Right` 形态键作兜底（非必需）。
 - [ ] 角色内置动画 clip **可选导出**，命名 `idle`（见 §4.6）；不导出则系统仍用纯形态键+骨骼驱动。
@@ -316,7 +317,7 @@ Auto-Rig Pro（ARP）命名（实测导出骨名，小写 `.x`/`.l`/`.r` 后缀�
 
 ---
 
-## 附：当前内置情绪 → 形态键映射（参考，可被 character.json 覆盖）
+## 附：当前内置情绪 → 形态键映射（写在 `src/windows/room/morphExpressions.ts`，当前无配置覆盖入口）
 | 情绪 | 首选 | 回退（缺首选时） |
 |---|---|---|
 | 平静 | （中性） | — |
