@@ -1,4 +1,5 @@
 import { getUIPref, setUIPref } from '../uiPreferences';
+import { validatePerformanceRoutes, type PerformanceRoutes } from '../character/performanceRoutes';
 
 export type Framing = 'face' | 'upperBody' | 'full';
 export type RenderMode = 'model3d' | 'live2d';
@@ -42,6 +43,8 @@ export interface RoomProp {
 export interface CharacterCfg {
   boneMap?: BoneMap;
   physicsBones?: PhysicsBonesCfg;
+  /** CA-02 per-dimension driver override; absent means `auto` for every dimension. */
+  routes?: PerformanceRoutes;
 }
 
 // Camera/staging fields that make sense per scene×character combination — see `perPlacement`.
@@ -217,6 +220,8 @@ function validateCharacterCfg(raw: unknown): CharacterCfg | undefined {
   if (boneMap) out.boneMap = boneMap;
   const physicsBones = validatePhysicsBones(r.physicsBones);
   if (physicsBones) out.physicsBones = physicsBones;
+  const routes = validatePerformanceRoutes(r.routes);
+  if (routes) out.routes = routes;
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
