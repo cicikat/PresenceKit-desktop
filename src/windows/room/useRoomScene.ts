@@ -5,26 +5,22 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import { MOOD_TABLE } from '../../shared/state/store';
 import type { Mood } from '../../shared/state/store';
-import { MorphController } from './morphController';
-import { MOOD_MORPHS, EXPR_KEYS } from './morphExpressions';
 import { getActiveDirective } from './avatarDirective';
-import { backendMoodToFrontend } from '../../shared/state/mood-mapping';
 import { saveRoomSettings, getCharacterCfg } from '../../shared/room/roomSettings';
+import { CharacterPerformer } from '../../shared/character/performer';
+import { setupCharacter } from './characterSetup';
 import { collectSceneCameraPresets, placementFromSceneCamera } from './sceneCameraPresets';
 import type { SceneCameraPreset } from './sceneCameraPresets';
 import { loadRoomModel } from '../../shared/room/roomAssets';
 import type { RoomSettings } from '../../shared/room/roomSettings';
-import { BoneResolver, microNoise } from './boneResolver';
 import {
-  collectSpringChains,
   updateSpringChains,
-  getSpringChainRootNames,
   applySpringSettings,
   resetSpringChains,
   DEFAULT_SPRING_PARAMS,
 } from './springBones';
 import type { SpringChain } from './springBones';
-import { collectExcludedBoneNames, filterClipTracks, selectIdleClip } from './clipPlayer';
+import { collectExcludedBoneNames, filterClipTracks } from './clipPlayer';
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
@@ -47,12 +43,6 @@ interface SceneRefs {
   camBase: THREE.Vector3;
   proxyKey: THREE.Mesh;
   proxyFill: THREE.Mesh;
-}
-
-interface BlinkState {
-  phase: 'idle' | 'blink';
-  nextAt: number;
-  startedAt: number;
 }
 
 // ─── constants ────────────────────────────────────────────────────────────────
@@ -209,42 +199,6 @@ function addCharFallback(parent: THREE.Object3D): void {
   parent.add(head);
 }
 
-function scheduleNextBlink(state: BlinkState, mood: Mood): void {
-  const entry = MOOD_TABLE[mood];
-  const interval = (entry?.blinkInterval ?? 4500) as number;
-  const jitter   = (entry?.blinkJitter   ?? 0.4)  as number;
-  const variation = (Math.random() * 2 - 1) * jitter * interval;
-  state.nextAt = performance.now() + Math.max(500, interval + variation);
-  state.phase = 'idle';
-}
-
-function getBlinkPulse(state: BlinkState, now: number, mood: Mood): number {
-  if (state.phase === 'idle' && now >= state.nextAt) {
-    state.phase = 'blink';
-    state.startedAt = now;
-  }
-  if (state.phase === 'blink') {
-    const HALF = 60;
-    const elapsed = now - state.startedAt;
-    if (elapsed < HALF)        return elapsed / HALF;
-    if (elapsed < HALF * 2)    return 1 - (elapsed - HALF) / HALF;
-    scheduleNextBlink(state, mood);
-    return 0;
-  }
-  return 0;
-}
-
-function resolveExpression(morph: MorphController, mood: Mood): Record<string, number> {
-  const entry = MOOD_MORPHS[mood] ?? { primary: {}, fallback: {} };
-  const tryFilter = (src: Record<string, number>) =>
-    Object.fromEntries(Object.entries(src).filter(([k]) => morph.has(k)));
-  const fromPrimary = tryFilter(entry.primary);
-  if (Object.keys(fromPrimary).length > 0 || Object.keys(entry.primary).length === 0) {
-    return fromPrimary;
-  }
-  return tryFilter(entry.fallback);
-}
-
 function collectGlbLights(root: THREE.Object3D, visible: boolean): THREE.Light[] {
   const found: THREE.Light[] = [];
   root.traverse(obj => {
@@ -262,32 +216,21 @@ function enableCharLayer(model: THREE.Object3D): void {
   });
 }
 
-function findHeadBone(root: THREE.Object3D): THREE.Bone | null {
-  let found: THREE.Bone | null = null;
-  root.traverse(obj => {
-    if (!found && obj instanceof THREE.Bone && obj.name.toLowerCase().includes('head')) {
-      found = obj;
-    }
-  });
-  return found;
-}
-
-// Picks the idle clip (if any), deletes tracks owned by procedural/physics systems, and starts
-// it looping. Returns null when the model has no usable animation.
-function setupIdleClip(
+/**
+ * Deletes tracks for bones the performer and physics own, then starts the clip looping.
+ * Clip selection happens earlier (the performer needs to know whether a clip exists at
+ * all before it can resolve the body route), and which bones are excluded depends on the
+ * routes the performer resolved — so the two steps cannot be collapsed back together.
+ */
+function startIdleClip(
   model: THREE.Object3D,
-  animations: THREE.AnimationClip[],
-  headBone: THREE.Bone | null,
-  leftEyeBone: THREE.Bone | null,
-  rightEyeBone: THREE.Bone | null,
+  clip: THREE.AnimationClip,
+  ownedBones: (THREE.Bone | null)[],
   springChains: SpringChain[],
-  idleClipName: string | undefined,
-): { mixer: THREE.AnimationMixer; animatedBoneNames: Set<string> } | null {
-  if (animations.length === 0) return null;
-  if (import.meta.env.DEV) console.log('[room] clips:', animations.map(a => a.name));
-  const clip = selectIdleClip(animations, idleClipName);
-  if (!clip) return null;
-  const excluded = collectExcludedBoneNames(headBone, leftEyeBone, rightEyeBone, springChains);
+): { mixer: THREE.AnimationMixer; animatedBoneNames: Set<string> } {
+  const excluded = collectExcludedBoneNames(
+    ownedBones[0] ?? null, ownedBones[1] ?? null, ownedBones[2] ?? null, springChains,
+  );
   const animatedBoneNames = filterClipTracks(clip, excluded);
   const mixer = new THREE.AnimationMixer(model);
   mixer.clipAction(clip).setLoop(THREE.LoopRepeat, Infinity).play();
@@ -315,8 +258,7 @@ export function useRoomScene(
 ): RoomSceneAPI {
   const refsRef            = useRef<SceneRefs | null>(null);
   const moodRef            = useRef(mood);
-  const morphRef           = useRef<MorphController | null>(null);
-  const blinkStateRef      = useRef<BlinkState>({ phase: 'idle', nextAt: performance.now() + 2000, startedAt: 0 });
+  const performerRef       = useRef<CharacterPerformer | null>(null);
   const talkingRef         = useRef(talking);
   const settingsRef        = useRef<RoomSettings>(settings);
   const charGroupRef       = useRef<THREE.Group | null>(null);
@@ -329,17 +271,9 @@ export function useRoomScene(
   const disposedRef        = useRef(false);
   const freeLookRef        = useRef(false);
   const [freeLook, setFreeLook] = useState(false);
-  const headBoneRef        = useRef<THREE.Bone | null>(null);
-  const headBoneRestRef    = useRef(new THREE.Euler());
-  const boneResolverRef    = useRef<BoneResolver | null>(null);
   const springChainsRef    = useRef<SpringChain[]>([]);
   const mixerRef           = useRef<THREE.AnimationMixer | null>(null);
   const animatedBoneNamesRef = useRef<Set<string>>(new Set());
-  const chestBasePosYRef   = useRef(0);
-  const chestBaseScaleRef  = useRef(1);
-  const chestBaseRotXRef   = useRef(0);
-  const shLBasePosYRef     = useRef(0);
-  const shRBasePosYRef     = useRef(0);
 
   // Placement mode
   const placementModeRef      = useRef(false);
@@ -455,8 +389,7 @@ export function useRoomScene(
       charGroup.remove(child);
       disposeModel(child);
     }
-    morphRef.current = null;
-    headBoneRef.current = null;
+    performerRef.current = null;
     springChainsRef.current = [];
 
     let cancelled = false;
@@ -469,33 +402,14 @@ export function useRoomScene(
         normalizeAndPosition(model, s);
         enableCharLayer(model);
         charGroup.add(model);
-        morphRef.current = new MorphController(model);
         charBaseScaleRef.current = s.scaleMul > 0 ? model.scale.x / s.scaleMul : model.scale.x;
-        const charCfg = getCharacterCfg(s, s.characterFile);
-        boneResolverRef.current = new BoneResolver(model, charCfg.boneMap);
-        const res = boneResolverRef.current.resolved;
-        const hb = res.head ?? findHeadBone(model);
-        headBoneRef.current = hb;
-        if (hb) headBoneRestRef.current.copy(hb.rotation);
-        const breathBone = res.chest ?? res.spine;
-        if (breathBone) { chestBasePosYRef.current = breathBone.position.y; chestBaseScaleRef.current = breathBone.scale.x; chestBaseRotXRef.current = breathBone.rotation.x; }
-        if (res.shoulderL) shLBasePosYRef.current = res.shoulderL.position.y;
-        if (res.shoulderR) shRBasePosYRef.current = res.shoulderR.position.y;
-        springChainsRef.current = collectSpringChains(
-          model,
-          charCfg.physicsBones?.overrides,
-          { ...DEFAULT_SPRING_PARAMS, ...charCfg.physicsBones?.default },
+        const setup = setupCharacter(
+          model, gltf.animations, getCharacterCfg(s, s.characterFile), s.idleClip, startIdleClip,
         );
-        const clipSetup = setupIdleClip(
-          model, gltf.animations, hb, res.leftEye ?? null, res.rightEye ?? null,
-          springChainsRef.current, s.idleClip,
-        );
-        mixerRef.current = clipSetup?.mixer ?? null;
-        animatedBoneNamesRef.current = clipSetup?.animatedBoneNames ?? new Set();
-        if (import.meta.env.DEV) {
-          console.log('[room] char reloaded, morph keys:', morphRef.current.names(), '| bones:', boneResolverRef.current.names());
-          console.log('[room] phys chains:', getSpringChainRootNames(springChainsRef.current));
-        }
+        performerRef.current = setup.performer;
+        springChainsRef.current = setup.springChains;
+        mixerRef.current = setup.mixer;
+        animatedBoneNamesRef.current = setup.animatedBoneNames;
         if (!freeLookRef.current && !placementModeRef.current) applyView(refs, s);
       },
       undefined,
@@ -862,34 +776,16 @@ export function useRoomScene(
         normalizeAndPosition(model, activeSettings);
         enableCharLayer(model);
         charGroup.add(model);
-        morphRef.current = new MorphController(model);
         const sm = activeSettings.scaleMul;
         charBaseScaleRef.current = sm > 0 ? model.scale.x / sm : model.scale.x;
-        const charCfg = getCharacterCfg(activeSettings, activeSettings.characterFile);
-        boneResolverRef.current = new BoneResolver(model, charCfg.boneMap);
-        const res = boneResolverRef.current.resolved;
-        const hb = res.head ?? findHeadBone(model);
-        headBoneRef.current = hb;
-        if (hb) headBoneRestRef.current.copy(hb.rotation);
-        const breathBone = res.chest ?? res.spine;
-        if (breathBone) { chestBasePosYRef.current = breathBone.position.y; chestBaseScaleRef.current = breathBone.scale.x; chestBaseRotXRef.current = breathBone.rotation.x; }
-        if (res.shoulderL) shLBasePosYRef.current = res.shoulderL.position.y;
-        if (res.shoulderR) shRBasePosYRef.current = res.shoulderR.position.y;
-        springChainsRef.current = collectSpringChains(
-          model,
-          charCfg.physicsBones?.overrides,
-          { ...DEFAULT_SPRING_PARAMS, ...charCfg.physicsBones?.default },
+        const setup = setupCharacter(
+          model, gltf.animations, getCharacterCfg(activeSettings, activeSettings.characterFile),
+          activeSettings.idleClip, startIdleClip,
         );
-        const clipSetup = setupIdleClip(
-          model, gltf.animations, hb, res.leftEye ?? null, res.rightEye ?? null,
-          springChainsRef.current, activeSettings.idleClip,
-        );
-        mixerRef.current = clipSetup?.mixer ?? null;
-        animatedBoneNamesRef.current = clipSetup?.animatedBoneNames ?? new Set();
-        if (import.meta.env.DEV) {
-          console.log('[room] morph keys:', morphRef.current.names(), '| bones:', boneResolverRef.current.names());
-          console.log('[room] phys chains:', getSpringChainRootNames(springChainsRef.current));
-        }
+        performerRef.current = setup.performer;
+        springChainsRef.current = setup.springChains;
+        mixerRef.current = setup.mixer;
+        animatedBoneNamesRef.current = setup.animatedBoneNames;
         applyView(refs, activeSettings);
         charLoaded = true;
         maybeRemovePlaceholder();
@@ -916,211 +812,23 @@ export function useRoomScene(
       const t   = refs.clock.elapsedTime;
       const now = performance.now();
       const currentMood = moodRef.current;
-      const morph = morphRef.current;
 
       const directive = getActiveDirective(now);
 
       mixerRef.current?.update(dt);
 
-      if (morph) {
-        // Hair sway morph keys: only a fallback when no physics spring chain drives the hair
-        if (springChainsRef.current.length === 0) {
-          if (morph.has('hairSwayLeft') || morph.has('hairSwayRight')) {
-            const sway = Math.sin(t * 0.6);
-            morph.set('hairSwayLeft',  Math.max(0,  sway));
-            morph.set('hairSwayRight', Math.max(0, -sway));
-          } else if (morph.has('hairSway')) {
-            morph.set('hairSway', 0.5 + 0.5 * Math.sin(t * 0.6));
-          }
-        }
-
-        // Expression layer: directive overrides mood when active
-        let targets: Record<string, number>;
-        if (directive?.expression) {
-          const dMood = backendMoodToFrontend(directive.expression);
-          const base = resolveExpression(morph, dMood);
-          const s = directive.intensity;
-          targets = Object.fromEntries(Object.entries(base).map(([k, v]) => [k, v * s]));
-        } else {
-          targets = resolveExpression(morph, currentMood);
-        }
-        const moodBlinkBaseline = targets['blink'] ?? 0;
-        for (const key of EXPR_KEYS) {
-          morph.lerp(key, targets[key] ?? 0, 0.08);
-        }
-        const pulse = getBlinkPulse(blinkStateRef.current, now, currentMood);
-        morph.set('blink', Math.max(moodBlinkBaseline, pulse));
-
-        // Speaking: directive.speaking overrides the VN presenter's talking prop when not null
-        const talking = directive?.speaking ?? talkingRef.current;
-        const mouthTarget = talking
-          ? (0.35 + 0.45 * (0.5 + 0.5 * Math.sin(t * 11))) * (0.8 + Math.random() * 0.2)
-          : 0;
-        morph.lerp('mouthOpen', mouthTarget, 0.5);
-
-        // Gaze layer: directive gaze → eyeLook morphs (graceful if model lacks them)
-        if (directive?.gaze) {
-          const g = directive.gaze;
-          if (g.mode === 'user') {
-            morph.lerp('eyeLookLeft', 0, 0.05);
-            morph.lerp('eyeLookRight', 0, 0.05);
-            morph.lerp('eyeLookUp', 0, 0.05);
-            morph.lerp('eyeLookDown', 0, 0.05);
-          } else if (g.mode === 'away') {
-            morph.lerp('eyeLookLeft', 0.5, 0.05);
-            morph.lerp('eyeLookRight', 0, 0.05);
-            morph.lerp('eyeLookUp', 0, 0.05);
-            morph.lerp('eyeLookDown', 0.2, 0.05);
-          } else if (g.mode === 'point') {
-            morph.lerp('eyeLookLeft', Math.max(0, -g.x) * 0.7, 0.05);
-            morph.lerp('eyeLookRight', Math.max(0, g.x) * 0.7, 0.05);
-            morph.lerp('eyeLookUp', Math.max(0, g.y) * 0.5, 0.05);
-            morph.lerp('eyeLookDown', Math.max(0, -g.y) * 0.5, 0.05);
-          }
-          // idle mode: no override, existing idle drift handles it
-        } else {
-          // No active directive: lerp gaze morphs back to neutral
-          morph.lerp('eyeLookLeft', 0, 0.04);
-          morph.lerp('eyeLookRight', 0, 0.04);
-          morph.lerp('eyeLookUp', 0, 0.04);
-          morph.lerp('eyeLookDown', 0, 0.04);
-        }
-      }
-
-      // energy: perform-layer amplitude/speed scalar. 0.5 (no directive, or field absent) = the
-      // pre-Brief-12 baseline, so every `energyMul` below is a no-op until energy actually differs.
-      const energy = directive?.energy ?? 0.5;
-      const energyMul = 0.5 + energy;
-
-      // Gesture layer: head bone rotations only (graceful if no Head bone). lean_in/lean_back/
-      // shrink/straighten no longer live here — they're posture values, handled below.
-      {
-        const headBone = headBoneRef.current;
-        const rest = headBoneRestRef.current;
-        if (directive?.gesture && headBone) {
-          const elapsedMs = now - directive.receivedAt;
-          const rampIn = Math.min(1, elapsedMs / 200);
-          const osc = Math.sin(elapsedMs * 0.015) * rampIn * energyMul;
-          switch (directive.gesture) {
-            case 'nod':
-              headBone.rotation.x = rest.x + osc * 0.15;
-              headBone.rotation.y = rest.y;
-              headBone.rotation.z = rest.z;
-              break;
-            case 'shake':
-              headBone.rotation.x = rest.x;
-              headBone.rotation.y = rest.y + osc * 0.15;
-              headBone.rotation.z = rest.z;
-              break;
-            case 'tilt':
-            case 'tilt_r':
-              headBone.rotation.x = rest.x;
-              headBone.rotation.y = rest.y;
-              headBone.rotation.z = rest.z + rampIn * 0.18;
-              break;
-            case 'tilt_l':
-              headBone.rotation.x = rest.x;
-              headBone.rotation.y = rest.y;
-              headBone.rotation.z = rest.z - rampIn * 0.18;
-              break;
-            case 'dip':
-              headBone.rotation.x = rest.x + rampIn * 0.22;
-              headBone.rotation.y = rest.y;
-              headBone.rotation.z = rest.z;
-              break;
-            default:
-              headBone.rotation.set(rest.x, rest.y, rest.z);
-          }
-        } else if (headBone) {
-          // Lerp head bone back to rest + micro-drift noise (folded into the target so the
-          // noise amplitude stays whatever it's set to, instead of accumulating every frame).
-          const driftX = rest.x + microNoise(t, 11) * 0.015;
-          const driftY = rest.y + microNoise(t, 23) * 0.020;
-          const driftZ = rest.z + microNoise(t, 37) * 0.010;
-          headBone.rotation.x += (driftX - headBone.rotation.x) * 0.1;
-          headBone.rotation.y += (driftY - headBone.rotation.y) * 0.1;
-          headBone.rotation.z += (driftZ - headBone.rotation.z) * 0.1;
-        }
-      }
-
-      // Posture layer (Brief 12 §6.2): charGroup z-lean + chest rotation + shoulder sink,
-      // inserted after gesture and before the breath/micro-anim pass below (which folds
-      // `postureChestRotXOffset` / `postureShoulderYOffset` into its own additive-vs-absolute
-      // write so the two layers don't stomp each other on the same bones).
-      let postureChestRotXOffset = 0;
-      let postureShoulderYOffset = 0;
-      {
-        const charGroup = charGroupRef.current;
-        if (directive?.posture && charGroup) {
-          const elapsedMs = now - directive.receivedAt;
-          const ramp = Math.min(1, elapsedMs / 300);
-          switch (directive.posture) {
-            case 'lean_in':
-              charGroup.position.z += (-ramp * 0.1 - charGroup.position.z) * 0.15;
-              postureChestRotXOffset = ramp * 0.06 * energyMul;
-              break;
-            case 'lean_back':
-              charGroup.position.z += (ramp * 0.06 - charGroup.position.z) * 0.15;
-              postureChestRotXOffset = -ramp * 0.06 * energyMul;
-              break;
-            case 'shrink':
-              charGroup.position.z += (ramp * 0.02 - charGroup.position.z) * 0.15;
-              postureShoulderYOffset = -ramp * 0.02 * energyMul;
-              postureChestRotXOffset = ramp * 0.03 * energyMul;
-              break;
-            case 'straighten':
-              charGroup.position.z += (0 - charGroup.position.z) * 0.15;
-              postureShoulderYOffset = ramp * 0.006 * energyMul;
-              postureChestRotXOffset = -ramp * 0.025 * energyMul;
-              break;
-          }
-        } else if (charGroup) {
-          charGroup.position.z += (0 - charGroup.position.z) * 0.1;
-        }
-      }
-
-      // Procedural micro-animation: breath (chest) + head/shoulder noise.
-      // Bones driven by the idle clip get `+=` (mixer already wrote this frame's base value,
-      // so the offset doesn't accumulate); bones with no clip track use the existing
-      // rest-value + offset absolute write, since mixer never touches them. Posture's
-      // chest-rotation / shoulder-Y offsets fold into the same additive-vs-absolute branch —
-      // the absolute-write case reuses the base refs captured at model load time.
-      {
-        const res = boneResolverRef.current?.resolved;
-        const animatedBoneNames = animatedBoneNamesRef.current;
-        if (res) {
-          const moodEntry = MOOD_TABLE[currentMood];
-          const period = ((moodEntry?.breathePeriod as number | undefined) ?? 4200) / 1000;
-          const depth  = ((moodEntry?.breatheDepth  as number | undefined) ?? 0.022) * (0.7 + 0.6 * energy);
-          const breath = Math.sin((t / period) * Math.PI * 2);
-          const breathBone = res.chest ?? res.spine;
-          if (breathBone) {
-            const posOffset = breath * depth * 0.06;
-            const scaleOffset = breath * depth * 0.5;
-            if (animatedBoneNames.has(breathBone.name)) {
-              breathBone.position.y += posOffset;
-              breathBone.scale.x += scaleOffset;
-              breathBone.scale.y += scaleOffset;
-              breathBone.scale.z += scaleOffset;
-              breathBone.rotation.x += postureChestRotXOffset;
-            } else {
-              breathBone.position.y = chestBasePosYRef.current + posOffset;
-              breathBone.scale.setScalar(chestBaseScaleRef.current + scaleOffset);
-              breathBone.rotation.x = chestBaseRotXRef.current + postureChestRotXOffset;
-            }
-          }
-          if (res.shoulderL) {
-            const offset = microNoise(t, 5) * 0.004 + postureShoulderYOffset;
-            if (animatedBoneNames.has(res.shoulderL.name)) res.shoulderL.position.y += offset;
-            else res.shoulderL.position.y = shLBasePosYRef.current + offset;
-          }
-          if (res.shoulderR) {
-            const offset = microNoise(t, 9) * 0.004 + postureShoulderYOffset;
-            if (animatedBoneNames.has(res.shoulderR.name)) res.shoulderR.position.y += offset;
-            else res.shoulderR.position.y = shRBasePosYRef.current + offset;
-          }
-        }
-      }
+      // All morph/bone performance layers live in the shared performer (CA-02) so Room and
+      // Pet cannot drift apart. Room keeps only its own stage concerns: the physics chains
+      // below, camera breathing, and mood light tinting.
+      performerRef.current?.update({
+        t, now,
+        mood: currentMood,
+        directive,
+        talking: talkingRef.current,
+        animatedBoneNames: animatedBoneNamesRef.current,
+        charGroup: charGroupRef.current,
+        hairDrivenByPhysics: springChainsRef.current.length > 0,
+      });
 
       // Physics spring chains (hair/tail/ribbons) — must run after head/gaze/micro-anim so it
       // inherits the final bone orientations for this frame. Head/breath/shoulder edits above
@@ -1172,7 +880,7 @@ export function useRoomScene(
       proxyFillMat.dispose();
 
       refs.controls.dispose();
-      morphRef.current = null;
+      performerRef.current = null;
       springChainsRef.current = [];
       if (mixerRef.current) {
         mixerRef.current.stopAllAction();

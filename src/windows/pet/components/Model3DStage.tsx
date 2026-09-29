@@ -56,6 +56,7 @@ export function Model3DStage({ snapshot }: PetRendererProps) {
     settings.characterFile,
     getCharacterCfg(settings, settings.characterFile).boneMap,
     handleModelLoaded,
+    getCharacterCfg(settings, settings.characterFile).routes,
   );
   charGroupRef.current = charGroup;
 
