@@ -38,7 +38,28 @@ export function filterClipTracks(clip: THREE.AnimationClip, excludedBoneNames: S
   return animatedBoneNames;
 }
 
-// `idle` (case-insensitive) wins by default; `preferredName` (RoomSettings.idleClip) wins over that.
+/**
+ * True when every track in a clip drives morph-target weights rather than bones.
+ *
+ * Blender exports one such clip per mesh that has *any* shape-key animation, named
+ * after the mesh (`球体动作`, `Key动作.001`). They are an export artifact, not an idle
+ * animation — and the performer already owns every morph weight each frame, so playing
+ * one makes the mixer and the performer fight over the same weights.
+ */
+export function isMorphOnlyClip(clip: THREE.AnimationClip): boolean {
+  return clip.tracks.length > 0
+    && clip.tracks.every((t) => t.name.endsWith('.morphTargetInfluences'));
+}
+
+/**
+ * Pick the clip to play as idle.
+ *
+ * `preferredName` (RoomSettings.idleClip) wins, then a clip literally named `idle`.
+ * Failing both, fall back to the first clip that drives *bones* — never a morph-only
+ * clip, since those would collide with the performer's own morph writes. A model whose
+ * only clips are morph-only therefore gets no clip at all, which is correct: the
+ * performer drives those morphs better, and the body route degrades to `procedural`.
+ */
 export function selectIdleClip(
   clips: THREE.AnimationClip[],
   preferredName?: string,
@@ -49,5 +70,6 @@ export function selectIdleClip(
     if (named) return named;
   }
   const idle = clips.find((c) => c.name.toLowerCase() === 'idle');
-  return idle ?? clips[0];
+  if (idle) return idle;
+  return clips.find((c) => !isMorphOnlyClip(c)) ?? null;
 }
