@@ -13,6 +13,27 @@
   },
   "cases": [
     {
+      "id": "ca-00-anonymous-glb-fixtures",
+      "area": "automated",
+      "scenario": "Parse six anonymous GLB variants covering ordinary, morph-only, alternate bones, missing eyes and upper-body cases.",
+      "status": "passed",
+      "evidence": "scripts/generate-character-baselines.mjs; tests/fixtures/characters.test.ts"
+    },
+    {
+      "id": "ca-00-room-pet-real-baseline",
+      "area": "windows",
+      "scenario": "Record Room and Pet expression, blink, speech, gaze, breathing, idle, physics, model switch and lifecycle behavior with a real model.",
+      "status": "not-run",
+      "evidence": "docs/character-performance-baseline.md"
+    },
+    {
+      "id": "ca-00-dual-window-performance",
+      "area": "windows",
+      "scenario": "Measure cold loading, warmed frame times and ten-minute memory trend on a documented device.",
+      "status": "not-run",
+      "evidence": "docs/character-performance-baseline.md"
+    },
+    {
       "id": "chat-timer-unit",
       "area": "automated",
       "scenario": "Latest input timer cancels stale callbacks across replacement, engine switch, and unmount.",

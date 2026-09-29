@@ -1,5 +1,15 @@
 # docs/known-issues.md — 已知问题与技术债
 
+## 角色资产与统一表演 CA-00（2026-09-29，partial）
+
+current：六份可再生成的匿名 GLB 已由实际 GLTFLoader 解析，源码能力和 proposed/current 差异见
+`character-performance-baseline.md`。现有 Room 可播 idle，Pet 尚无同等 clip 接线；现有导入器不读取
+`character.json`，旧指南前文的可用承诺与后文现状互相矛盾。
+observe：真实 Room/Pet 窗口的原行为、材质参考图、双窗口帧耗时与 10 分钟内存趋势均未采集；
+匿名结构样本不能证明真实模型蒙皮、眼神或自然站姿。后续 CA-01～09 按工单推进，
+未取得这些证据前保持 partial。此单只建立本地桌面验收基线，没有后端/手机消费或接口变化。
+详见 `../cc-tasks/2026-09-27-character-assets-and-performance.md`。
+
 ## 主动视频来电窗口（2026-09-27，partial）
 
 current：拒绝立即结束本地来电窗口并异步回报后端；倒计时到 0 后关闭窗口，关闭请求失败或卡住时销毁窗口。来电头像从邀请的角色 ID 读取，缺失时显示角色文字。
