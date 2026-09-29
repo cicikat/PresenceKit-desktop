@@ -1,5 +1,6 @@
 import { getUIPref, setUIPref } from '../uiPreferences';
 import { validatePerformanceRoutes, type PerformanceRoutes } from '../character/performanceRoutes';
+import { ALL_ROLES, type BoneRole } from '../character/humanoid';
 
 export type Framing = 'face' | 'upperBody' | 'full';
 export type RenderMode = 'model3d' | 'live2d';
@@ -19,7 +20,9 @@ export interface RoomLights {
   moodTint: boolean;
 }
 
-export type BoneRole = 'head' | 'chest' | 'spine' | 'shoulderL' | 'shoulderR' | 'leftEye' | 'rightEye';
+// Role vocabulary lives in shared/character/humanoid.ts — settings only stores the
+// user's name overrides. Re-exported so existing importers keep working.
+export type { BoneRole };
 export type BoneMap = Partial<Record<BoneRole, string>>;
 
 export interface SpringParamsCfg {
@@ -187,9 +190,8 @@ function validateSpringParamsCfg(raw: unknown): SpringParamsCfg | undefined {
 function validateBoneMap(raw: unknown): BoneMap | undefined {
   if (!raw || typeof raw !== 'object') return undefined;
   const bm = raw as Record<string, unknown>;
-  const roles: BoneRole[] = ['head', 'chest', 'spine', 'shoulderL', 'shoulderR', 'leftEye', 'rightEye'];
   const out: BoneMap = {};
-  for (const role of roles) {
+  for (const role of ALL_ROLES) {
     if (typeof bm[role] === 'string' && bm[role]) out[role] = bm[role] as string;
   }
   return Object.keys(out).length > 0 ? out : undefined;

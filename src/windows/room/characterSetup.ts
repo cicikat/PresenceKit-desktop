@@ -51,6 +51,9 @@ export function setupCharacter(
     console.log('[room] phys chains:', getSpringChainRootNames(springChains));
     console.log('[room] clips:', animations.map(a => a.name), '| routes:', performer.routes);
     for (const note of performer.routes.notes) console.warn('[room] route note:', note);
+    console.log('[room] standing pose verified:', performer.standing.verified);
+    for (const note of performer.standing.notes) console.warn('[room] standing note:', note);
+    for (const w of performer.bones.warnings) console.warn('[room] rig warning:', w);
   }
 
   return {

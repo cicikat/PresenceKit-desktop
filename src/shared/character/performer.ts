@@ -19,6 +19,11 @@ import { backendMoodToFrontend } from '../state/mood-mapping';
 import type { ActiveDirective } from '../../windows/room/avatarDirective';
 import type { BoneMap } from '../room/roomSettings';
 import { probeRigCapability, GAZE_MORPH_KEYS } from './rigCapability';
+import type { BoneRole } from './humanoid';
+import {
+  buildStandingPose, reportStanding,
+  type PoseOffsets, type StandingReport,
+} from './standingPose';
 import {
   resolveRoutes, faceUsesMorphs, gazeUsesBones, gazeUsesMorphs,
   type PerformanceRoutes, type ResolvedRoutes, type RigCapability,
@@ -94,6 +99,32 @@ function findHeadBone(root: THREE.Object3D): THREE.Bone | null {
   return found;
 }
 
+/**
+ * Measure how far the bind pose spreads the arms, in degrees from straight down, by
+ * comparing the world positions of the upper arm and the hand (or elbow). Measuring
+ * geometry rather than reading a stored flag means a re-exported rig is classified
+ * correctly without the user touching settings.
+ *
+ * Returns 0 when the arm chain is missing, which yields no arm correction at all.
+ */
+function measureArmDropDeg(resolved: Partial<Record<BoneRole, THREE.Bone>>): number {
+  const upper = resolved.upperArmL ?? resolved.upperArmR;
+  const tip = resolved.upperArmL
+    ? (resolved.handL ?? resolved.lowerArmL)
+    : (resolved.handR ?? resolved.lowerArmR);
+  if (!upper || !tip) return 0;
+  upper.updateWorldMatrix(true, false);
+  tip.updateWorldMatrix(true, false);
+  const a = upper.getWorldPosition(new THREE.Vector3());
+  const b = tip.getWorldPosition(new THREE.Vector3());
+  const dir = b.sub(a);
+  if (dir.lengthSq() < 1e-8) return 0;
+  dir.normalize();
+  // Angle between the arm direction and straight down (0,-1,0).
+  const cos = THREE.MathUtils.clamp(-dir.y, -1, 1);
+  return THREE.MathUtils.radToDeg(Math.acos(cos));
+}
+
 /** Eye bone local rotation limits, radians. Outward/inward differ: eyes cross less than they diverge. */
 const EYE_LIMIT = { outward: 0.35, inward: 0.22, up: 0.20, down: 0.26 };
 
@@ -119,6 +150,10 @@ export class CharacterPerformer {
   /** Smoothed gaze target in normalized -1..1 screen-ish space, shared by both gaze drivers. */
   private gazeX = 0;
   private gazeY = 0;
+  /** Standing-pose capability report; callers surface `notes` rather than guessing. */
+  standing!: StandingReport;
+  /** The deltas actually applied at load, kept so the pose can be reported or reverted. */
+  standingPose: PoseOffsets = {};
 
   constructor(model: THREE.Object3D, options: PerformerOptions = {}) {
     this.morph = new MorphController(model);
@@ -145,6 +180,14 @@ export class CharacterPerformer {
     });
     this.routes = resolveRoutes(options.routes, this.capability);
 
+    // Standing pose is applied once, here, before the procedural bases are recorded — so
+    // breath and posture build on top of the relaxed rest instead of fighting it. The GLB's
+    // bind pose is untouched; these are deltas on the loaded local rotations.
+    const present = this.bones.presentRoles();
+    this.standing = reportStanding(present);
+    this.standingPose = buildStandingPose(measureArmDropDeg(resolved), present);
+    this.applyStandingPose();
+
     const breathBone = resolved.chest ?? resolved.spine;
     if (breathBone) {
       this.chestBasePosY = breathBone.position.y;
@@ -153,6 +196,21 @@ export class CharacterPerformer {
     }
     if (resolved.shoulderL) this.shoulderLBaseY = resolved.shoulderL.position.y;
     if (resolved.shoulderR) this.shoulderRBaseY = resolved.shoulderR.position.y;
+  }
+
+  /**
+   * Add the standing deltas onto each bone's loaded local rotation. Additive, once, at
+   * load: the bind pose in the GLB is never rewritten, and every later per-frame layer
+   * records its base *after* this runs, so nothing double-applies.
+   */
+  private applyStandingPose(): void {
+    for (const [role, off] of Object.entries(this.standingPose) as [BoneRole, { x?: number; y?: number; z?: number }][]) {
+      const bone = this.bones.resolved[role];
+      if (!bone) continue;
+      bone.rotation.x += off.x ?? 0;
+      bone.rotation.y += off.y ?? 0;
+      bone.rotation.z += off.z ?? 0;
+    }
   }
 
   /** Bones the performer owns exclusively; their clip tracks must be removed. */
