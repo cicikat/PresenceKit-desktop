@@ -39,6 +39,23 @@ const btnStyle: CSSProperties = {
 
 const dangerBtnStyle: CSSProperties = { ...btnStyle, color: 'var(--danger)', borderColor: 'var(--danger)' };
 
+/**
+ * Route dimensions and their selectable values. Option sets differ per dimension:
+ * only gaze can be `mixed` (it needs both drivers present), and only body has
+ * `procedural`/`clip`. Typed as literal i18n keys so a missing translation is a
+ * compile error rather than a key echoed at the user.
+ */
+type RouteOption = 'auto' | 'morph' | 'bone' | 'mixed' | 'off' | 'procedural' | 'clip';
+
+const ROUTE_DIMENSIONS: readonly {
+  dim: 'face' | 'gaze' | 'body';
+  options: readonly RouteOption[];
+}[] = [
+  { dim: 'face', options: ['auto', 'morph', 'bone', 'off'] },
+  { dim: 'gaze', options: ['auto', 'morph', 'bone', 'mixed', 'off'] },
+  { dim: 'body', options: ['auto', 'procedural', 'clip', 'off'] },
+];
+
 // mirrors springBones.ts DEFAULT_SPRING_PARAMS.gravity — kept local to avoid a cross-window import
 const DEFAULT_PHYS_GRAVITY = 0.3;
 
@@ -215,6 +232,20 @@ export function CallSettingsPage() {
           physicsBones: { ...charCfg.physicsBones, default: { ...charCfg.physicsBones?.default, gravity: v } },
         },
       },
+    });
+  }
+
+  /**
+   * Store a route override for the current character. `auto` is written as `undefined`
+   * so the stored config stays minimal and a re-exported model picks up its new
+   * capabilities instead of inheriting a stale explicit route.
+   */
+  function patchRoute(dim: 'face' | 'gaze' | 'body', value: string) {
+    const file = settings.characterFile;
+    const charCfg = getCharacterCfg(settings, file);
+    const routes = { ...charCfg.routes, [dim]: value === 'auto' ? undefined : value };
+    patch({
+      perCharacter: { ...settings.perCharacter, [file]: { ...charCfg, routes } },
     });
   }
 
@@ -489,6 +520,29 @@ export function CallSettingsPage() {
           </div>
         </div>
       )}
+
+      <Divider />
+
+      <div>
+        <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink)', marginBottom: 2 }}>{t('settings.perf.title')}</div>
+        <div className="mono" style={{ fontSize: 9.5, color: 'var(--ink-3)', letterSpacing: 1.1 }}>
+          {t('settings.perf.hint')}
+        </div>
+      </div>
+
+      {ROUTE_DIMENSIONS.map(({ dim, options }) => (
+        <Row key={dim} label={t(`settings.perf.${dim}`)} hint={t(`settings.perf.${dim}Hint`)}>
+          <select
+            style={selectStyle}
+            value={getCharacterCfg(settings, settings.characterFile).routes?.[dim] ?? 'auto'}
+            onChange={e => patchRoute(dim, e.target.value)}
+          >
+            {options.map(opt => (
+              <option key={opt} value={opt}>{t(`settings.perf.route.${opt}`)}</option>
+            ))}
+          </select>
+        </Row>
+      ))}
 
       <Divider />
 
