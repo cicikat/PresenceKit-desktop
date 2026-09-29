@@ -41,13 +41,32 @@ PresenceKit-desktop 是 `PresenceKit` AI 陪伴系统的新桌面客户端，技
 `npm.cmd` / `npx.cmd`、`.bat` / `.ps1`、PowerShell 语法；不要写 bash / Linux / macOS 专用命令
 （如 `rm -rf`、`export`、`.sh` 脚本）。跨平台 Node 脚本（`.mjs`）可以。
 
+### 换行：工作区 CRLF，git 仓库 LF
+
+- 本仓 `core.autocrlf=true`：git 里存 LF，工作区文本文件一律 **CRLF**。新建、改写文件都保持 CRLF，不要留下 LF 或混用。
+- 提交前对每个要 `git add` 的文件对比 `git diff --stat -- <path>` 与 `git diff --ignore-cr-at-eol --stat -- <path>`；两者差很多说明换行被误改，先修再提交，不要把换行转换混进功能提交。
+- 已知历史遗留：少数文件在 git 里本身带 CRLF/混用，不要顺手整文件归一化。
+- 例外：后端 `Emerald-presence` 由 `.gitattributes` 强制工作区 **LF**（仅 `.bat` / `.cmd` 用 CRLF）。跨仓改动时按该仓规则，不要把 CRLF 写进后端文件。
+
+### Bash 工具的 Shell 陷阱（先读再动手）
+
+Agent 的 Bash 工具是 Windows 上的 Git Bash（POSIX 语法），不是 PowerShell，也不是真 Linux。下面这些坑已经踩过，不要重复：
+
+- **路径用正斜杠盘符形式**：`/d/ai/<仓库名>/...`。不要在 Bash 里写 `C:\Users\10434...` 这类会话展示用的路径，也不要写带反斜杠的盘符路径，更不要用 `$var` 拼路径：反斜杠会被吃掉，变成 `D:aiEmerald-client` 这类不存在的路径。直接写字面路径。
+- **`/tmp` 实际是 `/d/tmp`**，不是系统临时目录。临时脚本放 `/d/tmp/`，用完删除；放进仓库的临时文件必须删掉，不要提交。
+- **Python 是 Windows 版，不认 Git Bash 路径**：传给 `python3` 的脚本里不要写绝对路径（会被改写成带反斜杠的盘符路径，触发转义错误或 FileNotFoundError）；先 `cd /d/ai/<仓库名>`，脚本里只用相对路径。
+- **不要在命令行或 heredoc 里内联含反斜杠转义（换行符转义、盘符路径）或中文的 Python/sed**：反斜杠和编码会被 shell 改写。改成用 Write 工具写脚本文件，再运行 `python3 -X utf8 /d/tmp/xxx.py`；运行前先 Grep 检查脚本里没有被改写的路径或转义。
+- **多行编辑前先查换行**：`git ls-files --eol <文件>`。Edit 工具的多行匹配失败时，先怀疑 CRLF/LF 混用；脚本里先把 CRLF 统一成 LF 再替换，改完再按本仓约定写回。
+- **文件必须是 UTF-8**。读到整段乱码多半是被按 GBK 写入过，先 `iconv -f GBK -t UTF-8` 验证，再重写，不要照乱码继续改。
+- **失败先看路径，不要原样重试**：先 `pwd` / `ls` 确认命令实际落在哪里，再换写法。
+
 ---
 
 ## 协作约定（Claude / Codex 共用）
 
 本节同步 `CLAUDE.md` 的协作规则，使 Codex 在默认读取本 `AGENTS.md` 时也获得同一施工约定：
 
-1. 用中文回复；默认自主推进、替用户拍板，只在删数据、改契约、对外发布等不可逆决策前提问。
+1. 用中文回复；默认自主推进、替用户拍板，仅未获授权的删数据、改契约、对外发布等不可逆决策需要确认。用户已拍板或已授权的事项不重复询问、不复述选项；缺少必要信息时集中提问一次，并继续做不依赖答案的部分；自检中的“确认”不是向用户请求批准。
 2. 先按本文件「任务关注点」定位，不够时再查 `ARCHITECTURE.md`，然后精确检索；检索排除 `node_modules/`、`dist/`、`src-tauri/gen/`、`src-tauri/target/`。
 3. 多个独立交付物一次性批量输出，并标明可并行项与前置依赖。
 4. 代码、脚本和文档不得写盘符绝对路径，统一相对仓库根（仓库可整体改名/移盘）；`start-dev.bat` 用 `%~dp0`。
