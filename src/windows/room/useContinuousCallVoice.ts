@@ -2,9 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { transcribeAudio } from '../../shared/api/backend';
 import { t } from '../../shared/i18n';
 
-const MAX_SEGMENT_MS = 12_000;
+// Short segments keep CPU Whisper out of its slow long-audio regime (see the STT work order).
+const MAX_SEGMENT_MS = 6_000;
 const END_SILENCE_MS = 900;
-const MAX_PENDING_SEGMENTS = 3;
+// Doubled with the halved segment length so fast talkers do not lose segments.
+const MAX_PENDING_SEGMENTS = 6;
 
 async function toBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
