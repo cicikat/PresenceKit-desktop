@@ -13,6 +13,7 @@ observe：真实 Room/Pet 窗口的原行为、材质参考图、双窗口帧耗
 ## 主动视频来电窗口（2026-09-27，partial）
 
 current：拒绝立即结束本地来电窗口并异步回报后端；倒计时到 0 后关闭窗口，关闭请求失败或卡住时销毁窗口。来电头像从邀请的角色 ID 读取，缺失时显示角色文字。
+2026-09-27 后续修复：`capabilities/video-call-invite.json` 此前缺 `core:window:allow-destroy`，导致 `destroy()` 被 ACL 拒绝。由于窗口 `decorations: false` 且 `alwaysOnTop`，超时后按钮禁用、关不掉也点不动，表现为窗口卡死在屏幕最上层。已补该权限。
 observe：真实 Windows Tauri 窗口中的超时、拒绝、接通，以及后端回执是否完成仍待复测。拒绝后若后端不可达，异步回执可能失败，后端仍以原 10 秒超时结算；没有改动服务端设置、手机消费或协议。
 详见 `../cc-tasks/2026-09-27-video-call-invite-window.md`。
 
