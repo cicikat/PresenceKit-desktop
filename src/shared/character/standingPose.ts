@@ -12,7 +12,10 @@
  * character's own left. A positive Z rotation on a left arm swings it away from the body.
  */
 
-import { STANDING_REQUIRED, LEG_ROLES, type BoneRole } from './humanoid';
+import {
+  STANDING_REQUIRED, LEG_ROLES, POSE_GROUPS, ROLE_POSE_GROUP,
+  type BoneRole, type PoseGroup,
+} from './humanoid';
 
 /** Euler delta in radians, applied in the bone's local space. */
 export interface PoseOffset {
@@ -61,11 +64,22 @@ const DEG = Math.PI / 180;
  *   has and the relaxed target, so an already-relaxed rig gets no arm rotation at all.
  * @param present roles that actually resolved on this model. Absent roles get no offset
  *   rather than a guessed one.
+ * @param intactGroups limb groups whose parent/child links hold in this export. A group is
+ *   posed only when it can be posed as a whole: a rotation propagates down the bone tree,
+ *   so writing a group whose chain is broken would move some meshes and leave the rest
+ *   behind. Defaults to every group, for callers that have already verified the topology.
  */
-export function buildStandingPose(armDropDeg: number, present: ReadonlySet<BoneRole>): PoseOffsets {
+export function buildStandingPose(
+  armDropDeg: number,
+  present: ReadonlySet<BoneRole>,
+  intactGroups: ReadonlySet<PoseGroup> = new Set(POSE_GROUPS),
+): PoseOffsets {
   const out: PoseOffsets = {};
   const put = (role: BoneRole, off: PoseOffset) => {
-    if (present.has(role)) out[role] = off;
+    if (!present.has(role)) return;
+    const group = ROLE_POSE_GROUP[role];
+    if (group && !intactGroups.has(group)) return;
+    out[role] = off;
   };
 
   // Arms: rotate about Z to swing down toward the body. Mirrored per side.
@@ -107,19 +121,29 @@ export function buildStandingPose(armDropDeg: number, present: ReadonlySet<BoneR
 
 /** Why a rig cannot report a verified standing pose. Reported, never silently ignored. */
 export interface StandingReport {
-  /** True only when every role in STANDING_REQUIRED resolved. */
+  /** True only when every required role resolved *and* every posed group is writable. */
   verified: boolean;
   /** Required roles that did not resolve. */
   missingRequired: BoneRole[];
   /** Leg roles that did not resolve — a half-body model, not necessarily an error. */
   missingLegs: BoneRole[];
+  /** Groups skipped because their bone chain is broken in this export. */
+  skippedGroups: PoseGroup[];
   /** Human-readable degradation reasons, in the same style as ResolvedRoutes.notes. */
   notes: string[];
 }
 
-export function reportStanding(present: ReadonlySet<BoneRole>): StandingReport {
+export function reportStanding(
+  present: ReadonlySet<BoneRole>,
+  intactGroups: ReadonlySet<PoseGroup> = new Set(POSE_GROUPS),
+): StandingReport {
   const missingRequired = STANDING_REQUIRED.filter(r => !present.has(r));
   const missingLegs = LEG_ROLES.filter(r => !present.has(r));
+  // Only groups the model could otherwise have posed count as skipped: a half-body rig is
+  // already described by missingLegs, and repeating it as a broken chain would misattribute
+  // an absent limb to a topology problem.
+  const skippedGroups = POSE_GROUPS.filter(group =>
+    !intactGroups.has(group) && GROUP_ROLES[group].some(r => present.has(r)));
   const notes: string[] = [];
   if (missingRequired.length > 0) {
     notes.push(`standing pose unverified: missing ${missingRequired.join(', ')}`);
@@ -129,10 +153,23 @@ export function reportStanding(present: ReadonlySet<BoneRole>): StandingReport {
   } else if (missingLegs.length > 0) {
     notes.push(`partial legs: missing ${missingLegs.join(', ')}`);
   }
+  if (skippedGroups.length > 0) {
+    notes.push(
+      `standing pose skipped for ${skippedGroups.join(', ')}: the bone chain is broken in ` +
+      'this export, so posing it would move some meshes and leave others behind',
+    );
+  }
   return {
-    verified: missingRequired.length === 0,
+    verified: missingRequired.length === 0 && skippedGroups.length === 0,
     missingRequired,
     missingLegs,
+    skippedGroups,
     notes,
   };
 }
+
+/** Roles belonging to each pose group, derived from ROLE_POSE_GROUP so the two cannot drift. */
+const GROUP_ROLES: Record<PoseGroup, BoneRole[]> = POSE_GROUPS.reduce((acc, group) => {
+  acc[group] = (Object.keys(ROLE_POSE_GROUP) as BoneRole[]).filter(r => ROLE_POSE_GROUP[r] === group);
+  return acc;
+}, {} as Record<PoseGroup, BoneRole[]>);

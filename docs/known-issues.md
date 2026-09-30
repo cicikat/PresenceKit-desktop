@@ -1,5 +1,19 @@
 # docs/known-issues.md — 已知问题与技术债
 
+## 自然站姿在断链骨架上造成脸发错位（2026-09-30，partial）
+
+current：CA-03 的站姿偏移会沿父子链累加到头骨。当前 Room 模型同时带控制骨架与形变骨架，
+脸跟着 `DEF-spine.*` 链走，头发与眼睛挂在另一分支，于是脸前移、头发与眼睛留在原地，看起来像头发往后错。
+在线查看器只渲染绑定姿态，所以看不出来。`checkTopology()` 原本已经发现这些断链，但只打警告。
+现在断链会作为门控：按躯干/左右臂/左右腿分组，链不完整的组不写站姿，并在
+`standing.notes` 里说明原因，同时不把 `verified` 标成已完成。该模型五组全部跳过，
+恢复为绑定姿态，外观与引入站姿之前一致。
+open：这个模型本身仍没有自然站姿。要让它的站姿生效，得先用只导出 DEF 链的运行时导出
+（`scripts/blender/export_runtime_glb.py`，尚未入库）重新导出；模型源文件未修改。
+observe：浏览器/真实 Room 与 Pet 窗口的实测尚未完成，目前只通过从真实 GLB 节点树重建骨架的
+单元验证确认五组全部跳过。
+详见 `../cc-tasks/2026-09-27-character-assets-and-performance.md`。
+
 ## 角色资产与统一表演 CA-00（2026-09-29，partial）
 
 current：六份可再生成的匿名 GLB 已由实际 GLTFLoader 解析，源码能力和 proposed/current 差异见

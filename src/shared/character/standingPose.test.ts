@@ -2,9 +2,15 @@ import { describe, it, expect } from 'vitest';
 import {
   buildStandingPose, classifyBindPose, reportStanding, type PoseOffsets,
 } from './standingPose';
-import { ALL_ROLES, STANDING_REQUIRED, LEG_ROLES, type BoneRole } from './humanoid';
+import {
+  ALL_ROLES, STANDING_REQUIRED, LEG_ROLES, POSE_GROUPS,
+  type BoneRole, type PoseGroup,
+} from './humanoid';
 
 const full = new Set<BoneRole>(ALL_ROLES);
+const allGroups = new Set<PoseGroup>(POSE_GROUPS);
+const without = (...drop: PoseGroup[]) =>
+  new Set<PoseGroup>(POSE_GROUPS.filter(g => !drop.includes(g)));
 
 function maxAbs(p: PoseOffsets): number {
   let m = 0;
@@ -63,6 +69,37 @@ describe('buildStandingPose', () => {
   it('produces no offsets at all for a rig with no resolved bones', () => {
     expect(buildStandingPose(90, new Set())).toEqual({});
   });
+
+  it('writes no torso offset when the torso chain is broken', () => {
+    // The regression this guards: spine/chest/neck offsets accumulate into the head, so on a
+    // rig whose head sits on a different branch the face moves while hair and eyes parented
+    // elsewhere stay put. Refusing the group keeps the model whole.
+    const p = buildStandingPose(90, full, without('torso'));
+    expect(p.spine).toBeUndefined();
+    expect(p.chest).toBeUndefined();
+    expect(p.neck).toBeUndefined();
+    // Limbs whose own chains are intact are still relaxed.
+    expect(p.upperArmL).toBeDefined();
+    expect(p.lowerLegR).toBeDefined();
+  });
+
+  it('skips only the broken side and still poses the intact one', () => {
+    const p = buildStandingPose(90, full, without('armL'));
+    expect(p.shoulderL).toBeUndefined();
+    expect(p.upperArmL).toBeUndefined();
+    expect(p.handL).toBeUndefined();
+    expect(p.shoulderR).toBeDefined();
+    expect(p.upperArmR).toBeDefined();
+    expect(p.handR).toBeDefined();
+  });
+
+  it('writes nothing when every group is broken, rather than posing part of the rig', () => {
+    expect(buildStandingPose(90, full, new Set())).toEqual({});
+  });
+
+  it('poses every group by default, so an already-verified caller is unaffected', () => {
+    expect(buildStandingPose(90, full)).toEqual(buildStandingPose(90, full, allGroups));
+  });
 });
 
 describe('reportStanding', () => {
@@ -97,8 +134,28 @@ describe('reportStanding', () => {
 
   it('requires exactly the documented role set', () => {
     for (const role of STANDING_REQUIRED) {
-      const without = new Set<BoneRole>(ALL_ROLES.filter(r => r !== role));
-      expect(reportStanding(without).verified).toBe(false);
+      const missing = new Set<BoneRole>(ALL_ROLES.filter(r => r !== role));
+      expect(reportStanding(missing).verified).toBe(false);
     }
+  });
+
+  it('refuses to verify a rig whose chain is broken and names the skipped group', () => {
+    const r = reportStanding(full, without('torso'));
+    expect(r.verified).toBe(false);
+    expect(r.skippedGroups).toEqual(['torso']);
+    expect(r.notes.join(' ')).toContain('torso');
+    expect(r.notes.join(' ')).toContain('bone chain is broken');
+    // Not misreported as a missing bone: every role did resolve.
+    expect(r.missingRequired).toEqual([]);
+  });
+
+  it('does not blame a broken chain for a limb the model simply does not have', () => {
+    // Half-body rig: the leg groups are unwritable because the bones are absent, which
+    // missingLegs already says. Reporting them as broken chains would misattribute it.
+    const upper = new Set<BoneRole>(ALL_ROLES.filter(r => !LEG_ROLES.includes(r)));
+    const r = reportStanding(upper, without('legL', 'legR'));
+    expect(r.skippedGroups).toEqual([]);
+    expect(r.notes.join(' ')).toContain('half-body');
+    expect(r.notes.join(' ')).not.toContain('bone chain is broken');
   });
 });

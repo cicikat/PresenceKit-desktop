@@ -167,6 +167,80 @@ describe('CA-02 shared performer', () => {
     expect(influence(model, 'hairSwayLeft')).toBeGreaterThan(0);
   });
 
+  it('leaves the head where the export put it when the torso chain is broken', () => {
+    // Regression: the model's face and its hair/eyes are skinned to bones on two
+    // unconnected branches (a Rigify export carrying both a control rig and a deform rig).
+    // Spine/chest/neck offsets accumulate into the head, so posing the torso pushed the face
+    // forward while hair and eyes stayed put — the hair appeared to slide behind the face.
+    const root = new THREE.Group();
+    const bone = (name: string, parent: THREE.Object3D, pos: [number, number, number]) => {
+      const b = new THREE.Bone();
+      b.name = name;
+      b.position.set(...pos);
+      parent.add(b);
+      return b;
+    };
+    // Branch A: the deform chain that carries the face mesh.
+    const hips = bone('DEF-hips', root, [0, 0.9, 0]);
+    const spine = bone('DEF-spine.001', hips, [0, 0.1, 0]);
+    const chest = bone('DEF-spine.003', spine, [0, 0.2, 0]);
+    const neck = bone('DEF-spine.004', chest, [0, 0.1, 0]);
+    const head = bone('DEF-spine.006', neck, [0, 0.1, 0]);
+    // Branch B: hair and eyes, parented under a separate root the torso never reaches.
+    const other = bone('ORG-spine.006', root, [0, 1.3, 0]);
+    const hair = bone('DEF-hair_fringe.001', other, [0, 0.05, 0.05]);
+    bone('DEF-eye.L', other, [0.03, 0.05, 0.06]);
+    bone('DEF-eye.R', other, [-0.03, 0.05, 0.06]);
+    root.updateMatrixWorld(true);
+
+    const headBefore = head.getWorldPosition(new THREE.Vector3());
+    const hairBefore = hair.getWorldPosition(new THREE.Vector3());
+    const performer = new CharacterPerformer(root);
+
+    // The torso group is refused, and the refusal is reported rather than silent.
+    expect(performer.standing.skippedGroups).toContain('torso');
+    expect(performer.standing.verified).toBe(false);
+    expect(performer.standingPose.spine).toBeUndefined();
+    expect(performer.standingPose.neck).toBeUndefined();
+
+    // Face and hair keep their authored relative offset: neither branch was moved.
+    root.updateMatrixWorld(true);
+    const headAfter = head.getWorldPosition(new THREE.Vector3());
+    const hairAfter = hair.getWorldPosition(new THREE.Vector3());
+    expect(headAfter.distanceTo(headBefore)).toBeLessThan(1e-6);
+    expect(hairAfter.distanceTo(hairBefore)).toBeLessThan(1e-6);
+    const gapBefore = hairBefore.clone().sub(headBefore);
+    const gapAfter = hairAfter.clone().sub(headAfter);
+    expect(gapAfter.distanceTo(gapBefore)).toBeLessThan(1e-6);
+  });
+
+  it('still relaxes a rig whose chain is whole', () => {
+    // The gate must not become a blanket opt-out: a well-formed rig keeps its standing pose.
+    const root = new THREE.Group();
+    const bone = (name: string, parent: THREE.Object3D, pos: [number, number, number]) => {
+      const b = new THREE.Bone();
+      b.name = name;
+      b.position.set(...pos);
+      parent.add(b);
+      return b;
+    };
+    const hips = bone('DEF-hips', root, [0, 0.9, 0]);
+    const spine = bone('DEF-spine.001', hips, [0, 0.1, 0]);
+    const chest = bone('DEF-spine.003', spine, [0, 0.2, 0]);
+    const neck = bone('DEF-spine.004', chest, [0, 0.1, 0]);
+    bone('DEF-spine.006', neck, [0, 0.1, 0]);
+    const shoulder = bone('DEF-shoulder.L', chest, [0.05, 0.08, 0]);
+    const upperArm = bone('DEF-upper_arm.L', shoulder, [0.12, 0, 0]);
+    bone('DEF-forearm.L', upperArm, [0.25, 0, 0]);
+    root.updateMatrixWorld(true);
+
+    const performer = new CharacterPerformer(root);
+    expect(performer.standing.skippedGroups).toEqual([]);
+    expect(performer.standingPose.spine).toBeDefined();
+    expect(performer.standingPose.neck).toBeDefined();
+    expect(Math.abs(spine.rotation.x)).toBeGreaterThan(0);
+  });
+
   it('claims eye bones only while the bone gaze driver is active', () => {
     const boneNames = ['DEF-spine.006', 'DEF-eye.L', 'DEF-eye.R'];
     const owned = (routes?: { gaze: 'bone' | 'morph' }) =>

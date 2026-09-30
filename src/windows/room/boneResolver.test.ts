@@ -134,3 +134,49 @@ describe('BoneResolver topology checks', () => {
     expect(r.warnings.join(' ')).not.toMatch(/Leg|foot|toes/i);
   });
 });
+
+describe('BoneResolver pose groups', () => {
+  it('reports every group intact on a well-formed rig', () => {
+    const groups = new BoneResolver(rig(HEALTHY)).intactPoseGroups();
+    expect(groups.has('torso')).toBe(true);
+    expect(groups.has('armL')).toBe(true);
+    expect(groups.has('armR')).toBe(true);
+  });
+
+  it('excludes the torso when the head hangs off another branch', () => {
+    // This is the shape a Rigify export with two skeletons produces: role resolution lands
+    // head on the DEF- chain and the eyes on the ORG- chain, which never meet. A torso
+    // offset accumulates into the head, so the face would move and the eyes would not.
+    const spec = HEALTHY.map(s => (s[0] === 'DEF-spine.006' ? ['DEF-spine.006', 'DEF-hips', s[2]] : s));
+    const r = new BoneResolver(rig(spec as typeof HEALTHY));
+    expect(r.brokenLinks.has('head')).toBe(true);
+    expect(r.intactPoseGroups().has('torso')).toBe(false);
+    // Arms are on their own chain and stay writable.
+    expect(r.intactPoseGroups().has('armL')).toBe(true);
+  });
+
+  it('excludes the torso when the eyes are not under the head, even if the spine chain holds', () => {
+    // The shipped model's shape: the DEF-spine chain is nested, but eyes and hair hang off a
+    // separate ORG- branch, so a torso offset would move the face and leave them behind.
+    const spec = HEALTHY.map(s => (s[0].startsWith('DEF-eye') ? [s[0], 'DEF-hips', s[2]] : s));
+    const r = new BoneResolver(rig(spec as typeof HEALTHY));
+    expect(r.brokenLinks.has('head')).toBe(false);
+    expect(r.intactPoseGroups().has('torso')).toBe(false);
+  });
+
+  it('excludes only the affected arm when one side is detached', () => {
+    const spec = HEALTHY.map(s => (
+      s[0] === 'DEF-upper_arm.L' ? ['DEF-upper_arm.L', 'DEF-hips', s[2]] : s));
+    const groups = new BoneResolver(rig(spec as typeof HEALTHY)).intactPoseGroups();
+    expect(groups.has('armL')).toBe(false);
+    expect(groups.has('armR')).toBe(true);
+    expect(groups.has('torso')).toBe(true);
+  });
+
+  it('treats an absent limb as absent, not as a broken chain', () => {
+    // HEALTHY has no legs at all; that is missingLegs' job to report, not brokenLinks'.
+    const r = new BoneResolver(rig(HEALTHY));
+    expect(r.brokenLinks.size).toBe(0);
+    expect(r.intactPoseGroups().has('legL')).toBe(true);
+  });
+});

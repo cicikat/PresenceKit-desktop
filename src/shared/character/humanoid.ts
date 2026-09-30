@@ -73,6 +73,61 @@ export const ROLE_CANDIDATES: Record<BoneRole, readonly string[]> = {
   rightEye:  ['DEF-eye.R', 'eye.R', 'RightEye', 'mixamorigRightEye', 'eye.r', 'c_eye.r'],
 };
 
+/**
+ * Semantic parent of each role. This is what the *skeleton* is expected to look like, not
+ * what any particular export happens to contain: `BoneResolver` compares it against the
+ * real bone tree, and the standing pose refuses to write a group whose links do not hold.
+ *
+ * Single source of truth — both the topology check and the pose gate read this map, so a
+ * rig can never pass one and fail the other.
+ */
+export const SEMANTIC_PARENT: Partial<Record<BoneRole, BoneRole>> = {
+  spine: 'hips', chest: 'spine', neck: 'chest', head: 'neck',
+  shoulderL: 'chest', shoulderR: 'chest',
+  upperArmL: 'shoulderL', upperArmR: 'shoulderR',
+  lowerArmL: 'upperArmL', lowerArmR: 'upperArmR',
+  handL: 'lowerArmL', handR: 'lowerArmR',
+  upperLegL: 'hips', upperLegR: 'hips',
+  lowerLegL: 'upperLegL', lowerLegR: 'upperLegR',
+  footL: 'lowerLegL', footR: 'lowerLegR',
+  toesL: 'footL', toesR: 'footR',
+  leftEye: 'head', rightEye: 'head',
+};
+
+/**
+ * Limbs the standing pose writes as a unit. A rotation offset propagates down the bone
+ * tree, so a group is only safe to write when every link inside it — and the link that
+ * anchors it to its parent — is a real parent/child relationship in the export. Writing
+ * half a group would move some meshes and leave the rest behind.
+ */
+export type PoseGroup = 'torso' | 'armL' | 'armR' | 'legL' | 'legR';
+
+export const POSE_GROUPS: readonly PoseGroup[] = ['torso', 'armL', 'armR', 'legL', 'legR'] as const;
+
+/** Which group each posed role belongs to. Roles absent here are never posed. */
+export const ROLE_POSE_GROUP: Partial<Record<BoneRole, PoseGroup>> = {
+  spine: 'torso', chest: 'torso', neck: 'torso',
+  shoulderL: 'armL', upperArmL: 'armL', lowerArmL: 'armL', handL: 'armL',
+  shoulderR: 'armR', upperArmR: 'armR', lowerArmR: 'armR', handR: 'armR',
+  upperLegL: 'legL', lowerLegL: 'legL',
+  upperLegR: 'legR', lowerLegR: 'legR',
+};
+
+/**
+ * Links that must hold before a group may be posed. Each entry is a *child* role; the link
+ * checked is the one to its {@link SEMANTIC_PARENT}. `torso` also covers what rides on the
+ * torso — head, eyes, shoulders — because a spine/chest/neck offset propagates into them:
+ * if the eyes (and the hair parented beside them) are not under the head, the face would
+ * move while they stay put.
+ */
+export const POSE_GROUP_LINKS: Record<PoseGroup, readonly BoneRole[]> = {
+  torso: ['spine', 'chest', 'neck', 'head', 'leftEye', 'rightEye', 'shoulderL', 'shoulderR'],
+  armL: ['shoulderL', 'upperArmL', 'lowerArmL', 'handL'],
+  armR: ['shoulderR', 'upperArmR', 'lowerArmR', 'handR'],
+  legL: ['upperLegL', 'lowerLegL', 'footL'],
+  legR: ['upperLegR', 'lowerLegR', 'footR'],
+};
+
 /** Left/right counterpart of a role, for detecting mirrored or swapped mappings. */
 export const MIRRORED_ROLE: Partial<Record<BoneRole, BoneRole>> = {
   shoulderL: 'shoulderR', shoulderR: 'shoulderL',

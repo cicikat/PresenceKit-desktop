@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import type { BoneMap } from '../../shared/room/roomSettings';
-import { ALL_ROLES, ROLE_CANDIDATES, MIRRORED_ROLE, type BoneRole } from '../../shared/character/humanoid';
+import {
+  ALL_ROLES, ROLE_CANDIDATES, MIRRORED_ROLE, SEMANTIC_PARENT,
+  POSE_GROUPS, POSE_GROUP_LINKS, type BoneRole, type PoseGroup,
+} from '../../shared/character/humanoid';
 
 // Smooth deterministic 1D pseudo-noise (sum of sines), returns approx -1..1
 export function microNoise(t: number, seed: number): number {
@@ -18,6 +21,13 @@ export class BoneResolver {
   resolved: Partial<Record<BoneRole, THREE.Bone>> = {};
   /** Topology and mapping problems found at load time. Reported, not thrown. */
   warnings: string[] = [];
+  /**
+   * Child roles whose link to their {@link SEMANTIC_PARENT} is broken in this export —
+   * either role resolved onto a bone that is not actually a descendant of the other. Kept
+   * as data (not just a warning string) so the standing pose can refuse to write across
+   * the break instead of tearing the model apart.
+   */
+  brokenLinks = new Set<BoneRole>();
 
   constructor(root: THREE.Object3D, map: BoneMap = {}) {
     root.traverse(o => {
@@ -58,6 +68,21 @@ export class BoneResolver {
     return new Set(ALL_ROLES.filter(r => this.resolved[r]));
   }
 
+  /**
+   * Pose groups whose internal parent/child links all hold in this export, so a rotation
+   * offset written inside the group actually carries the group's meshes. A group with a
+   * broken link is excluded rather than partially written: posing half a chain moves some
+   * meshes and leaves the rest behind, which reads as the model coming apart.
+   *
+   * Links whose roles are absent are not breaks — a half-body model simply has fewer
+   * groups, and `reportStanding` already describes that separately.
+   */
+  intactPoseGroups(): Set<PoseGroup> {
+    return new Set(POSE_GROUPS.filter(
+      group => !POSE_GROUP_LINKS[group].some(role => this.brokenLinks.has(role)),
+    ));
+  }
+
   names(): string[] { return [...this.byName.keys()]; }
 
   /**
@@ -78,24 +103,16 @@ export class BoneResolver {
       else seen.set(bone, role);
     }
 
-    // 2. Parent chain — each role must be a descendant of its expected ancestor.
-    const chain: Partial<Record<BoneRole, BoneRole>> = {
-      spine: 'hips', chest: 'spine', neck: 'chest', head: 'neck',
-      shoulderL: 'chest', shoulderR: 'chest',
-      upperArmL: 'shoulderL', upperArmR: 'shoulderR',
-      lowerArmL: 'upperArmL', lowerArmR: 'upperArmR',
-      handL: 'lowerArmL', handR: 'lowerArmR',
-      upperLegL: 'hips', upperLegR: 'hips',
-      lowerLegL: 'upperLegL', lowerLegR: 'upperLegR',
-      footL: 'lowerLegL', footR: 'lowerLegR',
-      toesL: 'footL', toesR: 'footR',
-      leftEye: 'head', rightEye: 'head',
-    };
-    for (const [childRole, parentRole] of Object.entries(chain) as [BoneRole, BoneRole][]) {
+    // 2. Parent chain — each role must be a descendant of its expected ancestor. A break
+    //    here is not cosmetic: it means two roles landed on unconnected branches (two
+    //    skeletons in one file, or a control rig resolved alongside a deform rig), so a
+    //    rotation written to one will not carry the other's meshes with it.
+    for (const [childRole, parentRole] of Object.entries(SEMANTIC_PARENT) as [BoneRole, BoneRole][]) {
       const child = this.resolved[childRole];
       const parent = this.resolved[parentRole];
       if (!child || !parent) continue;
       if (!isDescendantOf(child, parent)) {
+        this.brokenLinks.add(childRole);
         this.warnings.push(`${childRole} ("${child.name}") is not under ${parentRole} ("${parent.name}")`);
       }
     }

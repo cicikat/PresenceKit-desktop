@@ -184,8 +184,9 @@ export class CharacterPerformer {
     // breath and posture build on top of the relaxed rest instead of fighting it. The GLB's
     // bind pose is untouched; these are deltas on the loaded local rotations.
     const present = this.bones.presentRoles();
-    this.standing = reportStanding(present);
-    this.standingPose = buildStandingPose(measureArmDropDeg(resolved), present);
+    const intactGroups = this.bones.intactPoseGroups();
+    this.standing = reportStanding(present, intactGroups);
+    this.standingPose = buildStandingPose(measureArmDropDeg(resolved), present, intactGroups);
     this.applyStandingPose();
 
     const breathBone = resolved.chest ?? resolved.spine;
