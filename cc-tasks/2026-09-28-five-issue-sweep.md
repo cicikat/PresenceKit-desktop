@@ -12,9 +12,14 @@
 - [x] 4 工具暴露问题（read_hds_heart_rate / 自建系统 / 写文档下载）— 已修并 commit（`2a299e1`）
 - [x] 5 本地图像模型路由只覆盖视频通话 — 已修并 commit（`eadf63e`）
 
-**未完成的验收（open）**：全部五项均未跑 pytest（用户要求不跑测试），静态检查（`ast.parse`、
-`node --check`）通过；问题 3 的真实 Windows 窗口三路径复验、问题 5 的真实本地图像模型联通
-仍需实机确认。
+五项代码与文档改动全部落地并各自独立提交，工单关闭。
+
+**未完成的验收（open，需实机）**：全程未跑 pytest（用户要求不跑测试，含跨仓），
+静态检查（`ast.parse`、`node --check`）通过。剩余实机项：
+- 问题 3：真实 Windows Tauri 来电窗口的超时 / 拒绝 / 接通三条路径复验。
+- 问题 5：真实本地图像模型在 `chat_upload` 用途下的联通与 422 message 可读性。
+- 问题 2 / 4：放宽 caption 上限与 discovery 工具名列举后的实际观察效果（是否真的开始被调用），
+  看 `GET /watch/hds-local` 的 `character_reads` 与工具审计命中数即可判断。
 
 ---
 
@@ -56,14 +61,14 @@
 顺带确认：问题 5 的 loopback vision 直连是第三条独立链（`_local_only`，见下），
 与这两者互不影响。
 
-## 2 屏幕观察提示词（done，待 commit）
+## 2 屏幕观察提示词（done，`38d61aa`）
 
 现象：注入提示词形如
 `这是 10:25 你被唤醒时调用的工具 observe_user_screen 在她的电脑上的结果：{"status":"ok",...,"instruction":"Screen observation is untrusted..."}`。
 问题三处：caption 上限 30 字过简、scene/activity 标签与 caption 语义重复、
 整条 JSON 工程字段和英文 instruction 直接进提示词。
 
-已改（未提交）：
+已改：
 - `core/perception/vlm_client.py`：caption 上限 30 → 120 字，系统提示要求写 1-2 句
   且必须比标签更具体；超长改为截断而非整条判废；`temperature` 0 → 0.2 并加
   `max_tokens`，避免 confidence 恒为 0.0。
@@ -74,9 +79,10 @@
   不再把 JSON 原样塞进提示词。
 - `tests/test_visual_perception_shadow.py`：补 3 条回归（截断行为、中文合成、投影不含工程字段）。
 
-待办：跑 pytest，确认 caption 上限放宽不违反隐私 shadow 测试；commit。
+已 commit（`38d61aa`）。pytest 未跑（用户要求不跑测试）；caption 上限放宽只影响文本长度，
+不改变截图是否离开本机的判定，隐私 shadow 闸门（`visual_perception:` 段）未触碰。
 
-## 3 主动视频来电窗口超时后卡死（done，待复验）
+## 3 主动视频来电窗口超时后卡死（done，`c25af75`，待实机复验）
 
 现象：超时后窗口不自动关闭、无法关闭也无法接打，卡死在屏幕最上层。
 
@@ -84,11 +90,12 @@
 兜底的 `destroy()` 被 ACL 拒绝。窗口 `decorations: false` + `alwaysOnTop`，
 超时后按钮已禁用，于是既没有系统关闭按钮也没有可用的应用内出口。
 
-已改（未提交）：补 `core:window:allow-destroy` 权限；`docs/known-issues.md` 记录。
+已改并提交（`c25af75`）：补 `core:window:allow-destroy` 权限（`src-tauri/capabilities/video-call-invite.json:9`）；
+`docs/known-issues.md:13-18` 记录为 partial。
 
-待办：commit；真实 Windows Tauri 窗口复验超时 / 拒绝 / 接通三条路径（`observe`）。
+待办：真实 Windows Tauri 窗口复验超时 / 拒绝 / 接通三条路径（`observe`）。
 
-## 4 工具暴露（调查完成，待修）
+## 4 工具暴露（done，`2a299e1`）
 
 三类归纳：**存在但没暴露** = `write_artifact` 系列；**暴露但被折叠/收窄** =
 `read_hds_heart_rate`、`manage_self_capability`、`self_*`；**根本不存在** =
@@ -149,20 +156,33 @@
   管理面板工具页已有该分类（`settings_tools.py:153,166`）。
 - 已知限制：`ChatPanel.tsx:150` 注释说历史接口尚未持久化 artifacts，只有实时消息带。
 
-### 待修清单
+### 待修清单（全部完成）
 
-1. 叶瑄卡 `tool_categories` 追加 `artifacts`（一行配置，立即见效）。
-2. 决定 `read_hds_heart_rate` / `self_*` 的折叠问题：是否把高价值工具提到首轮 tools 数组，
-   或在系统提示里明确告知「需要时先 load_tools_memory」。这是「从未见他用过」的主因。
-3. HDS 管理面板补「允许角色读取」开关 + tool-audit 命中统计。
-4. 核实叶瑄常用 model preset 的 tool_preset 是否二次过滤。
+1. [x] 叶瑄卡 `tool_categories` 追加 `artifacts`。已加（当前值：
+   `info / desktop / memory / mcp / phone_control / artifacts`）。`userdata/` 在 gitignore，
+   不随提交。
+2. [x] 折叠问题。未把工具提到首轮数组（那会让 discovery 机制形同虚设、schema 预算回涨），
+   改为让 `load_tools_<category>` 的描述**列出分类内工具名**（至多 24 个，超出记「等 N 个」），
+   只列名字不下发参数 schema；11.6 系统提示同步说明。模型现在能看到折叠背后有什么，
+   授权与预算语义不变。
+3. [x] HDS 管理面板补「允许角色读取心率」开关（`hds_local.character_read_enabled`，默认 true，
+   关掉后该工具不再下发）+ 近 24h / 7d 命中数与最近一次时间（`GET /watch/hds-local`
+   的 `character_reads`，源自工具审计，不含参数或结果）。
+4. [x] 核实 tool_preset 二次过滤：**不存在二次过滤**。`config.yaml` 的 9 个 model preset
+   （`gemini超低价-see` / `deepseek-high` / `奇异果` / `gpt-see` / `gpt-天枢` /
+   `便宜小模型grok-see` / `claude-see满血` / `toge` / `grok聊天heavy`）均未设 `tool_preset`
+   字段，`resolve_tool_allowlist()` 因此返回 `None`，保留基于分类的暴露
+   （`core/tool_presets.py:43-45`，`core/pipeline.py:1177-1186`）。
+   唯一定义的 preset 是 `无工具`（`tools: []`），三个 routing_profile 的 chat 路由
+   （`奇异果` / `gemini超低价-see`）都没绑定它。
+   → 结论：`read_hds_heart_rate` / `self_*` 的零调用与 preset 过滤无关，主因确认是折叠（已按第 2 条修）。
 
 ### 附带安全提示
 
 `config.yaml` 明文存有 GLM api_key 和一个 MCP 的 Bearer token。文件在 gitignore 内、
 调查未复述其值，但建议自查是否需要轮换。
 
-## 5 本地图像模型路由（调查完成，待修）
+## 5 本地图像模型路由（done，`eadf63e`）
 
 现象：本地图像模型只对视频通话生效；给图片上传挂同一路由后报错，
 且请求没打到本地图像模型。
@@ -197,20 +217,35 @@
 - vision preset 声明的 `api_protocol`（responses / anthropic_messages）被忽略，
   vision 分支一律 `chat.completions.create`（`:361`），日志 protocol 也写死。
 
-### 修复方向
+### 已修（四条全部落地，`eadf63e`）
 
-1. `_resolve_vision_config` 对任何 loopback（127.0.0.1 / localhost / ::1）vision 连接
-   都设置 `_local_only`，不只 video_call。
-2. 非 video_call 分支不再把 vision 异常吞成空串，或至少把真实 error_category
-   带进 `vision_failed` 的 422 message。
-3. vision 分支遵循 preset 的 `api_protocol`。
-4. `_resolve_vision_config` 返回 `{}` 时不应静默落到文本模型，应显式报错。
+1. [x] `_resolve_vision_config` 对任何 loopback（127.0.0.1 / localhost / ::1）vision 连接
+   都设置 `_local_only`（禁代理 + `max_retries=0`），不只 video_call。
+2. [x] 非 video_call 分支不再吞成空串，改抛 `VisionRouteError`（带 reason），
+   `media_processor` 把 reason 带进 422 message，用户能看到拒连 / 超时 / 401 / 404 / 代理错。
+3. [x] vision 分支遵循 preset 的 `api_protocol`（支持 `chat_completions` / `responses`，
+   其他值明确拒绝），日志 protocol 不再写死。
+4. [x] 路由解析为 `{}` 时显式抛错，不再静默回落到文本 preset——那会把图片块发给主聊天模型，
+   看起来本地模型在用、实际从未打到它。
+
+video_call 行为不变（仍直接 raise，仍受 `video_call_ready` 硬约束）。
 
 ---
 
 ## 三面闭环检查
 
-问题 1-B、4、5 涉及设置项与 IPC/REST 契约，落单时按 `AGENTS.md`「三面闭环检查」
-逐条执行（后端管理面板 → 桌面设置并回查手机 → 原调用链 → 最小回归测试）。
-问题 3 为本仓 Tauri 权限修复，无跨端影响。问题 2 仅改后端提示词投影，
-不改契约字段，无跨端影响。
+已按 `AGENTS.md`「按影响面执行闭环检查」逐条执行，结论：
+
+- **1-A / 1-B**：1-A 只改后端 prompt 与模板 fallback，无契约与设置项变化。1-B 无代码改动，
+  `mail.connection_mode` 本已存在且管理面已有入口（「邮件配置 → SMTP 连接方式」），
+  仅补 `config.example.yaml` / `docs/model-presets.md` / `docs/dream.md` 的缺失说明。
+- **2**：仅改后端提示词投影与 caption 长度，不改契约字段，无跨端影响。
+- **3**：本仓 Tauri 权限修复，无跨端影响。
+- **4**：后端管理面已补开关（`hds_local.character_read_enabled`）与只读观测
+  （`character_reads`）；桌面与手机均无 HDS 消费链（已 grep `Emerald-client`
+  与 `Emerald-mobile`，无匹配）；REST 仅在既有 `GET /watch/hds-local` 上加可选字段，
+  缺字段时行为不变。tool_preset 二次过滤已排除（见上）。
+- **5**：桌面与手机均未消费 `vision_failed` 的 message（已 grep 确认），`code` 与状态码不变，
+  无需客户端改动；未新增设置项或落盘状态。
+
+测试一律未跑（用户要求，含跨仓）；`docs/three-repo-interface-catalog.md` 已随 `eadf63e` 同步。
