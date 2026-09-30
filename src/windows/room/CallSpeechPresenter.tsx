@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { wsClient } from '../../shared/api/ws';
 import { getActiveCharacterInfo } from '../../shared/activeCharacter';
 import { isSingleRealityMessage } from '../../shared/api/realityMessageScope';
 import { normalizeChatDisplayText } from '../chat/chatDisplay';
 import { VoiceMessageBar } from '../chat/components/VoiceMessageBar';
 import { VnBubble } from './VnBubble';
+import { claimSpeech } from './callSpeechDedup';
 
 interface SpeechLine { id: string; text: string }
 
@@ -15,15 +16,12 @@ function splitLines(text: string): string[] {
 export function CallSpeechPresenter({ name, onPlayingChange }: { name: string; onPlayingChange: (playing: boolean) => void }) {
   const [lines, setLines] = useState<SpeechLine[]>([]);
   const [playing, setPlaying] = useState(false);
-  const seenRef = useRef(new Set<string>());
 
   useEffect(() => {
     const enqueue = (msgId: string, texts: string[]) => {
-      if (seenRef.current.has(msgId)) return;
-      seenRef.current.add(msgId);
-      if (seenRef.current.size > 64) seenRef.current.delete(seenRef.current.values().next().value!);
       const next = texts.flatMap(splitLines).map((text, index) => ({ id: `${msgId}:${index}`, text }));
-      if (next.length) setLines(current => [...current, ...next]);
+      if (!next.length || !claimSpeech(msgId, next.length)) return;
+      setLines(current => [...current, ...next]);
     };
     const unMessage = wsClient.on('channel_message', message => {
       if (!isSingleRealityMessage(message, getActiveCharacterInfo().id) || !message.content.trim()) return;
