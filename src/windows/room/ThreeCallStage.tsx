@@ -3,6 +3,7 @@ import { useRoomScene } from './useRoomScene';
 import type { Mood } from '../../shared/state/store';
 import type { RoomSettings } from '../../shared/room/roomSettings';
 import type { SceneCameraPreset } from './sceneCameraPresets';
+import type { EditableId } from './sceneOutline';
 import { useI18n } from '../../shared/i18n';
 
 export interface ThreeCallStageHandle {
@@ -11,6 +12,9 @@ export interface ThreeCallStageHandle {
   togglePlacementMode: () => void;
   applyCameraPreset: (id: string) => boolean;
   bringCharacterToView: () => boolean;
+  selection: EditableId | null;
+  selectById: (id: EditableId | null) => boolean;
+  setGizmoMode: (mode: 'translate' | 'rotate' | 'scale') => void;
 }
 
 interface ThreeCallStageProps {
@@ -25,13 +29,21 @@ export const ThreeCallStage = forwardRef<ThreeCallStageHandle, ThreeCallStagePro
   function ThreeCallStage({ mood, talking, settings, onSceneStateChange, onCameraPresetsChange }, ref) {
     const { t } = useI18n();
     const mountRef = useRef<HTMLDivElement>(null);
-    const { freeLook, toggleFreeLook, saveCurrentView, placementMode, togglePlacementMode, applyCameraPreset, bringCharacterToView } =
-      useRoomScene(mountRef, mood, talking, settings, onCameraPresetsChange);
+    const {
+      freeLook, toggleFreeLook, saveCurrentView, placementMode, togglePlacementMode,
+      applyCameraPreset, bringCharacterToView, selection, selectById, setGizmoMode,
+    } = useRoomScene(mountRef, mood, talking, settings, onCameraPresetsChange);
 
     useImperativeHandle(
       ref,
-      () => ({ toggleFreeLook, saveCurrentView, togglePlacementMode, applyCameraPreset, bringCharacterToView }),
-      [toggleFreeLook, saveCurrentView, togglePlacementMode, applyCameraPreset, bringCharacterToView],
+      () => ({
+        toggleFreeLook, saveCurrentView, togglePlacementMode, applyCameraPreset, bringCharacterToView,
+        selection, selectById, setGizmoMode,
+      }),
+      [
+        toggleFreeLook, saveCurrentView, togglePlacementMode, applyCameraPreset, bringCharacterToView,
+        selection, selectById, setGizmoMode,
+      ],
     );
 
     useEffect(() => {

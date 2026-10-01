@@ -22,6 +22,8 @@ import {
 } from './springBones';
 import type { SpringChain } from './springBones';
 import { collectExcludedBoneNames, filterClipTracks } from './clipPlayer';
+import { editableIdEquals } from './sceneOutline';
+import type { EditableId, LightKey } from './sceneOutline';
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
@@ -248,6 +250,15 @@ export interface RoomSceneAPI {
   togglePlacementMode: () => void;
   applyCameraPreset: (id: string) => boolean;
   bringCharacterToView: () => boolean;
+  /** Single source of truth for "what's selected" — unifies the old selectedLightRef /
+   * selectedPropIdxRef pair so the panel (work order 2) and the raycaster can't disagree. */
+  selection: EditableId | null;
+  /** Attaches the gizmo to the given id (placement mode only). Returns false when there's
+   * nothing to attach — not in placement mode, or the id has no gizmo (ambient/scene). */
+  selectById: (id: EditableId | null) => boolean;
+  /** Lifts the G/R/S key handling into a method so panel buttons (work order 2) and the
+   * keyboard shortcut share one implementation. No-op outside placement mode. */
+  setGizmoMode: (mode: 'translate' | 'rotate' | 'scale') => void;
 }
 
 export function useRoomScene(
@@ -279,8 +290,10 @@ export function useRoomScene(
   // Placement mode
   const placementModeRef      = useRef(false);
   const [placementMode, setPlacementMode] = useState(false);
-  const selectedLightRef      = useRef<'key' | 'charFill' | null>(null);
-  const selectedPropIdxRef    = useRef<number | null>(null);
+  // Single-truth selection — replaces the old selectedLightRef/selectedPropIdxRef pair.
+  // The character is now an explicit `{ kind: 'character' }` id, not an implicit else-branch.
+  const selectionRef          = useRef<EditableId | null>(null);
+  const [selection, setSelection] = useState<EditableId | null>(null);
   const charBaseScaleRef      = useRef<number>(1);
   const placementKeyHandlerRef = useRef<((e: KeyboardEvent) => void) | null>(null);
   const intensityLabelRef     = useRef<HTMLDivElement | null>(null);
@@ -289,6 +302,14 @@ export function useRoomScene(
     cameraPresetsRef.current = collectSceneCameraPresets(scene);
     onCameraPresetsChangeRef.current(cameraPresetsRef.current);
     fitSceneClipRange(refs.camera, refs.controls, scene);
+  }, []);
+
+  // Keeps selectionRef (read by the render-loop-adjacent closures below) and the `selection`
+  // state (read by the panel, work order 2) in lockstep — the two must never disagree about
+  // what's currently picked.
+  const setSelectionBoth = useCallback((id: EditableId | null) => {
+    selectionRef.current = id;
+    setSelection(id);
   }, []);
 
   // keep settingsRef current
@@ -580,47 +601,58 @@ export function useRoomScene(
       if (objChangeThrottle) clearTimeout(objChangeThrottle);
       objChangeThrottle = setTimeout(() => {
         const s = settingsRef.current;
-        const lightKey = selectedLightRef.current;
+        const sel = selectionRef.current;
+        if (!sel) return;
 
-        if (lightKey === 'key') {
-          keyLight.position.copy(proxyKey.position);
-          const pos: [number, number, number] = [proxyKey.position.x, proxyKey.position.y, proxyKey.position.z];
-          saveRoomSettings({ ...s, lights: { ...s.lights, key: { ...s.lights.key, pos } } });
-        } else if (lightKey === 'charFill') {
-          charFill.position.copy(proxyFill.position);
-          const pos: [number, number, number] = [proxyFill.position.x, proxyFill.position.y, proxyFill.position.z];
-          saveRoomSettings({ ...s, lights: { ...s.lights, charFill: { ...s.lights.charFill, pos } } });
-        } else if (selectedPropIdxRef.current !== null) {
-          const propObj = propsGroupRef.current?.children.find(
-            c => c.userData.__propIdx === selectedPropIdxRef.current,
-          );
-          if (propObj) {
-            const updatedProps = (s.props ?? []).map((p, i) =>
-              i === selectedPropIdxRef.current
-                ? {
-                    ...p,
-                    pos: [propObj.position.x, propObj.position.y, propObj.position.z] as [number, number, number],
-                    rot: [propObj.rotation.x, propObj.rotation.y, propObj.rotation.z] as [number, number, number],
-                    scale: propObj.scale.x,
-                  }
-                : p,
-            );
-            saveRoomSettings({ ...s, props: updatedProps });
+        switch (sel.kind) {
+          case 'light': {
+            if (sel.key === 'key') {
+              keyLight.position.copy(proxyKey.position);
+              const pos: [number, number, number] = [proxyKey.position.x, proxyKey.position.y, proxyKey.position.z];
+              saveRoomSettings({ ...s, lights: { ...s.lights, key: { ...s.lights.key, pos } } });
+            } else if (sel.key === 'charFill') {
+              charFill.position.copy(proxyFill.position);
+              const pos: [number, number, number] = [proxyFill.position.x, proxyFill.position.y, proxyFill.position.z];
+              saveRoomSettings({ ...s, lights: { ...s.lights, charFill: { ...s.lights.charFill, pos } } });
+            }
+            // ambient has no position/gizmo, so there's nothing to react to here.
+            break;
           }
-        } else {
-          // Character
-          const model = charGroupRef.current?.children[0];
-          if (!model) return;
-          const newYawDeg = THREE.MathUtils.radToDeg(model.rotation.y);
-          const worldBox = new THREE.Box3().setFromObject(model);
-          const worldCenter = worldBox.getCenter(new THREE.Vector3());
-          const newOffset: [number, number, number] = s.anchorMode === 'floor'
-            ? [worldCenter.x, worldBox.min.y, worldCenter.z]
-            : [worldCenter.x, worldCenter.y, worldCenter.z];
-          const newScaleMul = charBaseScaleRef.current > 0
-            ? model.scale.x / charBaseScaleRef.current
-            : s.scaleMul;
-          saveRoomSettings({ ...s, offset: newOffset, yawDeg: newYawDeg, scaleMul: Math.max(0.2, Math.min(3, newScaleMul)) });
+          case 'prop': {
+            const propObj = propsGroupRef.current?.children.find(c => c.userData.__propIdx === sel.index);
+            if (propObj) {
+              const updatedProps = (s.props ?? []).map((p, i) =>
+                i === sel.index
+                  ? {
+                      ...p,
+                      pos: [propObj.position.x, propObj.position.y, propObj.position.z] as [number, number, number],
+                      rot: [propObj.rotation.x, propObj.rotation.y, propObj.rotation.z] as [number, number, number],
+                      scale: propObj.scale.x,
+                    }
+                  : p,
+              );
+              saveRoomSettings({ ...s, props: updatedProps });
+            }
+            break;
+          }
+          case 'character': {
+            const model = charGroupRef.current?.children[0];
+            if (!model) return;
+            const newYawDeg = THREE.MathUtils.radToDeg(model.rotation.y);
+            const worldBox = new THREE.Box3().setFromObject(model);
+            const worldCenter = worldBox.getCenter(new THREE.Vector3());
+            const newOffset: [number, number, number] = s.anchorMode === 'floor'
+              ? [worldCenter.x, worldBox.min.y, worldCenter.z]
+              : [worldCenter.x, worldCenter.y, worldCenter.z];
+            const newScaleMul = charBaseScaleRef.current > 0
+              ? model.scale.x / charBaseScaleRef.current
+              : s.scaleMul;
+            saveRoomSettings({ ...s, offset: newOffset, yawDeg: newYawDeg, scaleMul: Math.max(0.2, Math.min(3, newScaleMul)) });
+            break;
+          }
+          case 'scene':
+            // Scene root isn't individually placeable; no gizmo attaches to it.
+            break;
         }
       }, 150);
     });
@@ -644,12 +676,10 @@ export function useRoomScene(
         const hit = proxyHits[0].object;
         transformCtl.setMode('translate');
         if (hit === proxyKey) {
-          selectedLightRef.current = 'key';
-          selectedPropIdxRef.current = null;
+          setSelectionBoth({ kind: 'light', key: 'key' });
           transformCtl.attach(proxyKey);
         } else {
-          selectedLightRef.current = 'charFill';
-          selectedPropIdxRef.current = null;
+          setSelectionBoth({ kind: 'light', key: 'charFill' });
           transformCtl.attach(proxyFill);
         }
         return;
@@ -662,11 +692,13 @@ export function useRoomScene(
         if (propHits.length > 0) {
           let root = propHits[0].object;
           while (root.parent && root.parent !== pg) root = root.parent;
-          selectedLightRef.current = null;
-          selectedPropIdxRef.current = (root.userData.__propIdx as number | undefined) ?? null;
-          transformCtl.setMode('translate');
-          transformCtl.attach(root);
-          return;
+          const idx = (root.userData.__propIdx as number | undefined) ?? null;
+          if (idx !== null) {
+            setSelectionBoth({ kind: 'prop', index: idx });
+            transformCtl.setMode('translate');
+            transformCtl.attach(root);
+            return;
+          }
         }
       }
 
@@ -675,8 +707,7 @@ export function useRoomScene(
       if (charModel) {
         const charHits = raycaster.intersectObject(charModel, true);
         if (charHits.length > 0) {
-          selectedLightRef.current = null;
-          selectedPropIdxRef.current = null;
+          setSelectionBoth({ kind: 'character' });
           transformCtl.setMode('translate');
           transformCtl.attach(charModel);
           return;
@@ -685,8 +716,7 @@ export function useRoomScene(
 
       // Deselect on empty click
       transformCtl.detach();
-      selectedLightRef.current = null;
-      selectedPropIdxRef.current = null;
+      setSelectionBoth(null);
     });
 
     // ── shared refs ──
@@ -948,8 +978,7 @@ export function useRoomScene(
         }
         intensityLabelRef.current?.remove();
         intensityLabelRef.current = null;
-        selectedLightRef.current = null;
-        selectedPropIdxRef.current = null;
+        setSelectionBoth(null);
       }
       freeLookRef.current = true;
       setFreeLook(true);
@@ -996,8 +1025,7 @@ export function useRoomScene(
       }
       intensityLabelRef.current?.remove();
       intensityLabelRef.current = null;
-      selectedLightRef.current = null;
-      selectedPropIdxRef.current = null;
+      setSelectionBoth(null);
       // A scale-mode gizmo drag while in placement mode changes model world scale directly,
       // bypassing the settings effect (which is skipped in placement mode) — re-measure so
       // spring chains don't clamp hair to a now-stale rest length.
@@ -1041,11 +1069,12 @@ export function useRoomScene(
         const refs = refsRef.current;
         if (!refs || !placementModeRef.current) return;
         const tc = refs.transformCtl;
-        const lightKey = selectedLightRef.current;
+        const sel = selectionRef.current;
+        const lightKey: LightKey | null = sel?.kind === 'light' ? sel.key : null;
 
         // Arrow keys: adjust selected light intensity
         if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-          if (!lightKey) return;
+          if (lightKey !== 'key' && lightKey !== 'charFill') return;
           const delta = e.key === 'ArrowRight' ? 0.1 : -0.1;
           const light = lightKey === 'key' ? refs.keyLight : refs.charFill;
           const newIntensity = Math.max(0, Math.min(4, light.intensity + delta));
@@ -1079,15 +1108,15 @@ export function useRoomScene(
 
         switch (e.key.toLowerCase()) {
           case 'g':
-            tc.setMode('translate');
+            setGizmoModeRef.current('translate');
             setAxisConstraint(null);
             break;
           case 'r':
-            tc.setMode('rotate');
+            setGizmoModeRef.current('rotate');
             setAxisConstraint(null);
             break;
           case 's':
-            tc.setMode('scale');
+            setGizmoModeRef.current('scale');
             setAxisConstraint(null);
             break;
           case 'x':
@@ -1102,8 +1131,7 @@ export function useRoomScene(
           case 'escape':
             if (tc.object) {
               tc.detach();
-              selectedLightRef.current = null;
-              selectedPropIdxRef.current = null;
+              setSelectionBoth(null);
               intensityLabelRef.current?.remove();
               intensityLabelRef.current = null;
             } else {
@@ -1119,8 +1147,7 @@ export function useRoomScene(
                 window.removeEventListener('keydown', placementKeyHandlerRef.current);
                 placementKeyHandlerRef.current = null;
               }
-              selectedLightRef.current = null;
-              selectedPropIdxRef.current = null;
+              setSelectionBoth(null);
               intensityLabelRef.current?.remove();
               intensityLabelRef.current = null;
               const escModel = charGroupRef.current?.children[0];
@@ -1177,5 +1204,71 @@ export function useRoomScene(
     return true;
   }, []);
 
-  return { freeLook, toggleFreeLook, saveCurrentView, placementMode, togglePlacementMode, applyCameraPreset, bringCharacterToView };
+  const setGizmoMode = useCallback((mode: 'translate' | 'rotate' | 'scale') => {
+    const tc = refsRef.current?.transformCtl;
+    if (!tc || !placementModeRef.current) return;
+    tc.setMode(mode);
+  }, []);
+  // The placement-mode keydown handler is built inside togglePlacementMode's closure (it needs
+  // per-session axis-lock state), so it can't call the hook-level setGizmoMode directly without
+  // becoming a dependency that would force togglePlacementMode to be redefined on every render.
+  // Routing the call through a ref keeps the G/R/S implementation single-sourced in setGizmoMode
+  // without adding that dependency.
+  const setGizmoModeRef = useRef(setGizmoMode);
+  setGizmoModeRef.current = setGizmoMode;
+
+  const selectById = useCallback((id: EditableId | null): boolean => {
+    const refs = refsRef.current;
+    if (!refs || !placementModeRef.current) return false;
+
+    if (id === null) {
+      refs.transformCtl.detach();
+      setSelectionBoth(null);
+      return false;
+    }
+
+    switch (id.kind) {
+      case 'light': {
+        if (id.key === 'ambient') {
+          // No position to attach a gizmo to — selection updates, but there's nothing to drag.
+          setSelectionBoth(id);
+          return false;
+        }
+        const proxy = id.key === 'key' ? refs.proxyKey : refs.proxyFill;
+        setSelectionBoth(id);
+        refs.transformCtl.attach(proxy);
+        return true;
+      }
+      case 'prop': {
+        const propObj = propsGroupRef.current?.children.find(c => c.userData.__propIdx === id.index);
+        if (!propObj) {
+          setSelectionBoth(id);
+          return false;
+        }
+        setSelectionBoth(id);
+        refs.transformCtl.attach(propObj);
+        return true;
+      }
+      case 'character': {
+        const model = charGroupRef.current?.children[0];
+        if (!model) {
+          setSelectionBoth(id);
+          return false;
+        }
+        setSelectionBoth(id);
+        refs.transformCtl.attach(model);
+        return true;
+      }
+      case 'scene':
+        // The scene root isn't individually placeable.
+        setSelectionBoth(id);
+        return false;
+    }
+  }, [setSelectionBoth]);
+
+  return {
+    freeLook, toggleFreeLook, saveCurrentView, placementMode, togglePlacementMode,
+    applyCameraPreset, bringCharacterToView,
+    selection, selectById, setGizmoMode,
+  };
 }
