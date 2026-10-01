@@ -99,7 +99,7 @@ network access, or permissions. Only user-selected local package data may be imp
 | `resources.rig` / `calibration` | CA-03 mapping and pose calibration planned |
 | `resources.expressions` | CA-04 semantic expression and gaze mapping planned |
 | `resources.motions` | CA-05 action library and retargeting planned |
-| `resources.materials` | CA-06 Toon material binding planned |
+| `resources.materials` | CA-06 parser and FACE/HAIR/CLOTH Toon material current (`materialsConfig.ts`, `toonMaterial.ts`); scene wiring, outline, hair highlight, face SDF planned |
 
 The resource file formats are frozen in their respective implementation orders. A
 producer must not set a capability or ship a resource file as a promise of effect until
