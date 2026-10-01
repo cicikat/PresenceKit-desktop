@@ -86,6 +86,8 @@ export const zhCN = {
 "room.editor.look.nightLamp": "夜间台灯",
 "room.editor.look.coolIndoor": "冷调室内",
 "room.editor.look.stageRim": "舞台侧逆光",
+"room.editor.grade.unsupported2d": "Live2D 模式只支持色温、色调、饱和度、对比度、暗部提亮；曝光、色调映射、暗角、泛光需要 3D 渲染，已置灰。",
+"room.editor.live2dNoLights": "Live2D 模式下只有画面调色，立体光照需要 3D 模型。",
 "room.editor.keyHints": "G/R/S 切换移动/旋转/缩放 · X/Y/Z 锁轴 · ←/→ 调整所选灯光强度 · Esc 取消选择或退出",
 "settings.call.roomAssetsHint": "扫描下方目录的 character/ 与 scene/ 中的 GLB；选择后即时替换，机位和站位按场景×模型记忆。发行版新增模型请放入此目录。",
 "settings.call.characterAssetsHint": "下方目录 character/ 内的 GLB",

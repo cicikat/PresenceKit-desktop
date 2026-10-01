@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLive2DStage } from '../../shared/live2d/useLive2DStage';
 import type { Mood } from '../../shared/state/store';
+import type { GradeCfg } from '../../shared/room/gradeConfig';
 
 interface Live2DCallStageProps {
   mood: Mood;
   talking: boolean;
+  grade?: GradeCfg;
 }
 
-export function Live2DCallStage({ mood, talking }: Live2DCallStageProps) {
+export function Live2DCallStage({ mood, talking, grade }: Live2DCallStageProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const moodRef = useRef(mood);
   const talkingRef = useRef(talking);
@@ -30,6 +32,7 @@ export function Live2DCallStage({ mood, talking }: Live2DCallStageProps) {
     getTalking: () => talkingRef.current,
     getVolume: audioVolume > 0 ? () => audioVolume : undefined,
     transparent: false,
+    grade,
   });
 
   return (

@@ -90,6 +90,8 @@ export const enUS: Record<MessageKey, string> = {
 "room.editor.look.nightLamp": "Night lamp",
 "room.editor.look.coolIndoor": "Cool indoor",
 "room.editor.look.stageRim": "Stage rim light",
+"room.editor.grade.unsupported2d": "Live2D supports temperature, tint, saturation, contrast and shadow lift only; exposure, tone mapping, vignette and bloom need 3D rendering and are disabled.",
+"room.editor.live2dNoLights": "Live2D mode only has color grading; 3D lighting needs a 3D model.",
 "room.editor.keyHints": "G/R/S move/rotate/scale · X/Y/Z axis lock · ←/→ adjust selected light intensity · Esc deselect or exit",
 "settings.call.roomAssetsHint": "Scan GLB files in character/ and scene/ under the directory below. Selection replaces the model immediately and remembers camera and position per scene and character. Add release models here.",
 "settings.call.characterAssetsHint": "GLB files in character/ below",

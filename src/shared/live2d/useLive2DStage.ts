@@ -17,6 +17,8 @@ import { MOOD_TO_EXPRESSION, MOOD_PARAMS, matchExpressionName } from './live2dEx
 import { MOOD_TABLE } from '../state/store';
 import type { Mood } from '../state/store';
 import { backendMoodToFrontend } from '../state/mood-mapping';
+import { gradeColorMatrix, isNeutralGradeShader } from '../room/gradeConfig';
+import type { GradeCfg } from '../room/gradeConfig';
 import { getActiveDirective } from '../../windows/room/avatarDirective';
 import { microNoise } from '../../windows/room/boneResolver';
 import {
@@ -120,6 +122,8 @@ export interface UseLive2DStageOptions {
   getVolume?: () => number;
   transparent: boolean;
   zoom?: number;
+  /** Screen-level color grade (call window only). Applied as a color-matrix filter on the stage. */
+  grade?: GradeCfg;
 }
 
 export interface UseLive2DStageResult {
@@ -545,6 +549,25 @@ export function useLive2DStage(
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Color grade as a ColorMatrixFilter on the whole stage. Only temperature/tint/saturation/
+  // contrast/lift are expressible here; exposure, tone mapping, vignette and bloom are 3D-only.
+  const gradeFilterRef = useRef<PIXI.ColorMatrixFilter | null>(null);
+  useEffect(() => {
+    const app = appRef.current;
+    if (!app) return;
+    const grade = opts.grade;
+    if (!grade || !grade.enabled || isNeutralGradeShader(grade)) {
+      app.stage.filters = null;
+      gradeFilterRef.current?.destroy();
+      gradeFilterRef.current = null;
+      return;
+    }
+    const filter = gradeFilterRef.current ?? new PIXI.ColorMatrixFilter();
+    filter.matrix = gradeColorMatrix(grade) as unknown as PIXI.ColorMatrix;
+    gradeFilterRef.current = filter;
+    app.stage.filters = [filter];
+  }, [opts.grade]);
 
   // Re-fit layout when the caller's forced-transparent flag or zoom changes (pet zoom slider).
   useEffect(() => {

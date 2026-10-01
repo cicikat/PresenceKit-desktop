@@ -8,6 +8,7 @@ import './RoomWindow.css';
 import { ThreeCallStage } from './ThreeCallStage';
 import type { ThreeCallStageHandle } from './ThreeCallStage';
 import { Live2DCallStage } from './Live2DCallStage';
+import { Live2DEditorPanel } from './Live2DEditorPanel';
 import { useVnPresenter } from './useVnPresenter';
 import { loadRoomSettings, subscribeRoomSettings } from '../../shared/room/roomSettings';
 import type { RoomSettings } from '../../shared/room/roomSettings';
@@ -54,6 +55,10 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
   const threeStageRef = useRef<ThreeCallStageHandle>(null);
   const [freeLook, setFreeLook] = useState(false);
   const [placementMode, setPlacementMode] = useState(false);
+  // `editMode` is the shell-level "editing the picture" state. In 3D it is placementMode (gizmos,
+  // lights, props); in Live2D there is no placement, only color grade, so it is its own flag.
+  const [live2dEdit, setLive2dEdit] = useState(false);
+  const editMode = renderMode === 'live2d' ? live2dEdit : placementMode;
   const [cameraPresets, setCameraPresets] = useState<SceneCameraPreset[]>([]);
   const [presetMenuOpen, setPresetMenuOpen] = useState(false);
   const handleCameraPresetsChange = useCallback((presets: SceneCameraPreset[]) => setCameraPresets(presets), []);
@@ -68,6 +73,7 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
       setFreeLook(false);
       setPlacementMode(false);
     }
+    if (renderMode !== 'live2d') setLive2dEdit(false);
   }, [renderMode]);
 
   // Chat input
@@ -265,7 +271,7 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
       {/* Character stage container — 3D (Three.js) or Live2D, picked by roomSettings.renderMode */}
       <div className="call-room__stage" style={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
         {renderMode === 'live2d' ? (
-          <Live2DCallStage mood={mood} talking={ttsAutoPlay ? audioTalking : presenter.talking} />
+          <Live2DCallStage mood={mood} talking={ttsAutoPlay ? audioTalking : presenter.talking} grade={roomSettings.grade} />
         ) : (
           <ThreeCallStage
             ref={threeStageRef}
@@ -276,6 +282,8 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
             onCameraPresetsChange={handleCameraPresetsChange}
           />
         )}
+
+        {renderMode === 'live2d' && live2dEdit && <Live2DEditorPanel settings={roomSettings} />}
 
         <div className="call-room__ambience" aria-hidden="true"><i /><i /><i /></div>
         <div className="call-room__camera-preview" style={{ display: camera.on ? 'block' : 'none' }}>
@@ -405,7 +413,25 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
           <Icon name="video" size={20} />
         </button>
 
-        {/* placement mode / free look / save view — 3D-only; Live2D has no equivalent controls */}
+        {/* Live2D has no placement/free-look, but it can still be color-graded */}
+        {renderMode === 'live2d' && (
+          <button
+            title={t('room.editor.title')}
+            aria-pressed={editMode}
+            onClick={() => setLive2dEdit(v => !v)}
+            style={{
+              ...btnBase,
+              background: editMode ? 'oklch(0.40 0.14 60)' : 'oklch(0.22 0.03 240)',
+              color: editMode ? 'oklch(0.92 0.06 60)' : 'oklch(0.55 0.05 240)',
+              outline: editMode ? '2px solid oklch(0.62 0.18 60)' : 'none',
+              fontSize: 18,
+            }}
+          >
+            🛠
+          </button>
+        )}
+
+        {/* placement mode / free look / save view — 3D-only */}
         {renderMode === 'model3d' && (
           <>
             <button

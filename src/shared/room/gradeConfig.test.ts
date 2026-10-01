@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  DEFAULT_GRADE, validateGrade, gradeUniformsFrom, isNeutralGradeShader, needsComposer, applyGradeToRgb,
+  DEFAULT_GRADE, validateGrade, gradeUniformsFrom, isNeutralGradeShader, needsComposer, applyGradeToRgb, gradeColorMatrix,
 } from './gradeConfig';
 
 describe('validateGrade', () => {
@@ -85,5 +85,33 @@ describe('needsComposer', () => {
   it('is true for a non-neutral shader or bloom', () => {
     expect(needsComposer({ ...DEFAULT_GRADE, enabled: true, vignette: 0.3 })).toBe(true);
     expect(needsComposer({ ...DEFAULT_GRADE, enabled: true, bloom: { ...DEFAULT_GRADE.bloom, on: true } })).toBe(true);
+  });
+});
+
+describe('gradeColorMatrix (Live2D path)', () => {
+  const applyMatrix = (m: number[], rgb: [number, number, number]) =>
+    [0, 1, 2].map(r => m[r * 5] * rgb[0] + m[r * 5 + 1] * rgb[1] + m[r * 5 + 2] * rgb[2] + m[r * 5 + 4]);
+
+  it('is the identity matrix for the neutral grade, same neutrality as the three.js side', () => {
+    const m = gradeColorMatrix(DEFAULT_GRADE);
+    const identity = [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0];
+    m.forEach((v, i) => expect(v).toBeCloseTo(identity[i]));
+    expect(isNeutralGradeShader(DEFAULT_GRADE)).toBe(true);
+  });
+
+  it('has 20 entries with an untouched alpha row', () => {
+    const m = gradeColorMatrix({ ...DEFAULT_GRADE, temperature: 0.5, saturation: 1.4, contrast: 1.3, lift: 0.05 });
+    expect(m).toHaveLength(20);
+    expect(m.slice(15)).toEqual([0, 0, 0, 1, 0]);
+  });
+
+  it('matches the shared reference math for a non-trivial grade', () => {
+    const cfg = { ...DEFAULT_GRADE, enabled: true, temperature: 0.6, tint: -0.3, saturation: 1.4, contrast: 1.35, lift: 0.04 };
+    const samples: [number, number, number][] = [[0.2, 0.5, 0.8], [0.9, 0.1, 0.3], [0.5, 0.5, 0.5], [0, 0, 0], [1, 1, 1]];
+    for (const rgb of samples) {
+      const viaMatrix = applyMatrix(gradeColorMatrix(cfg), rgb);
+      const viaReference = applyGradeToRgb(rgb, gradeUniformsFrom(cfg));
+      viaMatrix.forEach((v, i) => expect(v).toBeCloseTo(viaReference[i], 6));
+    }
   });
 });

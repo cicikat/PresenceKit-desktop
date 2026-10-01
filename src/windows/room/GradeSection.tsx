@@ -19,7 +19,10 @@ const SLIDERS: { key: NumericGradeKey; min: number; max: number; step: number }[
   { key: 'vignette', min: 0, max: 1, step: 0.05 },
 ];
 
-export function GradeSection({ settings }: { settings: RoomSettings }) {
+/** Controls a Live2D stage can't honor; shown disabled with a reason instead of silently doing nothing. */
+const UNSUPPORTED_2D = new Set<string>(['exposure', 'vignette']);
+
+export function GradeSection({ settings, mode = '3d' }: { settings: RoomSettings; mode?: '3d' | '2d' }) {
   const { t } = useI18n();
   const grade = settings.grade ?? DEFAULT_GRADE;
   const patch = (partial: Partial<GradeCfg>) =>
@@ -32,13 +35,14 @@ export function GradeSection({ settings }: { settings: RoomSettings }) {
       <div className="room-editor-panel__group-title">{t('room.editor.grade.title')}</div>
       <div className="room-editor-panel__params room-editor-panel__params--flat">
         <div className="room-editor-panel__hint">{t('room.editor.grade.hint')}</div>
+        {mode === '2d' && <div className="room-editor-panel__hint">{t('room.editor.grade.unsupported2d')}</div>}
         <Row stacked label={t('room.editor.grade.enabled')}>
           <input type="checkbox" checked={grade.enabled} onChange={e => patch({ enabled: e.target.checked })} />
         </Row>
         {grade.enabled && (
           <>
             <Row stacked label={t('room.editor.grade.toneMapping')}>
-              <select value={grade.toneMapping}
+              <select value={grade.toneMapping} disabled={mode === '2d'}
                 onChange={e => patch({ toneMapping: e.target.value as GradeCfg['toneMapping'] })}>
                 {TONE_MAPPING_NAMES.map(name => (
                   <option key={name} value={name}>{t(`room.editor.grade.tm.${name}`)}</option>
@@ -48,11 +52,13 @@ export function GradeSection({ settings }: { settings: RoomSettings }) {
             {SLIDERS.map(({ key, min, max, step }) => (
               <Row stacked key={key} label={t(`room.editor.grade.${key}`)}>
                 <SliderNum width="100%" min={min} max={max} step={step} value={grade[key]}
+                  disabled={mode === '2d' && UNSUPPORTED_2D.has(key)}
                   onChange={v => patch({ [key]: v })} />
               </Row>
             ))}
             <Row stacked label={t('room.editor.grade.bloom')}>
-              <input type="checkbox" checked={grade.bloom.on} onChange={e => patchBloom({ on: e.target.checked })} />
+              <input type="checkbox" checked={grade.bloom.on} disabled={mode === '2d'}
+                onChange={e => patchBloom({ on: e.target.checked })} />
             </Row>
             {grade.bloom.on && (
               <>
