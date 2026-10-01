@@ -435,7 +435,7 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
         {renderMode === 'model3d' && (
           <>
             <button
-              title={placementMode ? '退出摆放模式' : '摆放模式（点选物体拖动）'}
+              title={t(placementMode ? 'room.call.placement.exit' : 'room.call.placement.enter')}
               onClick={() => threeStageRef.current?.togglePlacementMode()}
               style={{
                 ...btnBase,
@@ -449,7 +449,7 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
             </button>
 
             <button
-              title={freeLook ? '退出自由视角' : '调整视角（自由视角）'}
+              title={t(freeLook ? 'room.call.freeLook.exit' : 'room.call.freeLook.enter')}
               onClick={() => threeStageRef.current?.toggleFreeLook()}
               style={{
                 ...btnBase,
@@ -463,7 +463,7 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
 
             {freeLook && (
               <button
-                title="保存当前视角"
+                title={t('room.call.saveView')}
                 onClick={() => threeStageRef.current?.saveCurrentView()}
                 style={{ ...btnBase, background: 'oklch(0.22 0.03 240)', color: 'oklch(0.72 0.12 142)' }}
               >
@@ -486,7 +486,7 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
         {/* hang up */}
         <button
           className="call-room__hangup"
-          title="挂断"
+          title={t('room.call.hangup')}
           onClick={() => { camera.stop(); voice.stop(true); onClose(); }}
           style={{ ...btnBase, width: 52, height: 52, background: 'oklch(0.52 0.22 25)', color: '#fff' }}
         >

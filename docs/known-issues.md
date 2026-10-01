@@ -1,5 +1,14 @@
 # docs/known-issues.md — 已知问题与技术债
 
+## Room 可视化编辑器（2026-10-01，partial）
+
+current：编辑模式右侧面板（对象清单 / 附加灯 / 阴影 / 外观预设 / 画面调色），Live2D 下仅调色；
+详见 `frontend-structure.md` 与 `../cc-tasks/room-visual-editor.md`。静态测试、tsc、构建通过。
+open：以下均需真实 Tauri 视频通话窗口目检，未做前不得视为验收——对象清单点选与 gizmo 联动、
+改颜色/强度画面立即变、附加灯 helper 与代理球、阴影开关（含大场景 frustum）、`moodTint` 锁定提示、
+调色在透明画布（alpha）下 bloom/暗角表现、窗口缩放后 bloom 不错位、5 个内置预设的实际观感（数值未经肉眼调校）、
+Live2D `ColorMatrixFilter` 调色。关闭调色时帧率应与改动前一致（未做实测对比）。
+
 ## 自然站姿在断链骨架上造成脸发错位（2026-09-30，partial）
 
 current：CA-03 的站姿偏移会沿父子链累加到头骨。当前 Room 模型同时带控制骨架与形变骨架，

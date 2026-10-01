@@ -7,7 +7,7 @@ import {
   getCharacterCfg,
   switchRoomPlacement,
 } from '../../../shared/room/roomSettings';
-import type { RoomSettings, Framing, LightCfg, RoomLights, RoomProp } from '../../../shared/room/roomSettings';
+import type { RoomSettings, Framing, RoomProp } from '../../../shared/room/roomSettings';
 import { listRoomCharacters, listRoomScenes, listRoomPropCategories, listRoomPropFiles, roomAssetsLocation } from '../../../shared/room/roomAssets';
 import type { RoomAsset, RoomPropCategory, RoomPropFile } from '../../../shared/room/roomAssets';
 import {
@@ -73,7 +73,6 @@ export function CallSettingsPage() {
   const [assetsLocation, setAssetsLocation] = useState('');
   const [presets, setPresets] = useState<RoomPreset[]>(loadRoomPresets);
   const [newPresetName, setNewPresetName] = useState('');
-  const [lightsOpen, setLightsOpen] = useState(false);
   const [propsOpen, setPropsOpen] = useState(false);
   const [propCategories, setPropCategories] = useState<RoomPropCategory[]>([]);
   const [propCategory, setPropCategory] = useState('');
@@ -140,20 +139,6 @@ export function CallSettingsPage() {
     patch({ offset: next });
   }
 
-  function patchLights(partial: Partial<RoomLights>) {
-    patch({ lights: { ...settings.lights, ...partial } });
-  }
-
-  function patchLightCfg(key: 'ambient' | 'key' | 'charFill', partial: Partial<LightCfg>) {
-    patchLights({ [key]: { ...settings.lights[key], ...partial } });
-  }
-
-  function patchLightPos(key: 'key' | 'charFill', idx: 0 | 1 | 2, v: number) {
-    const pos = [...(settings.lights[key].pos ?? [0, 0, 0])] as [number, number, number];
-    pos[idx] = v;
-    patchLightCfg(key, { pos });
-  }
-
   function patchPhysicsGravity(v: number) {
     const file = settings.characterFile;
     const charCfg = getCharacterCfg(settings, file);
@@ -207,13 +192,6 @@ export function CallSettingsPage() {
     { value: 'upperBody', label: '半身' },
     { value: 'full', label: '全身' },
   ];
-
-  const colorInputStyle: CSSProperties = {
-    width: 32, height: 24, padding: 0, border: '1px solid var(--paper-edge)',
-    borderRadius: 'var(--radius-sm)', background: 'none', cursor: 'pointer',
-  };
-
-  const checkStyle: CSSProperties = { width: 14, height: 14, cursor: 'pointer' };
 
   const renderMode: RenderMode = settings.renderMode ?? 'model3d';
 
@@ -337,122 +315,12 @@ export function CallSettingsPage() {
 
       <Divider />
 
-      {/* ── Lights section ── */}
-      <SectionHeader
-        label="灯光"
-        hint="三盏灯 · 场景灯开关 · 情绪调色"
-        open={lightsOpen}
-        onToggle={() => setLightsOpen(o => !o)}
-      />
-
-      {lightsOpen && (
-        <div style={{ display: 'grid', gap: 14 }}>
-          <Row label="保留场景自带灯" hint="关闭时剥离 glb 内置灯（避免叠加突兀）">
-            <input
-              type="checkbox" style={checkStyle}
-              checked={settings.lights.useSceneLights}
-              onChange={e => patchLights({ useSceneLights: e.target.checked })}
-            />
-          </Row>
-          <Row label="情绪调色" hint="开启后主光随情绪轻微变色">
-            <input
-              type="checkbox" style={checkStyle}
-              checked={settings.lights.moodTint}
-              onChange={e => patchLights({ moodTint: e.target.checked })}
-            />
-          </Row>
-
-          <Divider />
-
-          {/* ambient */}
-          <div style={{ display: 'grid', gap: 8, paddingLeft: 10, borderLeft: '2px solid var(--paper-edge)' }}>
-            <Row label="环境光" hint="全场补光，无方向">
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input type="checkbox" style={checkStyle}
-                  checked={settings.lights.ambient.on}
-                  onChange={e => patchLightCfg('ambient', { on: e.target.checked })}
-                />
-                <input type="color" style={colorInputStyle}
-                  value={settings.lights.ambient.color}
-                  onChange={e => patchLightCfg('ambient', { color: e.target.value })}
-                />
-              </div>
-            </Row>
-            <Row label="强度" hint="0–4">
-              <SliderNum min={0} max={4} step={0.05} value={settings.lights.ambient.intensity}
-                onChange={v => patchLightCfg('ambient', { intensity: v })} />
-            </Row>
-          </div>
-
-          <Divider />
-
-          {/* key light */}
-          <div style={{ display: 'grid', gap: 8, paddingLeft: 10, borderLeft: '2px solid var(--paper-edge)' }}>
-            <Row label="主光" hint="有方向，照亮全场">
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input type="checkbox" style={checkStyle}
-                  checked={settings.lights.key.on}
-                  onChange={e => patchLightCfg('key', { on: e.target.checked })}
-                />
-                <input type="color" style={colorInputStyle}
-                  value={settings.lights.key.color}
-                  onChange={e => patchLightCfg('key', { color: e.target.value })}
-                />
-              </div>
-            </Row>
-            <Row label="强度" hint="0–4">
-              <SliderNum min={0} max={4} step={0.05} value={settings.lights.key.intensity}
-                onChange={v => patchLightCfg('key', { intensity: v })} />
-            </Row>
-            <Row label="位置 X" hint="-8–8">
-              <SliderNum min={-8} max={8} step={0.1} value={settings.lights.key.pos?.[0] ?? 2}
-                onChange={v => patchLightPos('key', 0, v)} />
-            </Row>
-            <Row label="位置 Y" hint="-8–8">
-              <SliderNum min={-8} max={8} step={0.1} value={settings.lights.key.pos?.[1] ?? 4}
-                onChange={v => patchLightPos('key', 1, v)} />
-            </Row>
-            <Row label="位置 Z" hint="-8–8">
-              <SliderNum min={-8} max={8} step={0.1} value={settings.lights.key.pos?.[2] ?? 3}
-                onChange={v => patchLightPos('key', 2, v)} />
-            </Row>
-          </div>
-
-          <Divider />
-
-          {/* charFill */}
-          <div style={{ display: 'grid', gap: 8, paddingLeft: 10, borderLeft: '2px solid var(--paper-edge)' }}>
-            <Row label="角色补光" hint="只照角色、不影响房间">
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input type="checkbox" style={checkStyle}
-                  checked={settings.lights.charFill.on}
-                  onChange={e => patchLightCfg('charFill', { on: e.target.checked })}
-                />
-                <input type="color" style={colorInputStyle}
-                  value={settings.lights.charFill.color}
-                  onChange={e => patchLightCfg('charFill', { color: e.target.value })}
-                />
-              </div>
-            </Row>
-            <Row label="强度" hint="0–4">
-              <SliderNum min={0} max={4} step={0.05} value={settings.lights.charFill.intensity}
-                onChange={v => patchLightCfg('charFill', { intensity: v })} />
-            </Row>
-            <Row label="位置 X" hint="-8–8">
-              <SliderNum min={-8} max={8} step={0.1} value={settings.lights.charFill.pos?.[0] ?? 0.5}
-                onChange={v => patchLightPos('charFill', 0, v)} />
-            </Row>
-            <Row label="位置 Y" hint="-8–8">
-              <SliderNum min={-8} max={8} step={0.1} value={settings.lights.charFill.pos?.[1] ?? 1.6}
-                onChange={v => patchLightPos('charFill', 1, v)} />
-            </Row>
-            <Row label="位置 Z" hint="-8–8">
-              <SliderNum min={-8} max={8} step={0.1} value={settings.lights.charFill.pos?.[2] ?? 2}
-                onChange={v => patchLightPos('charFill', 2, v)} />
-            </Row>
-          </div>
-        </div>
-      )}
+      <div className="serif" style={{
+        padding: '12px 14px', border: '1px dashed var(--paper-edge)',
+        borderRadius: 'var(--radius-md)', color: 'var(--ink-3)', fontSize: 12, lineHeight: 1.7,
+      }}>
+        {t('settings.call.lightingMovedHint')}
+      </div>
 
       <Divider />
 

@@ -72,7 +72,7 @@ export const ThreeCallStage = forwardRef<ThreeCallStageHandle, ThreeCallStagePro
             fontFamily: 'var(--font-mono, monospace)', letterSpacing: 0.8, zIndex: 5,
             backdropFilter: 'blur(4px)',
           }}>
-            拖拽旋转 · 滚轮缩放 · 右键平移
+            {t('room.call.freeLook.hint')}
           </div>
         )}
         {placementMode && (

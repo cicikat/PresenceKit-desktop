@@ -1,5 +1,30 @@
 # docs/frontend-structure.md — 前端结构指南
 
+## 视频通话可视化编辑器（2026-10-01，partial）
+
+通话窗口的「编辑模式」（底栏 🛠；3D 下即 `placementMode`，Live2D 下为 `live2dEdit`，外壳统一叫 `editMode`）
+把画面分成三层调：
+
+1. **光照**：决定立体感与方向（明暗交界、轮廓光、阴影）。环境光 / 主光 / 角色补光为固定三盏，另可加至多 4 盏
+   附加灯（平行/点/聚光，`lights.extra`），可开阴影（`lights.shadows`，默认关，吃帧率）。
+2. **画面调色（grade）**：决定整体色调与质感（曝光/色调映射/色温/色调/饱和/对比/暗部提亮/暗角/泛光），
+   与模型和场景无关，`settings.grade`，默认关（关闭时画面与未调色一致，不创建 EffectComposer）。
+3. **材质**：toon 材质由角色资产作者在模型旁的 `<model>.materials.json` 配置，本编辑器不碰。
+
+外观预设（Look）把 光照 + 调色 打成命名预设，5 个内置只读 + 用户预设，按 `sceneFile` 记忆（`lookByScene`），
+切场景时自动套用。
+
+面板结构（`src/windows/room/`）：`EditorPanel.tsx`（工具条：移动/旋转/缩放 + X/Y/Z 轴锁；四组对象清单：
+人物/场景/道具/光照，选中项内联参数；外观预设 `LookSection`；画面调色 `GradeSection`；键位说明）。
+面板只在编辑模式挂载，退出即卸载。对象模型/选中态在 `sceneOutline.ts`（`EditableId`，单一真相），
+附加灯与 helper 在 `extraLights.ts`，调色 pass 在 `gradePass.ts`（`GradeRenderer`），纯数学在
+`shared/room/gradeConfig.ts`，预设在 `shared/room/lookPresets.ts`。
+摆放模式下 settings→scene 的同步 effect 被暂停，所以面板对光/道具/人物/预设的修改走
+`useRoomScene` 的 `applyLightPatch` / `applyPropPatch` / `applyCharacterPatch` / `applyLookSettings`
+直接写 three 对象并镜像进 settings。Live2D 下只有调色（`ColorMatrixFilter`，曝光/色调映射/暗角/泛光不支持并置灰）。
+灯光参数不再在偏好页（`CallSettingsPage`）重复提供。仅本机渲染与 `room.settings` 偏好，无后端/手机改动。
+真实 Tauri 窗口目检未完成，见 `known-issues.md` 与 `../cc-tasks/room-visual-editor.md`。
+
 ## 主动视频来电窗口（2026-09-27，partial）
 
 主窗口收到匹配当前角色的 `video_call_invite` 后打开独立来电窗口。该窗口按邀请的 `char_id` 读取角色头像；拒绝立即结束本地窗口并异步回执，超时关闭带销毁兜底。接通成功后通知主窗口打开 Room。真实 Tauri 窗口和后端回执待复测，见 `../cc-tasks/2026-09-27-video-call-invite-window.md`。
