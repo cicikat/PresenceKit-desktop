@@ -11,7 +11,8 @@ import { CharacterPerformer } from '../../shared/character/performer';
 import { setupCharacter } from './characterSetup';
 import { collectSceneCameraPresets, placementFromSceneCamera } from './sceneCameraPresets';
 import type { SceneCameraPreset } from './sceneCameraPresets';
-import { loadRoomModel } from '../../shared/room/roomAssets';
+import { loadRoomModel, loadCharacterMaterials } from '../../shared/room/roomAssets';
+import { applyToonBindings } from '../../shared/character/toonMaterial';
 import type { RoomSettings } from '../../shared/room/roomSettings';
 import {
   updateSpringChains,
@@ -402,6 +403,9 @@ export function useRoomScene(
         normalizeAndPosition(model, s);
         enableCharLayer(model);
         charGroup.add(model);
+        void loadCharacterMaterials(s.characterFile).then((materials) => {
+          if (materials && !cancelled && !disposedRef.current) applyToonBindings(model, materials);
+        });
         charBaseScaleRef.current = s.scaleMul > 0 ? model.scale.x / s.scaleMul : model.scale.x;
         const setup = setupCharacter(
           model, gltf.animations, getCharacterCfg(s, s.characterFile), s.idleClip, startIdleClip,

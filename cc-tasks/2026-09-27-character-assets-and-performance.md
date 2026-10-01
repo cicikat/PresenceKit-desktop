@@ -51,7 +51,7 @@
 | CA-03 | 人体映射、校准、自然站姿与待机 | CA-02 | 未开始 |
 | CA-04 | 表情映射与眼球控制 | CA-02、CA-03 的坐标合同 | 未开始 |
 | CA-05 | 外部动作重定向与表演叠加 | CA-03、CA-04 | 未开始 |
-| CA-06 | Toon 模板及 Blender 对应预览 | CA-01、CA-02 | partial：materials.json 合同、参数解析与 FACE/HAIR/CLOTH 运行时材质已实现并有单测；未接入 Room/Pet 加载、无 Blender 节点组、无参考场景比对 |
+| CA-06 | Toon 模板及 Blender 对应预览 | CA-01、CA-02 | partial：materials.json 合同、参数解析与 FACE/HAIR/CLOTH 运行时材质已实现并有单测；已接 Room/Pet 侧车加载但未做真实窗口验收、无 Blender 节点组、无参考场景比对 |
 | CA-07 | 角色包导入、持久配置与诊断闭环 | CA-03～06 | 未开始 |
 | CA-08 | 双窗口、发行包、性能和回归验收 | CA-07 | 未开始 |
 | CA-09 | 更新建模操作指南并按指南重新交付模型 | CA-08；文档随各单增量维护 | 未开始 |
@@ -187,7 +187,7 @@ character.ptchar
 
 验收：至少一个完整角色、两套参数外观；更换参数无需改节点实现；不能把模板名称存在视为对应效果完成。
 
-进展（2026-10-01，未验收）：`src/shared/character/materialsConfig.ts`（合同解析、范围校验、优先级 模板默认<包绑定<look<本机覆盖、ramp 计算）与 `toonMaterial.ts`（MeshToonMaterial + 渐变贴图承载阴影色/分界/软硬度，rim 走 uniform，参数更新原地生效不重编译、不重烘焙）。绑定以 mesh 名 + 槽位为身份，materialName 失配判 stale 不应用。SKIN/METAL/EYE/GLASS 仅识别并跳过，不假装已支持。未完成：Room/Pet 接线（需 CA-07 提供 materials.json 来源）、描边、头发高光、脸部 SDF、Blender 节点组与参考场景比对、真实窗口验收。
+进展（2026-10-01，未验收）：`src/shared/character/materialsConfig.ts`（合同解析、范围校验、优先级 模板默认<包绑定<look<本机覆盖、ramp 计算）与 `toonMaterial.ts`（MeshToonMaterial + 渐变贴图承载阴影色/分界/软硬度，rim 走 uniform，参数更新原地生效不重编译、不重烘焙）。绑定以 mesh 名 + 槽位为身份，materialName 失配判 stale 不应用。SKIN/METAL/EYE/GLASS 仅识别并跳过，不假装已支持。2026-10-01 追加：Room 与 Pet 加载角色后读取本机侧车文件 `<模型名>.materials.json`（Rust `read_room_material_config`，先本机可写目录后内置资源，上限 256KB，无效则回退模型自带材质），CA-07 包导入落地后改由包提供同一份配置；电视机角色样例 24 槽位绑定经结构测试全部命中，真实窗口画面未验收。未完成：真实窗口验收、描边、头发高光、脸部 SDF、Blender 节点组与参考场景比对、真实窗口验收。
 
 ## 12. CA-07：打包导入、配置和诊断
 

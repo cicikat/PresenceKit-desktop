@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { parseMaterialsConfig, type MaterialsConfig } from '../character/materialsConfig';
 
 export interface RoomAsset {
   fileName: string;
@@ -51,4 +52,19 @@ export async function listRoomPropCategories(): Promise<RoomPropCategory[]> {
 
 export async function listRoomPropFiles(category: string): Promise<RoomPropFile[]> {
   return invoke<RoomPropFile[]>('list_room_props', { category });
+}
+
+/** CA-06 sidecar `<model>.materials.json`; null when the character has none or it fails validation. */
+export async function loadCharacterMaterials(fileName: string): Promise<MaterialsConfig | null> {
+  try {
+    const text = await invoke<string | null>('read_room_material_config', { fileName });
+    if (!text) return null;
+    const result = parseMaterialsConfig(JSON.parse(text));
+    if (result.ok === true) return result.config;
+    console.warn('[materials] invalid config, using model materials:', (result as { errors: string[] }).errors);
+    return null;
+  } catch (error) {
+    console.warn('[materials] config unavailable, using model materials:', error);
+    return null;
+  }
 }
