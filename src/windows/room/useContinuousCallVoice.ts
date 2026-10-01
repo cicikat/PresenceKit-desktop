@@ -7,6 +7,7 @@ const MAX_SEGMENT_MS = 6_000;
 const END_SILENCE_MS = 900;
 // Doubled with the halved segment length so fast talkers do not lose segments.
 const MAX_PENDING_SEGMENTS = 6;
+const ERROR_VISIBLE_MS = 4_000;
 
 async function toBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -32,6 +33,8 @@ export function useContinuousCallVoice(onTranscript: (text: string, audioPercept
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (errorTimerRef.current) clearTimeout(errorTimerRef.current); }, []);
 
   const processPending = useCallback(async () => {
     if (processingRef.current) return;
@@ -50,6 +53,8 @@ export function useContinuousCallVoice(onTranscript: (text: string, audioPercept
         } catch (cause) {
           if (String(cause).includes('NO_SPEECH')) continue;
           setError(`${t('room.call.voice.transcribeFailed')}: ${String(cause).slice(0, 160)}`);
+          if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+          errorTimerRef.current = setTimeout(() => setError(null), ERROR_VISIBLE_MS);
         }
       }
     } finally {

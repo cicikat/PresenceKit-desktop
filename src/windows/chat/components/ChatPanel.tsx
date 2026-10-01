@@ -52,7 +52,7 @@ import {
   pruneRenderedFallbacks,
   setBoundedMapEntry,
 } from '../correlation';
-import { mergeAttachments, fileToDraft, type DraftAttachment } from '../draftAttachments';
+import { mergeAttachments, fileToDraft, attachmentKind, type DraftAttachment } from '../draftAttachments';
 
 import { createLatestTimer } from '../chatTimer';
 import { bindHttpReplyIdentity, matchesHistoryReplay } from '../httpReplyIdentity';
@@ -1846,7 +1846,10 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
     const token = chatRequests.begin(userId);
     if (!token) return;
     if (chatRequests.size > 1) replyFallbacks.disableLegacySendMatching();
-    const filename = submitted.map(item => item.filename).join(', ');
+    // Image filenames are opaque hashes; show a neutral label instead.
+    const filename = submitted.every(item => attachmentKind(item.filename) === 'image')
+      ? t('chat.attachments.images')
+      : submitted.map(item => item.filename).join(', ');
     const userMessage = retry?.retryDraft?.text ?? input.trim();
     const placeholderText = userMessage
       ? `📎 ${filename}\n${userMessage}`
@@ -2199,7 +2202,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
         {(attachments.length > 0 || preparing || draftError) && <div className="chat-attachment-tray" aria-label={t('chat.attachments.pending')}>
           {attachments.map(item => <div key={item.id} className="chat-attachment-card">
             {item.preview ? <img src={item.preview} alt={item.filename} /> : <Icon name="attach" size={24} />}
-            <span title={item.filename}>{item.filename}</span>
+            {!item.preview && <span title={item.filename}>{item.filename}</span>}
             <button onClick={() => setAttachments(current => current.filter(draft => draft.id !== item.id))} aria-label={t('chat.attachments.remove')} title={t('chat.attachments.remove')}>×</button>
           </div>)}
           {preparing && <span role="status">{t('common.loading')}</span>}

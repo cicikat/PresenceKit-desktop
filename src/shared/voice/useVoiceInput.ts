@@ -121,6 +121,12 @@ export function useVoiceInput(): VoiceInputHandle {
   }, [stopVolumeLoop]);
 
   useEffect(() => {
+    if (!error) return;
+    const timer = setTimeout(() => setError(null), 4000);
+    return () => clearTimeout(timer);
+  }, [error]);
+
+  useEffect(() => {
     return () => {
       stopVolumeLoop();
       if (isRecordingRef.current) {

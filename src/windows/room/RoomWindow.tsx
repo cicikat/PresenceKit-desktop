@@ -177,7 +177,7 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
 
     try {
       const result = await sendChat(trimmed, undefined, camera.takeLatestObservation(), audioSource);
-      if (audioSource) setAudioStatus(t(result.audio_perception_applied ? 'room.call.voice.acousticSent' : 'room.call.voice.textOnly'));
+      if (audioSource && !result.audio_perception_applied) setAudioStatus(t('room.call.voice.textOnly'));
       sendingRef.current = false;
       setSending(false);
     } catch {
