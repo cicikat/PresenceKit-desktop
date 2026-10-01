@@ -23,6 +23,7 @@ export interface ThreeCallStageHandle {
   applyPropPatch: (index: number, patch: Partial<RoomProp>) => void;
   removeProp: (index: number) => void;
   applyCharacterPatch: (patch: { yawDeg?: number; scaleMul?: number }) => void;
+  applyLookSettings: (next: RoomSettings) => void;
   axisLock: 'X' | 'Y' | 'Z' | null;
   setAxisConstraint: (axis: 'X' | 'Y' | 'Z' | null) => void;
 }
@@ -42,18 +43,18 @@ export const ThreeCallStage = forwardRef<ThreeCallStageHandle, ThreeCallStagePro
     const {
       freeLook, toggleFreeLook, saveCurrentView, placementMode, togglePlacementMode,
       applyCameraPreset, bringCharacterToView, selection, selectById, setGizmoMode, gizmoMode,
-      applyLightPatch, setPropHidden, applyPropPatch, removeProp, applyCharacterPatch,
+      applyLightPatch, setPropHidden, applyPropPatch, removeProp, applyCharacterPatch, applyLookSettings,
       axisLock, setAxisConstraint,
     } = useRoomScene(mountRef, mood, talking, settings, onCameraPresetsChange);
 
     const handle = useMemo<ThreeCallStageHandle>(() => ({
       toggleFreeLook, saveCurrentView, togglePlacementMode, applyCameraPreset, bringCharacterToView,
       selection, selectById, setGizmoMode, gizmoMode, applyLightPatch, setPropHidden,
-      applyPropPatch, removeProp, applyCharacterPatch, axisLock, setAxisConstraint,
+      applyPropPatch, removeProp, applyCharacterPatch, applyLookSettings, axisLock, setAxisConstraint,
     }), [
       toggleFreeLook, saveCurrentView, togglePlacementMode, applyCameraPreset, bringCharacterToView,
       selection, selectById, setGizmoMode, gizmoMode, applyLightPatch, setPropHidden,
-      applyPropPatch, removeProp, applyCharacterPatch, axisLock, setAxisConstraint,
+      applyPropPatch, removeProp, applyCharacterPatch, applyLookSettings, axisLock, setAxisConstraint,
     ]);
     useImperativeHandle(ref, () => handle, [handle]);
 

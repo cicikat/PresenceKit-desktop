@@ -24,7 +24,7 @@ import type { SpringChain } from './springBones';
 import { collectExcludedBoneNames, filterClipTracks } from './clipPlayer';
 import { editableIdEquals } from './sceneOutline';
 import type { EditableId, LightKey } from './sceneOutline';
-import type { LightCfg, RoomProp } from '../../shared/room/roomSettings';
+import type { LightCfg, RoomProp, RoomLights } from '../../shared/room/roomSettings';
 import { DEFAULT_GRADE } from '../../shared/room/gradeConfig';
 import { GradeRenderer } from './gradePass';
 import { ExtraLightRig, LightHelperSet, fitDirectionalShadow } from './extraLights';
@@ -53,6 +53,31 @@ interface SceneRefs {
   proxyFill: THREE.Mesh;
   helpers: LightHelperSet;
   extraRig: ExtraLightRig;
+}
+
+/** Pushes the fixed lights (ambient/key/charFill) from settings onto the three.js objects. */
+function syncFixedLights(refs: SceneRefs, lights: RoomLights, glbLights: THREE.Light[]): void {
+  glbLights.forEach(l => { l.visible = lights.useSceneLights; });
+
+  refs.sceneAmbient.visible = lights.ambient.on;
+  refs.sceneAmbient.color.set(lights.ambient.color);
+  refs.sceneAmbient.intensity = lights.ambient.intensity;
+
+  refs.keyLight.visible = lights.key.on;
+  if (!lights.moodTint) {
+    refs.keyLight.color.set(lights.key.color);
+    refs.keyLight.intensity = lights.key.intensity;
+  }
+  if (lights.key.pos) refs.keyLight.position.set(...lights.key.pos);
+
+  refs.charFill.visible = lights.charFill.on;
+  refs.charFill.color.set(lights.charFill.color);
+  refs.charFill.intensity = lights.charFill.intensity;
+  if (lights.charFill.pos) refs.charFill.position.set(...lights.charFill.pos);
+
+  // Pick proxies follow the lights so a look applied mid-edit doesn't leave them behind.
+  refs.proxyKey.position.copy(refs.keyLight.position);
+  refs.proxyFill.position.copy(refs.charFill.position);
 }
 
 /** Edit-mode-only visuals: direction/cone helpers and the extra lights' pick proxies. */
@@ -284,6 +309,8 @@ export interface RoomSceneAPI {
   applyPropPatch: (index: number, patch: Partial<RoomProp>) => void;
   removeProp: (index: number) => void;
   applyCharacterPatch: (patch: { yawDeg?: number; scaleMul?: number }) => void;
+  /** Applies lights+grade from a look preset while editing (see applyLightPatch). */
+  applyLookSettings: (next: RoomSettings) => void;
   /** Current axis lock, mirrored for the panel's X/Y/Z buttons (work order 2). */
   axisLock: 'X' | 'Y' | 'Z' | null;
   setAxisConstraint: (axis: 'X' | 'Y' | 'Z' | null) => void;
@@ -425,25 +452,7 @@ export function useRoomScene(
     if (placementModeRef.current) return;
     const refs = refsRef.current;
     if (!refs) return;
-    const { lights } = settings;
-
-    glbSceneLightsRef.current.forEach(l => { l.visible = lights.useSceneLights; });
-
-    refs.sceneAmbient.visible = lights.ambient.on;
-    refs.sceneAmbient.color.set(lights.ambient.color);
-    refs.sceneAmbient.intensity = lights.ambient.intensity;
-
-    refs.keyLight.visible = lights.key.on;
-    if (!lights.moodTint) {
-      refs.keyLight.color.set(lights.key.color);
-      refs.keyLight.intensity = lights.key.intensity;
-    }
-    if (lights.key.pos) refs.keyLight.position.set(...lights.key.pos);
-
-    refs.charFill.visible = lights.charFill.on;
-    refs.charFill.color.set(lights.charFill.color);
-    refs.charFill.intensity = lights.charFill.intensity;
-    if (lights.charFill.pos) refs.charFill.position.set(...lights.charFill.pos);
+    syncFixedLights(refs, settings.lights, glbSceneLightsRef.current);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings]);
 
@@ -1429,6 +1438,20 @@ export function useRoomScene(
     if (patch.scaleMul !== undefined) model.scale.setScalar(charBaseScaleRef.current * patch.scaleMul);
   }, []);
 
+  // Applies a whole new settings object that changes lights/grade at once (look presets). The
+  // lights effect is skipped in placement mode, so push the result onto the scene directly.
+  const applyLookSettings = useCallback((next: RoomSettings) => {
+    settingsRef.current = next;
+    saveRoomSettings(next);
+    const refs = refsRef.current;
+    if (!refs) return;
+    syncFixedLights(refs, next.lights, glbSceneLightsRef.current);
+    refs.extraRig.sync(next.lights.extra, { shadows: next.lights.shadows, writePos: true });
+    applyShadowsRef.current?.();
+    refs.transformCtl.detach();
+    setSelectionBoth(null);
+  }, [setSelectionBoth]);
+
   const applyLightPatch = useCallback((key: LightKey, patch: Partial<LightCfg>) => {
     const refs = refsRef.current;
     const s = settingsRef.current;
@@ -1525,7 +1548,7 @@ export function useRoomScene(
     freeLook, toggleFreeLook, saveCurrentView, placementMode, togglePlacementMode,
     applyCameraPreset, bringCharacterToView,
     selection, selectById, setGizmoMode, gizmoMode, applyLightPatch, setPropHidden,
-    applyPropPatch, removeProp, applyCharacterPatch,
+    applyPropPatch, removeProp, applyCharacterPatch, applyLookSettings,
     axisLock, setAxisConstraint,
   };
 }

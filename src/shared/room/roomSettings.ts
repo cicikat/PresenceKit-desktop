@@ -2,6 +2,7 @@ import { getUIPref, setUIPref } from '../uiPreferences';
 import { validatePerformanceRoutes, type PerformanceRoutes } from '../character/performanceRoutes';
 import { ALL_ROLES, type BoneRole } from '../character/humanoid';
 import { validateGrade, type GradeCfg } from './gradeConfig';
+import { resolveSceneLook, applyLook, type LookPreset } from './lookPresets';
 
 export type Framing = 'face' | 'upperBody' | 'full';
 export type RenderMode = 'model3d' | 'live2d';
@@ -114,6 +115,10 @@ export interface RoomSettings {
   // with no entry yet just keeps whatever the top-level fields currently are (legacy fallback).
   perPlacement?: Record<string, PlacementCfg>;
   sceneCameraByScene?: Record<string, string>;
+  // User look presets (lights + grade) keyed by id, and the look last chosen per scene. Same
+  // memory style as sceneCameraByScene; built-in looks live in lookPresets.ts, not here.
+  looks?: Record<string, LookPreset>;
+  lookByScene?: Record<string, string>;
 }
 
 // Rig config is keyed by characterFile so switching between models with incompatible
@@ -297,6 +302,25 @@ function validatePerCharacter(raw: unknown): Record<string, CharacterCfg> | unde
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
+function validateLooks(raw: unknown): Record<string, LookPreset> | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const out: Record<string, LookPreset> = {};
+  for (const [id, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (!id || !v || typeof v !== 'object') continue;
+    const r = v as Record<string, unknown>;
+    if (typeof r.name !== 'string' || !r.name.trim()) continue;
+    out[id] = { name: r.name, lights: validateLights(r.lights), grade: validateGrade(r.grade) };
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function validateStringMap(raw: unknown): Record<string, string> | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const out = Object.fromEntries(Object.entries(raw as Record<string, unknown>)
+    .filter(([k, v]) => k.length > 0 && typeof v === 'string' && v.length > 0)) as Record<string, string>;
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 function validatePlacementCfg(raw: unknown): PlacementCfg {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   return {
@@ -370,6 +394,8 @@ function validate(raw: unknown): RoomSettings {
     idleClip: typeof r.idleClip === 'string' && r.idleClip ? r.idleClip : undefined,
     renderMode: r.renderMode === 'live2d' ? 'live2d' : 'model3d',
     perPlacement: validatePerPlacement(r.perPlacement),
+    looks: validateLooks(r.looks),
+    lookByScene: validateStringMap(r.lookByScene),
     sceneCameraByScene: r.sceneCameraByScene && typeof r.sceneCameraByScene === 'object'
       ? Object.fromEntries(Object.entries(r.sceneCameraByScene as Record<string, unknown>)
           .filter(([scene, camera]) => scene.length > 0 && typeof camera === 'string')) as Record<string, string>
@@ -415,7 +441,10 @@ export function switchRoomPlacement(
 
   const base: RoomSettings = { ...settings, characterFile, sceneFile, perPlacement };
   const remembered = perPlacement[newKey];
-  return remembered ? { ...base, ...remembered } : base;
+  const placed = remembered ? { ...base, ...remembered } : base;
+  // Entering a scene that has a remembered look re-applies it; other scenes keep what's current.
+  const look = sceneFile !== settings.sceneFile ? resolveSceneLook(placed, sceneFile) : null;
+  return look ? applyLook(placed, look) : placed;
 }
 
 export function saveRoomSettings(settings: RoomSettings): void {

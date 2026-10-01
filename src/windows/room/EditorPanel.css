@@ -151,3 +151,10 @@
 .room-editor-panel__add-row select { flex: 1; width: auto; }
 .room-editor-panel__add-row .room-editor-panel__tool-btn { flex: 0 0 auto; padding: 5px 10px; }
 .room-editor-panel__tool-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.room-editor-panel__text-input {
+  flex: 1; min-width: 0; padding: 4px 6px; font-size: 11px; border-radius: 5px;
+  background: oklch(0.18 0.03 240); color: oklch(0.85 0.04 240);
+  border: 1px solid oklch(0.28 0.05 240 / 0.6);
+}
+.room-editor-panel__delete-btn:disabled { opacity: 0.4; cursor: not-allowed; }
