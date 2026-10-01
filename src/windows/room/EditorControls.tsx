@@ -3,23 +3,29 @@
 // (EditorPanel.tsx) can reuse the exact same row/slider look instead of forking a copy.
 import type { CSSProperties } from 'react';
 
-export function Row({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+export function Row({ label, hint, children, stacked }: {
+  label: string; hint?: string; children: React.ReactNode;
+  /** Label above the control instead of beside it — for narrow containers like the editor panel. */
+  stacked?: boolean;
+}) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+    <div style={stacked
+      ? { display: 'grid', gap: 4 }
+      : { display: 'flex', alignItems: 'center', gap: 14 }}>
       <div style={{ flex: 1 }}>
         <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink)' }}>{label}</div>
         {hint && <div className="mono" style={{ fontSize: 9.5, color: 'var(--ink-3)', letterSpacing: 1.1, marginTop: 2 }}>{hint}</div>}
       </div>
-      <div style={{ flexShrink: 0 }}>{children}</div>
+      <div style={stacked ? undefined : { flexShrink: 0 }}>{children}</div>
     </div>
   );
 }
 
 export function SliderNum({
-  min, max, step, value, onChange, unit,
+  min, max, step, value, onChange, unit, width = 240,
 }: {
   min: number; max: number; step: number; value: number;
-  onChange: (v: number) => void; unit?: string;
+  onChange: (v: number) => void; unit?: string; width?: number | string;
 }) {
   const numStyle: CSSProperties = {
     width: 58, padding: '4px 6px', fontSize: 11,
@@ -28,7 +34,7 @@ export function SliderNum({
     fontFamily: 'var(--font-mono, monospace)', textAlign: 'right',
   };
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: 240 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, width }}>
       <input
         type="range" min={min} max={max} step={step} value={value}
         onChange={e => onChange(Number(e.target.value))}

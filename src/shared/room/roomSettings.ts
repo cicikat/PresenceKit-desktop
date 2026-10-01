@@ -1,6 +1,7 @@
 import { getUIPref, setUIPref } from '../uiPreferences';
 import { validatePerformanceRoutes, type PerformanceRoutes } from '../character/performanceRoutes';
 import { ALL_ROLES, type BoneRole } from '../character/humanoid';
+import { validateGrade, type GradeCfg } from './gradeConfig';
 
 export type Framing = 'face' | 'upperBody' | 'full';
 export type RenderMode = 'model3d' | 'live2d';
@@ -76,6 +77,8 @@ export interface RoomSettings {
   customView: { pos: [number, number, number]; target: [number, number, number] } | null;
   anchorMode: 'floor' | 'free';
   lights: RoomLights;
+  /** Screen-level color grade (work order 4). Absent means the neutral default. */
+  grade?: GradeCfg;
   props: RoomProp[];
   // Legacy global fields — migrated into `perCharacter[characterFile]` on load (see `validate`).
   // Kept optional here only so old persisted blobs still type-check through the migration path.
@@ -303,6 +306,7 @@ function validate(raw: unknown): RoomSettings {
     customView: validateCustomView(r.customView),
     anchorMode: r.anchorMode === 'floor' ? 'floor' : 'free',
     lights: validateLights(r.lights),
+    grade: validateGrade(r.grade),
     props: Array.isArray(r.props)
       ? (r.props as unknown[]).map(validateProp).filter((p): p is RoomProp => p !== null)
       : [],

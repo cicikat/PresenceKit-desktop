@@ -25,6 +25,8 @@ import { collectExcludedBoneNames, filterClipTracks } from './clipPlayer';
 import { editableIdEquals } from './sceneOutline';
 import type { EditableId, LightKey } from './sceneOutline';
 import type { LightCfg } from '../../shared/room/roomSettings';
+import { DEFAULT_GRADE } from '../../shared/room/gradeConfig';
+import { GradeRenderer } from './gradePass';
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
@@ -293,6 +295,7 @@ export function useRoomScene(
   const onCameraPresetsChangeRef = useRef(onCameraPresetsChange);
   onCameraPresetsChangeRef.current = onCameraPresetsChange;
   const disposedRef        = useRef(false);
+  const gradeRef           = useRef<GradeRenderer | null>(null);
   const freeLookRef        = useRef(false);
   const [freeLook, setFreeLook] = useState(false);
   const springChainsRef    = useRef<SpringChain[]>([]);
@@ -376,6 +379,12 @@ export function useRoomScene(
       { ...DEFAULT_SPRING_PARAMS, ...physicsBones?.default },
     );
   }, [settings]);
+
+  // Color grade is screen-level (not part of the placement gizmo state), so unlike lights it
+  // stays live while editing; GradeRenderer only builds a composer when the grade is visible.
+  useEffect(() => {
+    gradeRef.current?.apply(settings.grade ?? DEFAULT_GRADE);
+  }, [settings.grade]);
 
   // sync lights settings to scene objects (skip in placement mode)
   useEffect(() => {
@@ -746,6 +755,7 @@ export function useRoomScene(
         camera.aspect = nw / nh;
         camera.updateProjectionMatrix();
         renderer.setSize(nw, nh);
+        gradeRef.current?.setSize(nw, nh);
       }),
       targetLightColor,
       targetLightIntensity,
@@ -755,6 +765,10 @@ export function useRoomScene(
     };
     refs.resizeObs.observe(mount);
     refsRef.current = refs;
+
+    const grade = new GradeRenderer(renderer, scene, camera, w, h);
+    grade.apply(initSettings.grade ?? DEFAULT_GRADE);
+    gradeRef.current = grade;
 
     // ── groups ──
     const roomGroup = new THREE.Group();
@@ -904,7 +918,7 @@ export function useRoomScene(
       }
 
       controls.update();
-      renderer.render(scene, camera);
+      (gradeRef.current ?? { render: () => renderer.render(scene, camera) }).render();
     }
 
     refs.clock.getDelta();
@@ -954,6 +968,8 @@ export function useRoomScene(
         }
       });
 
+      gradeRef.current?.dispose();
+      gradeRef.current = null;
       refs.renderer.dispose();
       try { refs.renderer.forceContextLoss(); } catch {}
       refs.renderer.domElement.remove();

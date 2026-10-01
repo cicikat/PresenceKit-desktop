@@ -8,6 +8,7 @@ import type { ThreeCallStageHandle } from './ThreeCallStage';
 import type { RoomSettings, RoomProp } from '../../shared/room/roomSettings';
 import { saveRoomSettings } from '../../shared/room/roomSettings';
 import { Row, SliderNum, Divider } from './EditorControls';
+import { GradeSection } from './GradeSection';
 import { useI18n } from '../../shared/i18n';
 import './EditorPanel.css';
 
@@ -110,6 +111,10 @@ export function EditorPanel({ settings, loadedSceneFile, stage }: EditorPanelPro
 
       <Divider />
 
+      <GradeSection settings={settings} />
+
+      <Divider />
+
       <div className="room-editor-panel__footer">{t('room.editor.keyHints')}</div>
     </div>
   );
@@ -123,12 +128,12 @@ function SelectedParams({ id, settings, stage }: {
   if (id.kind === 'character') {
     return (
       <div className="room-editor-panel__params">
-        <Row label={t('room.editor.yaw')}>
-          <SliderNum min={-180} max={180} step={1} value={settings.yawDeg}
+        <Row stacked label={t('room.editor.yaw')}>
+          <SliderNum width="100%" min={-180} max={180} step={1} value={settings.yawDeg}
             onChange={v => patchSettings(settings, { yawDeg: v })} unit="°" />
         </Row>
-        <Row label={t('room.editor.gizmo.scale')}>
-          <SliderNum min={0.2} max={3} step={0.01} value={settings.scaleMul}
+        <Row stacked label={t('room.editor.gizmo.scale')}>
+          <SliderNum width="100%" min={0.2} max={3} step={0.01} value={settings.scaleMul}
             onChange={v => patchSettings(settings, { scaleMul: v })} />
         </Row>
       </div>
@@ -138,10 +143,10 @@ function SelectedParams({ id, settings, stage }: {
   if (id.kind === 'scene') {
     return (
       <div className="room-editor-panel__params">
-        <Row label={t('room.editor.sceneFile')}>
+        <Row stacked label={t('room.editor.sceneFile')}>
           <span className="room-editor-panel__scene-file">{settings.sceneFile}</span>
         </Row>
-        <Row label={t('room.editor.useSceneLights')}>
+        <Row stacked label={t('room.editor.useSceneLights')}>
           <input
             type="checkbox"
             checked={settings.lights.useSceneLights}
@@ -158,8 +163,8 @@ function SelectedParams({ id, settings, stage }: {
     return (
       <div className="room-editor-panel__params">
         {(['X', 'Y', 'Z'] as const).map((axis, i) => (
-          <Row key={axis} label={`${t('room.editor.position')} ${axis}`}>
-            <SliderNum min={-10} max={10} step={0.01} value={prop.pos[i]}
+          <Row stacked key={axis} label={`${t('room.editor.position')} ${axis}`}>
+            <SliderNum width="100%" min={-10} max={10} step={0.01} value={prop.pos[i]}
               onChange={v => {
                 const pos = [...prop.pos] as [number, number, number];
                 pos[i] = v;
@@ -168,8 +173,8 @@ function SelectedParams({ id, settings, stage }: {
           </Row>
         ))}
         {(['X', 'Y', 'Z'] as const).map((axis, i) => (
-          <Row key={`r${axis}`} label={`${t('room.editor.rotation')} ${axis}`}>
-            <SliderNum min={-Math.PI} max={Math.PI} step={0.01} value={prop.rot[i]}
+          <Row stacked key={`r${axis}`} label={`${t('room.editor.rotation')} ${axis}`}>
+            <SliderNum width="100%" min={-Math.PI} max={Math.PI} step={0.01} value={prop.rot[i]}
               onChange={v => {
                 const rot = [...prop.rot] as [number, number, number];
                 rot[i] = v;
@@ -177,11 +182,11 @@ function SelectedParams({ id, settings, stage }: {
               }} />
           </Row>
         ))}
-        <Row label={t('room.editor.gizmo.scale')}>
-          <SliderNum min={0.1} max={5} step={0.01} value={prop.scale}
+        <Row stacked label={t('room.editor.gizmo.scale')}>
+          <SliderNum width="100%" min={0.1} max={5} step={0.01} value={prop.scale}
             onChange={v => patchProp(settings, id.index, { scale: v })} />
         </Row>
-        <Row label={t('room.editor.delete')}>
+        <Row stacked label={t('room.editor.delete')}>
           <button
             type="button"
             className="room-editor-panel__delete-btn"
@@ -196,7 +201,7 @@ function SelectedParams({ id, settings, stage }: {
   const cfg = settings.lights[id.key];
   return (
     <div className="room-editor-panel__params">
-      <Row label={t('room.editor.color')}>
+      <Row stacked label={t('room.editor.color')}>
         <input
           type="color"
           className="room-editor-panel__color-input"
@@ -204,15 +209,15 @@ function SelectedParams({ id, settings, stage }: {
           onChange={e => stage.applyLightPatch(id.key, { color: e.target.value })}
         />
       </Row>
-      <Row label={t('room.editor.intensity')}>
-        <SliderNum min={0} max={4} step={0.05} value={cfg.intensity}
+      <Row stacked label={t('room.editor.intensity')}>
+        <SliderNum width="100%" min={0} max={4} step={0.05} value={cfg.intensity}
           onChange={v => stage.applyLightPatch(id.key, { intensity: v })} />
       </Row>
       {id.key !== 'ambient' && (
         <>
           {(['X', 'Y', 'Z'] as const).map((axis, i) => (
-            <Row key={axis} label={`${t('room.editor.position')} ${axis}`}>
-              <SliderNum min={-8} max={8} step={0.1} value={cfg.pos?.[i] ?? 0}
+            <Row stacked key={axis} label={`${t('room.editor.position')} ${axis}`}>
+              <SliderNum width="100%" min={-8} max={8} step={0.1} value={cfg.pos?.[i] ?? 0}
                 onChange={v => {
                   const pos = [...(cfg.pos ?? [0, 0, 0])] as [number, number, number];
                   pos[i] = v;

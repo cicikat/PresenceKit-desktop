@@ -125,3 +125,24 @@
   color: oklch(0.55 0.04 240);
   flex-shrink: 0;
 }
+
+.room-editor-panel__params--flat { padding-left: 10px; }
+.room-editor-panel__hint { font-size: 9.5px; line-height: 1.5; color: oklch(0.55 0.04 240); }
+.room-editor-panel select {
+  width: 100%; padding: 4px 6px; font-size: 11px; border-radius: 5px;
+  background: oklch(0.18 0.03 240); color: oklch(0.85 0.04 240);
+  border: 1px solid oklch(0.28 0.05 240 / 0.6);
+}
+.room-editor-panel__list { flex: none; }
+
+/* EditorControls are shared with the light-themed settings page and read its theme variables;
+ * re-scope them to the call window's dark palette inside the panel. */
+.room-editor-panel {
+  --ink: oklch(0.88 0.04 240);
+  --ink-2: oklch(0.80 0.04 240);
+  --ink-3: oklch(0.60 0.04 240);
+  --paper-2: oklch(0.18 0.03 240);
+  --paper-edge: oklch(0.28 0.05 240 / 0.6);
+  --radius-sm: 5px;
+}
+.room-editor-panel .room-editor-panel__params > div > div:first-child > div:first-child { font-size: 11px !important; }
