@@ -146,3 +146,8 @@
   --radius-sm: 5px;
 }
 .room-editor-panel .room-editor-panel__params > div > div:first-child > div:first-child { font-size: 11px !important; }
+
+.room-editor-panel__add-row { display: flex; gap: 6px; align-items: center; }
+.room-editor-panel__add-row select { flex: 1; width: auto; }
+.room-editor-panel__add-row .room-editor-panel__tool-btn { flex: 0 0 auto; padding: 5px 10px; }
+.room-editor-panel__tool-btn:disabled { opacity: 0.4; cursor: not-allowed; }

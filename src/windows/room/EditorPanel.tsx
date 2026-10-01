@@ -1,18 +1,22 @@
 // Right-side layer panel for the room editor (work order 2). Only mounted while
 // placementMode is true — the call window is long-lived, so this panel and its
 // subscriptions must not exist outside of edit sessions.
-import { useMemo } from 'react';
-import { buildOutline, editableIdEquals, editableIdKey, groupOutline, canToggleVisibility } from './sceneOutline';
-import type { EditableId, LightKey } from './sceneOutline';
+import { useMemo, useState } from 'react';
+import {
+  buildOutline, editableIdEquals, editableIdKey, groupOutline, canToggleVisibility,
+  getLightCfg, isExtraLightKey, extraLightId,
+} from './sceneOutline';
+import type { EditableId, FixedLightKey, LightKey } from './sceneOutline';
+import { proxyColorCss } from './extraLights';
 import type { ThreeCallStageHandle } from './ThreeCallStage';
-import type { RoomSettings, RoomProp } from '../../shared/room/roomSettings';
-import { saveRoomSettings } from '../../shared/room/roomSettings';
+import type { RoomSettings, ExtraLightCfg, ExtraLightType } from '../../shared/room/roomSettings';
+import { saveRoomSettings, EXTRA_LIGHT_TYPES, MAX_EXTRA_LIGHTS } from '../../shared/room/roomSettings';
 import { Row, SliderNum, Divider } from './EditorControls';
 import { GradeSection } from './GradeSection';
 import { useI18n } from '../../shared/i18n';
 import './EditorPanel.css';
 
-const LIGHT_LABEL_KEY: Record<LightKey, 'room.editor.light.ambient' | 'room.editor.light.key' | 'room.editor.light.charFill'> = {
+const LIGHT_LABEL_KEY: Record<FixedLightKey, 'room.editor.light.ambient' | 'room.editor.light.key' | 'room.editor.light.charFill'> = {
   ambient: 'room.editor.light.ambient',
   key: 'room.editor.light.key',
   charFill: 'room.editor.light.charFill',
@@ -28,9 +32,17 @@ function patchSettings(settings: RoomSettings, partial: Partial<RoomSettings>): 
   saveRoomSettings({ ...settings, ...partial });
 }
 
-function patchProp(settings: RoomSettings, index: number, partial: Partial<RoomProp>): void {
-  const nextProps = (settings.props ?? []).map((p, i) => (i === index ? { ...p, ...partial } : p));
-  patchSettings(settings, { props: nextProps });
+function patchExtra(settings: RoomSettings, id: string, partial: Partial<ExtraLightCfg>): void {
+  patchSettings(settings, {
+    lights: { ...settings.lights, extra: settings.lights.extra.map(e => (e.id === id ? { ...e, ...partial } : e)) },
+  });
+}
+
+function newExtraLight(type: ExtraLightType): ExtraLightCfg {
+  return {
+    id: crypto.randomUUID(), type, on: true, intensity: 1, color: '#ffffff',
+    pos: [0, 2, 2], distance: 0, angleDeg: 45, penumbra: 0.3, charOnly: false,
+  };
 }
 
 export function EditorPanel({ settings, loadedSceneFile, stage }: EditorPanelProps) {
@@ -76,7 +88,12 @@ export function EditorPanel({ settings, loadedSceneFile, stage }: EditorPanelPro
                       data-selected={isSelected}
                       onClick={() => stage.selectById(isSelected ? null : item.id)}
                     >
-                      <span className="room-editor-panel__row-dot" data-group={item.group} />
+                      <span
+                        className="room-editor-panel__row-dot"
+                        data-group={item.group}
+                        style={item.id.kind === 'light' && isExtraLightKey(item.id.key)
+                          ? { background: proxyColorCss(item.label as ExtraLightType) } : undefined}
+                      />
                       <button
                         type="button"
                         className="room-editor-panel__eye"
@@ -91,7 +108,7 @@ export function EditorPanel({ settings, loadedSceneFile, stage }: EditorPanelPro
                         }}
                       >{item.visible ? '👁' : '—'}</button>
                       <span className="room-editor-panel__row-label">
-                        {item.id.kind === 'light' ? t(LIGHT_LABEL_KEY[item.id.key]) : item.label}
+                        {item.id.kind === 'light' ? lightRowLabel(item.id.key, settings, t) : item.label}
                       </span>
                     </div>
                     {isSelected && (
@@ -104,6 +121,7 @@ export function EditorPanel({ settings, loadedSceneFile, stage }: EditorPanelPro
                   </div>
                 );
               })}
+              {group === 'light' && <LightsFooter settings={settings} />}
             </div>
           );
         })}
@@ -130,11 +148,11 @@ function SelectedParams({ id, settings, stage }: {
       <div className="room-editor-panel__params">
         <Row stacked label={t('room.editor.yaw')}>
           <SliderNum width="100%" min={-180} max={180} step={1} value={settings.yawDeg}
-            onChange={v => patchSettings(settings, { yawDeg: v })} unit="°" />
+            onChange={v => stage.applyCharacterPatch({ yawDeg: v })} unit="°" />
         </Row>
         <Row stacked label={t('room.editor.gizmo.scale')}>
           <SliderNum width="100%" min={0.2} max={3} step={0.01} value={settings.scaleMul}
-            onChange={v => patchSettings(settings, { scaleMul: v })} />
+            onChange={v => stage.applyCharacterPatch({ scaleMul: v })} />
         </Row>
       </div>
     );
@@ -168,7 +186,7 @@ function SelectedParams({ id, settings, stage }: {
               onChange={v => {
                 const pos = [...prop.pos] as [number, number, number];
                 pos[i] = v;
-                patchProp(settings, id.index, { pos });
+                stage.applyPropPatch(id.index, { pos });
               }} />
           </Row>
         ))}
@@ -178,19 +196,19 @@ function SelectedParams({ id, settings, stage }: {
               onChange={v => {
                 const rot = [...prop.rot] as [number, number, number];
                 rot[i] = v;
-                patchProp(settings, id.index, { rot });
+                stage.applyPropPatch(id.index, { rot });
               }} />
           </Row>
         ))}
         <Row stacked label={t('room.editor.gizmo.scale')}>
           <SliderNum width="100%" min={0.1} max={5} step={0.01} value={prop.scale}
-            onChange={v => patchProp(settings, id.index, { scale: v })} />
+            onChange={v => stage.applyPropPatch(id.index, { scale: v })} />
         </Row>
         <Row stacked label={t('room.editor.delete')}>
           <button
             type="button"
             className="room-editor-panel__delete-btn"
-            onClick={() => patchSettings(settings, { props: (settings.props ?? []).filter((_, i) => i !== id.index) })}
+            onClick={() => stage.removeProp(id.index)}
           >{t('room.editor.delete')}</button>
         </Row>
       </div>
@@ -198,19 +216,27 @@ function SelectedParams({ id, settings, stage }: {
   }
 
   // light
-  const cfg = settings.lights[id.key];
+  const cfg = getLightCfg(settings.lights, id.key);
+  if (!cfg) return null;
+  const extraId = isExtraLightKey(id.key) ? extraLightId(id.key) : null;
+  const extra = extraId ? settings.lights.extra.find(e => e.id === extraId) : undefined;
+  // moodTint rewrites the key light's color/intensity every frame, so a manual edit would
+  // silently snap back. Lock those two controls and say why instead.
+  const moodLocked = id.key === 'key' && settings.lights.moodTint;
   return (
     <div className="room-editor-panel__params">
+      {moodLocked && <div className="room-editor-panel__hint">{t('room.editor.light.moodTakeover')}</div>}
       <Row stacked label={t('room.editor.color')}>
         <input
           type="color"
           className="room-editor-panel__color-input"
           value={cfg.color}
+          disabled={moodLocked}
           onChange={e => stage.applyLightPatch(id.key, { color: e.target.value })}
         />
       </Row>
       <Row stacked label={t('room.editor.intensity')}>
-        <SliderNum width="100%" min={0} max={4} step={0.05} value={cfg.intensity}
+        <SliderNum width="100%" min={0} max={4} step={0.05} value={cfg.intensity} disabled={moodLocked}
           onChange={v => stage.applyLightPatch(id.key, { intensity: v })} />
       </Row>
       {id.key !== 'ambient' && (
@@ -227,7 +253,82 @@ function SelectedParams({ id, settings, stage }: {
           ))}
         </>
       )}
+      {extra && (
+        <>
+          {extra.type !== 'directional' && (
+            <Row stacked label={t('room.editor.light.distance')}>
+              <SliderNum width="100%" min={0} max={50} step={0.5} value={extra.distance ?? 0}
+                onChange={v => patchExtra(settings, extra.id, { distance: v })} />
+            </Row>
+          )}
+          {extra.type === 'spot' && (
+            <>
+              <Row stacked label={t('room.editor.light.angle')}>
+                <SliderNum width="100%" min={5} max={90} step={1} value={extra.angleDeg ?? 45} unit="°"
+                  onChange={v => patchExtra(settings, extra.id, { angleDeg: v })} />
+              </Row>
+              <Row stacked label={t('room.editor.light.penumbra')}>
+                <SliderNum width="100%" min={0} max={1} step={0.05} value={extra.penumbra ?? 0.3}
+                  onChange={v => patchExtra(settings, extra.id, { penumbra: v })} />
+              </Row>
+            </>
+          )}
+          <Row stacked label={t('room.editor.light.charOnly')}>
+            <input type="checkbox" checked={!!extra.charOnly}
+              onChange={e => patchExtra(settings, extra.id, { charOnly: e.target.checked })} />
+          </Row>
+          <Row stacked label={t('room.editor.delete')}>
+            <button type="button" className="room-editor-panel__delete-btn"
+              onClick={() => patchSettings(settings, {
+                lights: { ...settings.lights, extra: settings.lights.extra.filter(e => e.id !== extra.id) },
+              })}
+            >{t('room.editor.delete')}</button>
+          </Row>
+        </>
+      )}
     </div>
   );
 }
 
+function lightRowLabel(key: LightKey, settings: RoomSettings, t: (k: any) => string): string {
+  if (!isExtraLightKey(key)) return t(LIGHT_LABEL_KEY[key]);
+  const id = extraLightId(key);
+  const index = settings.lights.extra.findIndex(e => e.id === id);
+  const type = settings.lights.extra[index]?.type ?? 'point';
+  return `${t('room.editor.light.extra')} ${index + 1} · ${t(`room.editor.light.type.${type}`)}`;
+}
+
+/** Add-light control plus the lights-wide switches (shadows, mood tint). */
+function LightsFooter({ settings }: { settings: RoomSettings }) {
+  const { t } = useI18n();
+  const [type, setType] = useState<ExtraLightType>('point');
+  const full = settings.lights.extra.length >= MAX_EXTRA_LIGHTS;
+  return (
+    <div className="room-editor-panel__params room-editor-panel__params--flat">
+      <div className="room-editor-panel__add-row">
+        <select value={type} onChange={e => setType(e.target.value as ExtraLightType)}>
+          {EXTRA_LIGHT_TYPES.map(tp => <option key={tp} value={tp}>{t(`room.editor.light.type.${tp}`)}</option>)}
+        </select>
+        <button
+          type="button"
+          className="room-editor-panel__tool-btn"
+          disabled={full}
+          title={full ? t('room.editor.light.maxReached') : undefined}
+          onClick={() => patchSettings(settings, {
+            lights: { ...settings.lights, extra: [...settings.lights.extra, newExtraLight(type)] },
+          })}
+        >{t('room.editor.light.add')}</button>
+      </div>
+      {full && <div className="room-editor-panel__hint">{t('room.editor.light.maxReached')}</div>}
+      <Row stacked label={t('room.editor.light.shadows')}>
+        <input type="checkbox" checked={settings.lights.shadows}
+          onChange={e => patchSettings(settings, { lights: { ...settings.lights, shadows: e.target.checked } })} />
+      </Row>
+      <div className="room-editor-panel__hint">{t('room.editor.light.shadowsWarn')}</div>
+      <Row stacked label={t('room.editor.light.moodTint')}>
+        <input type="checkbox" checked={settings.lights.moodTint}
+          onChange={e => patchSettings(settings, { lights: { ...settings.lights, moodTint: e.target.checked } })} />
+      </Row>
+    </div>
+  );
+}

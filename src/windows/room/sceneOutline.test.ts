@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { buildOutline, editableIdEquals, editableIdKey, groupOutline, paramControlsFor, canToggleVisibility } from './sceneOutline';
+import { buildOutline, editableIdEquals, editableIdKey, groupOutline, paramControlsFor, canToggleVisibility, extraLightKey, isExtraLightKey, extraLightId, getLightCfg } from './sceneOutline';
 import { DEFAULT_ROOM_SETTINGS, DEFAULT_LIGHTS } from '../../shared/room/roomSettings';
-import type { RoomSettings } from '../../shared/room/roomSettings';
+import type { RoomSettings, ExtraLightCfg } from '../../shared/room/roomSettings';
 
 function settingsWithProps(): RoomSettings {
   return {
@@ -133,5 +133,50 @@ describe('panel logic helpers', () => {
     s.props[1] = { ...s.props[1], hidden: true };
     const props = buildOutline(s, null).filter(i => i.group === 'prop');
     expect(props.map(p => p.visible)).toEqual([true, false]);
+  });
+});
+
+describe('extra lights in the outline', () => {
+  const withExtras = (): RoomSettings => ({
+    ...DEFAULT_ROOM_SETTINGS,
+    lights: {
+      ...DEFAULT_LIGHTS,
+      extra: [
+        { id: 'a', type: 'point', on: true, intensity: 1, color: '#ffffff', pos: [0, 1, 0] },
+        { id: 'b', type: 'spot', on: false, intensity: 1, color: '#ffffff', pos: [1, 1, 0] },
+      ],
+    },
+  });
+
+  it('appends extras after the fixed lights, transformable, with their type as label', () => {
+    const lights = buildOutline(withExtras(), null).filter(i => i.group === 'light');
+    expect(lights.map(i => i.label)).toEqual(['ambient', 'key', 'charFill', 'point', 'spot']);
+    expect(lights.slice(3).every(i => i.transformable)).toBe(true);
+    expect(lights.map(i => i.visible)).toEqual([true, true, true, true, false]);
+  });
+
+  it('encodes and decodes the extra key in one way only', () => {
+    expect(extraLightKey('a')).toBe('extra:a');
+    expect(isExtraLightKey('extra:a')).toBe(true);
+    expect(isExtraLightKey('key')).toBe(false);
+    expect(extraLightId(extraLightKey('x-1'))).toBe('x-1');
+  });
+
+  it('resolves fixed and extra light configs, and undefined for a removed extra', () => {
+    const { lights } = withExtras();
+    expect(getLightCfg(lights, 'key')).toBe(lights.key);
+    expect((getLightCfg(lights, extraLightKey('b')) as ExtraLightCfg | undefined)?.type).toBe('spot');
+    expect(getLightCfg(lights, extraLightKey('gone'))).toBeUndefined();
+  });
+
+  it('gives extras shape and delete controls but fixed lights none', () => {
+    expect(paramControlsFor({ kind: 'light', key: extraLightKey('a') })).toEqual(
+      expect.arrayContaining(['lightPos', 'extraShape', 'extraDelete']));
+    expect(paramControlsFor({ kind: 'light', key: 'key' })).not.toContain('extraDelete');
+  });
+
+  it('keeps two extras distinct for selection equality', () => {
+    expect(editableIdEquals({ kind: 'light', key: extraLightKey('a') }, { kind: 'light', key: extraLightKey('b') })).toBe(false);
+    expect(editableIdKey({ kind: 'light', key: extraLightKey('a') })).toBe('light:extra:a');
   });
 });

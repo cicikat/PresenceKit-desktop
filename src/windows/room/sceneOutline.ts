@@ -2,10 +2,29 @@
 // only — no three.js imports here, so this module is cheap to unit test and safe to import
 // from both the hook (useRoomScene.ts) and the panel (EditorPanel.tsx, work order 2) without
 // pulling in rendering concerns.
-import type { RoomSettings, RoomProp } from '../../shared/room/roomSettings';
+import type { RoomSettings, RoomProp, RoomLights, LightCfg, ExtraLightCfg } from '../../shared/room/roomSettings';
 
-/** `LightKey` only covers the three fixed lights for now; work order 3 extends it to `extra:<id>`. */
-export type LightKey = 'ambient' | 'key' | 'charFill';
+/**
+ * Fixed lights are named; user-added lights are encoded as the string `extra:<id>` (one
+ * encoding only — never a `{ extra }` object form). Use the helpers below instead of
+ * building or splitting the prefix by hand.
+ */
+export type FixedLightKey = 'ambient' | 'key' | 'charFill';
+export type ExtraLightKey = `extra:${string}`;
+export type LightKey = FixedLightKey | ExtraLightKey;
+
+export function extraLightKey(id: string): ExtraLightKey { return `extra:${id}`; }
+export function isExtraLightKey(key: LightKey): key is ExtraLightKey { return key.startsWith('extra:'); }
+export function extraLightId(key: ExtraLightKey): string { return key.slice('extra:'.length); }
+
+/** Resolves a light key to its config, or undefined when an extra light no longer exists. */
+export function getLightCfg(lights: RoomLights, key: LightKey): LightCfg | ExtraLightCfg | undefined {
+  if (isExtraLightKey(key)) {
+    const id = extraLightId(key);
+    return lights.extra.find(e => e.id === id);
+  }
+  return lights[key];
+}
 
 export type EditableId =
   | { kind: 'character' }
@@ -67,16 +86,25 @@ export function buildOutline(settings: RoomSettings, loadedSceneFile: string | n
     });
   });
 
-  const lightKeys: LightKey[] = ['ambient', 'key', 'charFill'];
-  for (const key of lightKeys) {
-    const cfg = settings.lights[key];
+  const fixedKeys: FixedLightKey[] = ['ambient', 'key', 'charFill'];
+  for (const key of fixedKeys) {
     items.push({
       id: { kind: 'light', key },
       label: key,
       group: 'light',
       transformable: key !== 'ambient',
       hasLightParams: true,
-      visible: cfg.on,
+      visible: settings.lights[key].on,
+    });
+  }
+  for (const extra of settings.lights.extra) {
+    items.push({
+      id: { kind: 'light', key: extraLightKey(extra.id) },
+      label: extra.type,
+      group: 'light',
+      transformable: true,
+      hasLightParams: true,
+      visible: extra.on,
     });
   }
 
@@ -113,7 +141,7 @@ export function groupOutline(items: OutlineItem[]): { group: OutlineItem['group'
 export type ParamControl =
   | 'yaw' | 'scale' | 'sceneFile' | 'useSceneLights'
   | 'propPos' | 'propRot' | 'propDelete'
-  | 'lightColor' | 'lightIntensity' | 'lightPos';
+  | 'lightColor' | 'lightIntensity' | 'lightPos' | 'extraShape' | 'extraDelete';
 
 /** Which inline controls the panel shows for the selected item (ambient has no position). */
 export function paramControlsFor(id: EditableId): ParamControl[] {
@@ -122,9 +150,9 @@ export function paramControlsFor(id: EditableId): ParamControl[] {
     case 'scene': return ['sceneFile', 'useSceneLights'];
     case 'prop': return ['propPos', 'propRot', 'scale', 'propDelete'];
     case 'light':
-      return id.key === 'ambient'
-        ? ['lightColor', 'lightIntensity']
-        : ['lightColor', 'lightIntensity', 'lightPos'];
+      if (id.key === 'ambient') return ['lightColor', 'lightIntensity'];
+      if (isExtraLightKey(id.key)) return ['lightColor', 'lightIntensity', 'lightPos', 'extraShape', 'extraDelete'];
+      return ['lightColor', 'lightIntensity', 'lightPos'];
   }
 }
 

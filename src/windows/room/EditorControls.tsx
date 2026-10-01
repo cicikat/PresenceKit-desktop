@@ -22,10 +22,10 @@ export function Row({ label, hint, children, stacked }: {
 }
 
 export function SliderNum({
-  min, max, step, value, onChange, unit, width = 240,
+  min, max, step, value, onChange, unit, width = 240, disabled,
 }: {
   min: number; max: number; step: number; value: number;
-  onChange: (v: number) => void; unit?: string; width?: number | string;
+  onChange: (v: number) => void; unit?: string; width?: number | string; disabled?: boolean;
 }) {
   const numStyle: CSSProperties = {
     width: 58, padding: '4px 6px', fontSize: 11,
@@ -36,12 +36,12 @@ export function SliderNum({
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, width }}>
       <input
-        type="range" min={min} max={max} step={step} value={value}
+        type="range" min={min} max={max} step={step} value={value} disabled={disabled}
         onChange={e => onChange(Number(e.target.value))}
         style={{ flex: 1, minWidth: 0 }}
       />
       <input
-        type="number" min={min} max={max} step={step} value={value}
+        type="number" min={min} max={max} step={step} value={value} disabled={disabled}
         onChange={e => {
           const v = parseFloat(e.target.value);
           if (!isNaN(v)) onChange(Math.max(min, Math.min(max, v)));

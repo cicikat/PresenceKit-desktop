@@ -24,9 +24,11 @@ import type { SpringChain } from './springBones';
 import { collectExcludedBoneNames, filterClipTracks } from './clipPlayer';
 import { editableIdEquals } from './sceneOutline';
 import type { EditableId, LightKey } from './sceneOutline';
-import type { LightCfg } from '../../shared/room/roomSettings';
+import type { LightCfg, RoomProp } from '../../shared/room/roomSettings';
 import { DEFAULT_GRADE } from '../../shared/room/gradeConfig';
 import { GradeRenderer } from './gradePass';
+import { ExtraLightRig, LightHelperSet, fitDirectionalShadow } from './extraLights';
+import { extraLightKey, extraLightId, isExtraLightKey, getLightCfg } from './sceneOutline';
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
@@ -49,6 +51,14 @@ interface SceneRefs {
   camBase: THREE.Vector3;
   proxyKey: THREE.Mesh;
   proxyFill: THREE.Mesh;
+  helpers: LightHelperSet;
+  extraRig: ExtraLightRig;
+}
+
+/** Edit-mode-only visuals: direction/cone helpers and the extra lights' pick proxies. */
+function setEditVisuals(refs: SceneRefs, on: boolean): void {
+  refs.helpers.setActive(on);
+  refs.extraRig.setPlacement(on);
 }
 
 // ─── constants ────────────────────────────────────────────────────────────────
@@ -270,6 +280,10 @@ export interface RoomSceneAPI {
   /** Toggles a prop's visibility straight on the three.js object, same reasoning as
    * applyLightPatch — the props-reload effect is skipped during placement mode. */
   setPropHidden: (index: number, hidden: boolean) => void;
+  /** Placement-mode direct writes for the panel's number fields (see applyLightPatch). */
+  applyPropPatch: (index: number, patch: Partial<RoomProp>) => void;
+  removeProp: (index: number) => void;
+  applyCharacterPatch: (patch: { yawDeg?: number; scaleMul?: number }) => void;
   /** Current axis lock, mirrored for the panel's X/Y/Z buttons (work order 2). */
   axisLock: 'X' | 'Y' | 'Z' | null;
   setAxisConstraint: (axis: 'X' | 'Y' | 'Z' | null) => void;
@@ -296,6 +310,7 @@ export function useRoomScene(
   onCameraPresetsChangeRef.current = onCameraPresetsChange;
   const disposedRef        = useRef(false);
   const gradeRef           = useRef<GradeRenderer | null>(null);
+  const applyShadowsRef    = useRef<(() => void) | null>(null);
   const freeLookRef        = useRef(false);
   const [freeLook, setFreeLook] = useState(false);
   const springChainsRef    = useRef<SpringChain[]>([]);
@@ -386,6 +401,25 @@ export function useRoomScene(
     gradeRef.current?.apply(settings.grade ?? DEFAULT_GRADE);
   }, [settings.grade]);
 
+  // User-added lights and shadows. Unlike the fixed lights below this is NOT skipped in
+  // placement mode, because the panel adds/removes lights while editing; position is only
+  // written when not editing (the proxy owns it mid-drag).
+  useEffect(() => {
+    const refs = refsRef.current;
+    if (!refs) return;
+    refs.extraRig.sync(settings.lights.extra, {
+      shadows: settings.lights.shadows,
+      writePos: !placementModeRef.current,
+    });
+    applyShadowsRef.current?.();
+    const sel = selectionRef.current;
+    if (sel?.kind === 'light' && isExtraLightKey(sel.key) && !refs.extraRig.has(extraLightId(sel.key))) {
+      refs.transformCtl.detach();
+      setSelectionBoth(null);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.lights.extra, settings.lights.shadows]);
+
   // sync lights settings to scene objects (skip in placement mode)
   useEffect(() => {
     if (placementModeRef.current) return;
@@ -448,6 +482,7 @@ export function useRoomScene(
         normalizeAndPosition(model, s);
         enableCharLayer(model);
         charGroup.add(model);
+        applyShadowsRef.current?.();
         void loadCharacterMaterials(s.characterFile).then((materials) => {
           if (materials && !cancelled && !disposedRef.current) applyToonBindings(model, materials);
         });
@@ -497,6 +532,7 @@ export function useRoomScene(
       (gltf) => {
         if (cancelled || disposedRef.current) return;
         roomGroup.add(gltf.scene);
+        applyShadowsRef.current?.();
         glbSceneLightsRef.current = collectGlbLights(gltf.scene, settingsRef.current.lights.useSceneLights);
         registerSceneCameras(gltf.scene, refs);
       },
@@ -538,6 +574,7 @@ export function useRoomScene(
           obj.visible = !prop.hidden;
           obj.userData.__propIdx = idx;
           propsGroup.add(obj);
+          applyShadowsRef.current?.();
         },
         undefined,
         () => { /* graceful: skip missing prop */ },
@@ -615,6 +652,13 @@ export function useRoomScene(
     scene.add(proxyKey);
     scene.add(proxyFill);
 
+    // Edit-mode helpers (direction/cone lines) and the user-added lights.
+    const helpers = new LightHelperSet(scene);
+    helpers.track('key', keyLight, 0xffee44);
+    helpers.track('charFill', charFill, 0x44aaff);
+    const extraRig = new ExtraLightRig(scene, helpers, CHAR_LAYER);
+    extraRig.sync(initLights.extra, { shadows: initLights.shadows, writePos: true });
+
     // ── TransformControls ──
     const transformCtl = new TransformControls(camera, renderer.domElement);
     transformCtl.addEventListener('dragging-changed', (event) => {
@@ -640,7 +684,21 @@ export function useRoomScene(
               const pos: [number, number, number] = [proxyFill.position.x, proxyFill.position.y, proxyFill.position.z];
               saveRoomSettings({ ...s, lights: { ...s.lights, charFill: { ...s.lights.charFill, pos } } });
             }
+            else if (isExtraLightKey(sel.key)) {
+              const id = extraLightId(sel.key);
+              const proxy = extraRig.getProxy(id);
+              const light = extraRig.getLight(id);
+              if (proxy && light) {
+                light.position.copy(proxy.position);
+                const pos: [number, number, number] = [proxy.position.x, proxy.position.y, proxy.position.z];
+                saveRoomSettings({
+                  ...s,
+                  lights: { ...s.lights, extra: s.lights.extra.map(e => (e.id === id ? { ...e, pos } : e)) },
+                });
+              }
+            }
             // ambient has no position/gizmo, so there's nothing to react to here.
+            applyShadowsRef.current?.();
             break;
           }
           case 'prop': {
@@ -696,11 +754,15 @@ export function useRoomScene(
       raycaster.setFromCamera(mouse2d, camera);
 
       // Proxies first
-      const proxyHits = raycaster.intersectObjects([proxyKey, proxyFill]);
+      const proxyHits = raycaster.intersectObjects([proxyKey, proxyFill, ...extraRig.proxies]);
       if (proxyHits.length > 0) {
         const hit = proxyHits[0].object;
         transformCtl.setMode('translate');
-        if (hit === proxyKey) {
+        const extraId = hit.userData.__extraId as string | undefined;
+        if (extraId) {
+          setSelectionBoth({ kind: 'light', key: extraLightKey(extraId) });
+          transformCtl.attach(hit);
+        } else if (hit === proxyKey) {
           setSelectionBoth({ kind: 'light', key: 'key' });
           transformCtl.attach(proxyKey);
         } else {
@@ -762,6 +824,8 @@ export function useRoomScene(
       camBase: new THREE.Vector3(0, 1.15, 2.0),
       proxyKey,
       proxyFill,
+      helpers,
+      extraRig,
     };
     refs.resizeObs.observe(mount);
     refsRef.current = refs;
@@ -782,6 +846,46 @@ export function useRoomScene(
     const propsGroup = new THREE.Group();
     scene.add(propsGroup);
     propsGroupRef.current = propsGroup;
+
+    // Shadows are opt-in (settings.lights.shadows). Also refits directional shadow frusta to the
+    // current scene bounds, and is re-run after any model finishes loading. A no-op while off
+    // and never turned on, so the default path costs nothing.
+    applyShadowsRef.current = () => {
+      const on = settingsRef.current.lights.shadows;
+      const wasOn = renderer.shadowMap.enabled;
+      if (!on && !wasOn) return;
+      renderer.shadowMap.enabled = on;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      keyLight.castShadow = on;
+      const mark = (group: THREE.Object3D, cast: boolean) => group.traverse(obj => {
+        if ((obj as THREE.Mesh).isMesh) {
+          obj.castShadow = on && cast;
+          obj.receiveShadow = on;
+        }
+      });
+      mark(roomGroup, false);
+      mark(charGroup, true);
+      mark(propsGroup, true);
+      if (on) {
+        const bounds = new THREE.Box3();
+        for (const g of [roomGroup, charGroup, propsGroup]) {
+          const b = new THREE.Box3().setFromObject(g);
+          if (!b.isEmpty()) bounds.union(b);
+        }
+        fitDirectionalShadow(keyLight, bounds);
+        extraRig.lights.forEach(l => {
+          if ((l as THREE.DirectionalLight).isDirectionalLight) fitDirectionalShadow(l as THREE.DirectionalLight, bounds);
+        });
+      }
+      if (on !== wasOn) {
+        // Existing programs were compiled without shadow code; force a rebuild once.
+        scene.traverse(obj => {
+          const mats = (obj as THREE.Mesh).material;
+          if (mats) (Array.isArray(mats) ? mats : [mats]).forEach(m => { m.needsUpdate = true; });
+        });
+      }
+    };
+    applyShadowsRef.current();
 
     // ── placeholder note ──
     let placeholderNote: HTMLDivElement | null = null;
@@ -817,6 +921,7 @@ export function useRoomScene(
       (gltf) => {
         if (disposedRef.current) return;
         roomGroup.add(gltf.scene);
+        applyShadowsRef.current?.();
         glbSceneLightsRef.current = collectGlbLights(gltf.scene, settingsRef.current.lights.useSceneLights);
         registerSceneCameras(gltf.scene, refs);
         roomLoaded = true;
@@ -840,6 +945,7 @@ export function useRoomScene(
         normalizeAndPosition(model, activeSettings);
         enableCharLayer(model);
         charGroup.add(model);
+        applyShadowsRef.current?.();
         const sm = activeSettings.scaleMul;
         charBaseScaleRef.current = sm > 0 ? model.scale.x / sm : model.scale.x;
         const setup = setupCharacter(
@@ -918,6 +1024,7 @@ export function useRoomScene(
       }
 
       controls.update();
+      if (placementModeRef.current) helpers.update();
       (gradeRef.current ?? { render: () => renderer.render(scene, camera) }).render();
     }
 
@@ -970,6 +1077,9 @@ export function useRoomScene(
 
       gradeRef.current?.dispose();
       gradeRef.current = null;
+      helpers.dispose();
+      extraRig.dispose();
+      applyShadowsRef.current = null;
       refs.renderer.dispose();
       try { refs.renderer.forceContextLoss(); } catch {}
       refs.renderer.domElement.remove();
@@ -1002,6 +1112,7 @@ export function useRoomScene(
         if (refs) {
           refs.proxyKey.visible = false;
           refs.proxyFill.visible = false;
+          setEditVisuals(refs, false);
           refs.transformCtl.detach();
         }
         if (placementKeyHandlerRef.current) {
@@ -1049,6 +1160,7 @@ export function useRoomScene(
         lockControls(refs.controls);
         refs.proxyKey.visible = false;
         refs.proxyFill.visible = false;
+        setEditVisuals(refs, false);
         refs.transformCtl.detach();
       }
       if (placementKeyHandlerRef.current) {
@@ -1083,6 +1195,7 @@ export function useRoomScene(
         refs.proxyFill.position.copy(refs.charFill.position);
         refs.proxyKey.visible  = true;
         refs.proxyFill.visible = true;
+        setEditVisuals(refs, true);
       }
 
       axisLockRef.current = null;
@@ -1098,16 +1211,12 @@ export function useRoomScene(
 
         // Arrow keys: adjust selected light intensity
         if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-          if (lightKey !== 'key' && lightKey !== 'charFill') return;
+          if (!lightKey) return;
+          const cfg = getLightCfg(settingsRef.current.lights, lightKey);
+          if (!cfg) return;
           const delta = e.key === 'ArrowRight' ? 0.1 : -0.1;
-          const light = lightKey === 'key' ? refs.keyLight : refs.charFill;
-          const newIntensity = Math.max(0, Math.min(4, light.intensity + delta));
-          light.intensity = newIntensity;
-          const s = settingsRef.current;
-          saveRoomSettings({
-            ...s,
-            lights: { ...s.lights, [lightKey]: { ...s.lights[lightKey], intensity: newIntensity } },
-          });
+          const newIntensity = Math.max(0, Math.min(4, cfg.intensity + delta));
+          applyLightPatchRef.current(lightKey, { intensity: newIntensity });
           // Show intensity label
           const mount = mountRef.current;
           if (mount) {
@@ -1123,7 +1232,7 @@ export function useRoomScene(
               mount.appendChild(el);
               intensityLabelRef.current = el;
             }
-            const name = lightKey === 'key' ? 'key' : 'fill';
+            const name = lightKey === 'key' ? 'key' : lightKey === 'charFill' ? 'fill' : lightKey === 'ambient' ? 'ambient' : 'extra';
             intensityLabelRef.current.textContent = `${name} ▸ ${newIntensity.toFixed(1)}`;
           }
           e.preventDefault();
@@ -1166,6 +1275,7 @@ export function useRoomScene(
               lockControls(refs.controls);
               refs.proxyKey.visible  = false;
               refs.proxyFill.visible = false;
+              setEditVisuals(refs, false);
               tc.detach();
               if (placementKeyHandlerRef.current) {
                 window.removeEventListener('keydown', placementKeyHandlerRef.current);
@@ -1250,12 +1360,8 @@ export function useRoomScene(
   const setAxisConstraintRef = useRef(setAxisConstraint);
   setAxisConstraintRef.current = setAxisConstraint;
 
-  // The "sync lights settings to scene objects" effect above bails out early while in placement
-  // mode (dragging a light's gizmo would otherwise fight that effect every render). That means
-  // panel edits made during placement mode must poke the three.js objects directly — this is
-  // that direct write path, mirrored into settings so it isn't lost on the next real sync.
-  // Same reasoning as applyLightPatch: the props-reload effect is skipped during placement
-  // mode, so a panel-driven visibility toggle must flip the live three.js object directly.
+  // The props-reload effect is skipped during placement mode, so a panel-driven visibility
+  // toggle must flip the live three.js object directly.
   const setPropHidden = useCallback((index: number, hidden: boolean) => {
     const s = settingsRef.current;
     const nextProps = (s.props ?? []).map((p, i) => (i === index ? { ...p, hidden } : p));
@@ -1267,23 +1373,90 @@ export function useRoomScene(
     if (propObj) propObj.visible = !hidden;
   }, []);
 
+  // The "sync lights settings to scene objects" effect bails out early while in placement mode
+  // (dragging a light's gizmo would otherwise fight that effect every render). Panel edits made
+  // during placement mode must therefore poke the three.js objects directly — this is that
+  // direct write path, mirrored into settings so it isn't lost on the next real sync.
+  // Same reasoning for the numeric prop/character edits: the props and placement-settings
+  // effects don't run during placement mode, so the panel's number fields write the live
+  // three.js objects here and mirror the result into settings.
+  const applyPropPatch = useCallback((index: number, patch: Partial<RoomProp>) => {
+    const s = settingsRef.current;
+    const next = { ...s, props: (s.props ?? []).map((p, i) => (i === index ? { ...p, ...patch } : p)) };
+    settingsRef.current = next;
+    saveRoomSettings(next);
+    const obj = propsGroupRef.current?.children.find(c => c.userData.__propIdx === index);
+    if (!obj) return;
+    if (patch.pos) obj.position.set(...patch.pos);
+    if (patch.rot) obj.rotation.set(...patch.rot);
+    if (patch.scale !== undefined) obj.scale.setScalar(patch.scale);
+  }, []);
+
+  const removeProp = useCallback((index: number) => {
+    const refs = refsRef.current;
+    const group = propsGroupRef.current;
+    const s = settingsRef.current;
+    const next = { ...s, props: (s.props ?? []).filter((_, i) => i !== index) };
+    settingsRef.current = next;
+    saveRoomSettings(next);
+    if (!group) return;
+    const obj = group.children.find(c => c.userData.__propIdx === index);
+    if (obj) {
+      if (refs?.transformCtl.object === obj) refs.transformCtl.detach();
+      group.remove(obj);
+      disposeModel(obj);
+    }
+    // Objects after the removed one shift down so __propIdx keeps matching settings.props.
+    group.children.forEach(c => {
+      const i = c.userData.__propIdx as number | undefined;
+      if (i !== undefined && i > index) c.userData.__propIdx = i - 1;
+    });
+    const sel = selectionRef.current;
+    if (sel?.kind === 'prop') {
+      if (sel.index === index) setSelectionBoth(null);
+      else if (sel.index > index) setSelectionBoth({ kind: 'prop', index: sel.index - 1 });
+    }
+  }, [setSelectionBoth]);
+
+  const applyCharacterPatch = useCallback((patch: { yawDeg?: number; scaleMul?: number }) => {
+    const s = settingsRef.current;
+    const next = { ...s, ...patch };
+    settingsRef.current = next;
+    saveRoomSettings(next);
+    const model = charGroupRef.current?.children[0];
+    if (!model) return;
+    if (patch.yawDeg !== undefined) model.rotation.y = THREE.MathUtils.degToRad(patch.yawDeg);
+    if (patch.scaleMul !== undefined) model.scale.setScalar(charBaseScaleRef.current * patch.scaleMul);
+  }, []);
+
   const applyLightPatch = useCallback((key: LightKey, patch: Partial<LightCfg>) => {
     const refs = refsRef.current;
     const s = settingsRef.current;
-    const nextCfg = { ...s.lights[key], ...patch };
-    const next = { ...s, lights: { ...s.lights, [key]: nextCfg } };
+    if (!getLightCfg(s.lights, key)) return;
+    const lights = isExtraLightKey(key)
+      ? { ...s.lights, extra: s.lights.extra.map(e => (e.id === extraLightId(key) ? { ...e, ...patch } : e)) }
+      : { ...s.lights, [key]: { ...s.lights[key], ...patch } };
+    const next = { ...s, lights };
     settingsRef.current = next;
     saveRoomSettings(next);
     if (!refs) return;
 
-    const light = key === 'ambient' ? refs.sceneAmbient : key === 'key' ? refs.keyLight : refs.charFill;
+    let light: THREE.Light | null;
+    let proxy: THREE.Mesh | null = null;
+    if (isExtraLightKey(key)) {
+      light = refs.extraRig.getLight(extraLightId(key));
+      proxy = refs.extraRig.getProxy(extraLightId(key));
+    } else {
+      light = key === 'ambient' ? refs.sceneAmbient : key === 'key' ? refs.keyLight : refs.charFill;
+      proxy = key === 'key' ? refs.proxyKey : key === 'charFill' ? refs.proxyFill : null;
+    }
+    if (!light) return;
     if (patch.on !== undefined) light.visible = patch.on;
     if (patch.color !== undefined) light.color.set(patch.color);
     if (patch.intensity !== undefined) light.intensity = patch.intensity;
     if (patch.pos !== undefined && key !== 'ambient') {
       light.position.set(...patch.pos);
-      const proxy = key === 'key' ? refs.proxyKey : refs.proxyFill;
-      proxy.position.set(...patch.pos);
+      proxy?.position.set(...patch.pos);
     }
   }, []);
   // The placement-mode keydown handler is built inside togglePlacementMode's closure (it needs
@@ -1291,6 +1464,8 @@ export function useRoomScene(
   // becoming a dependency that would force togglePlacementMode to be redefined on every render.
   // Routing the call through a ref keeps the G/R/S implementation single-sourced in setGizmoMode
   // without adding that dependency.
+  const applyLightPatchRef = useRef(applyLightPatch);
+  applyLightPatchRef.current = applyLightPatch;
   const setGizmoModeRef = useRef(setGizmoMode);
   setGizmoModeRef.current = setGizmoMode;
 
@@ -1311,8 +1486,11 @@ export function useRoomScene(
           setSelectionBoth(id);
           return false;
         }
-        const proxy = id.key === 'key' ? refs.proxyKey : refs.proxyFill;
+        const proxy = isExtraLightKey(id.key)
+          ? refs.extraRig.getProxy(extraLightId(id.key))
+          : id.key === 'key' ? refs.proxyKey : refs.proxyFill;
         setSelectionBoth(id);
+        if (!proxy) return false;
         refs.transformCtl.attach(proxy);
         return true;
       }
@@ -1347,6 +1525,7 @@ export function useRoomScene(
     freeLook, toggleFreeLook, saveCurrentView, placementMode, togglePlacementMode,
     applyCameraPreset, bringCharacterToView,
     selection, selectById, setGizmoMode, gizmoMode, applyLightPatch, setPropHidden,
+    applyPropPatch, removeProp, applyCharacterPatch,
     axisLock, setAxisConstraint,
   };
 }

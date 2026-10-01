@@ -5,7 +5,7 @@ import type { Mood } from '../../shared/state/store';
 import type { RoomSettings } from '../../shared/room/roomSettings';
 import type { SceneCameraPreset } from './sceneCameraPresets';
 import type { EditableId, LightKey } from './sceneOutline';
-import type { LightCfg } from '../../shared/room/roomSettings';
+import type { LightCfg, RoomProp } from '../../shared/room/roomSettings';
 import { useI18n } from '../../shared/i18n';
 
 export interface ThreeCallStageHandle {
@@ -20,6 +20,9 @@ export interface ThreeCallStageHandle {
   gizmoMode: 'translate' | 'rotate' | 'scale';
   applyLightPatch: (key: LightKey, patch: Partial<LightCfg>) => void;
   setPropHidden: (index: number, hidden: boolean) => void;
+  applyPropPatch: (index: number, patch: Partial<RoomProp>) => void;
+  removeProp: (index: number) => void;
+  applyCharacterPatch: (patch: { yawDeg?: number; scaleMul?: number }) => void;
   axisLock: 'X' | 'Y' | 'Z' | null;
   setAxisConstraint: (axis: 'X' | 'Y' | 'Z' | null) => void;
 }
@@ -39,15 +42,18 @@ export const ThreeCallStage = forwardRef<ThreeCallStageHandle, ThreeCallStagePro
     const {
       freeLook, toggleFreeLook, saveCurrentView, placementMode, togglePlacementMode,
       applyCameraPreset, bringCharacterToView, selection, selectById, setGizmoMode, gizmoMode,
-      applyLightPatch, setPropHidden, axisLock, setAxisConstraint,
+      applyLightPatch, setPropHidden, applyPropPatch, removeProp, applyCharacterPatch,
+      axisLock, setAxisConstraint,
     } = useRoomScene(mountRef, mood, talking, settings, onCameraPresetsChange);
 
     const handle = useMemo<ThreeCallStageHandle>(() => ({
       toggleFreeLook, saveCurrentView, togglePlacementMode, applyCameraPreset, bringCharacterToView,
-      selection, selectById, setGizmoMode, gizmoMode, applyLightPatch, setPropHidden, axisLock, setAxisConstraint,
+      selection, selectById, setGizmoMode, gizmoMode, applyLightPatch, setPropHidden,
+      applyPropPatch, removeProp, applyCharacterPatch, axisLock, setAxisConstraint,
     }), [
       toggleFreeLook, saveCurrentView, togglePlacementMode, applyCameraPreset, bringCharacterToView,
-      selection, selectById, setGizmoMode, gizmoMode, applyLightPatch, setPropHidden, axisLock, setAxisConstraint,
+      selection, selectById, setGizmoMode, gizmoMode, applyLightPatch, setPropHidden,
+      applyPropPatch, removeProp, applyCharacterPatch, axisLock, setAxisConstraint,
     ]);
     useImperativeHandle(ref, () => handle, [handle]);
 

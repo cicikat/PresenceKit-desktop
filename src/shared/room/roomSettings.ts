@@ -13,12 +13,34 @@ export interface LightCfg {
   pos?: [number, number, number];
 }
 
+export type ExtraLightType = 'directional' | 'point' | 'spot';
+export const EXTRA_LIGHT_TYPES: readonly ExtraLightType[] = ['directional', 'point', 'spot'];
+/** Cap on user-added lights; keeps a casual "add another lamp" from tanking the frame rate. */
+export const MAX_EXTRA_LIGHTS = 4;
+
+export interface ExtraLightCfg extends LightCfg {
+  id: string;
+  type: ExtraLightType;
+  /** point/spot falloff distance (0 = no falloff); ignored by directional. */
+  distance?: number;
+  /** spot cone angle in degrees; ignored by other types. */
+  angleDeg?: number;
+  /** spot edge softness 0-1; ignored by other types. */
+  penumbra?: number;
+  /** Light only the character (CHAR_LAYER) instead of the whole scene. */
+  charOnly?: boolean;
+}
+
 export interface RoomLights {
   useSceneLights: boolean;
   ambient: LightCfg;
   key: LightCfg;
   charFill: LightCfg;
   moodTint: boolean;
+  /** User-added lights, at most MAX_EXTRA_LIGHTS. Old saves have none. */
+  extra: ExtraLightCfg[];
+  /** Cast/receive shadows. Off by default: the one option here that visibly costs frame rate. */
+  shadows: boolean;
 }
 
 // Role vocabulary lives in shared/character/humanoid.ts — settings only stores the
@@ -110,6 +132,8 @@ export const DEFAULT_LIGHTS: RoomLights = {
   key:      { on: true, intensity: 0.9, color: '#fff5e0', pos: [2, 4, 3] },
   charFill: { on: true, intensity: 0.6, color: '#ffffff', pos: [0.5, 1.6, 2] },
   moodTint: false,
+  extra: [],
+  shadows: false,
 };
 
 export const DEFAULT_ROOM_SETTINGS: RoomSettings = {
@@ -161,7 +185,33 @@ function validateLightCfg(raw: unknown, def: LightCfg): LightCfg {
   };
 }
 
-function validateLights(raw: unknown): RoomLights {
+const DEFAULT_EXTRA_LIGHT: LightCfg = { on: true, intensity: 1, color: '#ffffff', pos: [0, 2, 2] };
+
+function validateExtraLights(raw: unknown): ExtraLightCfg[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const out: ExtraLightCfg[] = [];
+  for (const item of raw.slice(0, MAX_EXTRA_LIGHTS)) {
+    if (!item || typeof item !== 'object') continue;
+    const r = item as Record<string, unknown>;
+    let id = typeof r.id === 'string' && r.id ? r.id : `extra-${out.length}`;
+    if (seen.has(id)) id = `${id}-${out.length}`;
+    seen.add(id);
+    const base = validateLightCfg(r, DEFAULT_EXTRA_LIGHT);
+    out.push({
+      ...base,
+      id,
+      type: EXTRA_LIGHT_TYPES.includes(r.type as ExtraLightType) ? (r.type as ExtraLightType) : 'point',
+      distance: clamp(typeof r.distance === 'number' ? r.distance : 0, 0, 50),
+      angleDeg: clamp(typeof r.angleDeg === 'number' ? r.angleDeg : 45, 5, 90),
+      penumbra: clamp(typeof r.penumbra === 'number' ? r.penumbra : 0.3, 0, 1),
+      charOnly: typeof r.charOnly === 'boolean' ? r.charOnly : false,
+    });
+  }
+  return out;
+}
+
+export function validateLights(raw: unknown): RoomLights {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   return {
     useSceneLights: typeof r.useSceneLights === 'boolean' ? r.useSceneLights : DEFAULT_LIGHTS.useSceneLights,
@@ -169,6 +219,8 @@ function validateLights(raw: unknown): RoomLights {
     key:      validateLightCfg(r.key,      DEFAULT_LIGHTS.key),
     charFill: validateLightCfg(r.charFill, DEFAULT_LIGHTS.charFill),
     moodTint: typeof r.moodTint === 'boolean' ? r.moodTint : DEFAULT_LIGHTS.moodTint,
+    extra: validateExtraLights(r.extra),
+    shadows: typeof r.shadows === 'boolean' ? r.shadows : DEFAULT_LIGHTS.shadows,
   };
 }
 
