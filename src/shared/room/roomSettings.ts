@@ -41,6 +41,8 @@ export interface RoomProp {
   pos: [number, number, number];
   rot: [number, number, number];
   scale: number;
+  /** Panel eye-icon toggle (work order 2). Absent/old data means visible, not hidden. */
+  hidden?: boolean;
 }
 
 export interface CharacterCfg {
@@ -174,7 +176,10 @@ function validateProp(raw: unknown): RoomProp | null {
   const pos = validatePos(r.pos) ?? ([0, 0, 0] as [number, number, number]);
   const rot = validatePos(r.rot) ?? ([0, 0, 0] as [number, number, number]);
   const scale = typeof r.scale === 'number' && r.scale > 0 ? r.scale : 1;
-  return { file: r.file, pos, rot, scale };
+  // Old persisted props have no `hidden` field at all — that must validate as visible (false),
+  // not just "whatever typeof check falls through to", so the migration is explicit here.
+  const hidden = typeof r.hidden === 'boolean' ? r.hidden : false;
+  return { file: r.file, pos, rot, scale, hidden };
 }
 
 function validateSpringParamsCfg(raw: unknown): SpringParamsCfg | undefined {

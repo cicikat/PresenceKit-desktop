@@ -24,6 +24,7 @@ import type { SpringChain } from './springBones';
 import { collectExcludedBoneNames, filterClipTracks } from './clipPlayer';
 import { editableIdEquals } from './sceneOutline';
 import type { EditableId, LightKey } from './sceneOutline';
+import type { LightCfg } from '../../shared/room/roomSettings';
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
@@ -259,6 +260,17 @@ export interface RoomSceneAPI {
   /** Lifts the G/R/S key handling into a method so panel buttons (work order 2) and the
    * keyboard shortcut share one implementation. No-op outside placement mode. */
   setGizmoMode: (mode: 'translate' | 'rotate' | 'scale') => void;
+  /** Current gizmo mode, mirrored for the panel's toolbar highlight (work order 2). */
+  gizmoMode: 'translate' | 'rotate' | 'scale';
+  /** Writes a light param straight to the three.js object (and mirrors it into settings).
+   * Needed because the settings→scene sync effect is skipped during placement mode. */
+  applyLightPatch: (key: LightKey, patch: Partial<LightCfg>) => void;
+  /** Toggles a prop's visibility straight on the three.js object, same reasoning as
+   * applyLightPatch — the props-reload effect is skipped during placement mode. */
+  setPropHidden: (index: number, hidden: boolean) => void;
+  /** Current axis lock, mirrored for the panel's X/Y/Z buttons (work order 2). */
+  axisLock: 'X' | 'Y' | 'Z' | null;
+  setAxisConstraint: (axis: 'X' | 'Y' | 'Z' | null) => void;
 }
 
 export function useRoomScene(
@@ -294,6 +306,9 @@ export function useRoomScene(
   // The character is now an explicit `{ kind: 'character' }` id, not an implicit else-branch.
   const selectionRef          = useRef<EditableId | null>(null);
   const [selection, setSelection] = useState<EditableId | null>(null);
+  const axisLockRef           = useRef<'X' | 'Y' | 'Z' | null>(null);
+  const [axisLock, setAxisLock] = useState<'X' | 'Y' | 'Z' | null>(null);
+  const [gizmoMode, setGizmoModeState] = useState<'translate' | 'rotate' | 'scale'>('translate');
   const charBaseScaleRef      = useRef<number>(1);
   const placementKeyHandlerRef = useRef<((e: KeyboardEvent) => void) | null>(null);
   const intensityLabelRef     = useRef<HTMLDivElement | null>(null);
@@ -511,6 +526,7 @@ export function useRoomScene(
           obj.position.set(prop.pos[0], prop.pos[1], prop.pos[2]);
           obj.rotation.set(prop.rot[0], prop.rot[1], prop.rot[2]);
           obj.scale.setScalar(prop.scale);
+          obj.visible = !prop.hidden;
           obj.userData.__propIdx = idx;
           propsGroup.add(obj);
         },
@@ -1053,17 +1069,9 @@ export function useRoomScene(
         refs.proxyFill.visible = true;
       }
 
-      // Per-session axis constraint state
-      let lockedAxis: 'X' | 'Y' | 'Z' | null = null;
-
-      function setAxisConstraint(axis: 'X' | 'Y' | 'Z' | null) {
-        lockedAxis = axis;
-        const tc = refsRef.current?.transformCtl;
-        if (!tc) return;
-        tc.showX = !axis || axis === 'X';
-        tc.showY = !axis || axis === 'Y';
-        tc.showZ = !axis || axis === 'Z';
-      }
+      axisLockRef.current = null;
+      setAxisLock(null);
+      setGizmoModeState('translate');
 
       const handler = (e: KeyboardEvent) => {
         const refs = refsRef.current;
@@ -1109,24 +1117,24 @@ export function useRoomScene(
         switch (e.key.toLowerCase()) {
           case 'g':
             setGizmoModeRef.current('translate');
-            setAxisConstraint(null);
+            setAxisConstraintRef.current(null);
             break;
           case 'r':
             setGizmoModeRef.current('rotate');
-            setAxisConstraint(null);
+            setAxisConstraintRef.current(null);
             break;
           case 's':
             setGizmoModeRef.current('scale');
-            setAxisConstraint(null);
+            setAxisConstraintRef.current(null);
             break;
           case 'x':
-            setAxisConstraint(lockedAxis === 'X' ? null : 'X');
+            setAxisConstraintRef.current(axisLockRef.current === 'X' ? null : 'X');
             break;
           case 'y':
-            setAxisConstraint(lockedAxis === 'Y' ? null : 'Y');
+            setAxisConstraintRef.current(axisLockRef.current === 'Y' ? null : 'Y');
             break;
           case 'z':
-            setAxisConstraint(lockedAxis === 'Z' ? null : 'Z');
+            setAxisConstraintRef.current(axisLockRef.current === 'Z' ? null : 'Z');
             break;
           case 'escape':
             if (tc.object) {
@@ -1208,6 +1216,59 @@ export function useRoomScene(
     const tc = refsRef.current?.transformCtl;
     if (!tc || !placementModeRef.current) return;
     tc.setMode(mode);
+    setGizmoModeState(mode);
+  }, []);
+
+  const setAxisConstraint = useCallback((axis: 'X' | 'Y' | 'Z' | null) => {
+    const tc = refsRef.current?.transformCtl;
+    if (!tc || !placementModeRef.current) return;
+    axisLockRef.current = axis;
+    setAxisLock(axis);
+    tc.showX = !axis || axis === 'X';
+    tc.showY = !axis || axis === 'Y';
+    tc.showZ = !axis || axis === 'Z';
+  }, []);
+  // Same reasoning as setGizmoModeRef: the placement-mode keydown handler is built inside
+  // togglePlacementMode's closure and must not become dependent on setAxisConstraint's
+  // identity, so it calls through this ref instead.
+  const setAxisConstraintRef = useRef(setAxisConstraint);
+  setAxisConstraintRef.current = setAxisConstraint;
+
+  // The "sync lights settings to scene objects" effect above bails out early while in placement
+  // mode (dragging a light's gizmo would otherwise fight that effect every render). That means
+  // panel edits made during placement mode must poke the three.js objects directly — this is
+  // that direct write path, mirrored into settings so it isn't lost on the next real sync.
+  // Same reasoning as applyLightPatch: the props-reload effect is skipped during placement
+  // mode, so a panel-driven visibility toggle must flip the live three.js object directly.
+  const setPropHidden = useCallback((index: number, hidden: boolean) => {
+    const s = settingsRef.current;
+    const nextProps = (s.props ?? []).map((p, i) => (i === index ? { ...p, hidden } : p));
+    const next = { ...s, props: nextProps };
+    settingsRef.current = next;
+    saveRoomSettings(next);
+
+    const propObj = propsGroupRef.current?.children.find(c => c.userData.__propIdx === index);
+    if (propObj) propObj.visible = !hidden;
+  }, []);
+
+  const applyLightPatch = useCallback((key: LightKey, patch: Partial<LightCfg>) => {
+    const refs = refsRef.current;
+    const s = settingsRef.current;
+    const nextCfg = { ...s.lights[key], ...patch };
+    const next = { ...s, lights: { ...s.lights, [key]: nextCfg } };
+    settingsRef.current = next;
+    saveRoomSettings(next);
+    if (!refs) return;
+
+    const light = key === 'ambient' ? refs.sceneAmbient : key === 'key' ? refs.keyLight : refs.charFill;
+    if (patch.on !== undefined) light.visible = patch.on;
+    if (patch.color !== undefined) light.color.set(patch.color);
+    if (patch.intensity !== undefined) light.intensity = patch.intensity;
+    if (patch.pos !== undefined && key !== 'ambient') {
+      light.position.set(...patch.pos);
+      const proxy = key === 'key' ? refs.proxyKey : refs.proxyFill;
+      proxy.position.set(...patch.pos);
+    }
   }, []);
   // The placement-mode keydown handler is built inside togglePlacementMode's closure (it needs
   // per-session axis-lock state), so it can't call the hook-level setGizmoMode directly without
@@ -1269,6 +1330,7 @@ export function useRoomScene(
   return {
     freeLook, toggleFreeLook, saveCurrentView, placementMode, togglePlacementMode,
     applyCameraPreset, bringCharacterToView,
-    selection, selectById, setGizmoMode,
+    selection, selectById, setGizmoMode, gizmoMode, applyLightPatch, setPropHidden,
+    axisLock, setAxisConstraint,
   };
 }

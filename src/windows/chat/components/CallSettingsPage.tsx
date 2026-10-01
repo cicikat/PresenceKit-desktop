@@ -19,6 +19,7 @@ import type { RoomPreset } from '../../../shared/room/roomPresets';
 import type { RenderMode } from '../../../shared/room/roomSettings';
 import { Live2DSettingsSection } from './Live2DSettingsSection';
 import { useI18n } from '../../../shared/i18n';
+import { Row, SliderNum, Divider, SectionHeader } from '../../room/EditorControls';
 
 // ─── shared styles ────────────────────────────────────────────────────────────
 
@@ -60,74 +61,6 @@ const ROUTE_DIMENSIONS: readonly {
 const DEFAULT_PHYS_GRAVITY = 0.3;
 
 // ─── primitives ───────────────────────────────────────────────────────────────
-
-function Row({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-      <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink)' }}>{label}</div>
-        {hint && <div className="mono" style={{ fontSize: 9.5, color: 'var(--ink-3)', letterSpacing: 1.1, marginTop: 2 }}>{hint}</div>}
-      </div>
-      <div style={{ flexShrink: 0 }}>{children}</div>
-    </div>
-  );
-}
-
-function SliderNum({
-  min, max, step, value, onChange, unit,
-}: {
-  min: number; max: number; step: number; value: number;
-  onChange: (v: number) => void; unit?: string;
-}) {
-  const numStyle: CSSProperties = {
-    width: 58, padding: '4px 6px', fontSize: 11,
-    border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-sm)',
-    background: 'var(--paper-2)', color: 'var(--ink-2)',
-    fontFamily: 'var(--font-mono, monospace)', textAlign: 'right',
-  };
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: 240 }}>
-      <input
-        type="range" min={min} max={max} step={step} value={value}
-        onChange={e => onChange(Number(e.target.value))}
-        style={{ flex: 1, minWidth: 0 }}
-      />
-      <input
-        type="number" min={min} max={max} step={step} value={value}
-        onChange={e => {
-          const v = parseFloat(e.target.value);
-          if (!isNaN(v)) onChange(Math.max(min, Math.min(max, v)));
-        }}
-        style={numStyle}
-      />
-      {unit && <span className="mono" style={{ fontSize: 10, color: 'var(--ink-3)', width: 18 }}>{unit}</span>}
-    </div>
-  );
-}
-
-function Divider() {
-  return <div style={{ height: 1, background: 'var(--paper-edge)' }} />;
-}
-
-function SectionHeader({ label, hint, open, onToggle }: {
-  label: string; hint?: string; open: boolean; onToggle: () => void;
-}) {
-  return (
-    <button
-      onClick={onToggle}
-      style={{
-        all: 'unset', display: 'flex', width: '100%', alignItems: 'center',
-        gap: 8, cursor: 'pointer',
-      }}
-    >
-      <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink)' }}>{label}</div>
-        {hint && <div className="mono" style={{ fontSize: 9.5, color: 'var(--ink-3)', letterSpacing: 1.1 }}>{hint}</div>}
-      </div>
-      <span style={{ fontSize: 10, color: 'var(--ink-3)' }}>{open ? '▲' : '▼'}</span>
-    </button>
-  );
-}
 
 // ─── main component ───────────────────────────────────────────────────────────
 

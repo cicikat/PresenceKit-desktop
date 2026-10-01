@@ -1,0 +1,127 @@
+/* Room editor panel — mounted only while placementMode is true (see RoomWindow.tsx).
+ * Palette matches the call window's existing bottom-controls look (oklch + blur), not a
+ * new design language. */
+.room-editor-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 220px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  background: oklch(0.12 0.02 240 / 0.88);
+  backdrop-filter: blur(8px);
+  border-left: 1px solid oklch(0.28 0.05 240 / 0.6);
+  color: oklch(0.88 0.04 240);
+  font-size: 12px;
+  overflow-y: auto;
+}
+
+.room-editor-panel__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 10px 8px;
+  border-bottom: 1px solid oklch(0.25 0.05 240 / 0.5);
+  flex-shrink: 0;
+}
+
+.room-editor-panel__tool-btn,
+.room-editor-panel__axis-btn {
+  flex: 1;
+  padding: 5px 0;
+  border: 1px solid oklch(0.28 0.05 240 / 0.6);
+  border-radius: 5px;
+  background: oklch(0.18 0.03 240);
+  color: oklch(0.70 0.05 240);
+  font-size: 10.5px;
+  cursor: pointer;
+}
+.room-editor-panel__tool-btn[aria-pressed="true"],
+.room-editor-panel__axis-btn[aria-pressed="true"] {
+  background: oklch(0.42 0.15 210);
+  color: #fff;
+  border-color: oklch(0.55 0.18 210);
+}
+.room-editor-panel__axis-btn { flex: 0 0 26px; }
+.room-editor-panel__toolbar-sep { width: 1px; align-self: stretch; background: oklch(0.28 0.05 240 / 0.6); margin: 0 2px; }
+
+.room-editor-panel__list { flex: 1; overflow-y: auto; padding: 4px 0; }
+
+.room-editor-panel__group-title {
+  padding: 8px 10px 4px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: oklch(0.55 0.04 240);
+  text-transform: uppercase;
+}
+
+.room-editor-panel__row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 10px;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+}
+.room-editor-panel__row:hover { background: oklch(0.18 0.03 240 / 0.6); }
+.room-editor-panel__row[data-selected="true"] {
+  border-left-color: oklch(0.62 0.18 210);
+  background: oklch(0.20 0.05 210 / 0.5);
+}
+
+.room-editor-panel__row-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+  background: oklch(0.65 0.10 240);
+}
+.room-editor-panel__row-dot[data-group="character"] { background: oklch(0.70 0.15 300); }
+.room-editor-panel__row-dot[data-group="scene"] { background: oklch(0.65 0.10 140); }
+.room-editor-panel__row-dot[data-group="prop"] { background: oklch(0.70 0.14 60); }
+.room-editor-panel__row-dot[data-group="light"] { background: oklch(0.80 0.16 90); }
+
+.room-editor-panel__eye {
+  width: 18px; height: 18px; flex-shrink: 0; padding: 0;
+  border: none; background: none; cursor: pointer;
+  color: oklch(0.70 0.05 240); font-size: 11px;
+}
+.room-editor-panel__eye:disabled { opacity: 0.3; cursor: default; }
+
+.room-editor-panel__row-label {
+  flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 11.5px;
+}
+
+.room-editor-panel__params {
+  display: grid;
+  gap: 8px;
+  padding: 6px 10px 12px 24px;
+}
+.room-editor-panel__params .room-editor-panel__row-wrap,
+.room-editor-panel__params > div { font-size: 11px; }
+
+.room-editor-panel__scene-file {
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  color: oklch(0.65 0.04 240);
+  overflow-wrap: anywhere;
+}
+
+.room-editor-panel__color-input {
+  width: 28px; height: 20px; padding: 0; border: 1px solid oklch(0.28 0.05 240 / 0.6);
+  border-radius: 4px; background: none; cursor: pointer;
+}
+
+.room-editor-panel__delete-btn {
+  padding: 4px 10px; border-radius: 5px; font-size: 10.5px;
+  background: oklch(0.22 0.03 240); color: oklch(0.65 0.18 25);
+  border: 1px solid oklch(0.65 0.18 25 / 0.5); cursor: pointer;
+}
+
+.room-editor-panel__footer {
+  padding: 8px 10px 10px;
+  font-size: 9.5px;
+  line-height: 1.5;
+  color: oklch(0.55 0.04 240);
+  flex-shrink: 0;
+}

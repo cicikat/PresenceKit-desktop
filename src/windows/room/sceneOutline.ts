@@ -4,9 +4,6 @@
 // pulling in rendering concerns.
 import type { RoomSettings, RoomProp } from '../../shared/room/roomSettings';
 
-// RoomProp has no `hidden` field yet — placeholder type kept for the `propLabel` signature
-// below, which stays shape-compatible once work order 2 adds the field.
-
 /** `LightKey` only covers the three fixed lights for now; work order 3 extends it to `extra:<id>`. */
 export type LightKey = 'ambient' | 'key' | 'charFill';
 
@@ -66,9 +63,7 @@ export function buildOutline(settings: RoomSettings, loadedSceneFile: string | n
       group: 'prop',
       transformable: true,
       hasLightParams: false,
-      // `RoomProp.hidden` lands in work order 2 together with the panel's eye icon; until then
-      // every prop is visible, matching current (pre-outliner) behaviour exactly.
-      visible: true,
+      visible: !prop.hidden,
     });
   });
 
@@ -104,4 +99,36 @@ export function editableIdKey(id: EditableId): string {
     case 'light': return `light:${id.key}`;
     default: return id.kind;
   }
+}
+
+export const OUTLINE_GROUPS = ['character', 'scene', 'prop', 'light'] as const;
+
+/** Groups an outline for panel rendering, preserving item order and dropping empty groups. */
+export function groupOutline(items: OutlineItem[]): { group: OutlineItem['group']; items: OutlineItem[] }[] {
+  return OUTLINE_GROUPS
+    .map(group => ({ group, items: items.filter(item => item.group === group) }))
+    .filter(g => g.items.length > 0);
+}
+
+export type ParamControl =
+  | 'yaw' | 'scale' | 'sceneFile' | 'useSceneLights'
+  | 'propPos' | 'propRot' | 'propDelete'
+  | 'lightColor' | 'lightIntensity' | 'lightPos';
+
+/** Which inline controls the panel shows for the selected item (ambient has no position). */
+export function paramControlsFor(id: EditableId): ParamControl[] {
+  switch (id.kind) {
+    case 'character': return ['yaw', 'scale'];
+    case 'scene': return ['sceneFile', 'useSceneLights'];
+    case 'prop': return ['propPos', 'propRot', 'scale', 'propDelete'];
+    case 'light':
+      return id.key === 'ambient'
+        ? ['lightColor', 'lightIntensity']
+        : ['lightColor', 'lightIntensity', 'lightPos'];
+  }
+}
+
+/** The eye icon only applies to props and lights; character/scene hiding has no meaning in a call. */
+export function canToggleVisibility(id: EditableId): boolean {
+  return id.kind === 'prop' || id.kind === 'light';
 }

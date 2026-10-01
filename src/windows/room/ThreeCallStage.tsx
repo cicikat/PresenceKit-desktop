@@ -1,9 +1,11 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
 import { useRoomScene } from './useRoomScene';
+import { EditorPanel } from './EditorPanel';
 import type { Mood } from '../../shared/state/store';
 import type { RoomSettings } from '../../shared/room/roomSettings';
 import type { SceneCameraPreset } from './sceneCameraPresets';
-import type { EditableId } from './sceneOutline';
+import type { EditableId, LightKey } from './sceneOutline';
+import type { LightCfg } from '../../shared/room/roomSettings';
 import { useI18n } from '../../shared/i18n';
 
 export interface ThreeCallStageHandle {
@@ -15,6 +17,11 @@ export interface ThreeCallStageHandle {
   selection: EditableId | null;
   selectById: (id: EditableId | null) => boolean;
   setGizmoMode: (mode: 'translate' | 'rotate' | 'scale') => void;
+  gizmoMode: 'translate' | 'rotate' | 'scale';
+  applyLightPatch: (key: LightKey, patch: Partial<LightCfg>) => void;
+  setPropHidden: (index: number, hidden: boolean) => void;
+  axisLock: 'X' | 'Y' | 'Z' | null;
+  setAxisConstraint: (axis: 'X' | 'Y' | 'Z' | null) => void;
 }
 
 interface ThreeCallStageProps {
@@ -31,20 +38,18 @@ export const ThreeCallStage = forwardRef<ThreeCallStageHandle, ThreeCallStagePro
     const mountRef = useRef<HTMLDivElement>(null);
     const {
       freeLook, toggleFreeLook, saveCurrentView, placementMode, togglePlacementMode,
-      applyCameraPreset, bringCharacterToView, selection, selectById, setGizmoMode,
+      applyCameraPreset, bringCharacterToView, selection, selectById, setGizmoMode, gizmoMode,
+      applyLightPatch, setPropHidden, axisLock, setAxisConstraint,
     } = useRoomScene(mountRef, mood, talking, settings, onCameraPresetsChange);
 
-    useImperativeHandle(
-      ref,
-      () => ({
-        toggleFreeLook, saveCurrentView, togglePlacementMode, applyCameraPreset, bringCharacterToView,
-        selection, selectById, setGizmoMode,
-      }),
-      [
-        toggleFreeLook, saveCurrentView, togglePlacementMode, applyCameraPreset, bringCharacterToView,
-        selection, selectById, setGizmoMode,
-      ],
-    );
+    const handle = useMemo<ThreeCallStageHandle>(() => ({
+      toggleFreeLook, saveCurrentView, togglePlacementMode, applyCameraPreset, bringCharacterToView,
+      selection, selectById, setGizmoMode, gizmoMode, applyLightPatch, setPropHidden, axisLock, setAxisConstraint,
+    }), [
+      toggleFreeLook, saveCurrentView, togglePlacementMode, applyCameraPreset, bringCharacterToView,
+      selection, selectById, setGizmoMode, gizmoMode, applyLightPatch, setPropHidden, axisLock, setAxisConstraint,
+    ]);
+    useImperativeHandle(ref, () => handle, [handle]);
 
     useEffect(() => {
       onSceneStateChange(freeLook, placementMode);
@@ -64,15 +69,20 @@ export const ThreeCallStage = forwardRef<ThreeCallStageHandle, ThreeCallStagePro
           </div>
         )}
         {placementMode && (
-          <div style={{
-            position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)',
-            background: 'oklch(0.15 0.03 60 / 0.82)', color: 'oklch(0.82 0.06 60)',
-            fontSize: 11, padding: '4px 14px', borderRadius: 6, pointerEvents: 'none',
-            fontFamily: 'var(--font-mono, monospace)', letterSpacing: 0.8, zIndex: 5,
-            backdropFilter: 'blur(4px)',
-          }}>
-            {t('room.call.placementHint')}
-          </div>
+          <>
+            <div style={{
+              position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)',
+              background: 'oklch(0.15 0.03 60 / 0.82)', color: 'oklch(0.82 0.06 60)',
+              fontSize: 11, padding: '4px 14px', borderRadius: 6, pointerEvents: 'none',
+              fontFamily: 'var(--font-mono, monospace)', letterSpacing: 0.8, zIndex: 5,
+              backdropFilter: 'blur(4px)',
+            }}>
+              {t('room.editor.title')}
+            </div>
+            {/* Mounted here (not in RoomWindow) because selection/gizmo/axis state lives in this
+              * component's hook; the panel unmounts when placementMode ends. */}
+            <EditorPanel settings={settings} loadedSceneFile={null} stage={handle} />
+          </>
         )}
       </div>
     );

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildOutline, editableIdEquals, editableIdKey } from './sceneOutline';
+import { buildOutline, editableIdEquals, editableIdKey, groupOutline, paramControlsFor, canToggleVisibility } from './sceneOutline';
 import { DEFAULT_ROOM_SETTINGS, DEFAULT_LIGHTS } from '../../shared/room/roomSettings';
 import type { RoomSettings } from '../../shared/room/roomSettings';
 
@@ -96,5 +96,42 @@ describe('editableIdKey', () => {
     expect(editableIdKey({ kind: 'scene' })).toBe('scene');
     expect(editableIdKey({ kind: 'prop', index: 2 })).toBe('prop:2');
     expect(editableIdKey({ kind: 'light', key: 'charFill' })).toBe('light:charFill');
+  });
+});
+
+describe('panel logic helpers', () => {
+  it('groups the outline in fixed order and drops empty groups', () => {
+    const groups = groupOutline(buildOutline(DEFAULT_ROOM_SETTINGS, null));
+    expect(groups.map(g => g.group)).toEqual(['character', 'scene', 'light']);
+    expect(groups[2].items).toHaveLength(3);
+  });
+
+  it('includes the prop group when props exist', () => {
+    expect(groupOutline(buildOutline(settingsWithProps(), null)).map(g => g.group))
+      .toEqual(['character', 'scene', 'prop', 'light']);
+  });
+
+  it('shows no position control for ambient but does for key', () => {
+    expect(paramControlsFor({ kind: 'light', key: 'ambient' })).not.toContain('lightPos');
+    expect(paramControlsFor({ kind: 'light', key: 'key' })).toContain('lightPos');
+  });
+
+  it('gives props a delete control and characters a yaw control', () => {
+    expect(paramControlsFor({ kind: 'prop', index: 0 })).toContain('propDelete');
+    expect(paramControlsFor({ kind: 'character' })).toContain('yaw');
+  });
+
+  it('disables visibility toggling for character and scene only', () => {
+    expect(canToggleVisibility({ kind: 'character' })).toBe(false);
+    expect(canToggleVisibility({ kind: 'scene' })).toBe(false);
+    expect(canToggleVisibility({ kind: 'prop', index: 0 })).toBe(true);
+    expect(canToggleVisibility({ kind: 'light', key: 'key' })).toBe(true);
+  });
+
+  it('reflects a hidden prop as not visible in the outline', () => {
+    const s = settingsWithProps();
+    s.props[1] = { ...s.props[1], hidden: true };
+    const props = buildOutline(s, null).filter(i => i.group === 'prop');
+    expect(props.map(p => p.visible)).toEqual([true, false]);
   });
 });
