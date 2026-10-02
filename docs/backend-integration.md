@@ -9,6 +9,12 @@ send_chat IPC 新增可选 audioPerceptionId，Rust 转为 POST /desktop/chat �
 STT 配置由管理面维护，语调仅是后端印象；不改 WS、通知、ack 或授权范围。
 定向请求测试和 cargo check 通过；真实麦克风/远端 STT 联调 observe。
 
+后端行为说明（presence 工单组「语音链路·工具泄漏·视频帧差分」，2026-10-02，**client 无代码改动**）：
+`/transcribe` 合同不变（`text` 或 422）。后端现在会把「ASR 把专有名词提示当转写结果复读」的结果当作没听清，
+同样返回 422 `没有识别到语音`（远程路径为「未能听清」），`useVoiceInput` / `useContinuousCallVoice` 已把 422 当正常静音，不必区分。
+转写整段到齐才开始识别（本地与远程皆然），没有流式；要边说边出字需要改录音协议，三仓 open，见 presence
+`docs/three-repo-interface-catalog.md` 开头。本地引擎可在管理面切换 faster-whisper / sherpa-onnx，客户端不感知。
+
 ## 工单 264：视频电话摄像头与连续语音
 
 工单 265：摄像头开启且后端 `video_call` 路由有效时，窗口每秒调用一次 `poll_video_call_camera`；收到一次性请求才从当前媒体轨道抓取新 JPEG 并调用 `submit_video_call_camera_frame`，挂断/换角色调用 `close_video_call_camera`。此链用于角色 `observe_video_call_camera`，与原每 4 秒周期摄像头观察并行。周期观察可每隔至少 60 秒产生主动候选，即使画面不变。所有摄像头识别仍走后端 `image_presets.routes.video_call`，不接桌面屏幕截图或实验性视觉观察路由。真实摄像头、模型及主动消息验收未完成。
@@ -17,6 +23,10 @@ Tauri `get_video_call_state` 通过 chat scope 读取 `/video-call/state`；
 `observe_video_call_frame` 只上传当前 JPEG 到 `/video-call/observe`，响应的一次性
 `observation_id` 最多保留 40 秒，随下一次 `send_chat` 作为 `video_observation_id`
 提交。无有效本机视觉路由时仍可本地预览，后端不接收帧。通话挂断释放媒体轨道。
+后端可选开启「帧差分」（管理面功能开关 `video_call_frame_diff`，默认关）：`/video-call/observe` 请求与响应形状完全不变，
+客户端仍按固定周期上传；差分只在后端发生（首帧全量，之后只描述变化，写给聊天模型的描述是「底稿 + 最近几条变化」，
+`[major]` 变化会作为主动候选）。按需拍照（`poll`/`result`）始终是全量描述。让客户端先做图像差分、只在显著变化时上传
+（screen 路由已有的做法）是更彻底的省成本方案，**本期决定不做**，等后端差分的真实 token 对比数据再评估（open）。
 连续语音的 `transcribe_audio` 仍使用 `/transcribe`；合并多段转写和输入文字时，
 可随 `audio_perception_id` 传入对应的 `audio_perception_text`，由后端验证该段
 确实包含在本轮消息内。文字与语音失败互不阻断。真实设备、模型和 TTS 联调为 observe。
