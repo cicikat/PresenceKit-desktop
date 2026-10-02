@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { transcribeAudio } from '../../shared/api/backend';
 import { t } from '../../shared/i18n';
+import { shouldCutSegment, type CallVoiceActivity } from './callVoiceUtils';
 
 // Short segments keep CPU Whisper out of its slow long-audio regime (see the STT work order).
-const MAX_SEGMENT_MS = 6_000;
-const END_SILENCE_MS = 900;
 // Doubled with the halved segment length so fast talkers do not lose segments.
 const MAX_PENDING_SEGMENTS = 6;
 const ERROR_VISIBLE_MS = 4_000;
@@ -29,6 +28,8 @@ export function useContinuousCallVoice(onTranscript: (text: string, audioPercept
   const pendingRef = useRef<Blob[]>([]);
   const processingRef = useRef(false);
   const generationRef = useRef(0);
+  const lastVoiceAtRef = useRef(0);
+  const voiceActiveRef = useRef(false);
   const discardRef = useRef(false);
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
@@ -71,16 +72,19 @@ export function useContinuousCallVoice(onTranscript: (text: string, audioPercept
     const analyser = analyserRef.current;
     const samples = analyser ? new Uint8Array(analyser.fftSize) : null;
     let voicedFrames = 0;
-    let lastVoiceAt = Date.now();
+    lastVoiceAtRef.current = Math.max(lastVoiceAtRef.current, Date.now());
+    voiceActiveRef.current = false;
     const startedAt = Date.now();
     recorder.ondataavailable = event => { if (event.data.size) chunks.push(event.data); };
     recorder.onstop = () => {
       if (timerRef.current) clearTimeout(timerRef.current);
+      voiceActiveRef.current = false;
       if (discardRef.current) return;
       const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
       if (blob.size && (!analyser || voicedFrames >= 3)) {
         if (pendingRef.current.length >= MAX_PENDING_SEGMENTS) {
           pendingRef.current.shift();
+          console.warn('[call-voice] transcription queue full, dropping oldest segment');
           setError(t('room.call.voice.lagging'));
         }
         pendingRef.current.push(blob);
@@ -96,12 +100,12 @@ export function useContinuousCallVoice(onTranscript: (text: string, audioPercept
         for (const sample of samples) power += ((sample - 128) / 128) ** 2;
         if (Math.sqrt(power / samples.length) > 0.008) {
           voicedFrames += 1;
-          lastVoiceAt = Date.now();
+          lastVoiceAtRef.current = Date.now();
+          voiceActiveRef.current = true;
         }
       }
       const elapsed = Date.now() - startedAt;
-      if ((voicedFrames >= 3 && elapsed >= 1_200 && Date.now() - lastVoiceAt >= END_SILENCE_MS)
-          || elapsed >= MAX_SEGMENT_MS) {
+      if (shouldCutSegment(elapsed, Date.now() - lastVoiceAtRef.current, voicedFrames)) {
         if (recorder.state === 'recording') recorder.stop();
       }
     }, 100);
@@ -158,5 +162,11 @@ export function useContinuousCallVoice(onTranscript: (text: string, audioPercept
   }, []);
 
   useEffect(() => () => stop(true), [stop]);
-  return { recording, transcribing, error, start, stop };
+  const getActivity = useCallback((): CallVoiceActivity => ({
+    transcribing: processingRef.current,
+    pendingCount: pendingRef.current.length,
+    isVoiceActive: voiceActiveRef.current,
+    lastVoiceAt: lastVoiceAtRef.current,
+  }), []);
+  return { recording, transcribing, error, start, stop, getActivity };
 }

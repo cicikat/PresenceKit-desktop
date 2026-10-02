@@ -16,6 +16,7 @@ import { setupAvatarDirectiveListener } from './avatarDirective';
 import { sendChat } from '../../shared/api/backend';
 import { wsClient } from '../../shared/api/ws';
 import { useContinuousCallVoice } from './useContinuousCallVoice';
+import { canAutoSend, joinTranscript } from './callVoiceUtils';
 import { VnBubble } from './VnBubble';
 import { getActiveCharacterInfo, getActiveCharacterName, subscribeActiveCharacter } from '../../shared/activeCharacter';
 import { isSingleRealityMessage } from '../../shared/api/realityMessageScope';
@@ -86,7 +87,7 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
   const [speechDraft, setSpeechDraft] = useState('');
   const [audioStatus, setAudioStatus] = useState<string | null>(null);
   const onTranscript = useCallback((text: string, audioPerceptionId?: string) => {
-    speechDraftRef.current = [speechDraftRef.current, text].filter(Boolean).join(' ').slice(-12_000);
+    speechDraftRef.current = joinTranscript(speechDraftRef.current, text).slice(-12_000);
     if (audioPerceptionId) latestAudioRef.current = { text, id: audioPerceptionId };
     setSpeechDraft(speechDraftRef.current);
   }, []);
@@ -162,7 +163,7 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
 
   const handleSend = useCallback(async (text: string) => {
     if (sendingRef.current) return;
-    const trimmed = [speechDraftRef.current, text].filter(Boolean).join(' ').trim().slice(0, 12_000);
+    const trimmed = joinTranscript(speechDraftRef.current, text).trim().slice(0, 12_000);
     if (!trimmed) return;
     speechDraftRef.current = '';
     const audioSource = latestAudioRef.current;
@@ -195,11 +196,13 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     if (sending || !speechDraft) return;
-    const timer = setTimeout(() => {
-      if (!sendingRef.current && speechDraftRef.current) void handleSend('');
-    }, 700);
-    return () => clearTimeout(timer);
-  }, [sending, speechDraft, handleSend]);
+    // Poll: only send once nothing is being said, queued or transcribed.
+    const timer = setInterval(() => {
+      if (sendingRef.current || !speechDraftRef.current) return;
+      if (canAutoSend(voice.getActivity(), Date.now())) void handleSend('');
+    }, 250);
+    return () => clearInterval(timer);
+  }, [sending, speechDraft, handleSend, voice.getActivity]);
 
   const handleInputKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
