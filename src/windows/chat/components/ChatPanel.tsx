@@ -34,7 +34,7 @@ import { wsClient } from '../../../shared/api/ws';
 import { notifyOnMessage } from '../../../shared/api/notify';
 import { getActiveCharacterInfo, getActiveCharacterName } from '../../../shared/activeCharacter';
 import { isSingleRealityMessage, isSingleRealityStream, type RealityMessageScope } from '../../../shared/api/realityMessageScope';
-import { chatThemeFontSize } from '../../../shared/chatAppearance';
+import { chatThemeFontSize, injectPreviewZoom, loadChatAppearance } from '../../../shared/chatAppearance';
 import { useI18n } from '../../../shared/i18n';
 import { useDesignMounts } from '../../../shared/design-mod/mounts';
 import { chatSessionMetrics } from '../../../shared/design-mod/metrics';
@@ -712,7 +712,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
     setArtifactNotice(null);
     try {
       const html = await previewChatArtifact(item.id);
-      setArtifactPreview({ filename: item.filename, html });
+      setArtifactPreview({ filename: item.filename, html: injectPreviewZoom(html, loadChatAppearance().themeFontSize) });
     } catch {
       setArtifactNotice(t('chat.artifacts.previewFailed'));
     }
@@ -2141,7 +2141,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
           <div
             onClick={e => e.stopPropagation()}
             style={{
-              width: 'min(760px, 100%)', maxHeight: '80vh',
+              width: 'min(92vw, 1100px)', height: 'min(86vh, 900px)',
               background: 'var(--paper)', border: '1px solid var(--paper-edge)',
               borderRadius: 'var(--radius-md)', display: 'flex', flexDirection: 'column',
               boxShadow: '0 18px 48px oklch(0.30 0.04 60 / 0.28)',
@@ -2149,14 +2149,14 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderBottom: '1px solid var(--paper-edge)' }}>
               <span className="mono" style={{ flex: 1, fontSize: chatThemeFontSize(11), color: 'var(--ink-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{artifactPreview.filename}</span>
-              <button type="button" onClick={() => setArtifactPreview(null)} style={{ background: 'transparent', border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-xs)', cursor: 'pointer', color: 'var(--ink-3)', padding: '2px 8px' }}>{t('chat.artifacts.close')}</button>
+              <button type="button" onClick={() => setArtifactPreview(null)} style={{ background: 'transparent', border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-xs)', cursor: 'pointer', color: 'var(--ink-3)', padding: '2px 8px', fontSize: chatThemeFontSize(11) }}>{t('chat.artifacts.close')}</button>
             </div>
             <iframe
               sandbox=""
               referrerPolicy="no-referrer"
               title={artifactPreview.filename}
               srcDoc={artifactPreview.html}
-              style={{ width: '100%', flex: 1, minHeight: 320, border: 'none', background: '#fff' }}
+              style={{ width: '100%', flex: 1, minHeight: 0, border: 'none', background: '#fff' }}
             />
           </div>
         </div>

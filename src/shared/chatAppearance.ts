@@ -101,3 +101,16 @@ export function chatFontUrl(fileName: string): string {
 export function chatThemeFontSize(size: number): string {
   return `calc(${size}px * var(--chat-theme-font-scale, 1))`;
 }
+
+/** 把主题字号缩放注入预览 HTML（iframe 是独立文档，吃不到 CSS 变量）。 */
+export function injectPreviewZoom(html: string, themeFontSize: number): string {
+  const scale = themeFontSize / DEFAULT_APPEARANCE.themeFontSize;
+  if (!Number.isFinite(scale) || scale <= 0 || Math.abs(scale - 1) < 0.001) return html;
+  const style = `<style>html{zoom:${scale}}</style>`;
+  const headMatch = /<head[^>]*>/i.exec(html);
+  if (headMatch) {
+    const at = headMatch.index + headMatch[0].length;
+    return html.slice(0, at) + style + html.slice(at);
+  }
+  return style + html;
+}
