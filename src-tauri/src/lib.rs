@@ -1006,6 +1006,8 @@ async fn send_chat(
     reply_to: Option<ReplyToPayload>,
     audio_perception_id: Option<String>,
     audio_perception_text: Option<String>,
+    voice_receipt_ids: Option<Vec<String>>,
+    voice_receipt_texts: Option<Vec<String>>,
     video_observation_id: Option<String>,
 ) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
@@ -1016,6 +1018,13 @@ async fn send_chat(
         body["audio_perception_id"] = serde_json::json!(id);
         if let Some(text) = audio_perception_text.filter(|value| value.len() <= 12_000) {
             body["audio_perception_text"] = serde_json::json!(text);
+        }
+    }
+    // 多段语音回执（工单 A3）：最多 16 段，逐项长度受限；后端逐个校验并取最差置信度。
+    if let Some(ids) = voice_receipt_ids.filter(|v| !v.is_empty() && v.len() <= 16 && v.iter().all(|i| i.len() <= 128)) {
+        body["voice_receipt_ids"] = serde_json::json!(ids);
+        if let Some(texts) = voice_receipt_texts.filter(|v| v.len() <= 16 && v.iter().all(|t| t.len() <= 12_000)) {
+            body["voice_receipt_texts"] = serde_json::json!(texts);
         }
     }
     if let Some(id) = video_observation_id.filter(|value| value.len() <= 128) {

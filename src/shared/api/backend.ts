@@ -3,13 +3,17 @@ import type { ChatResponse, DesktopWakeResponse, GardenState, CoplayState, Diary
 
 let pendingVoice: { text: string; id: string; expires: number } | undefined;
 
-export async function sendChat(message: string, replyTo?: ReplyToPayload, videoObservationId?: string, audioSource?: { text: string; id: string }): Promise<ChatResponse> {
+export async function sendChat(message: string, replyTo?: ReplyToPayload, videoObservationId?: string, audioSource?: { text: string; id: string } | { text: string; id: string }[]): Promise<ChatResponse> {
   const voice = pendingVoice;
   pendingVoice = undefined;
-  const audioPerceptionId = audioSource?.id || (voice && voice.expires > Date.now() && voice.text.trim() === message.trim() ? voice.id : undefined);
+  const audioSources = Array.isArray(audioSource) ? audioSource : audioSource ? [audioSource] : [];
+  const lastSource = audioSources[audioSources.length - 1];
+  const audioPerceptionId = lastSource?.id || (voice && voice.expires > Date.now() && voice.text.trim() === message.trim() ? voice.id : undefined);
   return invokeGated<ChatResponse>('send_chat', {
     message, ...(replyTo ? { replyTo } : {}), ...(audioPerceptionId ? { audioPerceptionId } : {}),
-    ...(audioSource ? { audioPerceptionText: audioSource.text } : {}),
+    ...(lastSource ? { audioPerceptionText: lastSource.text } : {}),
+    // 多段回执（工单 A3）：后端逐个校验并取最差置信度；旧后端忽略此字段，仍按上面的单个回执处理。
+    ...(audioSources.length > 1 ? { voiceReceiptIds: audioSources.map(s => s.id), voiceReceiptTexts: audioSources.map(s => s.text) } : {}),
     ...(videoObservationId ? { videoObservationId } : {}),
   });
 }
@@ -322,13 +326,20 @@ export async function patchGroupSettings(id: string, settings: Partial<GroupSett
   return invokeGated<GroupSettings>('group_settings_patch', { id, settings });
 }
 
-export async function transcribeAudio(audioB64: string): Promise<{ text: string; audio_perception_id?: string }> {
+export async function transcribeAudio(audioB64: string): Promise<{ text: string; audio_perception_id?: string; asr_quality?: AsrQuality }> {
   pendingVoice = undefined;
-  const result = await invokeGated<{ text: string; audio_perception_id?: string }>('transcribe_audio', { audioB64 });
+  const result = await invokeGated<{ text: string; audio_perception_id?: string; asr_quality?: AsrQuality }>('transcribe_audio', { audioB64 });
   if (result.audio_perception_id) pendingVoice = {
     text: result.text, id: result.audio_perception_id, expires: Date.now() + 300_000,
   };
   return result;
+}
+
+export interface AsrQuality {
+  avg_logprob_mean: number | null;
+  avg_logprob_min: number | null;
+  no_speech_max: number | null;
+  dropped_segments: number;
 }
 
 export interface UploadAttachment { filePath?: string; filename?: string; dataB64?: string }

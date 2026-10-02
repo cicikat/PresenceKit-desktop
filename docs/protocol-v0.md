@@ -4,6 +4,13 @@ Brief 253.6 兼容扩展：POST /transcribe 保留 text，可返回 tone/audio_p
 POST /desktop/chat 可附带 audio_perception_id，仅关联原样转写的语调；后端按 owner/char/channel/text
 校验，5 分钟、一次性，失效时仅丢语调。send_chat IPC 对应 audioPerceptionId 可选参数；无新 WS 帧。
 
+工单 A3 扩展：POST /transcribe 所有路径都返回 audio_perception_id（本地 STT 未开声学分析时仅标记语音来源），
+可附 asr_quality {avg_logprob_mean, avg_logprob_min, no_speech_max, dropped_segments}（faster-whisper 才有）。
+通话中一条消息由多个分段合成时，POST /desktop/chat 可带 voice_receipt_ids: string[]（最多 16）与可选
+voice_receipt_texts: string[]（按位置对应各段原文），后端全部消费并取最差质量；旧 audio_perception_id /
+audio_perception_text 继续兼容（客户端仍同时发送最后一段）。send_chat IPC 对应 voiceReceiptIds / voiceReceiptTexts。
+后端据此给本轮记忆打 input_modality=voice 标记并在低置信时提示模型输入可靠性。
+
 ## Conversation calendar (2026-09-12)
 
 Current: GET /chat-log/stats/calendar requires memory.read + state.read. All four metrics are scoped to owner + character; period=day/week/month/year with date, or start/end (up to 366 days). Missing history is null, never zero. Coverage and totals_partial disclose incomplete data. See backend docs/conversation-calendar.md.

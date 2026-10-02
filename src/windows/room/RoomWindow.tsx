@@ -83,12 +83,13 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
   const sendingRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const speechDraftRef = useRef('');
-  const latestAudioRef = useRef<{ text: string; id: string } | undefined>(undefined);
+  // 本条消息累积的所有分段回执（工单 A3）；发送时一并交给后端取最差置信度。
+  const audioReceiptsRef = useRef<{ text: string; id: string }[]>([]);
   const [speechDraft, setSpeechDraft] = useState('');
   const [audioStatus, setAudioStatus] = useState<string | null>(null);
   const onTranscript = useCallback((text: string, audioPerceptionId?: string) => {
     speechDraftRef.current = joinTranscript(speechDraftRef.current, text).slice(-12_000);
-    if (audioPerceptionId) latestAudioRef.current = { text, id: audioPerceptionId };
+    if (audioPerceptionId) audioReceiptsRef.current = [...audioReceiptsRef.current, { text, id: audioPerceptionId }].slice(-16);
     setSpeechDraft(speechDraftRef.current);
   }, []);
 
@@ -166,8 +167,8 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
     const trimmed = joinTranscript(speechDraftRef.current, text).trim().slice(0, 12_000);
     if (!trimmed) return;
     speechDraftRef.current = '';
-    const audioSource = latestAudioRef.current;
-    latestAudioRef.current = undefined;
+    const audioSource = audioReceiptsRef.current.length ? audioReceiptsRef.current : undefined;
+    audioReceiptsRef.current = [];
     if (audioSource) setAudioStatus(null);
     setSpeechDraft('');
     setChatInput('');
