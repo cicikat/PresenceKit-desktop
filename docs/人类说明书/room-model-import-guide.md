@@ -25,7 +25,21 @@
 | `rig/humanoid.json`、`rig/calibration.json` | 未冻结 | CA-03 | 骨骼语义映射以设置面板 RoomSettings 为准（§4） |
 | `expressions/expressions.json` | 未冻结 | CA-04 | 异名/自定义表情当前无入口（§6） |
 | `motions/motions.json`、外部动作重定向 | 未冻结 | CA-05 | 当前只有同骨架 GLB 内 `idle` clip（§4.6） |
-| SKIN / METAL / EYE / GLASS 材质模板、脸部 SDF | 未实现 | CA-06 | 写进 materials.json 会被识别并跳过，不生效 |
+| SKIN / METAL / EYE 材质模板 | 可用（真实窗口验收未做） | CA-06 | 与 FACE/HAIR/CLOTH 共用同一 shader，仅默认参数不同，见 §4.8 |
+| GLASS 材质模板、脸部 SDF | 未实现 | CA-06 | GLASS 写进 materials.json 会被识别并跳过；SDF 需要额外贴图，见下方「验收前需要你提供的东西」 |
+
+### 验收前需要你提供的东西（持续更新）
+
+代码阶段只搭好基础设施。下面这些素材/确认项只有你能给，集中放在这里，导入验收时一起核对。
+
+| 项目 | 需要什么 | 影响 |
+|---|---|---|
+| 头发骨、眼骨的父级 | 重新导出时让 `DEF-hair_*`、`DEF-eye.*` 挂在头骨（`DEF-spine.006`）之下，不要挂在 armature 根下 | 否则躯干链被判为断链：自然站姿被跳过，呼吸/肩噪声/头部微漂移被关闭，眼睛不跟着头转 |
+| 骨骼权重 | 头发网格里被拆成「头骨一半、头发骨一半」的接缝顶点，权重要么全给头骨、要么全给头发骨 | 否则接缝处会被拉扯 |
+| 脸部阴影 SDF 贴图 | 与脸部底色贴图同 UV 的灰度图（脸部明暗阈值图）。脸部 SDF 尚未实现；没有这张图时脸部用普通 FACE 明暗，不会报错 | 脸部 SDF 阴影 |
+| 材质贴图 | 每个槽位的 `<槽位>__ShadowTint.png`、`<槽位>__TransitionTint.png` 放在 GLB 同目录，文件名写进 `shadeMap`/`transitionMap`；与底色贴图同 UV、同分辨率更稳 | 阴影色与过渡色 |
+| 眼睛槽位 | 眼球槽位用 `EYE` 模板；眼睑/睫毛槽位保持 `outlineWidth: 0` | 避免描边在透明片上变成黑边 |
+| 参考灯光与相机 | 想与 Blender 对比时，给出 Blender 里那一帧的灯光方向和相机，我据此固定一组参考场景 | CA-06 参考场景比对 |
 
 骨骼、表情、动作三类配置的 JSON 格式冻结前，建模端**不需要返工**：Blender 工程里的骨名、形态键名、自定义属性不变，将来只是把「语义角色 → 你的名字」补写成配置。
 
@@ -349,7 +363,7 @@ foot      DEF-foot.L / .R              toes       DEF-toe.L / .R
 | `bindings[].id` | `[A-Za-z0-9._-]`，1–48 字符，不得重复 |
 | `mesh` + `slot` | 网格节点名 + 材质槽序号（从 0 起）；**这对组合必须唯一**，名字本身不是身份 |
 | `materialName` | 建模时的材质名；与运行时不一致则判为过期、不应用，防止重导出后串槽 |
-| `template` | `FACE` / `HAIR` / `CLOTH`。`SKIN` `METAL` `EYE` `GLASS` 会被识别并**跳过** |
+| `template` | `FACE` / `HAIR` / `CLOTH` / `SKIN` / `METAL` / `EYE`（默认参数不同，shader 相同）。`GLASS` 会被识别并**跳过** |
 | `baseColor` | `#rrggbb`；不写则保留原贴图与原色 |
 | `shadeColor` / `rimColor` | `#rrggbb` |
 | `edgeLow` / `edgeHigh` | −1 到 1，明暗混合区间（光线与法线夹角的余弦，对应 Blender 的 Shadow Edge Low/High，默认 −0.22 / 0.68）。旧字段 `shadeThreshold`/`shadeSoftness` 仍可读，会换算成这一对并给出警告 |

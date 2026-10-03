@@ -1,8 +1,8 @@
 /** CA-06 materials.json contract: pure parsing, parameter resolution and ramp math (no Three.js). */
-export const TOON_TEMPLATES = ['FACE', 'HAIR', 'CLOTH'] as const;
+export const TOON_TEMPLATES = ['FACE', 'HAIR', 'CLOTH', 'SKIN', 'METAL', 'EYE'] as const;
 export type ToonTemplate = typeof TOON_TEMPLATES[number];
 /** Named by the contract but without a runtime consumer yet; bindings using them are skipped, not faked. */
-export const PLANNED_TEMPLATES = ['SKIN', 'METAL', 'EYE', 'GLASS'] as const;
+export const PLANNED_TEMPLATES = ['GLASS'] as const;
 
 export interface ToonParams {
   /** sRGB hex. Omitted = keep the source material's base color/texture untouched. */
@@ -58,6 +58,12 @@ export const TEMPLATE_DEFAULTS: Record<ToonTemplate, ToonParams> = {
   FACE: { ...BASE_DEFAULTS, shadeColor: '#c9a9a6' },
   HAIR: { ...BASE_DEFAULTS, shadeColor: '#6f6a88', rimStrength: 0.25, hairSheen: 0.075 },
   CLOTH: { ...BASE_DEFAULTS },
+  // Body skin: warm, soft terminator, faint rim.
+  SKIN: { ...BASE_DEFAULTS, shadeColor: '#d9b3ae', edgeLow: -0.3, edgeHigh: 0.55, rimStrength: 0.05 },
+  // Hard two-tone with a tight highlight; the highlight reuses the shared N·H term (no env reflection).
+  METAL: { ...BASE_DEFAULTS, shadeColor: '#5d6275', edgeLow: 0.0, edgeHigh: 0.12, transitionStrength: 0, hairSheen: 0.6 },
+  // Eyeballs stay fully lit: no shade, no rim, no outline.
+  EYE: { ...BASE_DEFAULTS, edgeLow: -1, edgeHigh: -0.99, transitionStrength: 0, rimStrength: 0 },
 };
 
 export interface MaterialBinding {

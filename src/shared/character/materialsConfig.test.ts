@@ -25,7 +25,7 @@ describe('CA-06 materials config', () => {
     expect(parseMaterialsConfig({ ...raw, schemaVersion: '2.0.0' })).toMatchObject({ ok: false });
   });
   it('skips planned templates instead of faking them', () => {
-    const r = parseMaterialsConfig({ ...raw, bindings: [{ ...raw.bindings[0], template: 'SKIN' }] });
+    const r = parseMaterialsConfig({ ...raw, bindings: [{ ...raw.bindings[0], template: 'GLASS' }] });
     expect(r).toMatchObject({ ok: true });
     if (r.ok) { expect(r.config.bindings).toHaveLength(0); expect(r.warnings.join()).toContain('planned'); }
   });
