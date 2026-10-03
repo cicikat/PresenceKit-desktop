@@ -330,31 +330,33 @@ export class CharacterPerformer {
     this.gazeX += (targetX - this.gazeX) * speed;
     this.gazeY += (targetY - this.gazeY) * speed;
 
-    if (gazeUsesMorphs(this.routes.gaze)) this.writeGazeMorphs();
-    if (gazeUsesBones(this.routes.gaze)) this.writeGazeBones();
+    // In mixed mode each driver carries half the turn so the two never add up to a double gaze.
+    const share = this.routes.gaze === 'mixed' ? 0.5 : 1;
+    if (gazeUsesMorphs(this.routes.gaze)) this.writeGazeMorphs(share);
+    if (gazeUsesBones(this.routes.gaze)) this.writeGazeBones(share);
     if (this.routes.gaze === 'off') for (const key of GAZE_MORPH_KEYS) this.morph.set(key, 0);
     // 'headOnly' contributes through the head gesture layer's rest offset below.
   }
 
-  private writeGazeMorphs(): void {
+  private writeGazeMorphs(share = 1): void {
     const { morph } = this;
     // Morph keys are one-sided 0..1 pairs, so a signed target splits across the pair.
-    morph.set('eyeLookLeft', Math.max(0, this.gazeX) * 0.7);
-    morph.set('eyeLookRight', Math.max(0, -this.gazeX) * 0.7);
-    morph.set('eyeLookUp', Math.max(0, this.gazeY) * 0.5);
-    morph.set('eyeLookDown', Math.max(0, -this.gazeY) * 0.5);
+    morph.set('eyeLookLeft', Math.max(0, this.gazeX) * 0.7 * share);
+    morph.set('eyeLookRight', Math.max(0, -this.gazeX) * 0.7 * share);
+    morph.set('eyeLookUp', Math.max(0, this.gazeY) * 0.5 * share);
+    morph.set('eyeLookDown', Math.max(0, -this.gazeY) * 0.5 * share);
   }
 
-  private writeGazeBones(): void {
+  private writeGazeBones(share = 1): void {
     // Each eye is limited separately: turning toward the nose (inward) has less range
     // than turning away, which is what keeps extreme targets from crossing the eyes.
     const yaw = (isLeftEye: boolean) => {
       // +gazeX is the character's left: the left eye turns outward, the right eye inward.
       const outward = isLeftEye ? this.gazeX > 0 : this.gazeX < 0;
       const limit = outward ? EYE_LIMIT.outward : EYE_LIMIT.inward;
-      return this.gazeX * limit;
+      return this.gazeX * limit * share;
     };
-    const pitch = this.gazeY * (this.gazeY > 0 ? EYE_LIMIT.up : EYE_LIMIT.down);
+    const pitch = this.gazeY * (this.gazeY > 0 ? EYE_LIMIT.up : EYE_LIMIT.down) * share;
     if (this.leftEye) this.aimEye(this.leftEye, this.leftEyeRest, this.leftEyeAxes, yaw(true), pitch);
     if (this.rightEye) this.aimEye(this.rightEye, this.rightEyeRest, this.rightEyeAxes, yaw(false), pitch);
   }

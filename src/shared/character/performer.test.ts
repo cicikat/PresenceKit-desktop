@@ -108,6 +108,16 @@ describe('CA-02 shared performer', () => {
     expect(performer.standing.notes.join()).toContain('micro-motion skipped');
   });
 
+  it('splits the turn between bones and morphs in mixed mode', () => {
+    const model = buildModel({ boneNames: ['DEF-eye.L', 'DEF-eye.R'] });
+    const performer = new CharacterPerformer(model, { routes: { gaze: 'mixed' } });
+    expect(performer.routes.gaze).toBe('mixed');
+    for (let i = 0; i < 300; i++) performer.update(frame({ directive: directive({ gaze: { mode: 'point', x: -1, y: 0 } }) }));
+    expect(influence(model, 'eyeLookLeft')).toBeCloseTo(0.35, 2);
+    const eye = model.children.find((c) => c.name === 'DEF-eye.L')!;
+    expect(eye.quaternion.angleTo(new THREE.Quaternion())).toBeCloseTo(0.175, 2);
+  });
+
   it('keeps eye bone rotation inside the configured limits at extreme targets', () => {
     const model = buildModel({ boneNames: ['DEF-eye.L', 'DEF-eye.R'] });
     const performer = new CharacterPerformer(model);
