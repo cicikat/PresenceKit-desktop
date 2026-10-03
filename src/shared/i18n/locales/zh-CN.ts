@@ -88,6 +88,7 @@ export const zhCN = {
 "room.editor.look.namePlaceholder": "预设名称",
 "room.editor.look.saveNew": "存为新预设",
 "room.editor.look.update": "更新当前",
+"room.editor.look.rename": "重命名",
 "room.editor.look.daylight": "日光",
 "room.editor.look.dusk": "黄昏暖光",
 "room.editor.look.nightLamp": "夜间台灯",

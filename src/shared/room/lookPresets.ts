@@ -155,6 +155,14 @@ export function updateLook(settings: RoomSettings, id: string): RoomSettings {
   return { ...settings, looks: { ...settings.looks, [id]: snapshotLook(settings, existing.name) } };
 }
 
+/** Renames a user look; built-ins and blank names are ignored. */
+export function renameLook(settings: RoomSettings, id: string, name: string): RoomSettings {
+  const existing = settings.looks?.[id];
+  const trimmed = name.trim();
+  if (isBuiltinLookId(id) || !existing || !trimmed) return settings;
+  return { ...settings, looks: { ...settings.looks, [id]: { ...existing, name: trimmed } } };
+}
+
 /** Deletes a user look and every scene binding that pointed at it. Built-ins can't be deleted. */
 export function deleteLook(settings: RoomSettings, id: string): RoomSettings {
   if (isBuiltinLookId(id) || !settings.looks?.[id]) return settings;

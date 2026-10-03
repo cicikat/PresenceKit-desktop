@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import type { RoomSettings } from '../../shared/room/roomSettings';
 import {
-  BUILTIN_LOOKS, applyAndRemember, saveNewLook, updateLook, deleteLook, setSceneLook, isBuiltinLookId,
+  BUILTIN_LOOKS, applyAndRemember, saveNewLook, updateLook, renameLook, deleteLook, setSceneLook, isBuiltinLookId,
 } from '../../shared/room/lookPresets';
 import type { ThreeCallStageHandle } from './ThreeCallStage';
 import { useI18n } from '../../shared/i18n';
@@ -65,6 +65,12 @@ export function LookSection({ settings, stage }: { settings: RoomSettings; stage
             disabled={!canEdit}
             onClick={() => stage.applyLookSettings(updateLook(settings, selectedId))}
           >{t('room.editor.look.update')}</button>
+          <button
+            type="button"
+            className="room-editor-panel__tool-btn"
+            disabled={!canEdit || !name.trim()}
+            onClick={() => { stage.applyLookSettings(renameLook(settings, selectedId, name)); setName(''); }}
+          >{t('room.editor.look.rename')}</button>
           <button
             type="button"
             className="room-editor-panel__delete-btn"

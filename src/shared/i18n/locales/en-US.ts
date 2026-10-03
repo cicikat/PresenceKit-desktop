@@ -92,6 +92,7 @@ export const enUS: Record<MessageKey, string> = {
 "room.editor.look.namePlaceholder": "Preset name",
 "room.editor.look.saveNew": "Save as new",
 "room.editor.look.update": "Update current",
+"room.editor.look.rename": "Rename",
 "room.editor.look.daylight": "Daylight",
 "room.editor.look.dusk": "Dusk",
 "room.editor.look.nightLamp": "Night lamp",
