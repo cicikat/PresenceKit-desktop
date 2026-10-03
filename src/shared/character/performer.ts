@@ -171,6 +171,13 @@ export class CharacterPerformer {
   private gazeY = 0;
   /** Standing-pose capability report; callers surface `notes` rather than guessing. */
   standing!: StandingReport;
+  /**
+   * False when the torso chain is broken in this export (face/eye/hair bones are not under the
+   * head chain). Continuous idle motion written to that chain — breath, shoulder noise, head
+   * micro-drift — then pulls skin seams apart because the split-weighted vertices are anchored
+   * to bones that do not move with it, which reads as twitching at the hair roots.
+   */
+  idleMotionSafe = true;
   /** The deltas actually applied at load, kept so the pose can be reported or reverted. */
   standingPose: PoseOffsets = {};
 
@@ -208,6 +215,10 @@ export class CharacterPerformer {
     this.standing = reportStanding(present, intactGroups);
     this.standingPose = buildStandingPose(measureArmDropDeg(resolved), present, intactGroups);
     this.applyStandingPose();
+    this.idleMotionSafe = intactGroups.has('torso');
+    if (!this.idleMotionSafe) {
+      this.standing.notes.push('idle breath, shoulder and head micro-motion skipped: the torso chain is broken in this export');
+    }
 
     const breathBone = resolved.chest ?? resolved.spine;
     if (breathBone) {
@@ -386,11 +397,12 @@ export class CharacterPerformer {
     // No gesture: ease back to rest plus micro-drift. The noise is folded into the target
     // rather than added to the current value, so its amplitude cannot accumulate per frame.
     // `headOnly` gaze rides along here, since the head is the only thing left to aim.
+    const drift = this.idleMotionSafe ? 1 : 0;
     const gazeYaw = this.routes.gaze === 'headOnly' ? this.gazeX * 0.25 : 0;
     const gazePitch = this.routes.gaze === 'headOnly' ? this.gazeY * 0.18 : 0;
-    const driftX = rest.x + microNoise(ctx.t, 11) * 0.015 - gazePitch;
-    const driftY = rest.y + microNoise(ctx.t, 23) * 0.020 + gazeYaw;
-    const driftZ = rest.z + microNoise(ctx.t, 37) * 0.010;
+    const driftX = rest.x + drift * microNoise(ctx.t, 11) * 0.015 - gazePitch;
+    const driftY = rest.y + drift * microNoise(ctx.t, 23) * 0.020 + gazeYaw;
+    const driftZ = rest.z + drift * microNoise(ctx.t, 37) * 0.010;
     head.rotation.x += (driftX - head.rotation.x) * 0.1;
     head.rotation.y += (driftY - head.rotation.y) * 0.1;
     head.rotation.z += (driftZ - head.rotation.z) * 0.1;
@@ -427,6 +439,7 @@ export class CharacterPerformer {
    */
   private updateProcedural(ctx: FrameContext, posture: { chestRotX: number; shoulderY: number }): void {
     if (this.routes.body === 'off' || this.routes.body === 'clip') return;
+    if (!this.idleMotionSafe) return;
     const resolved = this.bones.resolved;
     const animated = ctx.animatedBoneNames;
     const moodEntry = MOOD_TABLE[ctx.mood];

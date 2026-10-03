@@ -86,6 +86,28 @@ describe('CA-02 shared performer', () => {
     for (const eye of eyes) expect(forward(eye).z).toBeGreaterThan(0.999);
   });
 
+  it('resolves bones under the names GLTFLoader produces (dots stripped from DEF-eye.L)', () => {
+    const model = buildModel({ boneNames: ['DEF-spine006', 'DEF-eyeL', 'DEF-eyeR'] });
+    const performer = new CharacterPerformer(model);
+    expect(performer.bones.resolved.head?.name).toBe('DEF-spine006');
+    expect(performer.bones.resolved.leftEye?.name).toBe('DEF-eyeL');
+    expect(performer.routes.gaze).toBe('bone');
+  });
+
+  it('holds still on a broken torso chain instead of pulling skin seams apart', () => {
+    // Flat bones: neck is not under chest, so the torso group is broken like the v008 export.
+    const model = buildModel({ boneNames: ['DEF-spine003', 'DEF-spine004', 'DEF-spine006'] });
+    const performer = new CharacterPerformer(model);
+    expect(performer.idleMotionSafe).toBe(false);
+    const chest = model.children.find((c) => c.name === 'DEF-spine003')!;
+    const head = model.children.find((c) => c.name === 'DEF-spine006')!;
+    for (let i = 0; i < 120; i++) performer.update(frame({ t: i / 10 }));
+    expect(chest.scale.x).toBe(1);
+    expect(chest.position.y).toBe(0);
+    expect(head.rotation.x).toBe(0);
+    expect(performer.standing.notes.join()).toContain('micro-motion skipped');
+  });
+
   it('keeps eye bone rotation inside the configured limits at extreme targets', () => {
     const model = buildModel({ boneNames: ['DEF-eye.L', 'DEF-eye.R'] });
     const performer = new CharacterPerformer(model);

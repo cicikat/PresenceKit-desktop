@@ -21,6 +21,18 @@ open：这个模型本身仍没有自然站姿。要让它的站姿生效，得�
 （`scripts/blender/export_runtime_glb.py`，尚未入库）重新导出；模型源文件未修改。
 observe：浏览器/真实 Room 与 Pet 窗口的实测尚未完成，目前只通过从真实 GLB 节点树重建骨架的
 单元验证确认五组全部跳过。
+2026-10-03 追加（partial）：
+- GLTFLoader 会把节点名里的 `. [ ] : /` 去掉，Blender 的 `DEF-eye.L` 到运行时是 `DEF-eyeL`，而候选骨名表按带点写，
+  所以此前真实加载时只有 `DEF-spine` 一根骨被识别（头、眼、肩、四肢全部漏掉；单测直接造带点的骨名因此看不出来）。
+  `BoneResolver` 现在把候选名、显式 boneMap 与实际骨名都按「去点号、小写」比较，真实 GLB 上 head/eye/肩/四肢均能识别。
+- 识别修好后，躯干链断开（脸、眼、头发骨不在头骨之下）的模型会暴露另一个问题：呼吸、肩部噪声和头部微漂移
+  只写在断开的链上，被拆成两半权重的头发接缝顶点（v008 的 Hair_Main 147/491、Hair_Fringe 12/74）被拉扯，
+  headless 实测接缝 3–18mm。现在躯干链断开时跳过这三项连续待机动作（`standing.notes` 说明原因），
+  同一脚本复测 15 秒待机帧间位移与漂移均为 0。
+- 头发「骨骼与形态键抢同一处」的假设在该 GLB 上不成立：节点没有 `phys_chain` 属性，不会生成弹簧链，也没有 clip；
+  `hairSway` 形态键不动发根（Hair_Main 顶部 15% 顶点最大 2mm，Hair_Fringe 为 0），但接缝处最大 53mm 的大幅摆动。
+  是否就是用户看到的发根抽搐，需要真实窗口确认；根治仍是重新导出时让头发/眼骨挂在头骨之下。
+open：真实 Room/Pet 窗口验收未做。
 详见 `../cc-tasks/2026-09-27-character-assets-and-performance.md`。
 
 ## 角色资产与统一表演 CA-00（2026-09-29，partial）

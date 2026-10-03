@@ -14,6 +14,16 @@ export function microNoise(t: number, seed: number): number {
   );
 }
 
+/**
+ * GLTFLoader runs node names through PropertyBinding.sanitizeNodeName, which drops `. [ ] : /` and
+ * turns whitespace into `_`, so a Blender bone `DEF-eye.L` arrives as `DEF-eyeL`. Candidates and
+ * explicit names are compared in that sanitized, lowercased form so they match what the loader
+ * actually produced (and still match when a model reaches us unsanitized).
+ */
+export function canonicalBoneName(name: string): string {
+  return name.replace(/\s/g, '_').replace(/[\[\].:/]/g, '').toLowerCase();
+}
+
 export class BoneResolver {
   private byName = new Map<string, THREE.Bone>();
   /** Lowercased name → bone, for case-insensitive candidate matching. */
@@ -33,8 +43,8 @@ export class BoneResolver {
     root.traverse(o => {
       if (o instanceof THREE.Bone) {
         this.byName.set(o.name, o);
-        const lower = o.name.toLowerCase();
-        // First occurrence wins: a duplicate lowercase name is ambiguous, so keep the
+        const lower = canonicalBoneName(o.name);
+        // First occurrence wins: a duplicate canonical name is ambiguous, so keep the
         // earlier one and let checkTopology report it.
         if (!this.byLower.has(lower)) this.byLower.set(lower, o);
       }
@@ -42,14 +52,14 @@ export class BoneResolver {
     for (const role of ALL_ROLES) {
       const explicit = map[role];
       if (explicit) {
-        const bone = this.byName.get(explicit);
+        const bone = this.byName.get(explicit) ?? this.byLower.get(canonicalBoneName(explicit));
         if (bone) { this.resolved[role] = bone; continue; }
         // An explicit entry that does not exist is a stale mapping, not a reason to fall
         // back silently — the user would keep seeing a rig that ignores their setting.
         this.warnings.push(`boneMap.${role} points at "${explicit}" which is not a bone in this model`);
       }
       for (const cand of ROLE_CANDIDATES[role]) {
-        const bone = this.byLower.get(cand.toLowerCase());
+        const bone = this.byLower.get(canonicalBoneName(cand));
         if (bone) { this.resolved[role] = bone; break; }
       }
     }
