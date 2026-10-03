@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import type { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { parseMaterialsConfig, type MaterialsConfig } from '../character/materialsConfig';
 import { parseExpressionsConfig, type ExpressionsConfig } from '../character/expressionsConfig';
+import { parseMotionsConfig, type MotionsConfig } from '../character/motionConfig';
 
 export interface RoomAsset {
   fileName: string;
@@ -117,3 +118,22 @@ export async function loadCharacterExpressions(fileName: string): Promise<Expres
     return null;
   }
 }
+
+/** CA-05 sidecar `<model>.motions.json`; null when absent or invalid. */
+export async function loadCharacterMotions(fileName: string): Promise<MotionsConfig | null> {
+  try {
+    const text = await invoke<string | null>('read_room_motion_config', { fileName });
+    if (!text) return null;
+    const result = parseMotionsConfig(JSON.parse(text));
+    if (result.ok === true) return result.config;
+    console.warn('[motions] invalid config, no motions loaded:', (result as { errors: string[] }).errors);
+    return null;
+  } catch (error) {
+    console.warn('[motions] config unavailable, no motions loaded:', error);
+    return null;
+  }
+}
+
+/** Data URL of `motions/<name>.glb`, or null when it does not exist. */
+export const loadMotionFileUrl = (motionName: string): Promise<string | null> =>
+  invoke<string | null>('read_room_motion_file', { motionName });

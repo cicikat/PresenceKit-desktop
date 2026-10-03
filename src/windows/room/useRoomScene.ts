@@ -11,10 +11,11 @@ import { CharacterPerformer } from '../../shared/character/performer';
 import { setupCharacter } from './characterSetup';
 import { collectSceneCameraPresets, placementFromSceneCamera } from './sceneCameraPresets';
 import type { SceneCameraPreset } from './sceneCameraPresets';
+import { MotionLibrary, setActiveMotionLibrary } from '../../shared/character/motionLibrary';
 import { buildCharacterDiagnostics, publishCharacterDiagnostics } from '../../shared/character/diagnostics';
 import type { BindingReport } from '../../shared/character/toonMaterial';
 import type { MappingReport } from './morphController';
-import { loadRoomModel, loadCharacterMaterials, loadCharacterToonTextures, loadCharacterExpressions } from '../../shared/room/roomAssets';
+import { loadRoomModel, loadCharacterMaterials, loadCharacterToonTextures, loadCharacterExpressions, loadCharacterMotions, loadMotionFileUrl } from '../../shared/room/roomAssets';
 import { applyToonBindings } from '../../shared/character/toonMaterial';
 import type { RoomSettings } from '../../shared/room/roomSettings';
 import {
@@ -344,6 +345,7 @@ export function useRoomScene(
   const freeLookRef        = useRef(false);
   const [freeLook, setFreeLook] = useState(false);
   const springChainsRef    = useRef<SpringChain[]>([]);
+  const motionRef          = useRef<MotionLibrary | null>(null);
   const mixerRef           = useRef<THREE.AnimationMixer | null>(null);
   const animatedBoneNamesRef = useRef<Set<string>>(new Set());
 
@@ -482,6 +484,8 @@ export function useRoomScene(
       disposeModel(child);
     }
     performerRef.current = null;
+    motionRef.current = null;
+    setActiveMotionLibrary(null);
     springChainsRef.current = [];
 
     let cancelled = false;
@@ -513,6 +517,14 @@ export function useRoomScene(
         performerRef.current = setup.performer;
         void loadCharacterExpressions(s.characterFile).then((cfg) => {
           if (cfg && !cancelled && !disposedRef.current && performerRef.current === setup.performer) { diagExtra.expressions = setup.performer.applyExpressions(cfg); publishDiag(); }
+        });
+        void loadCharacterMotions(s.characterFile).then(async (cfg) => {
+          if (!cfg || cancelled || disposedRef.current || performerRef.current !== setup.performer) return;
+          const lib = new MotionLibrary(model, setup.performer, gltf.animations);
+          await lib.load(cfg, loadMotionFileUrl);
+          if (cancelled || disposedRef.current || performerRef.current !== setup.performer) { lib.dispose(); return; }
+          motionRef.current = lib;
+          setActiveMotionLibrary(lib);
         });
         publishDiag();
         springChainsRef.current = setup.springChains;
@@ -1014,6 +1026,7 @@ export function useRoomScene(
       // All morph/bone performance layers live in the shared performer (CA-02) so Room and
       // Pet cannot drift apart. Room keeps only its own stage concerns: the physics chains
       // below, camera breathing, and mood light tinting.
+      motionRef.current?.update(dt);
       performerRef.current?.update({
         t, now,
         mood: currentMood,
@@ -1099,6 +1112,8 @@ export function useRoomScene(
         }
       });
 
+      motionRef.current = null;
+      setActiveMotionLibrary(null);
       gradeRef.current?.dispose();
       gradeRef.current = null;
       helpers.dispose();

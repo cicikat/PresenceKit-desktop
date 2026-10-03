@@ -826,6 +826,38 @@ fn read_room_material_map(app: tauri::AppHandle, file_name: String, map_name: St
     Ok(None)
 }
 
+/// CA-05 motion clip file: `<character dir>/motions/<name>.glb`, live-then-bundled. Single plain
+/// component, resolved path must stay inside the motions directory, 20MB cap. Not listed as a character.
+#[tauri::command]
+fn read_room_motion_file(app: tauri::AppHandle, motion_name: String) -> Result<Option<String>, String> {
+    let ok = Path::new(&motion_name).components().count() == 1
+        && !motion_name.starts_with('.')
+        && motion_name.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+        && motion_name.to_ascii_lowercase().ends_with(".glb");
+    if !ok { return Err("无效的动作文件名".to_string()); }
+    let mut dirs = vec![room_live_dir(&app, "character")?.join("motions")];
+    if let Ok(dir) = room_assets_dir(&app, "character") { dirs.push(dir.join("motions")); }
+    for dir in dirs {
+        let path = dir.join(&motion_name);
+        if !path.is_file() { continue; }
+        let (Ok(real), Ok(real_dir)) = (path.canonicalize(), dir.canonicalize()) else { continue };
+        if real.parent() != Some(real_dir.as_path()) {
+            return Err("动作文件必须位于 motions 目录内".to_string());
+        }
+        let meta = fs::metadata(&real).map_err(|e| format!("读取动作文件失败: {e}"))?;
+        if meta.len() > 20 * 1024 * 1024 { return Err("动作文件超过 20MB".to_string()); }
+        let bytes = fs::read(&real).map_err(|e| format!("读取动作文件失败: {e}"))?;
+        return Ok(Some(format!("data:model/gltf-binary;base64,{}", base64::engine::general_purpose::STANDARD.encode(bytes))));
+    }
+    Ok(None)
+}
+
+/// CA-05 sidecar: `<model>.motions.json`.
+#[tauri::command]
+fn read_room_motion_config(app: tauri::AppHandle, file_name: String) -> Result<Option<String>, String> {
+    read_character_sidecar(&app, &file_name, "motions")
+}
+
 #[tauri::command]
 fn list_room_assets(app: tauri::AppHandle, kind: String) -> Result<serde_json::Value, String> {
     if kind != "character" && kind != "scene" {
@@ -3547,6 +3579,8 @@ pub fn run() {
             read_room_asset,
             read_room_material_config,
             read_room_expression_config,
+            read_room_motion_config,
+            read_room_motion_file,
             read_room_material_map,
             list_room_props,
             list_live2d_models,

@@ -24,7 +24,7 @@
 | `manifest.json`（角色包清单） | 校验器有，导入器未接 | CA-01 / CA-07 | 应用现在不会读取，字段见 §4.9 |
 | `rig/humanoid.json`、`rig/calibration.json` | 未冻结 | CA-03 | 骨骼语义映射以设置面板 RoomSettings 为准（§4） |
 | `<模型名>.expressions.json` 侧车（语义名→加权形态键） | 可用（真实窗口验收未做） | CA-04 | 见 §4.8.1；包内 `expressions/expressions.json` 待 CA-07 |
-| `motions/motions.json`、外部动作重定向 | 未冻结 | CA-05 | 当前只有同骨架 GLB 内 `idle` clip（§4.6） |
+| `<模型名>.motions.json` + `motions/<名>.glb`（外部动作重定向） | 可用，但还没有触发入口（真实窗口验收未做） | CA-05 | 字段见 §4.10；目前没有触发入口：perform 指令还不能带动作 id（需后端契约变更），设置面板的预览按钮也还没做 |
 | SKIN / METAL / EYE 材质模板 | 可用（真实窗口验收未做） | CA-06 | 与 FACE/HAIR/CLOTH 共用同一 shader，仅默认参数不同，见 §4.8 |
 | GLASS 材质模板、脸部 SDF | 未实现 | CA-06 | GLASS 写进 materials.json 会被识别并跳过；SDF 需要额外贴图，见下方「验收前需要你提供的东西」 |
 
@@ -412,6 +412,33 @@ PNG 贴图靠 Rust 命令 `read_room_material_map` 读取，只允许模型同�
 
 一个语义名只要有一个目标能解析就整体替换原来的同名绑定；全部解析失败则保留原绑定。眨眼和口型始终独立于表情，所以微笑时仍能闭眼、说话。
 情绪到语义名的对应见文末「内置情绪 → 形态键映射」；这个文件只改「语义名 → 真实键」，不改情绪到语义名的关系。
+
+### 4.10 动作侧车 `<模型名>.motions.json` + `motions/` 目录（可用，无触发入口）
+
+动作文件放在角色目录下的 `motions/` 子目录（只含动作的 GLB，文件名仅字母数字 `._-`，≤20MB）；描述文件放在角色 GLB 旁。
+动作 GLB 里的骨架按语义角色（head、upperArmL…）自动识别，用「目标静止姿态 × 源静止姿态⁻¹ × 源局部旋转」重定向；位置轨道默认丢弃（原地动作）。
+
+```json
+{
+  "schemaVersion": "1.0.0",
+  "motions": [
+    { "id": "wave", "clip": "Wave", "file": "wave.glb", "loop": false,
+      "fadeInMs": 200, "fadeOutMs": 300, "mask": "arms", "priority": 5,
+      "rootMotion": "inPlace", "headEye": "performer" }
+  ]
+}
+```
+
+| 字段 | 规则 |
+|---|---|
+| `id` | `[A-Za-z0-9._-]`，1–48 字符，不得重复 |
+| `clip` / `file` | 动作 GLB 里的 clip 名；`file` 省略则用角色 GLB 自带动画 |
+| `mask` | `full` 全身 / `upper` 上半身 / `arms` 双臂 |
+| `priority` | −100 到 100，运行中的动作只会被同级或更高优先级替换 |
+| `rootMotion` | `inPlace`（默认）丢弃位移；`keep` 只保留 hips 位移并按髋高比缩放 |
+| `headEye` | `performer` 头与眼仍由表演层控制（动作里的头眼轨道被剔除）；`clip` 播放期间由动作接管，结束后表演层从静止姿态缓入 |
+
+动作缺必要骨骼时只播能映射的部分，并在诊断里标注；一条轨道都映射不上则该动作不可用。脚接触与手部 IK 未实现。
 
 ### 4.9 角色包清单 `manifest.json`（仅校验器，应用尚不读取）
 

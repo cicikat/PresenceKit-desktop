@@ -3,10 +3,11 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { Mood } from '../state/store';
 import type { BoneMap } from '../room/roomSettings';
+import { MotionLibrary, setActiveMotionLibrary } from '../character/motionLibrary';
 import { buildCharacterDiagnostics, publishCharacterDiagnostics } from '../character/diagnostics';
 import type { BindingReport } from '../character/toonMaterial';
 import type { MappingReport } from '../../windows/room/morphController';
-import { loadRoomModel, loadCharacterMaterials, loadCharacterToonTextures, loadCharacterExpressions } from '../room/roomAssets';
+import { loadRoomModel, loadCharacterMaterials, loadCharacterToonTextures, loadCharacterExpressions, loadCharacterMotions, loadMotionFileUrl } from '../room/roomAssets';
 import { applyToonBindings } from '../character/toonMaterial';
 import type { ActiveDirective } from '../../windows/room/avatarDirective';
 import { CharacterPerformer } from '../character/performer';
@@ -66,6 +67,8 @@ export function useCharacterRig(
   const charGroup = charGroupRef.current;
   const performerRef = useRef<CharacterPerformer | null>(null);
   const pendingSpeechRef = useRef<string | null>(null);
+  const motionRef = useRef<MotionLibrary | null>(null);
+  const lastTRef = useRef<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,6 +78,8 @@ export function useCharacterRig(
       disposeRigModel(child);
     }
     performerRef.current = null;
+    motionRef.current = null;
+    setActiveMotionLibrary(null);
 
     const loader = new GLTFLoader();
     loadRoomModel(loader, 'character', characterFile,
@@ -95,6 +100,14 @@ export function useCharacterRig(
         const extra: { expressions?: MappingReport; materials?: BindingReport[] } = {};
         const publish = () => { if (!cancelled && performerRef.current === performer) publishCharacterDiagnostics(buildCharacterDiagnostics(performer, extra)); };
         publish();
+        void loadCharacterMotions(characterFile).then(async (cfg) => {
+          if (!cfg || cancelled || performerRef.current !== performer) return;
+          const lib = new MotionLibrary(model, performer, gltf.animations);
+          await lib.load(cfg, loadMotionFileUrl);
+          if (cancelled || performerRef.current !== performer) { lib.dispose(); return; }
+          motionRef.current = lib;
+          setActiveMotionLibrary(lib);
+        });
         void loadCharacterExpressions(characterFile).then((cfg) => {
           if (cfg && !cancelled && performerRef.current === performer) { extra.expressions = performer.applyExpressions(cfg); publish(); }
         });
@@ -122,6 +135,8 @@ export function useCharacterRig(
 
     return () => {
       cancelled = true;
+      motionRef.current = null;
+      setActiveMotionLibrary(null);
       for (const child of [...charGroup.children]) {
         charGroup.remove(child);
         disposeRigModel(child);
@@ -139,6 +154,9 @@ export function useCharacterRig(
 
   const EMPTY_BONES: ReadonlySet<string> = new Set();
   const animate = useCallback((t: number, now: number, mood: Mood, directive: ActiveDirective | null) => {
+    const dt = lastTRef.current === null ? 0 : Math.max(0, Math.min(0.1, t - lastTRef.current));
+    lastTRef.current = t;
+    motionRef.current?.update(dt);
     performerRef.current?.update({
       t, now, mood, directive,
       talking: false,

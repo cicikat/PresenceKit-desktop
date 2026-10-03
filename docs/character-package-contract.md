@@ -98,7 +98,7 @@ network access, or permissions. Only user-selected local package data may be imp
 | `model.uri` | CA-07 local asset loader planned; existing GLB loader remains current |
 | `resources.rig` / `calibration` | CA-03 mapping and pose calibration planned |
 | `resources.expressions` | CA-04 semantic expression mapping current as sidecar `<model>.expressions.json` (`expressionsConfig.ts`, `read_room_expression_config`); package-embedded file and gaze/bone deltas planned |
-| `resources.motions` | CA-05 action library and retargeting planned |
+| `resources.motions` | CA-05 current as sidecar `<model>.motions.json` + `motions/<name>.glb` (`motionConfig.ts`, `retarget.ts`, `motionLibrary.ts`); package-embedded file, trigger path and IK planned |
 | `resources.materials` | CA-06 parser and FACE/HAIR/CLOTH/SKIN/METAL/EYE Toon material current (`materialsConfig.ts`, `toonMaterial.ts`); face SDF planned, outline current as an inverted-hull shell (`outlineWidth`/`outlineColor`); hair highlight, shade/transition maps (`shadeMap`/`transitionMap`, PNG beside the model via `read_room_material_map`) current. Until CA-07 packages exist, a dev/local sidecar `<model>.materials.json` next to the character GLB is read by Room and Pet (`read_room_material_config`, 256KB cap, data only); an invalid sidecar falls back to the model's own materials |
 
 The resource file formats are frozen in their respective implementation orders. A

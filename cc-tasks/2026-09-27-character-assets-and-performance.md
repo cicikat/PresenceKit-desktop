@@ -178,7 +178,7 @@ character.ptchar
 
 验收：同一动作在两种不同骨架/比例样本上播放；挥手时呼吸与眨眼继续；全身动作保留原转头；微调不累积，停止后回正；脚锁/手目标在声明支持的场景成立。
 
-进展（2026-10-03，未验收）：动作合同与重定向核心已写成纯逻辑——`motionConfig.ts`（motions.json：id/clip/file/loop/淡入淡出/mask full·upper·arms/priority/rootMotion inPlace·keep/headEye performer·clip，拒绝路径穿越与重复 id）与 `retarget.ts`（按语义角色重定向四元数轨道：`目标静止 × 源静止⁻¹ × 源局部`，位置轨道默认丢弃、hips 在 keep 时按髋高比缩放，mask 与 performer 保留的头眼角色过滤，报告目标缺失角色），有单测。未接入：运行时读取 motions.json、加载动作 GLB 并从其骨架取静止姿态、混合播放/淡入淡出、永久/临时微调、脚接触与手部 IK（未实现，不提供入口）。
+进展（2026-10-03，未验收）：动作合同与重定向核心已写成纯逻辑——`motionConfig.ts`（motions.json：id/clip/file/loop/淡入淡出/mask full·upper·arms/priority/rootMotion inPlace·keep/headEye performer·clip，拒绝路径穿越与重复 id）与 `retarget.ts`（按语义角色重定向四元数轨道：`目标静止 × 源静止⁻¹ × 源局部`，位置轨道默认丢弃、hips 在 keep 时按髋高比缩放，mask 与 performer 保留的头眼角色过滤，报告目标缺失角色），有单测。运行时已接线：侧车 `<模型名>.motions.json`（Rust `read_room_motion_config`）+ `motions/<名>.glb`（`read_room_motion_file`，20MB、仅 motions 目录内），`MotionLibrary` 加载动作 GLB、从其骨架按角色取静止姿态并重定向，`MotionPlayer` 用独立 mixer 叠在待机之上播放（淡入淡出、优先级、播完/停止时还原被动骨骼、按 headEye 让出头眼），Room 与 Pet 的帧循环都会更新；`getActiveMotionLibrary()` 可取得当前库。未做：谁来触发播放（perform 指令尚无 motion 字段，需要后端契约变更，暂不扩）、永久/临时微调、脚接触与手部 IK（未实现，不提供入口）、从目标参考姿势而非绑定姿势做重定向校准、设置面板动作预览。
 
 ## 11. CA-06：Toon 模板与 Blender 预览
 
