@@ -11,6 +11,9 @@ import { CharacterPerformer } from '../../shared/character/performer';
 import { setupCharacter } from './characterSetup';
 import { collectSceneCameraPresets, placementFromSceneCamera } from './sceneCameraPresets';
 import type { SceneCameraPreset } from './sceneCameraPresets';
+import { buildCharacterDiagnostics, publishCharacterDiagnostics } from '../../shared/character/diagnostics';
+import type { BindingReport } from '../../shared/character/toonMaterial';
+import type { MappingReport } from './morphController';
 import { loadRoomModel, loadCharacterMaterials, loadCharacterToonTextures, loadCharacterExpressions } from '../../shared/room/roomAssets';
 import { applyToonBindings } from '../../shared/character/toonMaterial';
 import type { RoomSettings } from '../../shared/room/roomSettings';
@@ -492,11 +495,16 @@ export function useRoomScene(
         enableCharLayer(model);
         charGroup.add(model);
         applyShadowsRef.current?.();
+        const diagExtra: { expressions?: MappingReport; materials?: BindingReport[] } = {};
+        const publishDiag = () => {
+          if (!cancelled && !disposedRef.current && performerRef.current) publishCharacterDiagnostics(buildCharacterDiagnostics(performerRef.current, diagExtra));
+        };
         void loadCharacterMaterials(s.characterFile).then(async (materials) => {
           if (!materials) return;
           const textures = await loadCharacterToonTextures(s.characterFile, materials);
           if (cancelled || disposedRef.current) { Object.values(textures).forEach((t) => t.dispose()); return; }
-          applyToonBindings(model, materials, { textures });
+          diagExtra.materials = applyToonBindings(model, materials, { textures });
+          publishDiag();
         });
         charBaseScaleRef.current = s.scaleMul > 0 ? model.scale.x / s.scaleMul : model.scale.x;
         const setup = setupCharacter(
@@ -504,8 +512,9 @@ export function useRoomScene(
         );
         performerRef.current = setup.performer;
         void loadCharacterExpressions(s.characterFile).then((cfg) => {
-          if (cfg && !cancelled && !disposedRef.current && performerRef.current === setup.performer) setup.performer.applyExpressions(cfg);
+          if (cfg && !cancelled && !disposedRef.current && performerRef.current === setup.performer) { diagExtra.expressions = setup.performer.applyExpressions(cfg); publishDiag(); }
         });
+        publishDiag();
         springChainsRef.current = setup.springChains;
         mixerRef.current = setup.mixer;
         animatedBoneNamesRef.current = setup.animatedBoneNames;

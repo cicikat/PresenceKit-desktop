@@ -3,6 +3,9 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { Mood } from '../state/store';
 import type { BoneMap } from '../room/roomSettings';
+import { buildCharacterDiagnostics, publishCharacterDiagnostics } from '../character/diagnostics';
+import type { BindingReport } from '../character/toonMaterial';
+import type { MappingReport } from '../../windows/room/morphController';
 import { loadRoomModel, loadCharacterMaterials, loadCharacterToonTextures, loadCharacterExpressions } from '../room/roomAssets';
 import { applyToonBindings } from '../character/toonMaterial';
 import type { ActiveDirective } from '../../windows/room/avatarDirective';
@@ -84,12 +87,16 @@ export function useCharacterRig(
           if (!materials) return;
           const textures = await loadCharacterToonTextures(characterFile, materials);
           if (cancelled) { Object.values(textures).forEach((t) => t.dispose()); return; }
-          applyToonBindings(model, materials, { textures });
+          extra.materials = applyToonBindings(model, materials, { textures });
+          publish();
         });
         const performer = new CharacterPerformer(model, { boneMap, routes, hasIdleClip: false });
         performerRef.current = performer;
+        const extra: { expressions?: MappingReport; materials?: BindingReport[] } = {};
+        const publish = () => { if (!cancelled && performerRef.current === performer) publishCharacterDiagnostics(buildCharacterDiagnostics(performer, extra)); };
+        publish();
         void loadCharacterExpressions(characterFile).then((cfg) => {
-          if (cfg && !cancelled && performerRef.current === performer) performer.applyExpressions(cfg);
+          if (cfg && !cancelled && performerRef.current === performer) { extra.expressions = performer.applyExpressions(cfg); publish(); }
         });
         // A reply that arrived while the model was still loading still gets its mouth movement.
         if (pendingSpeechRef.current !== null) {

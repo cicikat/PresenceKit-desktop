@@ -205,6 +205,8 @@ character.ptchar
 
 验收：有效包、损坏包、不兼容版本、越界资源、缺选配资源、更新后过期映射均有稳定结果；发行安装后加载有效，重启保持本机修正。
 
+进展（2026-10-03，未验收）：诊断快照 `src/shared/character/diagnostics.ts`（角色映射缺失项、断链、路由、能力、站姿/待机动作门控、表情映射缺失目标、材质绑定状态与原因），只含名称与计数，无路径/资产内容；Room 与 Pet 加载后发布，`getCharacterDiagnostics()` / `subscribeCharacterDiagnostics()` 可读，`formatCharacterDiagnostics()` 输出可复制的脱敏 JSON。不上传后端、无新台账。未完成：设置面板展示与复制按钮（Room 设置页有他人未提交改动，待其合入后接）、ZIP 导入、本机覆盖管理界面、包内资源。
+
 ## 13. CA-08：验证与交付矩阵
 
 自动验证优先复用 vitest/Rust 现有测试，新增只覆盖真实风险：schema/迁移、引用解析、重定向坐标、骨骼合成、mask、生命周期、包路径与资源限制。相关 TypeScript 检查与 Vite build；Rust 改动才运行对应检查。按开发环境文档处理沙箱 EPERM，不用 tsc 替代构建。
