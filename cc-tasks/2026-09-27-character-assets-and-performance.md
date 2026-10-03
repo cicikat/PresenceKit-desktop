@@ -207,7 +207,9 @@ character.ptchar
 
 验收：有效包、损坏包、不兼容版本、越界资源、缺选配资源、更新后过期映射均有稳定结果；发行安装后加载有效，重启保持本机修正。
 
-进展（2026-10-03，未验收）：诊断快照 `src/shared/character/diagnostics.ts`（角色映射缺失项、断链、路由、能力、站姿/待机动作门控、表情映射缺失目标、材质绑定状态与原因），只含名称与计数，无路径/资产内容；Room 与 Pet 加载后发布，`getCharacterDiagnostics()` / `subscribeCharacterDiagnostics()` 可读，`formatCharacterDiagnostics()` 输出可复制的脱敏 JSON。不上传后端、无新台账。未完成：设置面板展示与复制按钮（Room 设置页有他人未提交改动，待其合入后接）、ZIP 导入、本机覆盖管理界面、包内资源。
+进展（2026-10-03，未验收）：诊断快照 `src/shared/character/diagnostics.ts`（角色映射缺失项、断链、路由、能力、站姿/待机动作门控、表情映射缺失目标、材质绑定状态与原因），只含名称与计数，无路径/资产内容；Room 与 Pet 加载后发布，`getCharacterDiagnostics()` / `subscribeCharacterDiagnostics()` 可读，`formatCharacterDiagnostics()` 输出可复制的脱敏 JSON。不上传后端、无新台账。未完成：设置面板展示与复制按钮（Room 设置页有他人未提交改动，待其合入后接）、本机覆盖管理界面。
+
+进展（2026-10-03，Rust 侧未验收）：ZIP 导入后端已落地（`zip` 依赖，Tauri 命令 `inspect_character_package` / `install_character_package`）。限制：128 文件、单文件 64MB、解压总量 256MB、manifest 256KB；拒绝绝对路径、`..`、反斜杠、隐藏段、符号链接、大小写重复；先写 `.staging-<assetId>`，校验模型 SHA-256 后再移动，模型最后移入；同 assetId 需 `replace=true`，旧文件进 `.prev/<assetId>/`。包内条目映射为现有扁平侧车命名（`<id>.glb`/`.materials.json`/`.expressions.json`/`.motions.json`、`motions/`、同级贴图），不改既有加载顺序。`cargo check` 与 3 个 Rust 单测通过。未完成：前端导入入口与替换确认 UI、revision 比较提示、真实 `.ptchar` 端到端与发行路径验收。
 
 ## 13. CA-08：验证与交付矩阵
 

@@ -721,6 +721,180 @@ fn room_assets_dir(app: &tauri::AppHandle, kind: &str) -> Result<PathBuf, String
 
 // Writable assets take precedence over bundled defaults in release builds.
 // Keep the same source as Vite's public directory in development.
+// ───── CA-07 character package (.ptchar ZIP) ─────
+
+const PKG_MAX_FILES: usize = 128;
+const PKG_MAX_ENTRY: u64 = 64 * 1024 * 1024;
+const PKG_MAX_TOTAL: u64 = 256 * 1024 * 1024;
+const PKG_MAX_MANIFEST: u64 = 256 * 1024;
+
+/// Entry names must be plain relative paths: no absolute/drive/backslash/`..`/hidden components.
+fn pkg_safe_name(name: &str) -> bool {
+    if name.is_empty() || name.contains('\\') || name.starts_with('/') || name.contains(':') || name.contains('\0') {
+        return false;
+    }
+    name.split('/').all(|part| !part.is_empty() && part != "." && part != ".." && !part.starts_with('.'))
+}
+
+struct PkgEntry { index: usize, name: String, size: u64 }
+
+/// Validate the archive shape (count, sizes, names, symlinks, duplicates) without extracting anything.
+fn pkg_scan(archive: &mut zip::ZipArchive<fs::File>) -> Result<Vec<PkgEntry>, String> {
+    if archive.len() > PKG_MAX_FILES { return Err(format!("包内文件超过 {PKG_MAX_FILES} 个")); }
+    let mut entries = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    let mut total = 0u64;
+    for i in 0..archive.len() {
+        let file = archive.by_index(i).map_err(|e| format!("无法读取包条目: {e}"))?;
+        if file.is_dir() { continue; }
+        let name = file.name().to_string();
+        if !pkg_safe_name(&name) { return Err(format!("包内路径不安全: {name}")); }
+        if let Some(mode) = file.unix_mode() {
+            if mode & 0o170000 == 0o120000 { return Err(format!("包内含符号链接: {name}")); }
+        }
+        if !seen.insert(name.to_ascii_lowercase()) { return Err(format!("包内路径重复: {name}")); }
+        if file.size() > PKG_MAX_ENTRY { return Err(format!("包内文件过大: {name}")); }
+        total = total.saturating_add(file.size());
+        if total > PKG_MAX_TOTAL { return Err("包解压后总量超过 256MB".to_string()); }
+        entries.push(PkgEntry { index: i, name, size: file.size() });
+    }
+    Ok(entries)
+}
+
+fn pkg_read_bounded(archive: &mut zip::ZipArchive<fs::File>, index: usize, limit: u64) -> Result<Vec<u8>, String> {
+    use std::io::Read;
+    let file = archive.by_index(index).map_err(|e| e.to_string())?;
+    let mut buf = Vec::new();
+    // Take limit+1 so an entry whose header lied about its size is still rejected.
+    file.take(limit + 1).read_to_end(&mut buf).map_err(|e| e.to_string())?;
+    if buf.len() as u64 > limit { return Err("包内文件超过限制".to_string()); }
+    Ok(buf)
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PackageInspection { entries: Vec<String>, manifest: String, model_sha256_actual: Option<String> }
+
+/// Read-only look inside a `.ptchar`: returns the safe entry list, the manifest text and the real
+/// SHA-256 of the file the manifest names as the model. Nothing is written; the client validates the manifest.
+#[tauri::command]
+fn inspect_character_package(path: String) -> Result<PackageInspection, String> {
+    let file = fs::File::open(&path).map_err(|e| format!("无法打开角色包: {e}"))?;
+    let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("不是有效的 ZIP: {e}"))?;
+    let entries = pkg_scan(&mut archive)?;
+    let manifest_entry = entries.iter().find(|e| e.name == "manifest.json").ok_or("缺少 manifest.json")?;
+    if manifest_entry.size > PKG_MAX_MANIFEST { return Err("manifest.json 过大".to_string()); }
+    let manifest_bytes = pkg_read_bounded(&mut archive, manifest_entry.index, PKG_MAX_MANIFEST)?;
+    let manifest = String::from_utf8(manifest_bytes).map_err(|_| "manifest.json 不是 UTF-8".to_string())?;
+    let model_uri = serde_json::from_str::<serde_json::Value>(&manifest).ok()
+        .and_then(|v| v["model"]["uri"].as_str().map(str::to_string));
+    let mut digest = None;
+    if let Some(uri) = model_uri {
+        if let Some(e) = entries.iter().find(|e| e.name == uri) {
+            use sha2::{Digest, Sha256};
+            let bytes = pkg_read_bounded(&mut archive, e.index, PKG_MAX_ENTRY)?;
+            digest = Some(format!("{:x}", Sha256::digest(&bytes)));
+        }
+    }
+    Ok(PackageInspection { entries: entries.into_iter().map(|e| e.name).collect(), manifest, model_sha256_actual: digest })
+}
+
+/// Where each package entry lands in the flat character directory the existing loaders read.
+/// Returns None for entries that are not installed (manifest, preview, planned rig/calibration files).
+fn pkg_target_name(asset_id: &str, manifest: &serde_json::Value, entry: &str) -> Option<String> {
+    let res = |key: &str| manifest["resources"][key].as_str();
+    if manifest["model"]["uri"].as_str() == Some(entry) { return Some(format!("{asset_id}.glb")); }
+    if res("materials") == Some(entry) { return Some(format!("{asset_id}.materials.json")); }
+    if res("expressions") == Some(entry) { return Some(format!("{asset_id}.expressions.json")); }
+    if res("motions") == Some(entry) { return Some(format!("{asset_id}.motions.json")); }
+    if let Some(rest) = entry.strip_prefix("motions/") {
+        if !rest.contains('/') && rest.to_ascii_lowercase().ends_with(".glb") { return Some(format!("motions/{rest}")); }
+    }
+    if let Some(rest) = entry.strip_prefix("textures/") {
+        if !rest.contains('/') && rest.to_ascii_lowercase().ends_with(".png") { return Some(rest.to_string()); }
+    }
+    None
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PackageInstallResult { file_name: String, installed: Vec<String>, replaced: bool }
+
+/// Install a validated package into the writable character directory. The model digest is
+/// re-checked here against the manifest, files are staged first and only moved into place when
+/// every one extracted, and an existing install of the same asset needs `replace` (its files
+/// are kept under `.prev/<assetId>/` for rollback).
+#[tauri::command]
+fn install_character_package(app: tauri::AppHandle, path: String, replace: bool) -> Result<PackageInstallResult, String> {
+    use sha2::{Digest, Sha256};
+    let file = fs::File::open(&path).map_err(|e| format!("无法打开角色包: {e}"))?;
+    let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("不是有效的 ZIP: {e}"))?;
+    let entries = pkg_scan(&mut archive)?;
+    let m = entries.iter().find(|e| e.name == "manifest.json").ok_or("缺少 manifest.json".to_string())?;
+    let manifest_text = String::from_utf8(pkg_read_bounded(&mut archive, m.index, PKG_MAX_MANIFEST)?)
+        .map_err(|_| "manifest.json 不是 UTF-8".to_string())?;
+    let manifest: serde_json::Value = serde_json::from_str(&manifest_text).map_err(|e| format!("manifest.json 无效: {e}"))?;
+    let asset_id = manifest["assetId"].as_str().ok_or("manifest 缺少 assetId".to_string())?.to_string();
+    if asset_id.len() < 3 || asset_id.len() > 64
+        || !asset_id.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '.' | '_' | '-'))
+        || asset_id.starts_with('.') {
+        return Err("assetId 不合法".to_string());
+    }
+    let expected = manifest["model"]["sha256"].as_str().ok_or("manifest 缺少 model.sha256".to_string())?.to_ascii_lowercase();
+
+    let live = room_live_dir(&app, "character")?;
+    fs::create_dir_all(&live).map_err(|e| format!("无法创建角色目录: {e}"))?;
+    let staging = live.join(format!(".staging-{asset_id}"));
+    let _ = fs::remove_dir_all(&staging);
+    fs::create_dir_all(staging.join("motions")).map_err(|e| e.to_string())?;
+    let model_name = format!("{asset_id}.glb");
+    let result = (|| -> Result<Vec<String>, String> {
+        let mut planned = Vec::new();
+        for e in &entries {
+            let Some(target) = pkg_target_name(&asset_id, &manifest, &e.name) else { continue };
+            let bytes = pkg_read_bounded(&mut archive, e.index, PKG_MAX_ENTRY)?;
+            if target == model_name {
+                let actual = format!("{:x}", Sha256::digest(&bytes));
+                if actual != expected { return Err("模型文件摘要与 manifest 不一致".to_string()); }
+            }
+            fs::write(staging.join(&target), &bytes).map_err(|e| format!("写入失败: {e}"))?;
+            planned.push(target);
+        }
+        if !planned.contains(&model_name) { return Err("包内没有模型文件".to_string()); }
+        Ok(planned)
+    })();
+    let planned = match result { Ok(p) => p, Err(e) => { let _ = fs::remove_dir_all(&staging); return Err(e); } };
+
+    let replaced = live.join(&model_name).exists();
+    if replaced && !replace {
+        let _ = fs::remove_dir_all(&staging);
+        return Err("已安装同一 assetId，需要确认替换".to_string());
+    }
+    if replaced {
+        let prev = live.join(".prev").join(&asset_id);
+        let _ = fs::remove_dir_all(&prev);
+        fs::create_dir_all(prev.join("motions")).map_err(|e| e.to_string())?;
+        let mut old_names = planned.clone();
+        for stale in [".materials.json", ".expressions.json", ".motions.json"] {
+            let n = format!("{asset_id}{stale}");
+            if !old_names.contains(&n) { old_names.push(n); }
+        }
+        for t in &old_names {
+            let old = live.join(t);
+            if old.is_file() { let _ = fs::rename(&old, prev.join(t)); }
+        }
+    }
+    fs::create_dir_all(live.join("motions")).map_err(|e| e.to_string())?;
+    // Model last so a half-moved install is never listed as a character.
+    let mut order = planned.clone();
+    order.sort_by_key(|t| *t == model_name);
+    for t in &order {
+        fs::rename(staging.join(t), live.join(t)).map_err(|e| format!("安装失败: {e}"))?;
+    }
+    let _ = fs::remove_dir_all(&staging);
+    Ok(PackageInstallResult { file_name: model_name, installed: planned, replaced })
+}
+
 fn room_live_dir(app: &tauri::AppHandle, kind: &str) -> Result<PathBuf, String> {
     if cfg!(debug_assertions) {
         return Ok(PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -3527,6 +3701,8 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            inspect_character_package,
+            install_character_package,
             actions::action_minimize_window,
             actions::action_request_attention,
             actions::action_send_notification,
@@ -4318,5 +4494,57 @@ mod avatar_file_tests {
         assert!(read_chat_attachment(ChatAttachment {
             filename: Some("paste.png".into()), file_path: Some("unused.png".into()), data_b64: Some("aGVsbG8=".into()),
         }).unwrap_err().starts_with("HTTP 422"));
+    }
+}
+
+#[cfg(test)]
+mod character_package_tests {
+    use super::*;
+    use std::io::Write;
+
+    fn make_zip(path: &Path, files: &[(&str, &[u8])]) {
+        let f = fs::File::create(path).unwrap();
+        let mut w = zip::ZipWriter::new(f);
+        let opts = zip::write::SimpleFileOptions::default();
+        for (n, b) in files {
+            w.start_file(*n, opts).unwrap();
+            w.write_all(b).unwrap();
+        }
+        w.finish().unwrap();
+    }
+
+    #[test]
+    fn rejects_unsafe_names() {
+        for bad in ["../a", "/a", "a/../b", r"a\b", "/abs/x", ".hidden", "a//b", ""] {
+            assert!(!pkg_safe_name(bad), "{bad}");
+        }
+        assert!(pkg_safe_name("motions/walk.glb"));
+    }
+
+    #[test]
+    fn scan_rejects_traversal_and_duplicates() {
+        let dir = std::env::temp_dir().join(format!("pkgtest-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("bad.zip");
+        make_zip(&p, &[("../evil.txt", b"x")]);
+        let mut a = zip::ZipArchive::new(fs::File::open(&p).unwrap()).unwrap();
+        assert!(pkg_scan(&mut a).is_err());
+        let q = dir.join("dup.zip");
+        make_zip(&q, &[("a.txt", b"1"), ("A.txt", b"2")]);
+        let mut a = zip::ZipArchive::new(fs::File::open(&q).unwrap()).unwrap();
+        assert!(pkg_scan(&mut a).is_err());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn target_mapping_is_flat_and_scoped() {
+        let m: serde_json::Value = serde_json::json!({
+            "model": {"uri": "model.glb"},
+            "resources": {"materials": "materials/materials.json"}
+        });
+        assert_eq!(pkg_target_name("hero", &m, "model.glb").as_deref(), Some("hero.glb"));
+        assert_eq!(pkg_target_name("hero", &m, "materials/materials.json").as_deref(), Some("hero.materials.json"));
+        assert_eq!(pkg_target_name("hero", &m, "motions/a.glb").as_deref(), Some("motions/a.glb"));
+        assert_eq!(pkg_target_name("hero", &m, "preview.png"), None);
     }
 }
