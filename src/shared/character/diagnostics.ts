@@ -2,7 +2,7 @@
 import type { CharacterPerformer } from './performer';
 import type { BindingReport } from './toonMaterial';
 import type { MappingReport } from '../../windows/room/morphController';
-import { ALL_ROLES } from './humanoid';
+import { ALL_ROLES, LEG_ROLES, type BoneRole } from './humanoid';
 
 export interface CharacterDiagnostics {
   schema: 1;
@@ -15,8 +15,32 @@ export interface CharacterDiagnostics {
   morphKeyCount: number;
   expressions?: { applied: string[]; unresolved: string[]; missingTargets: string[] };
   materials?: { applied: number; problems: { id: string; status: string }[] };
+  /** Body parts the rig cannot support, with stable codes the UI can map to i18n keys. */
+  degraded: BodyDegradation[];
   /** Degradation reasons from routing, standing pose and rig topology, in load order. */
   notes: string[];
+}
+
+export interface BodyDegradation {
+  part: 'armL' | 'armR' | 'legs' | 'torso';
+  /** Stable code: arm-drop-unavailable, no-legs, partial-legs, no-torso-anchor. */
+  code: string;
+  missing: string[];
+}
+
+/** Which natural-pose abilities are lost to missing bones. Never claims a calibration the rig cannot back. */
+export function describeBodyDegradation(present: ReadonlySet<BoneRole>): BodyDegradation[] {
+  const out: BodyDegradation[] = [];
+  for (const [part, roles] of [['armL', ['upperArmL', 'lowerArmL']], ['armR', ['upperArmR', 'lowerArmR']]] as const) {
+    const missing = roles.filter((r) => !present.has(r));
+    if (missing.length) out.push({ part, code: 'arm-drop-unavailable', missing });
+  }
+  const legMissing = LEG_ROLES.filter((r) => !present.has(r));
+  if (legMissing.length === LEG_ROLES.length) out.push({ part: 'legs', code: 'no-legs', missing: legMissing });
+  else if (legMissing.length) out.push({ part: 'legs', code: 'partial-legs', missing: legMissing });
+  const torso = (['hips', 'spine', 'chest'] as const).filter((r) => !present.has(r));
+  if (torso.length) out.push({ part: 'torso', code: 'no-torso-anchor', missing: torso });
+  return out;
 }
 
 export function buildCharacterDiagnostics(
@@ -34,6 +58,7 @@ export function buildCharacterDiagnostics(
     standing: { verified: standing.verified, skippedGroups: [...standing.skippedGroups], missingLegs: [...standing.missingLegs] },
     idleMotionSafe: performer.idleMotionSafe,
     morphKeyCount: performer.morph.names().length,
+    degraded: describeBodyDegradation(present),
     notes: [...routes.notes, ...standing.notes, ...performer.bones.warnings],
   };
   if (extra.expressions) out.expressions = { ...extra.expressions };

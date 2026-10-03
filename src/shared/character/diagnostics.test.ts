@@ -14,6 +14,8 @@ describe('CA-07 diagnostics', () => {
     expect(d.roles.missing).toContain('handL');
     expect(d.routes.gaze).toBe('bone');
     expect(d.materials).toEqual({ applied: 1, problems: [{ id: 'b', status: 'stale-name' }] });
+    expect(d.degraded.find((x) => x.part === 'armL')).toEqual({ part: 'armL', code: 'arm-drop-unavailable', missing: ['upperArmL', 'lowerArmL'] });
+    expect(d.degraded.some((x) => x.code === 'no-legs')).toBe(true);
     expect(JSON.stringify(d)).not.toMatch(/[A-Za-z]:[\/]/);
   });
 });
