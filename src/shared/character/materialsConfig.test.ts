@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { buildToonRamp, parseMaterialsConfig, resolveToonParams, TEMPLATE_DEFAULTS } from './materialsConfig';
+import { MAP_FILE, parseMaterialsConfig, resolveToonParams, TEMPLATE_DEFAULTS } from './materialsConfig';
 import { applyToonBindings, revertToonBindings, updateToonParams } from './toonMaterial';
 
 const raw = {
@@ -33,16 +33,26 @@ describe('CA-06 materials config', () => {
     const r = parseMaterialsConfig(raw);
     if (!r.ok) throw new Error('parse');
     const face = r.config.bindings[0];
-    expect(resolveToonParams(face).shadeSoftness).toBe(TEMPLATE_DEFAULTS.FACE.shadeSoftness);
+    expect(resolveToonParams(face).edgeHigh).toBe(TEMPLATE_DEFAULTS.FACE.edgeHigh);
     expect(resolveToonParams(face).rimStrength).toBe(0.4);
     expect(resolveToonParams(face, r.config.looks.night.face).shadeColor).toBe('#334466');
     expect(resolveToonParams(face, r.config.looks.night.face, { shadeColor: '#112233' }).shadeColor).toBe('#112233');
   });
-  it('builds a ramp that goes shade -> white across the threshold', () => {
-    const p = { ...TEMPLATE_DEFAULTS.CLOTH, shadeColor: '#404040', shadeThreshold: 0, shadeSoftness: 0 };
-    const ramp = buildToonRamp(p, [1, 1, 1], 64);
-    expect(ramp[0]).toBeLessThan(80);
-    expect(ramp[63 * 4]).toBe(255);
+  it('defaults match the Blender group and accept map names beside the model', () => {
+    expect(TEMPLATE_DEFAULTS.CLOTH).toMatchObject({ edgeLow: -0.22, edgeHigh: 0.68, transitionStrength: 0.2, rimPower: 5 });
+    const ok = parseMaterialsConfig({ ...raw, bindings: [{ ...raw.bindings[0], params: { shadeMap: 'Body__ShadowTint.png', hairSheen: 0.075 } }] });
+    expect(ok).toMatchObject({ ok: true });
+    for (const bad of ['../x.png', 'a/b.png', 'C:x.png', '.hidden.png', 'x.glb']) {
+      expect(MAP_FILE.test(bad)).toBe(false);
+      expect(parseMaterialsConfig({ ...raw, bindings: [{ ...raw.bindings[0], params: { transitionMap: bad } }] })).toMatchObject({ ok: false });
+    }
+  });
+  it('maps legacy threshold/softness to an edge pair', () => {
+    const r = parseMaterialsConfig({ ...raw, bindings: [{ ...raw.bindings[0], params: { shadeThreshold: 0.2, shadeSoftness: 0.2 } }] });
+    if (!r.ok) throw new Error('parse');
+    expect(r.config.bindings[0].params.edgeLow).toBeCloseTo(0.1);
+    expect(r.config.bindings[0].params.edgeHigh).toBeCloseTo(0.3);
+    expect(r.warnings.join()).toContain('legacy');
   });
 });
 
@@ -81,8 +91,8 @@ describe('CA-06 toon application', () => {
     const first = body.material;
     applyToonBindings(root, parsed.config, { look: 'night', local: { face: { rimStrength: 1.5 } } });
     expect(body.material).toBe(first);
-    expect((first.userData.toonRim as { rimStrength: { value: number } }).rimStrength.value).toBe(1.5);
+    expect((first.userData.toonUniforms as { ptRimStrength: { value: number } }).ptRimStrength.value).toBe(1.5);
     updateToonParams(first as unknown as THREE.MeshToonMaterial, resolveToonParams(parsed.config.bindings[0], undefined, { rimStrength: 0 }));
-    expect((first.userData.toonRim as { rimStrength: { value: number } }).rimStrength.value).toBe(0);
+    expect((first.userData.toonUniforms as { ptRimStrength: { value: number } }).ptRimStrength.value).toBe(0);
   });
 });

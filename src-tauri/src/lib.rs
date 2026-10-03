@@ -782,6 +782,39 @@ fn read_room_material_config(app: tauri::AppHandle, file_name: String) -> Result
     fs::read_to_string(&path).map(Some).map_err(|e| format!("读取 {} 失败: {e}", path.display()))
 }
 
+/// CA-06 Toon maps: a PNG beside the character GLB (same live-then-bundled order), returned as a
+/// data URL. Both names must be a single plain component; the resolved file must stay inside the
+/// character directory (no symlink escape) and is capped at 12MB.
+#[tauri::command]
+fn read_room_material_map(app: tauri::AppHandle, file_name: String, map_name: String) -> Result<Option<String>, String> {
+    let plain = |name: &str, ext: &str| {
+        Path::new(name).components().count() == 1
+            && !name.starts_with('.')
+            && name.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+            && name.to_ascii_lowercase().ends_with(ext)
+    };
+    if !plain(&file_name, ".glb") { return Err("无效的 GLB 文件名".to_string()); }
+    if !plain(&map_name, ".png") { return Err("无效的材质贴图文件名".to_string()); }
+    let live_dir = room_live_dir(&app, "character")?;
+    let mut candidates = vec![live_dir];
+    if let Ok(dir) = room_assets_dir(&app, "character") { candidates.push(dir); }
+    for dir in candidates {
+        let path = dir.join(&map_name);
+        if !path.is_file() { continue; }
+        let (Ok(real), Ok(real_dir)) = (path.canonicalize(), dir.canonicalize()) else { continue };
+        if real.parent() != Some(real_dir.as_path()) {
+            return Err("材质贴图必须位于模型同级目录".to_string());
+        }
+        let meta = fs::metadata(&real).map_err(|e| format!("读取材质贴图失败: {e}"))?;
+        if meta.len() > 12 * 1024 * 1024 {
+            return Err("材质贴图超过 12MB".to_string());
+        }
+        let bytes = fs::read(&real).map_err(|e| format!("读取材质贴图失败: {e}"))?;
+        return Ok(Some(format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(bytes))));
+    }
+    Ok(None)
+}
+
 #[tauri::command]
 fn list_room_assets(app: tauri::AppHandle, kind: String) -> Result<serde_json::Value, String> {
     if kind != "character" && kind != "scene" {
@@ -3502,6 +3535,7 @@ pub fn run() {
             room_assets_location,
             read_room_asset,
             read_room_material_config,
+            read_room_material_map,
             list_room_props,
             list_live2d_models,
             send_chat,

@@ -11,7 +11,7 @@ import { CharacterPerformer } from '../../shared/character/performer';
 import { setupCharacter } from './characterSetup';
 import { collectSceneCameraPresets, placementFromSceneCamera } from './sceneCameraPresets';
 import type { SceneCameraPreset } from './sceneCameraPresets';
-import { loadRoomModel, loadCharacterMaterials } from '../../shared/room/roomAssets';
+import { loadRoomModel, loadCharacterMaterials, loadCharacterToonTextures } from '../../shared/room/roomAssets';
 import { applyToonBindings } from '../../shared/character/toonMaterial';
 import type { RoomSettings } from '../../shared/room/roomSettings';
 import {
@@ -492,8 +492,11 @@ export function useRoomScene(
         enableCharLayer(model);
         charGroup.add(model);
         applyShadowsRef.current?.();
-        void loadCharacterMaterials(s.characterFile).then((materials) => {
-          if (materials && !cancelled && !disposedRef.current) applyToonBindings(model, materials);
+        void loadCharacterMaterials(s.characterFile).then(async (materials) => {
+          if (!materials) return;
+          const textures = await loadCharacterToonTextures(s.characterFile, materials);
+          if (cancelled || disposedRef.current) { Object.values(textures).forEach((t) => t.dispose()); return; }
+          applyToonBindings(model, materials, { textures });
         });
         charBaseScaleRef.current = s.scaleMul > 0 ? model.scale.x / s.scaleMul : model.scale.x;
         const setup = setupCharacter(

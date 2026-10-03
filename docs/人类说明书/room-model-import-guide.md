@@ -7,11 +7,27 @@
 > **本版并入了「物理骨骼链」规范（§4.5）**：头发/尾巴/飘带类摆动改为**运行时弹簧物理**驱动，不再依赖循环形态键；`boneMap` 收窄为纯语义控制骨。旧的 `hairSwayLeft/Right` 降级为「未绑骨兜底方案」。
 > （本文取代早前的 `角色_场景_道具_模型导入说明书_v2.md`，以此为单一事实来源。）
 
-> **CA-01 现状校正（2026-09-29）**：当前 Room/Pet 只从单个 GLB 与本机 RoomSettings 读取配置，
-> **不会读取本文提到的 `character.json`**；其 boneMap、expressions、physicsBones、idleClip
-> 示例均是历史拟议方案，不可当作已生效的操作步骤。眼骨虽可被识别，当前眼神只驱动
-> `eyeLook*` 形态键；Pet 还不播放 GLB idle clip。新角色包合同及 planned/current 边界见
-> [角色包协议](../character-package-contract.md)。CA-09 将按最终实现重写本操作指南并实际复现。
+> **现状校正（工单 `cc-tasks/2026-09-27-character-assets-and-performance.md`，CA-09 增量维护中）**：
+> 当前 Room/Pet 只从单个 GLB、本机 RoomSettings 与可选的 `<模型名>.materials.json` 侧车读取配置，
+> **不会读取 `character.json`**，其 boneMap、expressions、physicsBones、idleClip 示例均是历史拟议方案。
+> 眼骨虽可被识别，当前眼神只驱动 `eyeLook*` 形态键；Pet 还不播放 GLB idle clip。
+> 角色包合同见 [角色包协议](../character-package-contract.md)。**本文最终仍需按 CA-09 完整复现一遍才算验收。**
+
+## 字段状态总览（先看这张表，再动手）
+
+「可用」= 当前代码已消费，做了就生效；「校验器有」= 只有解析校验，应用不会读取；「未冻结」= 格式要等对应工单定，**不要先写、不要先声明 capability**。
+
+| 内容 | 状态 | 对应工单 | 说明 |
+|---|---|---|---|
+| GLB 本体：骨名、形态键名、`phys_chain`、`idle` clip | 可用 | — | 见 §3、§4.1、§4.5、§4.6 |
+| `<模型名>.materials.json` 侧车（FACE/HAIR/CLOTH Toon 材质） | 可用（真实窗口验收未做） | CA-06 | 见 §4.8 |
+| `manifest.json`（角色包清单） | 校验器有，导入器未接 | CA-01 / CA-07 | 应用现在不会读取，字段见 §4.9 |
+| `rig/humanoid.json`、`rig/calibration.json` | 未冻结 | CA-03 | 骨骼语义映射以设置面板 RoomSettings 为准（§4） |
+| `expressions/expressions.json` | 未冻结 | CA-04 | 异名/自定义表情当前无入口（§6） |
+| `motions/motions.json`、外部动作重定向 | 未冻结 | CA-05 | 当前只有同骨架 GLB 内 `idle` clip（§4.6） |
+| SKIN / METAL / EYE / GLASS 材质模板、描边、脸部 SDF | 未实现 | CA-06 | 写进 materials.json 会被识别并跳过，不生效 |
+
+骨骼、表情、动作三类配置的 JSON 格式冻结前，建模端**不需要返工**：Blender 工程里的骨名、形态键名、自定义属性不变，将来只是把「语义角色 → 你的名字」补写成配置。
 
 ---
 
@@ -304,6 +320,66 @@ foot      DEF-foot.L / .R              toes       DEF-toe.L / .R
 - 表演指令来自后端映射（`Emerald-presence` 的 `performance_mapping` 配置，可整体关闭）；
   关闭后角色回到"只有 mood 基调表情"的现状。
 
+### 4.8 Toon 材质侧车 `<模型名>.materials.json`（可用）
+
+放在角色 GLB 旁边（例如 `character.glb` 对应 `character.materials.json`），Room 与 Pet 加载角色后都会读取。
+先查本机可写目录，再查内置资源；上限 256KB，只含数据；文件无效则**回退为模型自带材质**，不会报错中断。
+解析与范围校验在 `src/shared/character/materialsConfig.ts`。
+
+```json
+{
+  "schemaVersion": "1.0.0",
+  "bindings": [
+    {
+      "id": "face",
+      "mesh": "Body",
+      "slot": 0,
+      "materialName": "M_Face",
+      "template": "FACE",
+      "params": { "shadeColor": "#c9a9a6", "shadeThreshold": -0.05, "shadeSoftness": 0.25, "rimStrength": 0 }
+    }
+  ],
+  "looks": { "night": { "face": { "shadeColor": "#6a5a7a" } } }
+}
+```
+
+| 字段 | 规则 |
+|---|---|
+| `schemaVersion` | `1.x.y` |
+| `bindings[].id` | `[A-Za-z0-9._-]`，1–48 字符，不得重复 |
+| `mesh` + `slot` | 网格节点名 + 材质槽序号（从 0 起）；**这对组合必须唯一**，名字本身不是身份 |
+| `materialName` | 建模时的材质名；与运行时不一致则判为过期、不应用，防止重导出后串槽 |
+| `template` | `FACE` / `HAIR` / `CLOTH`。`SKIN` `METAL` `EYE` `GLASS` 会被识别并**跳过** |
+| `baseColor` | `#rrggbb`；不写则保留原贴图与原色 |
+| `shadeColor` / `rimColor` | `#rrggbb` |
+| `edgeLow` / `edgeHigh` | −1 到 1，明暗混合区间（光线与法线夹角的余弦，对应 Blender 的 Shadow Edge Low/High，默认 −0.22 / 0.68）。旧字段 `shadeThreshold`/`shadeSoftness` 仍可读，会换算成这一对并给出警告 |
+| `transitionStrength` | 0 到 4，交界钟形曲线乘该值后混向过渡色（默认 0.2） |
+| `hairSheen` | 0 到 2，头发高光 `pow(max(N·H,0),12)`，颜色 (0.88,0.93,1.0)；HAIR 默认 0.075 |
+| `shadeMap` / `transitionMap` | 同目录 PNG 文件名（不含路径，≤12MB），分别给出阴影色与过渡色；与底色贴图共用 UV，源材质没有底色贴图时忽略。不写 `shadeMap` 则用 `shadeColor` × 底色 |
+| `rimStrength` | 0 到 2，0 关闭边缘光 |
+| `rimPower` | 0.5 到 8，越大越细 |
+| `looks` | 外观变体：`look 名 → binding id → 参数覆盖`，切换不需要重新烘焙 |
+
+参数优先级：模板默认 < 绑定 `params` < 所选 look < 本机覆盖。未知参数名只警告并忽略，越界或格式错误则整份文件被拒绝。
+模板默认值：FACE 阴影偏粉，HAIR 默认带一点边缘光与头发高光，CLOTH 用基础值。
+着色公式对应 Blender 节点组 `V006_Clean_Toon`：`t = smoothstep(edgeLow, edgeHigh, N·L)`，颜色 `mix(阴影色, 底色, t)`，
+交界处按 `transitionStrength` 混向过渡色，再加 `pow(1−N·V, rimPower)·rimStrength` 边缘光与头发高光。`L` 取场景里的真实灯光（多灯按亮度加权），不写死方向。
+PNG 贴图靠 Rust 命令 `read_room_material_map` 读取，只允许模型同级目录；缺文件时该槽位退回 `shadeColor`。
+
+**不要期待：** Blender 节点原样移植、描边、脸部 SDF（planned）。真实窗口画面与 Blender 的比对尚未做。
+
+### 4.9 角色包清单 `manifest.json`（仅校验器，应用尚不读取）
+
+CA-07 的导入器落地前，这份文件**不会产生任何运行时效果**；先做也不会被消费，仅供提前对齐字段。校验在 `src/shared/character/manifest.ts`。
+
+必填：`schemaVersion`、`assetId`、`revision`、`provenance`（`author`、`license` 必填，`source` 可选）、`minimumRuntime`、`capabilities`、`model`（`uri`、`sha256`）。
+`schemaVersion` / `minimumRuntime` 为三段十进制版本，当前只认主版本 1；`assetId` 为稳定小写标识，不是文件名也不是后端角色 ID；
+`revision` 为包内容 SHA-256（64 位小写十六进制）；`model.sha256` 为 GLB 内容摘要，**GLB 变化会使本机节点校准失效**。
+`capabilities` 可选值 `humanoid` `expressions` `lookAt` `motions` `toon`；未知名只警告、不授予任何能力；未知必需扩展会被拒绝。
+`resources` 里的路径必须是包内相对路径：禁止绝对路径、`..`、反斜杠、隐藏路径、忽略大小写后的重名，且声明的文件必须存在。
+**声明了 capability 或发布了 resources 文件，并不代表对应效果已实现**，以上表「字段状态总览」为准。
+包不能携带可执行脚本、自定义 Shader 源码或远程下载地址。
+
 ---
 
 ## 5. 场景与道具
@@ -374,7 +450,8 @@ foot      DEF-foot.L / .R              toes       DEF-toe.L / .R
 - [ ] 角色内置动画 clip **可选导出**，命名 `idle`（见 §4.6）；不导出则系统仍用纯形态键+骨骼驱动。
 - [ ] 场景/道具真实米制、原点规范；场景灯可不导出。
 - [ ] 文件名纯 ASCII，放对文件夹。
-- [ ] 想覆盖默认表情/构图/物理参数 → 放 `character.json`。
+- [ ] 想要 Toon 材质 → 写 `<模型名>.materials.json` 放在 GLB 旁（见 §4.8；`mesh`+`slot` 必须取自导出后真实的网格与槽位）。
+- [ ] 想覆盖构图/物理参数 → 通过设置面板（RoomSettings）；`character.json` 不被读取。
 - [ ] **ARP（Auto-Rig Pro）导出**（已实测验证的路径）：用 Blender 通用 glTF 导出即可，但必须勾 **Data → Armature → 仅导出形变骨骼**（否则 300+ 控制/参考骨全进包，动画通道数爆炸）；动画只保留命名 `idle` 的单个 action；自定义属性经实测在通用导出下存活；ARP 控制器形状网格（`cs_user_*`）导出前排除；真实米制、面朝 +Z、Shape Keys / Custom Properties 勾选。
 
 ---

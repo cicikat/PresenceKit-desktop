@@ -7,38 +7,51 @@ export const PLANNED_TEMPLATES = ['SKIN', 'METAL', 'EYE', 'GLASS'] as const;
 export interface ToonParams {
   /** sRGB hex. Omitted = keep the source material's base color/texture untouched. */
   baseColor?: string;
-  /** sRGB hex of the shadowed side; the ramp stores shade/base so textured materials tint correctly. */
+  /** sRGB hex tint of the shadowed side when no shadeMap is given (multiplies the base color). */
   shadeColor: string;
-  /** Cosine of the light/normal angle where lit meets shade, [-1, 1]. */
-  shadeThreshold: number;
-  /** Width of the lit/shade transition in cosine units, [0, 1]; 0 is a hard edge. */
-  shadeSoftness: number;
+  /** Cosine(light, normal) where the lit/shade mix starts, [-1, 1] (Blender "Shadow Edge Low"). */
+  edgeLow: number;
+  /** Cosine(light, normal) where the mix is fully lit, [-1, 1] (Blender "Shadow Edge High"). */
+  edgeHigh: number;
+  /** Strength of the transition-tint bell curve at the lit/shade border, [0, 4]. */
+  transitionStrength: number;
   rimColor: string;
   /** Additive rim intensity, [0, 2]; 0 disables the rim. */
   rimStrength: number;
-  /** Fresnel exponent, [0.5, 8]; larger = thinner rim. */
+  /** Exponent of the facing term (1 - N.V), [0.5, 8]; the Blender graph uses 5. */
   rimPower: number;
+  /** Hair highlight intensity pow(max(N.H, 0), 12), [0, 2]; 0 disables it. */
+  hairSheen: number;
+  /** Sidecar PNG file name (same directory as the model) giving the shade color per texel. */
+  shadeMap?: string;
+  /** Sidecar PNG file name giving the color blended in at the lit/shade border. */
+  transitionMap?: string;
 }
 
 type Range = { min: number; max: number };
-const RANGES: Record<'shadeThreshold' | 'shadeSoftness' | 'rimStrength' | 'rimPower', Range> = {
-  shadeThreshold: { min: -1, max: 1 },
-  shadeSoftness: { min: 0, max: 1 },
+const RANGES: Record<'edgeLow' | 'edgeHigh' | 'transitionStrength' | 'rimStrength' | 'rimPower' | 'hairSheen', Range> = {
+  edgeLow: { min: -1, max: 1 },
+  edgeHigh: { min: -1, max: 1 },
+  transitionStrength: { min: 0, max: 4 },
   rimStrength: { min: 0, max: 2 },
   rimPower: { min: 0.5, max: 8 },
+  hairSheen: { min: 0, max: 2 },
 };
 const COLOR_KEYS = ['baseColor', 'shadeColor', 'rimColor'] as const;
 const NUMBER_KEYS = Object.keys(RANGES) as (keyof typeof RANGES)[];
+const MAP_KEYS = ['shadeMap', 'transitionMap'] as const;
 const HEX = /^#[0-9a-fA-F]{6}$/;
+/** Single path component, no separators: maps must sit beside the model. */
+export const MAP_FILE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,95}\.png$/;
 
 const BASE_DEFAULTS: ToonParams = {
-  shadeColor: '#8a8fa8', shadeThreshold: 0.1, shadeSoftness: 0.08,
-  rimColor: '#ffffff', rimStrength: 0, rimPower: 3,
+  shadeColor: '#8a8fa8', edgeLow: -0.22, edgeHigh: 0.68, transitionStrength: 0.2,
+  rimColor: '#ffffff', rimStrength: 0, rimPower: 5, hairSheen: 0,
 };
 /** Per-template defaults layer over the shared base so templates differ by data, not by shader forks. */
 export const TEMPLATE_DEFAULTS: Record<ToonTemplate, ToonParams> = {
-  FACE: { ...BASE_DEFAULTS, shadeColor: '#c9a9a6', shadeThreshold: -0.05, shadeSoftness: 0.25 },
-  HAIR: { ...BASE_DEFAULTS, shadeColor: '#6f6a88', rimStrength: 0.25, rimPower: 4 },
+  FACE: { ...BASE_DEFAULTS, shadeColor: '#c9a9a6' },
+  HAIR: { ...BASE_DEFAULTS, shadeColor: '#6f6a88', rimStrength: 0.25, hairSheen: 0.075 },
   CLOTH: { ...BASE_DEFAULTS },
 };
 
@@ -73,16 +86,34 @@ function parseParams(raw: unknown, where: string, errors: string[], warnings: st
   if (raw === undefined) return out;
   const data = asRecord(raw);
   if (!data) { errors.push(`${where}: params must be an object`); return out; }
+  const checkNumber = (key: keyof typeof RANGES, value: unknown): number | undefined => {
+    const range = RANGES[key];
+    if (typeof value === 'number' && Number.isFinite(value) && value >= range.min && value <= range.max) return value;
+    errors.push(`${where}: ${key} must be a number in [${range.min}, ${range.max}]`);
+    return undefined;
+  };
   for (const [key, value] of Object.entries(data)) {
     if ((COLOR_KEYS as readonly string[]).includes(key)) {
       if (typeof value === 'string' && HEX.test(value)) (out as Record<string, unknown>)[key] = value.toLowerCase();
       else errors.push(`${where}: ${key} must be #rrggbb`);
     } else if ((NUMBER_KEYS as readonly string[]).includes(key)) {
-      const range = RANGES[key as keyof typeof RANGES];
-      if (typeof value === 'number' && Number.isFinite(value) && value >= range.min && value <= range.max) {
-        (out as Record<string, unknown>)[key] = value;
-      } else errors.push(`${where}: ${key} must be a number in [${range.min}, ${range.max}]`);
-    } else warnings.push(`${where}: ignored unknown param ${key}`);
+      const n = checkNumber(key as keyof typeof RANGES, value);
+      if (n !== undefined) (out as Record<string, unknown>)[key] = n;
+    } else if ((MAP_KEYS as readonly string[]).includes(key)) {
+      if (typeof value === 'string' && MAP_FILE.test(value)) (out as Record<string, unknown>)[key] = value;
+      else errors.push(`${where}: ${key} must be a .png file name beside the model`);
+    } else if (key !== 'shadeThreshold' && key !== 'shadeSoftness') {
+      warnings.push(`${where}: ignored unknown param ${key}`);
+    }
+  }
+  // Pre-v2 sidecars: threshold/softness become the equivalent edge pair unless edges are explicit.
+  const threshold = data.shadeThreshold, softness = data.shadeSoftness;
+  if (threshold !== undefined || softness !== undefined) {
+    warnings.push(`${where}: shadeThreshold/shadeSoftness are legacy; use edgeLow/edgeHigh`);
+    const t = typeof threshold === 'number' ? threshold : 0.1;
+    const half = (typeof softness === 'number' ? softness : 0.08) / 2;
+    if (data.edgeLow === undefined) out.edgeLow = Math.max(-1, Math.min(1, t - half));
+    if (data.edgeHigh === undefined) out.edgeHigh = Math.max(-1, Math.min(1, t + half));
   }
   return out;
 }
@@ -153,32 +184,10 @@ export function resolveToonParams(
   return { ...TEMPLATE_DEFAULTS[binding.template], ...binding.params, ...look, ...local };
 }
 
-/** Ramp texel i (of n) covers cos = i/(n-1)*2-1, matching three's toon `dotNL * 0.5 + 0.5` lookup. */
-export function buildToonRamp(params: ToonParams, base: [number, number, number], size = 64): Uint8Array {
-  const shade = hexToLinear(params.shadeColor);
-  // Ratio of shade to base, clamped so a darker-than-shade base never brightens the lit side.
-  const ratio = shade.map((c, i) => Math.min(1, c / Math.max(base[i], 1e-3)));
-  const half = params.shadeSoftness / 2;
-  const out = new Uint8Array(size * 4);
-  for (let i = 0; i < size; i++) {
-    const cos = (i / (size - 1)) * 2 - 1;
-    const w = smoothstep(params.shadeThreshold - half, params.shadeThreshold + half, cos);
-    for (let c = 0; c < 3; c++) out[i * 4 + c] = Math.round((ratio[c] + (1 - ratio[c]) * w) * 255);
-    out[i * 4 + 3] = 255;
-  }
-  return out;
-}
-
 export function hexToLinear(hex: string): [number, number, number] {
   const channel = (offset: number) => {
     const s = parseInt(hex.slice(offset, offset + 2), 16) / 255;
     return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
   };
   return [channel(1), channel(3), channel(5)];
-}
-
-function smoothstep(edge0: number, edge1: number, x: number): number {
-  if (edge1 <= edge0) return x >= edge0 ? 1 : 0;
-  const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
-  return t * t * (3 - 2 * t);
 }

@@ -99,7 +99,7 @@ network access, or permissions. Only user-selected local package data may be imp
 | `resources.rig` / `calibration` | CA-03 mapping and pose calibration planned |
 | `resources.expressions` | CA-04 semantic expression and gaze mapping planned |
 | `resources.motions` | CA-05 action library and retargeting planned |
-| `resources.materials` | CA-06 parser and FACE/HAIR/CLOTH Toon material current (`materialsConfig.ts`, `toonMaterial.ts`); outline, hair highlight, face SDF planned. Until CA-07 packages exist, a dev/local sidecar `<model>.materials.json` next to the character GLB is read by Room and Pet (`read_room_material_config`, 256KB cap, data only); an invalid sidecar falls back to the model's own materials |
+| `resources.materials` | CA-06 parser and FACE/HAIR/CLOTH Toon material current (`materialsConfig.ts`, `toonMaterial.ts`); outline and face SDF planned; hair highlight, shade/transition maps (`shadeMap`/`transitionMap`, PNG beside the model via `read_room_material_map`) current. Until CA-07 packages exist, a dev/local sidecar `<model>.materials.json` next to the character GLB is read by Room and Pet (`read_room_material_config`, 256KB cap, data only); an invalid sidecar falls back to the model's own materials |
 
 The resource file formats are frozen in their respective implementation orders. A
 producer must not set a capability or ship a resource file as a promise of effect until

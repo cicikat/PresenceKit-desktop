@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import * as THREE from 'three';
 import type { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { parseMaterialsConfig, type MaterialsConfig } from '../character/materialsConfig';
 
@@ -67,4 +68,36 @@ export async function loadCharacterMaterials(fileName: string): Promise<Material
     console.warn('[materials] config unavailable, using model materials:', error);
     return null;
   }
+}
+
+/** Sidecar PNG maps named by the config (shade/transition), decoded once per name; missing ones are skipped. */
+export async function loadCharacterToonTextures(
+  fileName: string, config: MaterialsConfig,
+): Promise<Record<string, THREE.Texture>> {
+  const names = new Set<string>();
+  for (const binding of config.bindings) {
+    if (binding.params.shadeMap) names.add(binding.params.shadeMap);
+    if (binding.params.transitionMap) names.add(binding.params.transitionMap);
+  }
+  for (const look of Object.values(config.looks)) {
+    for (const p of Object.values(look)) {
+      if (p.shadeMap) names.add(p.shadeMap);
+      if (p.transitionMap) names.add(p.transitionMap);
+    }
+  }
+  const out: Record<string, THREE.Texture> = {};
+  const loader = new THREE.TextureLoader();
+  await Promise.all([...names].map(async (mapName) => {
+    try {
+      const url = await invoke<string | null>('read_room_material_map', { fileName, mapName });
+      if (!url) return;
+      const texture = await loader.loadAsync(url);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.flipY = false; // match glTF texture orientation so the maps line up with the base map
+      out[mapName] = texture;
+    } catch (error) {
+      console.warn(`[materials] map ${mapName} unavailable:`, error);
+    }
+  }));
+  return out;
 }
