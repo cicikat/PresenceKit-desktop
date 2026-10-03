@@ -1,5 +1,22 @@
 # docs/known-issues.md — 已知问题与技术债
 
+## 角色资产与表演（CA-00～CA-09）遗留（2026-10-04，open）
+
+工单：`cc-tasks/2026-09-27-character-assets-and-performance.md`。下列均**未做**，自动检查（vitest、tsc、cargo check）通过不代表验收。
+
+- **真实窗口验收（open）**：Toon 材质与描边、表情映射、站姿、动作库、诊断，在 Room 与 Pet、开发与 Windows 发行版里一项都没有目检；Blender 参考场景比对也没做。
+- **`.ptchar` 前端导入（open）**：后端 `inspect_character_package` / `install_character_package` 已有，缺前端入口、替换确认、revision 比较提示、`.prev/` 回滚入口；没有用真实包做过端到端和发行路径验证；安装/回滚流程只有路径、重复、映射的单测，摘要校验与替换回滚没有测过。
+- **动作无触发入口（open，需后端契约）**：perform 指令不能带动作 id，动作库已进帧循环但用户不可见；设置面板预览按钮未做。变更在 Emerald-presence 侧，需要先定义契约。
+- **设置面板诊断入口（open）**：诊断快照与 `degraded` 可读可复制，但设置面板没有查看/复制按钮；Room 设置页曾有未提交改动，现已合入，可接。
+- **本机覆盖管理界面（open）**：骨名映射、材质、表情、动作的预览与覆盖管理（CA-07）未做。
+- **脸部 SDF 阴影（open，缺素材）**：需要用户提供与脸底色同 UV 的灰度阈值图，实现也未做。
+- **脚接触与手部 IK（open）**：未实现，半身判定之外的脚滑无解。
+- **GLASS 材质模板（open）**：识别后跳过。
+- **Pet 不播放 GLB idle clip（open）**：只有形态键与程序化微动。
+- **建模指南未被复现（open）**：`docs/人类说明书/room-model-import-guide.md` 已按实现重写，但没有从未配置的源模型走完整流程（CA-09 14.2），Blender 菜单级步骤未核实；`AGENTS.md`/`ARCHITECTURE.md`/`docs/pet-window-reference.md` 的入口同步未做。
+- **当前样例模型的绑定问题（open）**：头发/眼骨须挂在头骨下，接缝顶点权重要统一，见上一条站姿断链条目；需用户重新导出。
+- **双窗口与发行版回归（open，CA-08）**：双窗口一致性、发行包、性能与生命周期回归未开始。
+
 ## Room 可视化编辑器（2026-10-01，partial）
 
 current：编辑模式右侧面板（对象清单 / 附加灯 / 阴影 / 外观预设 / 画面调色），Live2D 下仅调色；
