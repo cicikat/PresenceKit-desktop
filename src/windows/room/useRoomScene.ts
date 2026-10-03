@@ -53,6 +53,8 @@ interface SceneRefs {
   targetLightColor: THREE.Color;
   targetLightIntensity: number;
   camBase: THREE.Vector3;
+  /** Orbit target at rest; breathing shifts it with the camera so the view direction never drifts. */
+  tgtBase: THREE.Vector3;
   proxyKey: THREE.Mesh;
   proxyFill: THREE.Mesh;
   helpers: LightHelperSet;
@@ -168,6 +170,7 @@ function applyView(refs: SceneRefs, settings: RoomSettings): void {
     applyFraming(refs.camera, refs.controls, settings.framing, fov);
   }
   refs.camBase.copy(refs.camera.position);
+  refs.tgtBase.copy(refs.controls.target);
 }
 
 function fitSceneClipRange(camera: THREE.PerspectiveCamera, controls: OrbitControls, scene: THREE.Object3D): void {
@@ -858,6 +861,7 @@ export function useRoomScene(
       targetLightColor,
       targetLightIntensity,
       camBase: new THREE.Vector3(0, 1.15, 2.0),
+      tgtBase: new THREE.Vector3(0, 1.15, 0),
       proxyKey,
       proxyFill,
       helpers,
@@ -1046,11 +1050,10 @@ export function useRoomScene(
 
       // camera breathing — paused in free look and placement mode
       if (!freeLookRef.current && !placementModeRef.current) {
-        camera.position.set(
-          refs.camBase.x + Math.sin(t * 0.18) * 0.010,
-          refs.camBase.y + Math.sin(t * 0.24) * 0.008,
-          refs.camBase.z,
-        );
+        const bx = Math.sin(t * 0.18) * 0.010;
+        const by = Math.sin(t * 0.24) * 0.008;
+        camera.position.set(refs.camBase.x + bx, refs.camBase.y + by, refs.camBase.z);
+        controls.target.set(refs.tgtBase.x + bx, refs.tgtBase.y + by, refs.tgtBase.z);
       }
 
       if (settingsRef.current.lights.moodTint) {
@@ -1182,6 +1185,7 @@ export function useRoomScene(
       refs.controls.target.z,
     ];
     refs.camBase.copy(refs.camera.position);
+    refs.tgtBase.copy(refs.controls.target);
     const next = { ...settingsRef.current, customView: { pos, target } };
     settingsRef.current = next;
     saveRoomSettings(next);
