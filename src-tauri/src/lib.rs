@@ -755,19 +755,18 @@ fn read_room_asset(app: tauri::AppHandle, kind: String, file_name: String) -> Re
     Ok(format!("data:model/gltf-binary;base64,{}", base64::engine::general_purpose::STANDARD.encode(bytes)))
 }
 
-/// CA-06 sidecar: `<model>.materials.json` next to a character GLB, same live-then-bundled order.
+/// Sidecar JSON next to a character GLB (`<model>.<kind>.json`), same live-then-bundled order.
 /// Returns None when absent. The file is data only; the client validates it before use.
-#[tauri::command]
-fn read_room_material_config(app: tauri::AppHandle, file_name: String) -> Result<Option<String>, String> {
-    if Path::new(&file_name).components().count() != 1
+fn read_character_sidecar(app: &tauri::AppHandle, file_name: &str, kind: &str) -> Result<Option<String>, String> {
+    if Path::new(file_name).components().count() != 1
         || file_name.starts_with('.')
         || !file_name.to_ascii_lowercase().ends_with(".glb") {
         return Err("无效的 GLB 文件名".to_string());
     }
-    let side_name = format!("{}.materials.json", &file_name[..file_name.len() - 4]);
-    let live = room_live_dir(&app, "character")?.join(&side_name);
+    let side_name = format!("{}.{kind}.json", &file_name[..file_name.len() - 4]);
+    let live = room_live_dir(app, "character")?.join(&side_name);
     let path = if live.is_file() { live } else {
-        match room_assets_dir(&app, "character") {
+        match room_assets_dir(app, "character") {
             Ok(dir) => dir.join(&side_name),
             Err(_) => return Ok(None),
         }
@@ -777,9 +776,21 @@ fn read_room_material_config(app: tauri::AppHandle, file_name: String) -> Result
     }
     let meta = fs::metadata(&path).map_err(|e| format!("读取 {} 失败: {e}", path.display()))?;
     if meta.len() > 256 * 1024 {
-        return Err("材质配置超过 256KB".to_string());
+        return Err("侧车配置超过 256KB".to_string());
     }
     fs::read_to_string(&path).map(Some).map_err(|e| format!("读取 {} 失败: {e}", path.display()))
+}
+
+/// CA-06 sidecar: `<model>.materials.json`.
+#[tauri::command]
+fn read_room_material_config(app: tauri::AppHandle, file_name: String) -> Result<Option<String>, String> {
+    read_character_sidecar(&app, &file_name, "materials")
+}
+
+/// CA-04 sidecar: `<model>.expressions.json`.
+#[tauri::command]
+fn read_room_expression_config(app: tauri::AppHandle, file_name: String) -> Result<Option<String>, String> {
+    read_character_sidecar(&app, &file_name, "expressions")
 }
 
 /// CA-06 Toon maps: a PNG beside the character GLB (same live-then-bundled order), returned as a
@@ -3535,6 +3546,7 @@ pub fn run() {
             room_assets_location,
             read_room_asset,
             read_room_material_config,
+            read_room_expression_config,
             read_room_material_map,
             list_room_props,
             list_live2d_models,

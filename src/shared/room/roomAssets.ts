@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import * as THREE from 'three';
 import type { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { parseMaterialsConfig, type MaterialsConfig } from '../character/materialsConfig';
+import { parseExpressionsConfig, type ExpressionsConfig } from '../character/expressionsConfig';
 
 export interface RoomAsset {
   fileName: string;
@@ -100,4 +101,19 @@ export async function loadCharacterToonTextures(
     }
   }));
   return out;
+}
+
+/** CA-04 sidecar `<model>.expressions.json`; null when absent or invalid (the model's own key names stay in use). */
+export async function loadCharacterExpressions(fileName: string): Promise<ExpressionsConfig | null> {
+  try {
+    const text = await invoke<string | null>('read_room_expression_config', { fileName });
+    if (!text) return null;
+    const result = parseExpressionsConfig(JSON.parse(text));
+    if (result.ok === true) return result.config;
+    console.warn('[expressions] invalid config, using model key names:', (result as { errors: string[] }).errors);
+    return null;
+  } catch (error) {
+    console.warn('[expressions] config unavailable, using model key names:', error);
+    return null;
+  }
 }

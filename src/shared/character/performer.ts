@@ -10,7 +10,8 @@
  * Every dimension has exactly one owner per frame, decided by `resolveRoutes`.
  */
 import * as THREE from 'three';
-import { MorphController } from '../../windows/room/morphController';
+import { MorphController, type MappingReport } from '../../windows/room/morphController';
+import type { ExpressionsConfig } from './expressionsConfig';
 import { MOOD_MORPHS, EXPR_KEYS } from '../../windows/room/morphExpressions';
 import { BoneResolver, microNoise } from '../../windows/room/boneResolver';
 import { MOOD_TABLE } from '../state/store';
@@ -146,8 +147,10 @@ function eyeAxesInParent(
 export class CharacterPerformer {
   readonly morph: MorphController;
   readonly bones: BoneResolver;
-  readonly capability: RigCapability;
-  readonly routes: ResolvedRoutes;
+  capability!: RigCapability;
+  routes!: ResolvedRoutes;
+  private readonly requestedRoutes: PerformanceRoutes | undefined;
+  private readonly hasIdleClip: boolean;
 
   private readonly headBone: THREE.Bone | null;
   private readonly headRest = new THREE.Euler();
@@ -194,18 +197,9 @@ export class CharacterPerformer {
     if (this.leftEye) { this.leftEyeRest.copy(this.leftEye.quaternion); eyeAxesInParent(model, this.leftEye, this.leftEyeAxes); }
     if (this.rightEye) { this.rightEyeRest.copy(this.rightEye.quaternion); eyeAxesInParent(model, this.rightEye, this.rightEyeAxes); }
 
-    this.capability = probeRigCapability({
-      morphKeys: this.morph.names(),
-      expressionKeys: EXPR_KEYS,
-      boneNames: this.bones.names(),
-      resolved: {
-        head: this.headBone !== null,
-        leftEye: this.leftEye !== null,
-        rightEye: this.rightEye !== null,
-      },
-      hasIdleClip: options.hasIdleClip === true,
-    });
-    this.routes = resolveRoutes(options.routes, this.capability);
+    this.requestedRoutes = options.routes;
+    this.hasIdleClip = options.hasIdleClip === true;
+    this.refreshCapability();
 
     // Standing pose is applied once, here, before the procedural bases are recorded — so
     // breath and posture build on top of the relaxed rest instead of fighting it. The GLB's
@@ -228,6 +222,28 @@ export class CharacterPerformer {
     }
     if (resolved.shoulderL) this.shoulderLBaseY = resolved.shoulderL.position.y;
     if (resolved.shoulderR) this.shoulderRBaseY = resolved.shoulderR.position.y;
+  }
+
+  private refreshCapability(): void {
+    this.capability = probeRigCapability({
+      morphKeys: this.morph.names(),
+      expressionKeys: EXPR_KEYS,
+      boneNames: this.bones.names(),
+      resolved: {
+        head: this.headBone !== null,
+        leftEye: this.leftEye !== null,
+        rightEye: this.rightEye !== null,
+      },
+      hasIdleClip: this.hasIdleClip,
+    });
+    this.routes = resolveRoutes(this.requestedRoutes, this.capability);
+  }
+
+  /** Apply an expressions.json mapping and re-resolve routes, since mapped names can add capability. */
+  applyExpressions(config: ExpressionsConfig): MappingReport {
+    const report = this.morph.applyMapping(config);
+    this.refreshCapability();
+    return report;
   }
 
   /**

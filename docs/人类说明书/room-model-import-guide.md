@@ -23,7 +23,7 @@
 | `<模型名>.materials.json` 侧车（FACE/HAIR/CLOTH Toon 材质） | 可用（真实窗口验收未做） | CA-06 | 见 §4.8 |
 | `manifest.json`（角色包清单） | 校验器有，导入器未接 | CA-01 / CA-07 | 应用现在不会读取，字段见 §4.9 |
 | `rig/humanoid.json`、`rig/calibration.json` | 未冻结 | CA-03 | 骨骼语义映射以设置面板 RoomSettings 为准（§4） |
-| `expressions/expressions.json` | 未冻结 | CA-04 | 异名/自定义表情当前无入口（§6） |
+| `<模型名>.expressions.json` 侧车（语义名→加权形态键） | 可用（真实窗口验收未做） | CA-04 | 见 §4.8.1；包内 `expressions/expressions.json` 待 CA-07 |
 | `motions/motions.json`、外部动作重定向 | 未冻结 | CA-05 | 当前只有同骨架 GLB 内 `idle` clip（§4.6） |
 | SKIN / METAL / EYE 材质模板 | 可用（真实窗口验收未做） | CA-06 | 与 FACE/HAIR/CLOTH 共用同一 shader，仅默认参数不同，见 §4.8 |
 | GLASS 材质模板、脸部 SDF | 未实现 | CA-06 | GLASS 写进 materials.json 会被识别并跳过；SDF 需要额外贴图，见下方「验收前需要你提供的东西」 |
@@ -36,6 +36,7 @@
 |---|---|---|
 | 头发骨、眼骨的父级 | 重新导出时让 `DEF-hair_*`、`DEF-eye.*` 挂在头骨（`DEF-spine.006`）之下，不要挂在 armature 根下 | 否则躯干链被判为断链：自然站姿被跳过，呼吸/肩噪声/头部微漂移被关闭，眼睛不跟着头转 |
 | 骨骼权重 | 头发网格里被拆成「头骨一半、头发骨一半」的接缝顶点，权重要么全给头骨、要么全给头发骨 | 否则接缝处会被拉扯 |
+| 表情映射 | 如果形态键名不是 `smile`/`sad`/`angry`/`surprised`/`blink`/`mouthOpen` 等，列出你的真实键名（或直接写 `.expressions.json`）；多网格同名键请标明想驱动哪个网格 | 表情是否生效 |
 | 脸部阴影 SDF 贴图 | 与脸部底色贴图同 UV 的灰度图（脸部明暗阈值图）。脸部 SDF 尚未实现；没有这张图时脸部用普通 FACE 明暗，不会报错 | 脸部 SDF 阴影 |
 | 材质贴图 | 每个槽位的 `<槽位>__ShadowTint.png`、`<槽位>__TransitionTint.png` 放在 GLB 同目录，文件名写进 `shadeMap`/`transitionMap`；与底色贴图同 UV、同分辨率更稳 | 阴影色与过渡色 |
 | 眼睛槽位 | 眼球槽位用 `EYE` 模板；眼睑/睫毛槽位保持 `outlineWidth: 0` | 避免描边在透明片上变成黑边 |
@@ -382,6 +383,33 @@ foot      DEF-foot.L / .R              toes       DEF-toe.L / .R
 PNG 贴图靠 Rust 命令 `read_room_material_map` 读取，只允许模型同级目录；缺文件时该槽位退回 `shadeColor`。
 
 **不要期待：** Blender 节点原样移植、脸部 SDF（planned）。真实窗口画面与 Blender 的比对尚未做。
+
+### 4.8.1 表情映射侧车 `<模型名>.expressions.json`（可用，真实窗口验收未做）
+
+形态键名和内置名字不同（例如叫 `face_smile`），或一个表情要同时驱动多个网格时，用它把「语义名」映射到真实形态键。放在 GLB 旁，上限 256KB，只含数据；无效则忽略并沿用模型自带的同名形态键。
+
+```json
+{
+  "schemaVersion": "1.0.0",
+  "expressions": {
+    "smile": [
+      { "key": "face_smile", "weight": 0.8 },
+      { "key": "cheek_up", "mesh": "Head_Face_Neck" }
+    ],
+    "blink": [{ "key": "eyes_closed" }]
+  }
+}
+```
+
+| 字段 | 规则 |
+|---|---|
+| 语义名 | `smile` `sad` `angry` `surprised` `blush` `browDown` `eyesWide` `blink` `mouthOpen` `eyeLookLeft/Right/Up/Down`；其他名字警告并忽略 |
+| `key` | 模型上的形态键名 |
+| `mesh` | 可选，网格节点名；不写则驱动所有带这个键的网格。**多个网格有同名键且只想驱动一个时必须写** |
+| `weight` | 0 到 2，默认 1，相乘后上限 1 |
+
+一个语义名只要有一个目标能解析就整体替换原来的同名绑定；全部解析失败则保留原绑定。眨眼和口型始终独立于表情，所以微笑时仍能闭眼、说话。
+情绪到语义名的对应见文末「内置情绪 → 形态键映射」；这个文件只改「语义名 → 真实键」，不改情绪到语义名的关系。
 
 ### 4.9 角色包清单 `manifest.json`（仅校验器，应用尚不读取）
 

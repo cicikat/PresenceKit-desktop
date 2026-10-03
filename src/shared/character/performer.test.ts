@@ -118,6 +118,24 @@ describe('CA-02 shared performer', () => {
     expect(eye.quaternion.angleTo(new THREE.Quaternion())).toBeCloseTo(0.175, 2);
   });
 
+  it('lets smile, speech and blink hold at once', () => {
+    const model = buildModel();
+    const performer = new CharacterPerformer(model);
+    const happy = directive({ expression: 'happy', speaking: true });
+    for (let i = 0; i < 200; i++) performer.update(frame({ now: 10_000 + i, directive: happy }));
+    expect(influence(model, 'smile')).toBeGreaterThan(0.3);
+    expect(influence(model, 'mouthOpen')).toBeGreaterThan(0.05);
+    // Force a blink while the smile is held: blink must reach full closure regardless of the expression.
+    const blinkAt = 10_000 + 200 + 60_000;
+    let peak = 0;
+    for (let i = 0; i < 20; i++) {
+      performer.update(frame({ now: blinkAt + i * 8, directive: { ...happy, receivedAt: blinkAt } }));
+      peak = Math.max(peak, influence(model, 'blink'));
+    }
+    expect(peak).toBeGreaterThan(0.9);
+    expect(influence(model, 'smile')).toBeGreaterThan(0.3);
+  });
+
   it('keeps eye bone rotation inside the configured limits at extreme targets', () => {
     const model = buildModel({ boneNames: ['DEF-eye.L', 'DEF-eye.R'] });
     const performer = new CharacterPerformer(model);

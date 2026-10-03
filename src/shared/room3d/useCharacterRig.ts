@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { Mood } from '../state/store';
 import type { BoneMap } from '../room/roomSettings';
-import { loadRoomModel, loadCharacterMaterials, loadCharacterToonTextures } from '../room/roomAssets';
+import { loadRoomModel, loadCharacterMaterials, loadCharacterToonTextures, loadCharacterExpressions } from '../room/roomAssets';
 import { applyToonBindings } from '../character/toonMaterial';
 import type { ActiveDirective } from '../../windows/room/avatarDirective';
 import { CharacterPerformer } from '../character/performer';
@@ -86,7 +86,11 @@ export function useCharacterRig(
           if (cancelled) { Object.values(textures).forEach((t) => t.dispose()); return; }
           applyToonBindings(model, materials, { textures });
         });
-        performerRef.current = new CharacterPerformer(model, { boneMap, routes, hasIdleClip: false });
+        const performer = new CharacterPerformer(model, { boneMap, routes, hasIdleClip: false });
+        performerRef.current = performer;
+        void loadCharacterExpressions(characterFile).then((cfg) => {
+          if (cfg && !cancelled && performerRef.current === performer) performer.applyExpressions(cfg);
+        });
         // A reply that arrived while the model was still loading still gets its mouth movement.
         if (pendingSpeechRef.current !== null) {
           performerRef.current.onNewSpeech(pendingSpeechRef.current);

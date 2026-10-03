@@ -11,7 +11,7 @@ import { CharacterPerformer } from '../../shared/character/performer';
 import { setupCharacter } from './characterSetup';
 import { collectSceneCameraPresets, placementFromSceneCamera } from './sceneCameraPresets';
 import type { SceneCameraPreset } from './sceneCameraPresets';
-import { loadRoomModel, loadCharacterMaterials, loadCharacterToonTextures } from '../../shared/room/roomAssets';
+import { loadRoomModel, loadCharacterMaterials, loadCharacterToonTextures, loadCharacterExpressions } from '../../shared/room/roomAssets';
 import { applyToonBindings } from '../../shared/character/toonMaterial';
 import type { RoomSettings } from '../../shared/room/roomSettings';
 import {
@@ -503,6 +503,9 @@ export function useRoomScene(
           model, gltf.animations, getCharacterCfg(s, s.characterFile), s.idleClip, startIdleClip,
         );
         performerRef.current = setup.performer;
+        void loadCharacterExpressions(s.characterFile).then((cfg) => {
+          if (cfg && !cancelled && !disposedRef.current && performerRef.current === setup.performer) setup.performer.applyExpressions(cfg);
+        });
         springChainsRef.current = setup.springChains;
         mixerRef.current = setup.mixer;
         animatedBoneNamesRef.current = setup.animatedBoneNames;
