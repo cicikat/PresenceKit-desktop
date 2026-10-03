@@ -136,6 +136,22 @@ describe('CA-02 shared performer', () => {
     expect(influence(model, 'smile')).toBeGreaterThan(0.3);
   });
 
+  it('leaves head and eye bones alone while a clip owns them, and reports them unowned', () => {
+    const model = buildModel({ boneNames: ['DEF-spine.006', 'DEF-eye.L', 'DEF-eye.R'] });
+    const performer = new CharacterPerformer(model, { yield: { head: true, eyes: true } });
+    expect(performer.ownedBones.every((b) => b === null)).toBe(true);
+    const head = model.children.find((c) => c.name === 'DEF-spine.006')!;
+    const eye = model.children.find((c) => c.name === 'DEF-eye.L')!;
+    head.rotation.set(0.3, 0, 0); // as if a clip wrote it
+    eye.rotation.set(0, 0.2, 0);
+    for (let i = 0; i < 50; i++) performer.update(frame({ t: i / 10, directive: directive({ gaze: { mode: 'point', x: 1, y: 1 } }) }));
+    expect(head.rotation.x).toBeCloseTo(0.3);
+    expect(eye.rotation.y).toBeCloseTo(0.2);
+    performer.setYield({ head: false, eyes: false });
+    expect(performer.ownedBones.filter(Boolean).length).toBe(3);
+    expect(head.rotation.x).toBeCloseTo(0); // eased back from rest, not from the clip's last pose
+  });
+
   it('keeps eye bone rotation inside the configured limits at extreme targets', () => {
     const model = buildModel({ boneNames: ['DEF-eye.L', 'DEF-eye.R'] });
     const performer = new CharacterPerformer(model);

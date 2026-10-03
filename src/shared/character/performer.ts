@@ -35,6 +35,8 @@ export interface PerformerOptions {
   routes?: PerformanceRoutes;
   /** Whether an idle clip drives this model — affects body route resolution. */
   hasIdleClip?: boolean;
+  /** Bone groups a playing clip owns; the performer then stops writing them (see ClipOwnership). */
+  yield?: { head?: boolean; eyes?: boolean };
 }
 
 export interface FrameContext {
@@ -151,6 +153,8 @@ export class CharacterPerformer {
   routes!: ResolvedRoutes;
   private readonly requestedRoutes: PerformanceRoutes | undefined;
   private readonly hasIdleClip: boolean;
+  private yieldHead: boolean;
+  private yieldEyes: boolean;
 
   private readonly headBone: THREE.Bone | null;
   private readonly headRest = new THREE.Euler();
@@ -199,6 +203,8 @@ export class CharacterPerformer {
 
     this.requestedRoutes = options.routes;
     this.hasIdleClip = options.hasIdleClip === true;
+    this.yieldHead = options.yield?.head === true;
+    this.yieldEyes = options.yield?.eyes === true;
     this.refreshCapability();
 
     // Standing pose is applied once, here, before the procedural bases are recorded — so
@@ -263,8 +269,26 @@ export class CharacterPerformer {
 
   /** Bones the performer owns exclusively; their clip tracks must be removed. */
   get ownedBones(): (THREE.Bone | null)[] {
-    return [this.headBone, gazeUsesBones(this.routes.gaze) ? this.leftEye : null,
-      gazeUsesBones(this.routes.gaze) ? this.rightEye : null];
+    const eyes = gazeUsesBones(this.routes.gaze) && !this.yieldEyes;
+    return [this.yieldHead ? null : this.headBone, eyes ? this.leftEye : null, eyes ? this.rightEye : null];
+  }
+
+  /**
+   * Hand head/eye bones to (or take them back from) a playing clip. Takes effect on the next frame;
+   * taking back re-seeds the head from its rest pose so it eases in instead of snapping from the clip's last pose.
+   */
+  setYield(group: { head?: boolean; eyes?: boolean }): void {
+    if (group.head !== undefined) {
+      if (this.yieldHead && !group.head && this.headBone) this.headBone.rotation.copy(this.headRest);
+      this.yieldHead = group.head;
+    }
+    if (group.eyes !== undefined) {
+      if (this.yieldEyes && !group.eyes) {
+        if (this.leftEye) this.leftEye.quaternion.copy(this.leftEyeRest);
+        if (this.rightEye) this.rightEye.quaternion.copy(this.rightEyeRest);
+      }
+      this.yieldEyes = group.eyes;
+    }
   }
 
   onNewSpeech(text: string): void {
@@ -364,6 +388,7 @@ export class CharacterPerformer {
   }
 
   private writeGazeBones(share = 1): void {
+    if (this.yieldEyes) return;
     // Each eye is limited separately: turning toward the nose (inward) has less range
     // than turning away, which is what keeps extreme targets from crossing the eyes.
     const yaw = (isLeftEye: boolean) => {
@@ -395,7 +420,7 @@ export class CharacterPerformer {
 
   private updateHeadGesture(ctx: FrameContext, energyMul: number): void {
     const head = this.headBone;
-    if (!head) return;
+    if (!head || this.yieldHead) return;
     const rest = this.headRest;
     const directive = ctx.directive;
     if (directive?.gesture) {

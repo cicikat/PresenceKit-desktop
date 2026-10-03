@@ -102,3 +102,13 @@ describe('collectExcludedBoneNames', () => {
     expect(collectExcludedBoneNames(null, null, null, []).size).toBe(0);
   });
 });
+
+describe('clip ownership', () => {
+  const bone = (n: string) => Object.assign(new THREE.Bone(), { name: n });
+  it('keeps the legacy exclusion by default and releases head/eyes when the clip owns them', () => {
+    const head = bone('Head'), l = bone('EyeL'), r = bone('EyeR');
+    expect([...collectExcludedBoneNames(head, l, r, [])].sort()).toEqual(['EyeL', 'EyeR', 'Head']);
+    const owned = collectExcludedBoneNames(head, l, r, [], { head: 'clip', eyes: 'clip', physics: 'performer' });
+    expect(owned.size).toBe(0);
+  });
+});

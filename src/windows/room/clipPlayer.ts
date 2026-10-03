@@ -10,17 +10,31 @@ function trackNodeName(trackName: string): string {
 
 // Bones owned by procedural/physics systems: their clip tracks are deleted so those
 // systems keep sole, conflict-free ownership (see room-model-import-guide.md §4.6).
+/**
+ * Who owns a bone group while a clip plays. Default is the legacy contract: the performer owns
+ * head, eyes and spring chains, so their tracks are dropped. `clip` hands a group to the clip
+ * (a full-body action that carries its own head turn or hair), and the performer must yield the
+ * same group via `PerformerOptions.yield`, so each bone keeps exactly one writer.
+ */
+export interface ClipOwnership {
+  head: 'performer' | 'clip';
+  eyes: 'performer' | 'clip';
+  physics: 'performer' | 'clip';
+}
+export const DEFAULT_CLIP_OWNERSHIP: ClipOwnership = { head: 'performer', eyes: 'performer', physics: 'performer' };
+
 export function collectExcludedBoneNames(
   headBone: THREE.Bone | null,
   leftEyeBone: THREE.Bone | null,
   rightEyeBone: THREE.Bone | null,
   springChains: SpringChain[],
+  ownership: ClipOwnership = DEFAULT_CLIP_OWNERSHIP,
 ): Set<string> {
   const excluded = new Set<string>();
-  if (headBone) excluded.add(headBone.name);
-  if (leftEyeBone) excluded.add(leftEyeBone.name);
-  if (rightEyeBone) excluded.add(rightEyeBone.name);
-  for (const chain of springChains) {
+  if (headBone && ownership.head === 'performer') excluded.add(headBone.name);
+  if (leftEyeBone && ownership.eyes === 'performer') excluded.add(leftEyeBone.name);
+  if (rightEyeBone && ownership.eyes === 'performer') excluded.add(rightEyeBone.name);
+  if (ownership.physics === 'performer') for (const chain of springChains) {
     for (const node of chain.nodes) {
       excluded.add(node.bone.name);
       excluded.add(node.childBone.name); // covers each chain's terminal leaf bone too
