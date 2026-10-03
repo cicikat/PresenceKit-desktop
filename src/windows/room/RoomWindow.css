@@ -51,18 +51,13 @@
 @keyframes call-wave { to { height: 15px; } }
 @media (prefers-reduced-motion: reduce) { .call-room *, .call-room *::before { animation: none !important; transition: none !important; } }
 @media (max-width: 540px) { .call-room__header { padding: 14px 16px !important; } .call-room__composer { padding-inline: 12px !important; } .call-room__presence { left: 12px; top: 12px; } }
-.call-room__voice-error {
-  padding: 6px 16px;
-  color: #ffd2ca;
-  background: #512a30;
-  font-size: 12px;
+.call-room__voice-error, .call-room__voice-status {
+  position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%); z-index: 11;
+  max-width: 70%; padding: 6px 14px; border-radius: 14px; font-size: 12px;
+  pointer-events: none; backdrop-filter: blur(10px);
 }
-.call-room__voice-status {
-  padding: 6px 16px;
-  color: #c9dceb;
-  background: #243341;
-  font-size: 12px;
-}
+.call-room__voice-error { color: #ffd2ca; background: #512a30b3; }
+.call-room__voice-status { color: #c9dceb; background: #243341a6; }
 
 .call-room__camera-preview {
   position: absolute;

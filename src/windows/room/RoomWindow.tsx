@@ -331,11 +331,12 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
             }}
           />
         )}
+        {/* Status overlays float over the stage; in-flow they resized it (canvas flash/fold). */}
+        {(voice.error || speechDraft) && <div role={voice.error ? 'alert' : 'status'} className={voice.error ? 'call-room__voice-error' : 'call-room__voice-status'}>{voice.error || `${t('room.call.voice.heard')}: ${speechDraft}`}</div>}
+        {audioStatus && <div role="status" className="call-room__voice-status">{audioStatus}</div>}
       </div>
 
       {/* chat input bar */}
-      {(voice.error || speechDraft) && <div role={voice.error ? 'alert' : 'status'} className={voice.error ? 'call-room__voice-error' : 'call-room__voice-status'}>{voice.error || `${t('room.call.voice.heard')}: ${speechDraft}`}</div>}
-      {audioStatus && <div role="status" className="call-room__voice-status">{audioStatus}</div>}
       <div className="call-room__composer" style={{
         display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px',
         background: 'oklch(0.10 0.02 240 / 0.90)',
@@ -480,10 +481,14 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
               title={t('room.call.bringCharacterToView')}
               aria-label={t('room.call.bringCharacterToView')}
               onClick={() => threeStageRef.current?.bringCharacterToView()}
-              style={{ ...btnBase, width: 'auto', padding: '0 12px', borderRadius: 22,
-                background: 'oklch(0.22 0.03 240)', color: 'oklch(0.83 0.06 210)', fontSize: 11,
-                whiteSpace: 'nowrap' }}
-            >{t('room.call.bringCharacterToView')}</button>
+              style={{ ...btnBase, background: 'oklch(0.22 0.03 240)', color: 'oklch(0.83 0.06 210)' }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                strokeWidth="1.8" aria-hidden="true">
+                <circle cx="12" cy="12" r="9.5" /><circle cx="12" cy="12" r="5.5" />
+                <circle cx="12" cy="12" r="1.8" fill="currentColor" stroke="none" />
+              </svg>
+            </button>
           </>
         )}
 
