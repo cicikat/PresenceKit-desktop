@@ -613,6 +613,18 @@ DesignRuntimeCoordinator 已提取激活代次/lifecycle/ledger，portal 与 Hos
 构造；updateBounds 兼容与真实 Windows 验收仍 open。并行本地发送槽已接入，无 request_id 的
 早期 WS 仍不猜归属；显示顺序与完整 reconciler 仍 open。
 
+- **WO-05 native geometry 兼容迁移** — `partial/open`。旧版 `updateBounds` 为兼容仓外
+  Mod 继续保留，当前只完成迁移方案和退出条件；尚未采集实际 Mod 用法，也未实现新版
+  logical intent/physical output 适配层。完成条件是 legacy 与新版路径均通过 DPI、负坐标、
+  跨屏、睡眠、generation 和主窗关闭验收，并由用户确认旧 Mod 已迁移后再考虑移除旧写入口。
+- **WO-06 DesignRuntimeCoordinator 收口** — `partial/open`。激活代次、lifecycle、ledger
+  和异步过期清理已抽出并有纯逻辑回归；portal 渲染和 Host API/service 组装仍在 React Host，
+  尚未完成职责迁移。完成条件是保持现有 portal、scene、snapshot 和公开 API 行为，并补齐
+  清理顺序回归。
+- **WO-07 Windows 真实窗口验收** — `open`。DPI、多屏负坐标、睡眠/恢复、热重载、主窗
+  关闭及连续 Mod 切换尚未在真实 Tauri 窗口执行；浏览器夹具、TypeScript、纯逻辑测试和构建
+  不能替代这项验收。完成后才可关闭对应 runtime acceptance matrix 条目。
+
 ### 9.17 Chat 局部收口（partial）
 
 current：HTTP 三来源统一兜底定时器、canonical 绑定；附件与 wake 不再遗漏明确回合 ID。
