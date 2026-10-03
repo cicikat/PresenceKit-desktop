@@ -67,6 +67,25 @@ describe('CA-02 shared performer', () => {
     expect(influence(model, 'eyeLookRight')).toBe(0);
   });
 
+  it('turns the eye about model up/left even when the bone axes are rig-style (Y along the gaze)', () => {
+    // Rigify-like eye: local Y points forward (+Z in the model), so a local Euler y would roll it.
+    const model = buildModel({ boneNames: ['DEF-eye.L', 'DEF-eye.R'] });
+    const eyes = ['DEF-eye.L', 'DEF-eye.R'].map((n) => model.children.find((c) => c.name === n)!);
+    for (const eye of eyes) eye.quaternion.set(0, -Math.SQRT1_2, -Math.SQRT1_2, 0);
+    const performer = new CharacterPerformer(model);
+    const forward = (eye: THREE.Object3D) => new THREE.Vector3(0, 1, 0).applyQuaternion(eye.quaternion);
+    const settle = (g: { x: number; y: number }) => {
+      for (let i = 0; i < 300; i++) performer.update(frame({ directive: directive({ gaze: { mode: 'point', ...g } }) }));
+    };
+    expect(forward(eyes[0]).toArray().map((v) => Math.round(v) + 0)).toEqual([0, 0, 1]);
+    settle({ x: -1, y: 0 }); // directive x is mirrored: -1 looks to the character's left (+X)
+    for (const eye of eyes) { expect(forward(eye).x).toBeGreaterThan(0.1); expect(Math.abs(forward(eye).y)).toBeLessThan(0.01); }
+    settle({ x: 0, y: 1 });
+    for (const eye of eyes) { expect(forward(eye).y).toBeGreaterThan(0.1); expect(Math.abs(forward(eye).x)).toBeLessThan(0.01); }
+    settle({ x: 0, y: 0 });
+    for (const eye of eyes) expect(forward(eye).z).toBeGreaterThan(0.999);
+  });
+
   it('keeps eye bone rotation inside the configured limits at extreme targets', () => {
     const model = buildModel({ boneNames: ['DEF-eye.L', 'DEF-eye.R'] });
     const performer = new CharacterPerformer(model);
@@ -76,8 +95,8 @@ describe('CA-02 shared performer', () => {
         performer.update(frame({ directive: directive({ gaze: { mode: 'point', ...gaze } }) }));
       }
       for (const eye of eyes) {
-        expect(Math.abs(eye.rotation.y)).toBeLessThanOrEqual(0.36);
-        expect(Math.abs(eye.rotation.x)).toBeLessThanOrEqual(0.27);
+        // Yaw and pitch compose, so bound the total turn by the two per-axis limits combined.
+        expect(eye.quaternion.angleTo(new THREE.Quaternion())).toBeLessThanOrEqual(Math.hypot(0.35, 0.26) + 0.01);
       }
     }
   });

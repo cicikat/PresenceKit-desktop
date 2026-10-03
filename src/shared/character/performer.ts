@@ -128,6 +128,21 @@ function measureArmDropDeg(resolved: Partial<Record<BoneRole, THREE.Bone>>): num
 /** Eye bone local rotation limits, radians. Outward/inward differ: eyes cross less than they diverge. */
 const EYE_LIMIT = { outward: 0.35, inward: 0.22, up: 0.20, down: 0.26 };
 
+const EYE_TMP_A = new THREE.Quaternion();
+const EYE_TMP_B = new THREE.Quaternion();
+
+/** Model-space +Y/+X re-expressed in the eye's parent frame, measured at load before any pose. */
+function eyeAxesInParent(
+  model: THREE.Object3D, eye: THREE.Bone,
+  out: { yaw: THREE.Vector3; pitch: THREE.Vector3 },
+): void {
+  const modelQ = model.getWorldQuaternion(new THREE.Quaternion());
+  const parentQ = (eye.parent ?? model).getWorldQuaternion(new THREE.Quaternion());
+  const toParent = parentQ.invert().multiply(modelQ); // model space -> parent space
+  out.yaw.set(0, 1, 0).applyQuaternion(toParent).normalize();
+  out.pitch.set(1, 0, 0).applyQuaternion(toParent).normalize();
+}
+
 export class CharacterPerformer {
   readonly morph: MorphController;
   readonly bones: BoneResolver;
@@ -138,8 +153,12 @@ export class CharacterPerformer {
   private readonly headRest = new THREE.Euler();
   private readonly leftEye: THREE.Bone | null;
   private readonly rightEye: THREE.Bone | null;
-  private readonly leftEyeRest = new THREE.Euler();
-  private readonly rightEyeRest = new THREE.Euler();
+  /** Rest local orientations; gaze is composed on top of these, never accumulated frame to frame. */
+  private readonly leftEyeRest = new THREE.Quaternion();
+  private readonly rightEyeRest = new THREE.Quaternion();
+  /** Model-space up (+Y) and character-left (+X) expressed in each eye's parent frame. */
+  private readonly leftEyeAxes = { yaw: new THREE.Vector3(0, 1, 0), pitch: new THREE.Vector3(1, 0, 0) };
+  private readonly rightEyeAxes = { yaw: new THREE.Vector3(0, 1, 0), pitch: new THREE.Vector3(1, 0, 0) };
   private readonly blink: BlinkState = { phase: 'idle', nextAt: performance.now() + 2000, startedAt: 0 };
   private chestBasePosY = 0;
   private chestBaseScale = 1;
@@ -164,8 +183,9 @@ export class CharacterPerformer {
     if (this.headBone) this.headRest.copy(this.headBone.rotation);
     this.leftEye = resolved.leftEye ?? null;
     this.rightEye = resolved.rightEye ?? null;
-    if (this.leftEye) this.leftEyeRest.copy(this.leftEye.rotation);
-    if (this.rightEye) this.rightEyeRest.copy(this.rightEye.rotation);
+    model.updateWorldMatrix(true, true);
+    if (this.leftEye) { this.leftEyeRest.copy(this.leftEye.quaternion); eyeAxesInParent(model, this.leftEye, this.leftEyeAxes); }
+    if (this.rightEye) { this.rightEyeRest.copy(this.rightEye.quaternion); eyeAxesInParent(model, this.rightEye, this.rightEyeAxes); }
 
     this.capability = probeRigCapability({
       morphKeys: this.morph.names(),
@@ -324,12 +344,24 @@ export class CharacterPerformer {
       return this.gazeX * limit;
     };
     const pitch = this.gazeY * (this.gazeY > 0 ? EYE_LIMIT.up : EYE_LIMIT.down);
-    if (this.leftEye) {
-      this.leftEye.rotation.set(this.leftEyeRest.x - pitch, this.leftEyeRest.y + yaw(true), this.leftEyeRest.z);
-    }
-    if (this.rightEye) {
-      this.rightEye.rotation.set(this.rightEyeRest.x - pitch, this.rightEyeRest.y + yaw(false), this.rightEyeRest.z);
-    }
+    if (this.leftEye) this.aimEye(this.leftEye, this.leftEyeRest, this.leftEyeAxes, yaw(true), pitch);
+    if (this.rightEye) this.aimEye(this.rightEye, this.rightEyeRest, this.rightEyeAxes, yaw(false), pitch);
+  }
+
+  /**
+   * Rotate around the character's own up and left axes (not the bone's local x/y/z): rig bones
+   * point along an arbitrary local axis, so a local Euler y can be a roll about the eye's
+   * line of sight, which reads as eyes rolling. Positive yaw looks to the character's left (+X),
+   * positive pitch looks up.
+   */
+  private aimEye(
+    eye: THREE.Bone, rest: THREE.Quaternion,
+    axes: { yaw: THREE.Vector3; pitch: THREE.Vector3 }, yaw: number, pitch: number,
+  ): void {
+    const qYaw = EYE_TMP_A.setFromAxisAngle(axes.yaw, yaw);
+    // Looking up is a negative turn about +X (+Z forward rotates toward -Y for positive angles).
+    const qPitch = EYE_TMP_B.setFromAxisAngle(axes.pitch, -pitch);
+    eye.quaternion.copy(qYaw).multiply(qPitch).multiply(rest);
   }
 
   private updateHeadGesture(ctx: FrameContext, energyMul: number): void {
