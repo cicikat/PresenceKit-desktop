@@ -22,6 +22,9 @@ export interface ToonParams {
   rimPower: number;
   /** Hair highlight intensity pow(max(N.H, 0), 12), [0, 2]; 0 disables it. */
   hairSheen: number;
+  /** Inverted-hull outline thickness in model units (metres), [0, 0.02]; 0 disables the outline. */
+  outlineWidth: number;
+  outlineColor: string;
   /** Sidecar PNG file name (same directory as the model) giving the shade color per texel. */
   shadeMap?: string;
   /** Sidecar PNG file name giving the color blended in at the lit/shade border. */
@@ -29,15 +32,16 @@ export interface ToonParams {
 }
 
 type Range = { min: number; max: number };
-const RANGES: Record<'edgeLow' | 'edgeHigh' | 'transitionStrength' | 'rimStrength' | 'rimPower' | 'hairSheen', Range> = {
+const RANGES: Record<'edgeLow' | 'edgeHigh' | 'transitionStrength' | 'rimStrength' | 'rimPower' | 'hairSheen' | 'outlineWidth', Range> = {
   edgeLow: { min: -1, max: 1 },
   edgeHigh: { min: -1, max: 1 },
   transitionStrength: { min: 0, max: 4 },
   rimStrength: { min: 0, max: 2 },
   rimPower: { min: 0.5, max: 8 },
   hairSheen: { min: 0, max: 2 },
+  outlineWidth: { min: 0, max: 0.02 },
 };
-const COLOR_KEYS = ['baseColor', 'shadeColor', 'rimColor'] as const;
+const COLOR_KEYS = ['baseColor', 'shadeColor', 'rimColor', 'outlineColor'] as const;
 const NUMBER_KEYS = Object.keys(RANGES) as (keyof typeof RANGES)[];
 const MAP_KEYS = ['shadeMap', 'transitionMap'] as const;
 const HEX = /^#[0-9a-fA-F]{6}$/;
@@ -47,6 +51,7 @@ export const MAP_FILE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,95}\.png$/;
 const BASE_DEFAULTS: ToonParams = {
   shadeColor: '#8a8fa8', edgeLow: -0.22, edgeHigh: 0.68, transitionStrength: 0.2,
   rimColor: '#ffffff', rimStrength: 0, rimPower: 5, hairSheen: 0,
+  outlineWidth: 0, outlineColor: '#3a3340',
 };
 /** Per-template defaults layer over the shared base so templates differ by data, not by shader forks. */
 export const TEMPLATE_DEFAULTS: Record<ToonTemplate, ToonParams> = {

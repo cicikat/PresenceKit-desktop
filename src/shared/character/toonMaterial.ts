@@ -127,6 +127,64 @@ function createToonFrom(source: SourceMat, params: ToonParams, textures: Record<
   return toon;
 }
 
+interface OutlineState { mesh: THREE.Mesh; width: { value: number }[]; mats: THREE.Material[] }
+const OUTLINE_KEY = 'ptOutline';
+
+function makeOutlineMaterial(params: ToonParams, width: { value: number }): THREE.MeshLambertMaterial {
+  // Lambert carries the normal/morph/skin chunks; black diffuse + emissive makes it flat-coloured.
+  const mat = new THREE.MeshLambertMaterial({ color: 0x000000, emissive: new THREE.Color(params.outlineColor), side: THREE.BackSide });
+  mat.visible = false; // only slots bound with a width draw a shell
+  mat.customProgramCacheKey = () => 'pt-outline-v1';
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.ptOutlineWidth = width;
+    shader.vertexShader = 'uniform float ptOutlineWidth;\n' + shader.vertexShader
+      .replace('#include <project_vertex>', 'transformed += normalize( objectNormal ) * ptOutlineWidth;\n#include <project_vertex>');
+  };
+  return mat;
+}
+
+/** Keep one back-face shell per mesh, extruded along skinned/morphed normals; slots without width are hidden. */
+function syncOutline(mesh: THREE.Mesh, slot: number, params: ToonParams): void {
+  const slots = Array.isArray(mesh.material) ? mesh.material.length : 1;
+  let state = mesh.userData[OUTLINE_KEY] as OutlineState | undefined;
+  if (!state) {
+    if (params.outlineWidth <= 0) return;
+    const shell = (mesh as THREE.SkinnedMesh).isSkinnedMesh
+      ? new THREE.SkinnedMesh(mesh.geometry, undefined)
+      : new THREE.Mesh(mesh.geometry, undefined);
+    if ((mesh as THREE.SkinnedMesh).isSkinnedMesh) {
+      const src = mesh as THREE.SkinnedMesh;
+      (shell as THREE.SkinnedMesh).bind(src.skeleton, src.bindMatrix);
+    }
+    shell.morphTargetInfluences = mesh.morphTargetInfluences;
+    shell.morphTargetDictionary = mesh.morphTargetDictionary;
+    shell.layers.mask = mesh.layers.mask;
+    shell.frustumCulled = false;
+    shell.name = `${mesh.name}__outline`;
+    const width = Array.from({ length: slots }, () => ({ value: 0 }));
+    state = { mesh: shell, width, mats: [] };
+    const hidden = new THREE.MeshBasicMaterial({ visible: false });
+    state.mats = width.map((w) => makeOutlineMaterial(params, w));
+    state.mats.push(hidden);
+    shell.material = slots > 1 ? state.mats.slice(0, slots).map((m, i) => (m ? m : hidden)) : state.mats[0];
+    mesh.add(shell);
+    mesh.userData[OUTLINE_KEY] = state;
+  }
+  const mat = state.mats[slot] as THREE.MeshLambertMaterial | undefined;
+  if (!mat) return;
+  state.width[slot].value = params.outlineWidth;
+  mat.emissive.set(params.outlineColor);
+  mat.visible = params.outlineWidth > 0;
+}
+
+function removeOutline(mesh: THREE.Mesh): void {
+  const state = mesh.userData[OUTLINE_KEY] as OutlineState | undefined;
+  if (!state) return;
+  mesh.remove(state.mesh);
+  state.mats.forEach((m) => m.dispose());
+  delete mesh.userData[OUTLINE_KEY];
+}
+
 function writeUniforms(u: ToonUniforms, params: ToonParams): void {
   u.ptShadeColor.value.set(params.shadeColor);
   u.ptEdgeLow.value = params.edgeLow;
@@ -180,6 +238,7 @@ export function applyToonBindings(root: THREE.Object3D, config: MaterialsConfig,
       const params = resolveToonParams(binding, look?.[binding.id], options.local?.[binding.id]);
       if ((current as THREE.MeshToonMaterial).isMeshToonMaterial) {
         updateToonParams(current as THREE.MeshToonMaterial, params);
+        syncOutline(mesh, binding.slot, params);
         status = 'applied';
         continue;
       }
@@ -187,6 +246,7 @@ export function applyToonBindings(root: THREE.Object3D, config: MaterialsConfig,
       if (!ORIGINALS.has(mesh)) ORIGINALS.set(mesh, Array.isArray(mesh.material) ? [...mesh.material] : mesh.material);
       const toon = createToonFrom(current as SourceMat, params, options.textures ?? {});
       if (Array.isArray(mesh.material)) mesh.material[binding.slot] = toon; else mesh.material = toon;
+      syncOutline(mesh, binding.slot, params);
       status = 'applied';
     }
     return { id: binding.id, status };
@@ -199,6 +259,7 @@ export function revertToonBindings(root: THREE.Object3D): void {
     const mesh = obj as THREE.Mesh;
     const original = mesh.isMesh ? ORIGINALS.get(mesh) : undefined;
     if (!original) return;
+    removeOutline(mesh);
     const toons = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     toons.forEach((m) => { if ((m as THREE.MeshToonMaterial).isMeshToonMaterial) { m.dispose(); } });
     mesh.material = original;

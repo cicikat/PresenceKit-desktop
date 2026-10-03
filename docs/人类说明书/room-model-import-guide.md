@@ -25,7 +25,7 @@
 | `rig/humanoid.json`、`rig/calibration.json` | 未冻结 | CA-03 | 骨骼语义映射以设置面板 RoomSettings 为准（§4） |
 | `expressions/expressions.json` | 未冻结 | CA-04 | 异名/自定义表情当前无入口（§6） |
 | `motions/motions.json`、外部动作重定向 | 未冻结 | CA-05 | 当前只有同骨架 GLB 内 `idle` clip（§4.6） |
-| SKIN / METAL / EYE / GLASS 材质模板、描边、脸部 SDF | 未实现 | CA-06 | 写进 materials.json 会被识别并跳过，不生效 |
+| SKIN / METAL / EYE / GLASS 材质模板、脸部 SDF | 未实现 | CA-06 | 写进 materials.json 会被识别并跳过，不生效 |
 
 骨骼、表情、动作三类配置的 JSON 格式冻结前，建模端**不需要返工**：Blender 工程里的骨名、形态键名、自定义属性不变，将来只是把「语义角色 → 你的名字」补写成配置。
 
@@ -355,6 +355,7 @@ foot      DEF-foot.L / .R              toes       DEF-toe.L / .R
 | `edgeLow` / `edgeHigh` | −1 到 1，明暗混合区间（光线与法线夹角的余弦，对应 Blender 的 Shadow Edge Low/High，默认 −0.22 / 0.68）。旧字段 `shadeThreshold`/`shadeSoftness` 仍可读，会换算成这一对并给出警告 |
 | `transitionStrength` | 0 到 4，交界钟形曲线乘该值后混向过渡色（默认 0.2） |
 | `hairSheen` | 0 到 2，头发高光 `pow(max(N·H,0),12)`，颜色 (0.88,0.93,1.0)；HAIR 默认 0.075 |
+| `outlineWidth` / `outlineColor` | 描边：反壳法，宽度 0 到 0.02（模型单位，米），0 关闭；颜色 `#rrggbb`。透明睫毛/发片槽位建议保持 0 |
 | `shadeMap` / `transitionMap` | 同目录 PNG 文件名（不含路径，≤12MB），分别给出阴影色与过渡色；与底色贴图共用 UV，源材质没有底色贴图时忽略。不写 `shadeMap` 则用 `shadeColor` × 底色 |
 | `rimStrength` | 0 到 2，0 关闭边缘光 |
 | `rimPower` | 0.5 到 8，越大越细 |
@@ -366,7 +367,7 @@ foot      DEF-foot.L / .R              toes       DEF-toe.L / .R
 交界处按 `transitionStrength` 混向过渡色，再加 `pow(1−N·V, rimPower)·rimStrength` 边缘光与头发高光。`L` 取场景里的真实灯光（多灯按亮度加权），不写死方向。
 PNG 贴图靠 Rust 命令 `read_room_material_map` 读取，只允许模型同级目录；缺文件时该槽位退回 `shadeColor`。
 
-**不要期待：** Blender 节点原样移植、描边、脸部 SDF（planned）。真实窗口画面与 Blender 的比对尚未做。
+**不要期待：** Blender 节点原样移植、脸部 SDF（planned）。真实窗口画面与 Blender 的比对尚未做。
 
 ### 4.9 角色包清单 `manifest.json`（仅校验器，应用尚不读取）
 

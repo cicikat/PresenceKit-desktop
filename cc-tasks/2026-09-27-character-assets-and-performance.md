@@ -189,7 +189,7 @@ character.ptchar
 
 验收：至少一个完整角色、两套参数外观；更换参数无需改节点实现；不能把模板名称存在视为对应效果完成。
 
-进展（2026-10-01，未验收）：`src/shared/character/materialsConfig.ts`（合同解析、范围校验、优先级 模板默认<包绑定<look<本机覆盖、ramp 计算）与 `toonMaterial.ts`（MeshToonMaterial + 渐变贴图承载阴影色/分界/软硬度，rim 走 uniform，参数更新原地生效不重编译、不重烘焙）。绑定以 mesh 名 + 槽位为身份，materialName 失配判 stale 不应用。SKIN/METAL/EYE/GLASS 仅识别并跳过，不假装已支持。2026-10-01 追加：Room 与 Pet 加载角色后读取本机侧车文件 `<模型名>.materials.json`（Rust `read_room_material_config`，先本机可写目录后内置资源，上限 256KB，无效则回退模型自带材质），CA-07 包导入落地后改由包提供同一份配置；电视机角色样例 24 槽位绑定经结构测试全部命中，真实窗口画面未验收。2026-10-03 追加：着色改为对应 Blender 节点组 `V006_Clean_Toon`（edgeLow/edgeHigh、过渡色钟形曲线、rim=pow(1-N·V,5)、头发高光 pow(N·H,12)，灯光取场景真实灯），新增 `shadeMap`/`transitionMap` 侧车 PNG（Rust `read_room_material_map`，12MB 上限、仅同级目录），旧 shadeThreshold/shadeSoftness 自动换算；v008 样本已写入 11 个槽位参数与贴图。未完成：真实窗口验收与 Blender 参考场景比对、描边、脸部 SDF、Blender 节点组与参考场景比对、真实窗口验收。
+进展（2026-10-01，未验收）：`src/shared/character/materialsConfig.ts`（合同解析、范围校验、优先级 模板默认<包绑定<look<本机覆盖、ramp 计算）与 `toonMaterial.ts`（MeshToonMaterial + 渐变贴图承载阴影色/分界/软硬度，rim 走 uniform，参数更新原地生效不重编译、不重烘焙）。绑定以 mesh 名 + 槽位为身份，materialName 失配判 stale 不应用。SKIN/METAL/EYE/GLASS 仅识别并跳过，不假装已支持。2026-10-01 追加：Room 与 Pet 加载角色后读取本机侧车文件 `<模型名>.materials.json`（Rust `read_room_material_config`，先本机可写目录后内置资源，上限 256KB，无效则回退模型自带材质），CA-07 包导入落地后改由包提供同一份配置；电视机角色样例 24 槽位绑定经结构测试全部命中，真实窗口画面未验收。2026-10-03 追加：着色改为对应 Blender 节点组 `V006_Clean_Toon`（edgeLow/edgeHigh、过渡色钟形曲线、rim=pow(1-N·V,5)、头发高光 pow(N·H,12)，灯光取场景真实灯），新增 `shadeMap`/`transitionMap` 侧车 PNG（Rust `read_room_material_map`，12MB 上限、仅同级目录），旧 shadeThreshold/shadeSoftness 自动换算；v008 样本已写入 11 个槽位参数与贴图。2026-10-03 再追加：描边（`outlineWidth` 米、`outlineColor`，反壳：每网格一份背面壳，沿蒙皮/形态键后的法线外扩，宽度为 0 的槽位不绘制）。未完成：真实窗口验收与 Blender 参考场景比对、脸部 SDF、SKIN/METAL/EYE 模板、Blender 节点组与参考场景比对、真实窗口验收。
 
 ## 12. CA-07：打包导入、配置和诊断
 

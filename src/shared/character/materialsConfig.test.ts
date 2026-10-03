@@ -96,3 +96,29 @@ describe('CA-06 toon application', () => {
     expect((first.userData.toonUniforms as { ptRimStrength: { value: number } }).ptRimStrength.value).toBe(0);
   });
 });
+
+describe('CA-06 outline', () => {
+  const make = (width: number) => {
+    const parsed = parseMaterialsConfig({ ...raw, bindings: [{ ...raw.bindings[0], params: { outlineWidth: width } }] });
+    if (!parsed.ok) throw new Error('parse');
+    return parsed.config;
+  };
+  it('adds a back-face shell only when width > 0, updates in place and removes on revert', () => {
+    const { root, body } = model();
+    applyToonBindings(root, make(0));
+    expect(body.children).toHaveLength(0);
+    applyToonBindings(root, make(0.004));
+    expect(body.children).toHaveLength(1);
+    const shell = body.children[0] as THREE.Mesh;
+    expect((shell.material as THREE.Material).side).toBe(THREE.BackSide);
+    expect((shell.material as THREE.Material).visible).toBe(true);
+    applyToonBindings(root, make(0));
+    expect(body.children).toHaveLength(1);
+    expect((shell.material as THREE.Material).visible).toBe(false);
+    revertToonBindings(root);
+    expect(body.children).toHaveLength(0);
+  });
+  it('rejects an out-of-range width', () => {
+    expect(parseMaterialsConfig({ ...raw, bindings: [{ ...raw.bindings[0], params: { outlineWidth: 1 } }] })).toMatchObject({ ok: false });
+  });
+});
