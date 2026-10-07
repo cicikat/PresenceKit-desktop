@@ -252,7 +252,10 @@ export function DreamWindow({ mode = 'single', groupId = null, groupRoster = {},
       const classified = classifyHttpError(e);
       if (classified.status === 409) {
         await refreshState();
-        if (classified.code === 'GROUP_DREAM_ALREADY_ACTIVE') {
+        if (!groupMode) {
+          setPhaseError(classified.message);
+          setPhase('ready');
+        } else if (classified.code === 'GROUP_DREAM_ALREADY_ACTIVE') {
           setPhase('active');
           addSystemMsg(t('groupDream.system.entered'));
         } else {

@@ -148,6 +148,9 @@ async fn safe_http_error(response: reqwest::Response) -> String {
     if status.as_u16() == 409 || status.as_u16() == 422 {
         if let Ok(body) = response.json::<serde_json::Value>().await {
             if let Some(detail) = body.get("detail") {
+                if let Some(message) = detail.as_str() {
+                    return format!("HTTP {}: {}", status.as_u16(), message);
+                }
                 let code = detail.get("code").and_then(|v| v.as_str());
                 let message = detail.get("message").and_then(|v| v.as_str());
                 let retryable = detail.get("retryable").and_then(|v| v.as_bool());

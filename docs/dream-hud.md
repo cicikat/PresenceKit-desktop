@@ -1,5 +1,8 @@
 # Dream HUD
 
+2026-10-07：单人入场错误独立处理并显示后端原始原因，HTTP 桥保留字符串 detail。
+后端允许任意当前角色入梦，保留单会话与群梦互斥。前端构建/cargo check 通过，真实窗口验收 observe。
+
 后端版本：v2.1（`core/dream/dream_hud.py`）  
 前端版本：v1.1（`DreamStatusSidebar.tsx`）
 
