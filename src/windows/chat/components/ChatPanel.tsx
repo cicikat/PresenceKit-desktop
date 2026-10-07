@@ -132,11 +132,11 @@ interface ChatMsg {
   role: 'user' | 'assistant' | 'system' | 'divider' | 'raw_fallback' | 'no_more';
   attachmentPreview?: string;
   failed?: boolean;
-  retryDraft?: { text: string; attachments: DraftAttachment[]; quote?: { text: string; time: number } };
+  retryDraft?: { text: string; attachments: DraftAttachment[]; quote?: { text: string; time: number; messageId?: string } };
   text: string;
   time: number;
   speakerId?: string; // char_id; absent = owner (right bubble)
-  replyTo?: { text: string; time: number };
+  replyTo?: { text: string; time: number; messageId?: string };
   moodHue?: number;
   moodLabel?: string;
   deleted?: string;
@@ -659,7 +659,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
   const [draftError, setDraftError] = useState<string | null>(null);
   const [preparing, setPreparing] = useState(false);
   const preparingRef = useRef(false);
-  const [replyTarget, setReplyTarget] = useState<{ text: string; time: number } | null>(null);
+  const [replyTarget, setReplyTarget] = useState<{ text: string; time: number; messageId?: string } | null>(null);
   const [artifactPreview, setArtifactPreview] = useState<{ filename: string; html: string } | null>(null);
   const [artifactNotice, setArtifactNotice] = useState<string | null>(null);
 
@@ -687,7 +687,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
   }, []);
 
   const onReplyToMsg = useCallback((msg: ChatMsg) => {
-    setReplyTarget({ text: normalizeChatDisplayText(msg.segmentedContent ?? msg.text), time: msg.time });
+    setReplyTarget({ text: normalizeChatDisplayText(msg.segmentedContent ?? msg.text), time: msg.time, messageId: msg.turnId && (msg.role === 'user' || msg.role === 'assistant') ? `${msg.turnId}:${msg.role}` : undefined });
     setCtxMenu(null);
   }, []);
 
@@ -1812,7 +1812,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
     if (!token) return;
     if (chatRequests.size > 1) replyFallbacks.disableLegacySendMatching();
     const replyTo = quote
-      ? { text: truncateForReplyTo(quote.text), ts: quote.time / 1000 }
+      ? { text: truncateForReplyTo(quote.text), ts: quote.time / 1000, message_id: quote.messageId }
       : undefined;
     if (!retry) { setInput(''); setReplyTarget(null); }
     setMessages(m => retry ? m.map(item => item.id === userId ? { ...item, failed: false } : item) : [...m, { id: userId, role: 'user', text: t, time: Date.now(), replyTo: quote ?? undefined, retryDraft: { text: t, attachments: [], quote: quote ?? undefined } }]);

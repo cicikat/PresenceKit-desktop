@@ -124,6 +124,7 @@ export interface ChatResponse {
 export interface ReplyToPayload {
   text: string;
   ts: number;
+  message_id?: string;
 }
 
 export interface DesktopWakeResponse {

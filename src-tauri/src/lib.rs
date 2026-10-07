@@ -1250,6 +1250,8 @@ fn greet(name: &str) -> String {
 struct ReplyToPayload {
     text: String,
     ts: f64,
+    #[serde(default)]
+    message_id: Option<String>,
 }
 
 #[tauri::command]
@@ -1284,7 +1286,7 @@ async fn send_chat(
         body["video_observation_id"] = serde_json::json!(id);
     }
     if let Some(reply_to) = reply_to {
-        body["reply_to"] = serde_json::json!({ "text": reply_to.text, "ts": reply_to.ts });
+        body["reply_to"] = serde_json::json!({ "text": reply_to.text, "ts": reply_to.ts, "message_id": reply_to.message_id });
     }
 
     let resp = authorized_request(&cfg, client.post(backend_url(&cfg, "/desktop/chat")))

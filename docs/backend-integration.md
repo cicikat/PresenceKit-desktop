@@ -1,3 +1,7 @@
+## 引用精确锚点（F6）
+
+桌面/手机 reply_to 新增可选 message_id，由已绑定 turn_id 与 user/assistant 作者组成。后端核验作者、原文和完整带时区时间；旧 text+ts 标为未经核验，不能精确展开。角色工具 read_message_context 可查上/下最多10条保留现实消息；遗忘、跨角色或不存在的锚点不可用。分段气泡引用整条原始消息。构建/回归不代表真实设备或模型验收。
+
 # docs/backend-integration.md — 后端接口与接入现状
 
 ## Brief 253.6：语音感知
