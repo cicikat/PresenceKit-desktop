@@ -14,7 +14,7 @@ import {
   effectiveParts,
 } from './turnIngest';
 import type { AssistantTurn } from './turnIngest';
-import { setLocalPerform, clearLocalPerform } from './avatarDirective';
+import { setCallPerform, clearCallPerform } from './callDirectiveLayers';
 
 // ── constants (see cc-tasks/06-room-vn-bubble-stream-reveal.md) ────────────────
 
@@ -43,6 +43,7 @@ export interface VnBubbleView {
 export interface VnPresenterOptions {
   /** Fired when a turn is force-completed by the 120s watchdog (WS died mid-stream). */
   onWatchdogTimeout?: () => void;
+  drivePerformance?: boolean;
 }
 
 export interface VnPresenterAPI {
@@ -60,6 +61,8 @@ interface Snapshot {
 const IDLE_SNAPSHOT: Snapshot = { bubble: null, talking: false };
 
 export function useVnPresenter(options: VnPresenterOptions = {}): VnPresenterAPI {
+  const drivePerformanceRef = useRef(options.drivePerformance !== false);
+  drivePerformanceRef.current = options.drivePerformance !== false;
   const onWatchdogTimeoutRef = useRef(options.onWatchdogTimeout);
   onWatchdogTimeoutRef.current = options.onWatchdogTimeout;
 
@@ -174,6 +177,8 @@ export function useVnPresenter(options: VnPresenterOptions = {}): VnPresenterAPI
     }
   }, []);
 
+  useEffect(() => { firedPerformRef.current = null; }, [options.drivePerformance]);
+
   // ── rAF presenter loop ─────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -196,7 +201,7 @@ export function useVnPresenter(options: VnPresenterOptions = {}): VnPresenterAPI
           activeMsgIdRef.current = null;
           statusRef.current = 'idle';
           firedPerformRef.current = null;
-          clearLocalPerform();
+          if (drivePerformanceRef.current) clearCallPerform();
         }
       }
 
@@ -240,8 +245,8 @@ export function useVnPresenter(options: VnPresenterOptions = {}): VnPresenterAPI
       // advancing to the next segment, and segments arriving late (swap re-fires for whatever
       // segment is current post-swap, since firedPerformRef was never set for it pre-swap).
       const fired = firedPerformRef.current;
-      if ((!fired || fired.msgId !== t.msgId || fired.segIdx !== segIdx) && performs[segIdx]) {
-        setLocalPerform(performs[segIdx]!);
+      if (drivePerformanceRef.current && (!fired || fired.msgId !== t.msgId || fired.segIdx !== segIdx)) {
+        setCallPerform(performs[segIdx]);
         firedPerformRef.current = { msgId: t.msgId, segIdx };
       }
 
@@ -302,7 +307,7 @@ export function useVnPresenter(options: VnPresenterOptions = {}): VnPresenterAPI
     rafId = requestAnimationFrame(tick);
     return () => {
       cancelAnimationFrame(rafId);
-      clearLocalPerform();
+      if (drivePerformanceRef.current) clearCallPerform();
     };
   }, [advanceOrFade]);
 

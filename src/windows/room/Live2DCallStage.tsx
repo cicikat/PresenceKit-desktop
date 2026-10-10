@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { getCallDirective } from './callDirectiveLayers';
 import { useLive2DStage } from '../../shared/live2d/useLive2DStage';
 import type { Mood } from '../../shared/state/store';
 import type { GradeCfg } from '../../shared/room/gradeConfig';
@@ -29,6 +30,7 @@ export function Live2DCallStage({ mood, talking, grade }: Live2DCallStageProps) 
 
   const { error } = useLive2DStage(mountRef, {
     getMood: () => moodRef.current,
+    getDirective: getCallDirective,
     getTalking: () => talkingRef.current,
     getVolume: audioVolume > 0 ? () => audioVolume : undefined,
     transparent: false,

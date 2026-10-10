@@ -975,3 +975,7 @@ UI 仍按段显示多个气泡，每条完整回复一个思考入口。历史 h
 ## Room TV screen expressions (2026-10-10)
 
 The Room screen driver is an opt-in local material adapter loaded by useRoomScene. It uses existing mood/directive outputs plus local call activity; no independent persisted mood store. No new UI surface or shared component changes. See tv-screen-contract.md.
+
+## Room sentence/audio ownership (2026-10-10)
+
+Room uses isolated callDirectiveLayers; legacy Pet directive storage is unchanged. Baseline and sentence expiration are independent. CallSpeechPlan merges canonical msg_id with segments, waits at most 150ms for metadata and preserves turn order; metadata alone never creates speech. Audio start/end owns TTS performance; text mode owns VN performance. Late cues only attach to unique exact normalized text; unavailable metadata falls back to whole-message speech. Queues and metadata are bounded. Character change/unmount cancels old generation. Live2D receives a caller-injected directive getter; its default remains legacy behavior. No new backend WS fields, persisted mood or mobile actions. Actual Tauri/audio acceptance remains pending.

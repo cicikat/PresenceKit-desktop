@@ -19,7 +19,7 @@ import type { Mood } from '../state/store';
 import { backendMoodToFrontend } from '../state/mood-mapping';
 import { gradeColorMatrix, isNeutralGradeShader } from '../room/gradeConfig';
 import type { GradeCfg } from '../room/gradeConfig';
-import { getActiveDirective } from '../../windows/room/avatarDirective';
+import { getActiveDirective, type ActiveDirective } from '../../windows/room/avatarDirective';
 import { microNoise } from '../../windows/room/boneResolver';
 import {
   attachDriver,
@@ -118,6 +118,8 @@ function getParamValue(coreModel: CoreModel, id: string): number | null {
 
 export interface UseLive2DStageOptions {
   getMood: () => Mood;
+  /** Optional caller-owned performance source. Default preserves Pet behavior. */
+  getDirective?: (now: number) => ActiveDirective | null;
   getTalking: () => boolean;
   getVolume?: () => number;
   transparent: boolean;
@@ -330,7 +332,7 @@ export function useLive2DStage(
     function driveFrame(coreModel: CoreModel, nowMs: number): void {
       const t = nowMs / 1000;
       const settings = settingsRef.current;
-      const directive = getActiveDirective(performance.now());
+      const directive = (optsRef.current.getDirective ?? getActiveDirective)(performance.now());
       const mood = directive?.expression ? backendMoodToFrontend(directive.expression) : optsRef.current.getMood();
       const intensity = directive?.expression ? directive.intensity : 0.85;
 

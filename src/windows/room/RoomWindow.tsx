@@ -12,7 +12,9 @@ import { Live2DEditorPanel } from './Live2DEditorPanel';
 import { useVnPresenter } from './useVnPresenter';
 import { loadRoomSettings, subscribeRoomSettings } from '../../shared/room/roomSettings';
 import type { RoomSettings } from '../../shared/room/roomSettings';
-import { setupAvatarDirectiveListener } from './avatarDirective';
+import { validateAvatarDirective } from './avatarDirective';
+import { callDirectiveLayers } from './callDirectiveLayers';
+import { setCallActivity } from './callActivity';
 import { sendChat } from '../../shared/api/backend';
 import { wsClient } from '../../shared/api/ws';
 import { useContinuousCallVoice } from './useContinuousCallVoice';
@@ -121,7 +123,7 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
   }, []);
 
   // Assistant bubble: buffer/revealed VN presenter (see turnIngest.ts / useVnPresenter.ts)
-  const presenter = useVnPresenter({ onWatchdogTimeout: () => setSending(false) });
+  const presenter = useVnPresenter({ drivePerformance: !ttsAutoPlay, onWatchdogTimeout: () => setSending(false) });
 
   // `sending` only tracks the user-facing input-disable window; the presenter owns turn/text
   // lifecycle entirely. stream_end normally clears it, onWatchdogTimeout above covers the case
@@ -153,7 +155,19 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
   }, []);
 
   useEffect(() => subscribeRoomSettings(setRoomSettings), []);
-  useEffect(() => setupAvatarDirectiveListener(), []);
+  useEffect(() => {
+    const reset = () => { callDirectiveLayers.reset(); setCallActivity('idle'); };
+    reset();
+    const unAction = wsClient.on('action', action => {
+      if (action.type === 'avatar_directive') callDirectiveLayers.setBaseline(validateAvatarDirective(action), performance.now());
+    });
+    const unChar = subscribeActiveCharacter(reset);
+    return () => { unAction(); unChar(); reset(); };
+  }, []);
+  useEffect(() => { callDirectiveLayers.clearSentence(); }, [ttsAutoPlay]);
+  useEffect(() => {
+    setCallActivity((ttsAutoPlay ? audioTalking : presenter.talking) ? 'speaking' : sending && !presenter.bubble?.text ? 'thinking' : 'listening');
+  }, [audioTalking, ttsAutoPlay, presenter.talking, presenter.bubble?.text, sending]);
 
   // Cleanup timers on unmount
   useEffect(() => () => {

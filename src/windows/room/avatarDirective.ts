@@ -46,7 +46,7 @@ function clampNum(v: unknown, lo: number, hi: number, def: number): number {
   return Math.max(lo, Math.min(hi, isFinite(n) ? n : def));
 }
 
-function validate(raw: DesktopActionPayload): AvatarDirective {
+export function validateAvatarDirective(raw: DesktopActionPayload): AvatarDirective {
   const exprRaw = typeof raw.expression === 'string' ? raw.expression : null;
   const expression = exprRaw && VALID_EXPRESSIONS.has(exprRaw) ? exprRaw : null;
 
@@ -98,7 +98,7 @@ export function getActiveDirective(now: number): ActiveDirective | null {
 export function setupAvatarDirectiveListener(): () => void {
   return wsClient.on('action', (action) => {
     if (action.type !== 'avatar_directive') return;
-    _active = { ...validate(action), receivedAt: performance.now(), origin: 'ws' };
+    _active = { ...validateAvatarDirective(action), receivedAt: performance.now(), origin: 'ws' };
   });
 }
 

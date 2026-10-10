@@ -7,7 +7,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import { MOOD_TABLE } from '../../shared/state/store';
 import type { Mood } from '../../shared/state/store';
-import { getActiveDirective } from './avatarDirective';
+import { getCallDirective } from './callDirectiveLayers';
 import { saveRoomSettings, getCharacterCfg } from '../../shared/room/roomSettings';
 import { CharacterPerformer } from '../../shared/character/performer';
 import { setupCharacter } from './characterSetup';
@@ -1037,7 +1037,7 @@ export function useRoomScene(
       const now = performance.now();
       const currentMood = moodRef.current;
 
-      const directive = getActiveDirective(now);
+      const directive = getCallDirective(now);
       const moodExpression: Record<Mood, string> = { '平静': 'neutral', '开心': 'happy', '低落': 'sad', '病娇': 'yandere', '分心': 'thinking', '生气': 'angry', '惊讶': 'surprised' };
       screenRef.current?.update(now, directive?.expression ?? moodExpression[currentMood],
         talkingRef.current ? 'speaking' : getCallActivity());

@@ -1274,3 +1274,7 @@ Room 与 Pet 舞台通过相同命令加载，文件内容不经后端 HTTP。�
 ## Opt-in Room screen playback (2026-10-10)
 
 New local IPC `read_room_screen_config(fileName)` and `read_room_screen_map(fileName,mapName)` read from the selected GLB origin, enforce canonical containment and size/PNG limits. No REST/WS or backend authorization changes. Screen resources are data, only PNG files beside GLB. Absent/invalid binding retains original material. Runtime acceptance pending.
+
+## Room sentence/audio ownership (2026-10-10)
+
+Room uses isolated callDirectiveLayers; legacy Pet directive storage is unchanged. Baseline and sentence expiration are independent. CallSpeechPlan merges canonical msg_id with segments, waits at most 150ms for metadata and preserves turn order; metadata alone never creates speech. Audio start/end owns TTS performance; text mode owns VN performance. Late cues only attach to unique exact normalized text; unavailable metadata falls back to whole-message speech. Queues and metadata are bounded. Character change/unmount cancels old generation. Live2D receives a caller-injected directive getter; its default remains legacy behavior. No new backend WS fields, persisted mood or mobile actions. Actual Tauri/audio acceptance remains pending.

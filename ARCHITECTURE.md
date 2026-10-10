@@ -81,3 +81,7 @@ Rust 根据 manifest 和主窗计算 native bounds；公开 updateBounds 兼容�
 ## Room screen expression driver (2026-10-10)
 
 `src/windows/room/screenConfig.ts` validates the opt-in data contract; `screenDriver.ts` owns only its unique target material clone and bounded textures. `useRoomScene.ts` loads/releases it on model lifecycle. Shared CharacterPerformer, Pet, StateEngine and backend mood storage remain unchanged. Room-only `callActivity.ts` provides transient activity. Contract: docs/tv-screen-contract.md.
+
+## Room sentence/audio ownership (2026-10-10)
+
+Room uses isolated callDirectiveLayers; legacy Pet directive storage is unchanged. Baseline and sentence expiration are independent. CallSpeechPlan merges canonical msg_id with segments, waits at most 150ms for metadata and preserves turn order; metadata alone never creates speech. Audio start/end owns TTS performance; text mode owns VN performance. Late cues only attach to unique exact normalized text; unavailable metadata falls back to whole-message speech. Queues and metadata are bounded. Character change/unmount cancels old generation. Live2D receives a caller-injected directive getter; its default remains legacy behavior. No new backend WS fields, persisted mood or mobile actions. Actual Tauri/audio acceptance remains pending.
