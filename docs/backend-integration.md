@@ -1270,3 +1270,7 @@ send_chat、upload_document 与 desktop_wake 返回的显式 turn_id 统一挂�
 按开发期 `public/room/` 或发行版 `app_local_data_dir/room/` 优先、打包资源兜底读取。
 Room 与 Pet 舞台通过相同命令加载，文件内容不经后端 HTTP。设置页定时重扫；
 选择只保存文件名，场景×角色的机位站位仍由本机 `RoomSettings.perPlacement` 管理。
+
+## Opt-in Room screen playback (2026-10-10)
+
+New local IPC `read_room_screen_config(fileName)` and `read_room_screen_map(fileName,mapName)` read from the selected GLB origin, enforce canonical containment and size/PNG limits. No REST/WS or backend authorization changes. Screen resources are data, only PNG files beside GLB. Absent/invalid binding retains original material. Runtime acceptance pending.

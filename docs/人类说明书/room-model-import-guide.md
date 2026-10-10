@@ -757,3 +757,7 @@ agent 在交付结束时，**逐项检查下列素材是否存在，缺的必须
 - 有 idle clip：身体循环待机；转头/gaze/点头摇头仍由指令驱动且不与 clip 打架；头发物理正常跟随身体动作；呼吸起伏叠加可见、无漂移累积（挂几分钟观察胸骨不跑偏）。
 - 表情、眨眼、口型、VN 气泡全部不受影响。
 - 模型热切换（设置里换角色文件）后 mixer 正确重建，无残留动画。
+
+## TV screen expressions (2026-10-10)
+
+Room now reads an opt-in `<model>.screen.json` sidecar. The feature contract defines playback; GLB provides only target node/material identifiers. No source geometry or UV remake is required. Image PNG, timed PNG sequences and built-in procedural presets are supported. Static/animated SVG and screen resources in `.ptchar` are not supported yet. Pet remains on its original morph path. See [screen contract](../tv-screen-contract.md). No sidecar means no screen material writes. Existing `.expressions.json` still means morph targets only. Actual Windows/model acceptance remains pending.

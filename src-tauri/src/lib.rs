@@ -964,6 +964,45 @@ fn read_room_material_config(app: tauri::AppHandle, file_name: String) -> Result
     read_character_sidecar(&app, &file_name, "materials")
 }
 
+
+// TV screen assets are resolved from the selected model's origin, never mixed across installs.
+fn screen_asset_dir(app: &tauri::AppHandle, file_name: &str) -> Result<PathBuf, String> {
+    if !plain_screen_name(file_name, ".glb") { return Err("invalid screen model name".into()); }
+    let live = room_live_dir(app, "character")?;
+    let dir = if live.join(file_name).is_file() { live } else { room_assets_dir(app, "character")? };
+    let real_dir = dir.canonicalize().map_err(|e| e.to_string())?;
+    let model = dir.join(file_name).canonicalize().map_err(|e| e.to_string())?;
+    if model.parent() != Some(real_dir.as_path()) { return Err("screen model path escape".into()); }
+    Ok(real_dir)
+}
+fn plain_screen_name(name: &str, extension: &str) -> bool {
+    !name.starts_with('.') && name.len() <= 128 && name.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-')) && name.to_ascii_lowercase().ends_with(extension)
+}
+fn bounded_screen_file(dir: &Path, name: &str, limit: u64) -> Result<Option<Vec<u8>>, String> {
+    let path = dir.join(name);
+    if !path.exists() { return Ok(None); }
+    let real = path.canonicalize().map_err(|e| e.to_string())?;
+    if real.parent() != Some(dir) { return Err("screen resource path escape".into()); }
+    if fs::metadata(&real).map_err(|e| e.to_string())?.len() > limit { return Err("screen resource limit".into()); }
+    let data = fs::read(real).map_err(|e| e.to_string())?;
+    if data.len() as u64 > limit { return Err("screen resource limit".into()); }
+    Ok(Some(data))
+}
+#[tauri::command]
+fn read_room_screen_config(app: tauri::AppHandle, file_name: String) -> Result<Option<String>, String> {
+    let dir = screen_asset_dir(&app, &file_name)?;
+    let name = format!("{}.screen.json", &file_name[..file_name.len()-4]);
+    bounded_screen_file(&dir, &name, 256*1024)?.map(|b| String::from_utf8(b).map_err(|e| e.to_string())).transpose()
+}
+#[tauri::command]
+fn read_room_screen_map(app: tauri::AppHandle, file_name: String, map_name: String) -> Result<Option<String>, String> {
+    if !plain_screen_name(&map_name, ".png") { return Err("invalid screen image name".into()); }
+    let dir = screen_asset_dir(&app, &file_name)?;
+    let Some(bytes) = bounded_screen_file(&dir, &map_name, 12*1024*1024)? else { return Ok(None); };
+    if !bytes.starts_with(b"\x89PNG\r\n\x1a\n") || bytes.len() < 24 || &bytes[12..16] != b"IHDR" { return Err("invalid screen PNG".into()); }
+    Ok(Some(format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(bytes))))
+}
+
 /// CA-04 sidecar: `<model>.expressions.json`.
 #[tauri::command]
 fn read_room_expression_config(app: tauri::AppHandle, file_name: String) -> Result<Option<String>, String> {
@@ -3760,6 +3799,8 @@ pub fn run() {
             read_room_asset,
             read_room_material_config,
             read_room_expression_config,
+            read_room_screen_config,
+            read_room_screen_map,
             read_room_motion_config,
             read_room_motion_file,
             read_room_material_map,

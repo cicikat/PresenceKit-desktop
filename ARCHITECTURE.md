@@ -77,3 +77,7 @@ Rust 根据 manifest 和主窗计算 native bounds；公开 updateBounds 兼容�
 旧原型迁移：旧 UI 原型与 Python 桌宠仅为参考；当前各窗口实现以上述源码为准，不修改参考仓。
 花园仍为只读，后续协议设计与未落地能力不得描述为 current。
 历史施工叙述归档于 [整理前快照](docs/history/architecture-before-2026-09-17.md)，不作为当前契约。
+
+## Room screen expression driver (2026-10-10)
+
+`src/windows/room/screenConfig.ts` validates the opt-in data contract; `screenDriver.ts` owns only its unique target material clone and bounded textures. `useRoomScene.ts` loads/releases it on model lifecycle. Shared CharacterPerformer, Pet, StateEngine and backend mood storage remain unchanged. Room-only `callActivity.ts` provides transient activity. Contract: docs/tv-screen-contract.md.

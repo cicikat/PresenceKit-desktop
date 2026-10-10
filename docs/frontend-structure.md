@@ -971,3 +971,7 @@ ChatPanel 的发送/附件/wake 共用 queueHttpReply、ChatReplyFallbacks、Cha
 每条本地请求独立等待；loading 从 pending 与空流等待派生。不改变 HTTP/WS/IPC 字段或后端权限。
 UI 仍按段显示多个气泡，每条完整回复一个思考入口。历史 hash 退役与完整 reconciler 仍 open。
 实施细节见 chat-correlation.md，验证与待办见 ../cc-tasks/2026-09-17-audit-work-orders.md。
+
+## Room TV screen expressions (2026-10-10)
+
+The Room screen driver is an opt-in local material adapter loaded by useRoomScene. It uses existing mood/directive outputs plus local call activity; no independent persisted mood store. No new UI surface or shared component changes. See tv-screen-contract.md.

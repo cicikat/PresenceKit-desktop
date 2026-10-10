@@ -1,3 +1,5 @@
+import { loadScreenDriver, type ScreenDriver } from './screenDriver';
+import { getCallActivity } from './callActivity';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -332,6 +334,7 @@ export function useRoomScene(
 ): RoomSceneAPI {
   const refsRef            = useRef<SceneRefs | null>(null);
   const moodRef            = useRef(mood);
+  const screenRef = useRef<ScreenDriver | null>(null);
   const performerRef       = useRef<CharacterPerformer | null>(null);
   const talkingRef         = useRef(talking);
   const settingsRef        = useRef<RoomSettings>(settings);
@@ -482,6 +485,7 @@ export function useRoomScene(
     }
     animatedBoneNamesRef.current = new Set();
 
+    screenRef.current?.dispose(); screenRef.current = null;
     for (const child of [...charGroup.children]) {
       charGroup.remove(child);
       disposeModel(child);
@@ -506,7 +510,7 @@ export function useRoomScene(
         const publishDiag = () => {
           if (!cancelled && !disposedRef.current && performerRef.current) publishCharacterDiagnostics(buildCharacterDiagnostics(performerRef.current, diagExtra));
         };
-        void loadCharacterMaterials(s.characterFile).then(async (materials) => {
+        const materialReady = loadCharacterMaterials(s.characterFile).then(async (materials) => {
           if (!materials) return;
           const textures = await loadCharacterToonTextures(s.characterFile, materials);
           if (cancelled || disposedRef.current) { Object.values(textures).forEach((t) => t.dispose()); return; }
@@ -518,6 +522,11 @@ export function useRoomScene(
           model, gltf.animations, getCharacterCfg(s, s.characterFile), s.idleClip, startIdleClip,
         );
         performerRef.current = setup.performer;
+        void materialReady.catch(error => console.warn('[screen] material preparation failed:', error)).then(() => loadScreenDriver(s.characterFile, model,
+          () => !cancelled && !disposedRef.current && performerRef.current === setup.performer)).then(driver => {
+          if (cancelled || disposedRef.current || performerRef.current !== setup.performer) driver?.dispose();
+          else screenRef.current = driver;
+        });
         void loadCharacterExpressions(s.characterFile).then((cfg) => {
           if (cfg && !cancelled && !disposedRef.current && performerRef.current === setup.performer) { diagExtra.expressions = setup.performer.applyExpressions(cfg); publishDiag(); }
         });
@@ -993,6 +1002,11 @@ export function useRoomScene(
           activeSettings.idleClip, startIdleClip,
         );
         performerRef.current = setup.performer;
+        void loadScreenDriver(activeSettings.characterFile, model,
+          () => !disposedRef.current && performerRef.current === setup.performer).then(driver => {
+          if (disposedRef.current || performerRef.current !== setup.performer) driver?.dispose();
+          else screenRef.current = driver;
+        });
         springChainsRef.current = setup.springChains;
         mixerRef.current = setup.mixer;
         animatedBoneNamesRef.current = setup.animatedBoneNames;
@@ -1024,6 +1038,9 @@ export function useRoomScene(
       const currentMood = moodRef.current;
 
       const directive = getActiveDirective(now);
+      const moodExpression: Record<Mood, string> = { '平静': 'neutral', '开心': 'happy', '低落': 'sad', '病娇': 'yandere', '分心': 'thinking', '生气': 'angry', '惊讶': 'surprised' };
+      screenRef.current?.update(now, directive?.expression ?? moodExpression[currentMood],
+        talkingRef.current ? 'speaking' : getCallActivity());
 
       mixerRef.current?.update(dt);
 
@@ -1073,6 +1090,7 @@ export function useRoomScene(
 
     return () => {
       disposedRef.current = true;
+      screenRef.current?.dispose(); screenRef.current = null;
       cancelAnimationFrame(refs.rafId);
       refs.resizeObs.disconnect();
 
