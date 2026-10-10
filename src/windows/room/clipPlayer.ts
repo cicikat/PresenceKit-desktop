@@ -52,6 +52,20 @@ export function filterClipTracks(clip: THREE.AnimationClip, excludedBoneNames: S
   return animatedBoneNames;
 }
 
+/** Both Room and Pet reuse the authored Idle. Clone before ownership filtering so
+ * external motion libraries retain the source clip's original tracks. */
+export function startIdleClip(
+  model: THREE.Object3D, source: THREE.AnimationClip,
+  ownedBones: (THREE.Bone | null)[], springChains: SpringChain[] = [],
+): { mixer: THREE.AnimationMixer; animatedBoneNames: Set<string> } {
+  const clip = source.clone();
+  const excluded = collectExcludedBoneNames(ownedBones[0] ?? null, ownedBones[1] ?? null, ownedBones[2] ?? null, springChains);
+  const animatedBoneNames = filterClipTracks(clip, excluded);
+  const mixer = new THREE.AnimationMixer(model);
+  mixer.clipAction(clip).setLoop(THREE.LoopRepeat, Infinity).play();
+  return { mixer, animatedBoneNames };
+}
+
 /**
  * True when every track in a clip drives morph-target weights rather than bones.
  *

@@ -1,12 +1,30 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { selectIdleClip, isMorphOnlyClip, filterClipTracks, collectExcludedBoneNames } from './clipPlayer';
+import { selectIdleClip, isMorphOnlyClip, filterClipTracks, collectExcludedBoneNames, startIdleClip } from './clipPlayer';
 
 /** A clip whose only tracks are morph weights — what Blender emits per shape-keyed mesh. */
 function morphClip(name: string, nodes: string[] = ['Head_Face_Neck']): THREE.AnimationClip {
   return new THREE.AnimationClip(name, 1, nodes.map(n =>
     new THREE.NumberKeyframeTrack(`${n}.morphTargetInfluences`, [0, 1], [0, 1])));
 }
+
+describe('shared Room/Pet Idle mixer', () => {
+  it('clones ownership-filtered Idle tracks and replays the authored pose without altering the library source', () => {
+    const model = new THREE.Group();
+    const head = new THREE.Bone(); head.name = 'head'; model.add(head);
+    const chest = new THREE.Bone(); chest.name = 'chest'; model.add(chest);
+    const source = new THREE.AnimationClip('idle', 1, [
+      new THREE.QuaternionKeyframeTrack('head.quaternion', [0, 1], [0, 0, 0, 1, 0, 0, 0, 1]),
+      new THREE.VectorKeyframeTrack('chest.position', [0, 1], [0, 1, 0, 0, 1.01, 0]),
+    ]);
+    const { mixer, animatedBoneNames } = startIdleClip(model, source, [head]);
+    expect(source.tracks).toHaveLength(2);
+    expect(animatedBoneNames.has('head')).toBe(false);
+    mixer.update(0.5);
+    expect(chest.position.y).toBeCloseTo(1.005);
+    mixer.stopAllAction();
+  });
+});
 
 /** A clip that drives bone rotation, i.e. a real body animation. */
 function boneClip(name: string, bones: string[] = ['DEF-spine.006']): THREE.AnimationClip {

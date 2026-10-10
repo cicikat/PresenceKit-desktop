@@ -259,3 +259,6 @@ tool_loop_discovery counters and schema counts. No new persistent state.
 Native devices and real model gateway verification remain observe; backend
 mocked regressions do not claim device acceptance. Design and validation:
 backend docs/tool-discovery.md and docs/three-repo-interface-catalog.md.
+### 2026-10-10 GLB 播放反馈
+
+本轮复用现有 TTS 场景设置与跨窗口播放队列；没有新增 TTS 开关、后端权限或客户端配置。character://behavior 仅观察播放成功/结束，合成准备不算 speaking。后端管理面仍控制 TTS/performance_mapping；手机沿原 mobile 场景消费，未增加 GLB/PNG 行为能力。

@@ -3,6 +3,7 @@ import type { ChatArtifactPayload, StickerPayload } from '../../shared/api/types
 
 export interface PetDialogue {
   id: string;
+  msgId?: string;
   text: string;
   sticker?: StickerPayload;
   artifacts?: ChatArtifactPayload[];
@@ -14,7 +15,7 @@ export function splitPetDialogue(message: PetDialogue): PetDialogue[] {
   const { parts } = effectiveParts(turnFromChannelMessage(message.id, message.text, 0));
   if (!parts.length && (message.sticker || message.artifacts?.length)) parts.push('');
   return parts.map((text, index) => ({
-    ...message, id: `${message.id}:${index}`, text,
+    ...message, id: `${message.id}:${index}`, msgId: message.msgId ?? message.id, text,
     sticker: index === 0 ? message.sticker : undefined,
     artifacts: index === 0 ? message.artifacts : undefined,
   }));

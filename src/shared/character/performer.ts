@@ -13,7 +13,9 @@ import * as THREE from 'three';
 import { MorphController, type MappingReport } from '../../windows/room/morphController';
 import type { ExpressionsConfig } from './expressionsConfig';
 import { MOOD_MORPHS, EXPR_KEYS } from '../../windows/room/morphExpressions';
-import { BoneResolver, microNoise } from '../../windows/room/boneResolver';
+import { BoneResolver } from '../../windows/room/boneResolver';
+import { MicroMotion, type MicroPose, type MotionActivity } from './microMotion';
+import { CHARACTER_BEHAVIOR as MOTION } from './behaviorParameters';
 import { MOOD_TABLE } from '../state/store';
 import type { Mood } from '../state/store';
 import { backendMoodToFrontend } from '../state/mood-mapping';
@@ -48,6 +50,8 @@ export interface FrameContext {
   directive: ActiveDirective | null;
   /** Fallback speaking flag when the directive does not specify one. */
   talking: boolean;
+  /** Presentation activity is separate from expression/mood and has playback ownership. */
+  activity?: MotionActivity;
   /** Bones the animation mixer already wrote this frame; those get additive offsets. */
   animatedBoneNames: ReadonlySet<string>;
   /** Present only on stages that support posture lean; null skips the posture layer. */
@@ -174,6 +178,8 @@ export class CharacterPerformer {
   private lastFrameTime: number | null = null;
   private frameDt = 1 / 60;
   private speechWeight = 0;
+  private readonly microMotion = new MicroMotion();
+  private microPose: Readonly<MicroPose> = { yaw: 0, pitch: 0, roll: 0, bodyRoll: 0, bodyYaw: 0, shoulderL: 0, shoulderR: 0 };
   private talkEndsAt = 0;
   /** Smoothed gaze target in normalized -1..1 screen-ish space, shared by both gaze drivers. */
   private gazeX = 0;
@@ -317,8 +323,9 @@ export class CharacterPerformer {
     if (ctx.animatedBoneNames.size === 0) this.prepareFrame();
     this.frameDt = this.lastFrameTime === null || ctx.t <= this.lastFrameTime ? 1 / 60 : Math.min(0.1, ctx.t - this.lastFrameTime);
     this.lastFrameTime = ctx.t;
-    const speaking = ctx.directive?.speaking ?? (ctx.talking || ctx.now < this.talkEndsAt);
-    this.speechWeight += ((speaking ? 1 : 0) - this.speechWeight) * (1 - Math.exp(-this.frameDt / 0.4));
+    const speaking = ctx.activity !== undefined ? ctx.activity === 'speaking' : ctx.directive?.speaking ?? (ctx.talking || ctx.now < this.talkEndsAt);
+    this.speechWeight += ((speaking ? 1 : 0) - this.speechWeight) * (1 - Math.exp(-this.frameDt / MOTION.speech.damping));
+    this.microPose = this.microMotion.sample(ctx.t, ctx.activity ?? (speaking ? 'speaking' : 'idle'));
     this.updateHair(ctx);
     this.updateFace(ctx);
     this.updateMouth(ctx);
@@ -362,7 +369,7 @@ export class CharacterPerformer {
   private updateMouth(ctx: FrameContext): void {
     // `speaking` from a directive wins when present; otherwise the stage's own flag, then
     // the speech timer. Mouth is not routable for the same reason blink is not.
-    const talking = ctx.directive?.speaking ?? (ctx.talking || ctx.now < this.talkEndsAt);
+    const talking = ctx.activity !== undefined ? ctx.activity === 'speaking' : ctx.directive?.speaking ?? (ctx.talking || ctx.now < this.talkEndsAt);
     const target = talking
       ? (0.35 + 0.45 * (0.5 + 0.5 * Math.sin(ctx.t * 11))) * (0.8 + Math.random() * 0.2)
       : 0;
@@ -471,12 +478,12 @@ export class CharacterPerformer {
     const gazeYaw = this.routes.gaze === 'headOnly' ? this.gazeX * 0.25 : 0;
     const gazePitch = this.routes.gaze === 'headOnly' ? this.gazeY * 0.18 : 0;
     if (!this.idleMotionSafe && gazeYaw === 0 && gazePitch === 0) { head.rotation.copy(rest); return; }
-    const gain = 1 + 0.35 * this.speechWeight;
-    this.headTarget.setFromAxisAngle(axes.up, drift * microNoise(ctx.t, 23) * 0.020 * gain + gazeYaw);
-    this.headTarget.multiply(new THREE.Quaternion().setFromAxisAngle(axes.pitch, drift * microNoise(ctx.t, 11) * 0.012 * gain - gazePitch));
-    this.headTarget.multiply(new THREE.Quaternion().setFromAxisAngle(axes.roll, drift * microNoise(ctx.t, 37) * 0.006));
+    const gain = 1 + MOTION.speech.gain * this.speechWeight;
+    this.headTarget.setFromAxisAngle(axes.up, drift * this.microPose.yaw * gain + gazeYaw);
+    this.headTarget.multiply(new THREE.Quaternion().setFromAxisAngle(axes.pitch, drift * this.microPose.pitch * gain - gazePitch));
+    this.headTarget.multiply(new THREE.Quaternion().setFromAxisAngle(axes.roll, drift * this.microPose.roll));
     this.headTarget.multiply(this.headRestQ);
-    head.quaternion.slerp(this.headTarget, 1 - Math.exp(-this.frameDt / 0.16));
+    head.quaternion.slerp(this.headTarget, 1 - Math.exp(-this.frameDt / MOTION.head.inertia));
   }
 
   /**
@@ -513,7 +520,7 @@ export class CharacterPerformer {
     const moodEntry = MOOD_TABLE[ctx.mood];
     const energy = ctx.directive?.energy ?? 0.5;
     const period = ((moodEntry?.breathePeriod as number | undefined) ?? 4200) / 1000;
-    const depth = Math.min(0.006, ((moodEntry?.breatheDepth as number | undefined) ?? 0.022) * (0.7 + 0.6 * energy));
+    const depth = Math.min(MOTION.breathing.maxDepth, ((moodEntry?.breatheDepth as number | undefined) ?? 0.022) * (0.7 + 0.6 * energy));
     const breath = Math.sin((ctx.t / period) * Math.PI * 2);
 
     const breathBone = resolved.chest ?? resolved.spine;
@@ -525,20 +532,21 @@ export class CharacterPerformer {
     if (breathBone) {
       const base = save(breathBone);
       const axes = this.motionAxes.get(breathBone)!;
-      const shift = microNoise(ctx.t * 0.32, 71) * 0.005 * (1 + 0.35 * this.speechWeight);
-      breathBone.position.copy(base.position).addScaledVector(axes.up, breath * depth * 0.06);
-      breathBone.scale.copy(base.scale).multiplyScalar(1 + breath * depth * 0.5);
+      const shift = this.microPose.bodyRoll;
+      breathBone.position.copy(base.position).addScaledVector(axes.up, breath * depth * MOTION.breathing.position);
+      breathBone.scale.copy(base.scale).multiplyScalar(1 + breath * depth * MOTION.breathing.scale);
       breathBone.quaternion.setFromAxisAngle(axes.roll, shift)
+        .multiply(new THREE.Quaternion().setFromAxisAngle(axes.up, this.microPose.bodyYaw))
         .multiply(new THREE.Quaternion().setFromAxisAngle(axes.pitch, posture.chestRotX))
         .multiply(base.quaternion);
     }
-    const shoulder = (bone: THREE.Bone | undefined, seed: number) => {
+    const shoulder = (bone: THREE.Bone | undefined, offset: number) => {
       if (!bone) return;
       const pose = save(bone);
-      const offset = (microNoise(ctx.t * 0.45, seed) * 0.00025 + breath * 0.00015) * (1 + 0.35 * this.speechWeight) + posture.shoulderY;
-      bone.position.copy(pose.position).addScaledVector(this.motionAxes.get(bone)!.up, offset);
+      bone.position.copy(pose.position).addScaledVector(this.motionAxes.get(bone)!.up,
+        offset + breath * MOTION.breathing.shoulder + posture.shoulderY);
     };
-    shoulder(resolved.shoulderL, 5);
-    shoulder(resolved.shoulderR, 9);
+    shoulder(resolved.shoulderL, this.microPose.shoulderL);
+    shoulder(resolved.shoulderR, this.microPose.shoulderR);
   }
 }

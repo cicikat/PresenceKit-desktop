@@ -4,7 +4,7 @@ import type { PetRendererProps } from '../../../shared/pet/petRenderer';
 import { useCharacterRig } from '../../../shared/room3d/useCharacterRig';
 import { loadRoomSettings, subscribeRoomSettings, getCharacterCfg } from '../../../shared/room/roomSettings';
 import { getUIPref } from '../../../shared/uiPreferences';
-import { listenPetPrefs, listenPetTurn } from '../../../shared/pet/bridge';
+import { listenPetPrefs } from '../../../shared/pet/bridge';
 import { getActiveDirective } from '../../room/avatarDirective';
 import type { Mood } from '../../../shared/state/store';
 
@@ -23,6 +23,8 @@ export function Model3DStage({ snapshot }: PetRendererProps) {
   const [zoom, setZoom] = useState(() => getUIPref<number>(PET_MODEL3D_ZOOM_KEY, 1));
 
   const moodRef = useRef<Mood>(snapshot.mood);
+  const thinkingRef = useRef(snapshot.thinking);
+  thinkingRef.current = snapshot.thinking;
 
   // Camera ref + head anchor so zoom/model-load can reframe the shot
   const cameraRef = useRef<THREE.OrthographicCamera | null>(null);
@@ -52,11 +54,12 @@ export function Model3DStage({ snapshot }: PetRendererProps) {
     applyFraming(zoomRef.current);
   }, [applyFraming]);
 
-  const { charGroup, animate, onNewSpeech } = useCharacterRig(
+  const { charGroup, animate } = useCharacterRig(
     settings.characterFile,
     getCharacterCfg(settings, settings.characterFile).boneMap,
     handleModelLoaded,
     getCharacterCfg(settings, settings.characterFile).routes,
+    settings.idleClip,
   );
   charGroupRef.current = charGroup;
 
@@ -82,29 +85,6 @@ export function Model3DStage({ snapshot }: PetRendererProps) {
 
   // Sync mood ref
   useEffect(() => { moodRef.current = snapshot.mood; }, [snapshot.mood]);
-
-  // Trigger speech animation on each forwarded turn (cc-tasks/14 §D.4 — replaces the old
-  // snapshot.latestAssistantText path now that the pet bubble is driven by pet://turn)
-  useEffect(() => {
-    let disposed = false;
-    let unlisten: (() => void) | undefined;
-    listenPetTurn(turn => {
-      if (disposed) return;
-      if (turn.kind !== 'channel_message') return;
-      // Edge-triggered (one line per turn, not per frame) — cc-tasks/20 §20-C:
-      // keeps a trace of "did the mouth-open signal actually arrive" without
-      // being a periodic/noisy log.
-      console.debug('[pet] 说话信号触发 msg_id=%s len=%d', turn.msg_id, turn.content.length);
-      onNewSpeech(turn.content);
-    }).then(fn => {
-      if (disposed) fn();
-      else unlisten = fn;
-    }).catch(error => console.warn('[pet] turn 监听失败:', error));
-    return () => {
-      disposed = true;
-      unlisten?.();
-    };
-  }, [onNewSpeech]);
 
   // Apply zoom changes to existing camera, keeping the head anchored near the top
   useEffect(() => { applyFraming(zoom); }, [zoom, applyFraming]);
@@ -174,7 +154,7 @@ export function Model3DStage({ snapshot }: PetRendererProps) {
 
       const t   = clock.getElapsedTime();
       const now = performance.now();
-      animate(t, now, moodRef.current, getActiveDirective(now));
+      animate(t, now, moodRef.current, getActiveDirective(now), thinkingRef.current);
       renderer.render(scene, camera);
     }
     clock.getDelta();

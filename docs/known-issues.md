@@ -669,3 +669,7 @@ legacy restoration and can jump; this audit does not claim that path fixed.
 Upper-body weight shift has no pelvis motion or IK. It adds zero foot motion relative
 to the clip, but does not correct preexisting foot drift in arbitrary animations.
 See `../cc-tasks/2026-10-10-tv-idle-motion-audit.md`.
+
+### open：电视机 P1/P2 真实桌面验收
+
+浏览器已用真实 v03 GLB/五张 PNG、生产 React 舞台和 HTMLAudioElement 验证；Tauri transport 与 TTS 合成采用 fixture。仍需 Windows Tauri 实际后端聊天、真实 TTS、多窗口热切换和衣服/鞋底观感验收。上身侧倾只表现重心变化，未新增足底 IK，不能修正输入动画自身接地。私有 GLB/PNG 不随 Git 交付；准备脚本及五态 sidecar 示例见施工单。

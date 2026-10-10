@@ -7,7 +7,8 @@ export function bindScreen(root: THREE.Object3D, config: ScreenConfig): { mesh: 
   const found: { mesh: THREE.Mesh; slot: number; original: ScreenMaterial }[] = [];
   root.traverse(o => {
     const mesh = o as THREE.Mesh;
-    if (!mesh.isMesh || mesh.name !== config.target.node) return;
+    // GLTFLoader sanitizes Object3D.name but preserves the original node name here.
+    if (!mesh.isMesh || (mesh.name !== config.target.node && mesh.userData.name !== config.target.node)) return;
     const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     mats.forEach((mat, slot) => {
       if (mat.name === config.target.materialName && (config.target.slot === undefined || config.target.slot === slot)) {

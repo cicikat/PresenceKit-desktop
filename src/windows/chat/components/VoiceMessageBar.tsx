@@ -3,6 +3,8 @@ import { synthesizeDesktopVoice } from '../../../shared/api/runtimeSettings';
 import { audioPlaybackQueue, type PlaybackQueueHandle } from '../../../shared/voice/playbackQueue';
 import { normalizeChatDisplayText } from '../chatDisplay';
 import { renderInlineStyled, spokenInlineText } from '../inlineStyle';
+import { publishBehavior } from '../../../shared/character/behaviorEvents';
+import { getActiveCharacterInfo } from '../../../shared/activeCharacter';
 
 function audioUrl(audioB64: string, mime: string): string {
   const binary = atob(audioB64);
@@ -11,7 +13,8 @@ function audioUrl(audioB64: string, mime: string): string {
   return URL.createObjectURL(new Blob([bytes], { type: mime || 'audio/wav' }));
 }
 
-export function VoiceMessageBar({ text, emotion = 'neutral', fontSize, autoPlay = false, scene = 'desktop_pet', controlsVisible = true, onPlaybackStart, onPlaybackEnd }: { text: string; emotion?: string; fontSize?: number; autoPlay?: boolean; scene?: 'chat' | 'dream' | 'video_call' | 'desktop_pet'; controlsVisible?: boolean; onPlaybackStart?: () => void; onPlaybackEnd?: () => void }) {
+export function VoiceMessageBar({ text, emotion = 'neutral', fontSize, autoPlay = false, scene = 'desktop_pet', controlsVisible = true, onPlaybackStart, onPlaybackEnd, messageId }: { text: string; emotion?: string; fontSize?: number; autoPlay?: boolean; scene?: 'chat' | 'dream' | 'video_call' | 'desktop_pet'; controlsVisible?: boolean; onPlaybackStart?: () => void; onPlaybackEnd?: () => void; messageId?: string }) {
+  const behaviorCharacterRef = useRef(getActiveCharacterInfo().id);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const dataArrayRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
@@ -142,6 +145,9 @@ export function VoiceMessageBar({ text, emotion = 'neutral', fontSize, autoPlay 
     if (!audioRef.current) audioRef.current = new Audio();
     const audio = audioRef.current;
     let settled = false;
+    let started = false;
+    const playbackId = crypto.randomUUID();
+    const charId = behaviorCharacterRef.current;
     const finish = () => {
       if (settled) return;
       settled = true;
@@ -149,6 +155,7 @@ export function VoiceMessageBar({ text, emotion = 'neutral', fontSize, autoPlay 
       audio.removeEventListener('pause', finish);
       audio.removeEventListener('error', finish);
       if (mountedRef.current) setPlaying(false);
+      if (started) void publishBehavior({ kind: 'audio-end', id: playbackId, charId, at: Date.now(), msgId: messageId, scene });
       onPlaybackEnd?.();
       resolve();
     };
@@ -158,6 +165,8 @@ export function VoiceMessageBar({ text, emotion = 'neutral', fontSize, autoPlay 
     audio.addEventListener('error', finish);
     void audio.play().then(() => {
       if (!settled && mountedRef.current) {
+        started = true;
+        void publishBehavior({ kind: 'audio-start', id: playbackId, charId, at: Date.now(), msgId: messageId, scene });
         setPlaying(true);
         onPlaybackStart?.();
       }
@@ -165,7 +174,7 @@ export function VoiceMessageBar({ text, emotion = 'neutral', fontSize, autoPlay 
       if (mountedRef.current) setError(String(e));
       finish();
     });
-  }), [onPlaybackStart, onPlaybackEnd]);
+  }), [onPlaybackStart, onPlaybackEnd, messageId, scene]);
 
   const play = useCallback(() => {
     if (playing) {

@@ -2,7 +2,7 @@
 
 Status: implementation contract, runtime acceptance pending. Requirements define this contract; GLB only supplies binding identifiers. Source geometry/UV need no retrofit.
 
-Opt-in sidecar `<model>.screen.json`, schemaVersion `1.0.0`, beside GLB. Target `node` and `materialName` must match one mesh/material slot; optional `slot` disambiguates. No naming heuristic and no global character capability changes. Room owns this driver; Pet remains unchanged.
+Opt-in sidecar `<model>.screen.json`, schemaVersion `1.0.0`, beside GLB. Target `node` and `materialName` must match one mesh/material slot; optional `slot` disambiguates. No naming heuristic and no global character capability changes. Room and Pet each own their screen driver and disposal lifecycle. Exact matching also accepts GLTFLoader userData.name metadata for the original node name.
 
 `clips` maps IDs to `image {uri}`, `sequence {frames:[{uri,durationMs}],loop,endBehavior:hold|neutral}`, or `procedural {preset:thinkingDots|spectrumBars|heartPulse,base,fallback}`. `base` and `fallback` refer to image clip IDs. PNG resources use single ASCII filenames beside GLB. Static SVG is deliberately deferred until a restricted parser exists; arbitrary SVG animation/scripts are never executed. No package-provided code.
 

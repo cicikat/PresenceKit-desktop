@@ -27,7 +27,8 @@ import {
   DEFAULT_SPRING_PARAMS,
 } from './springBones';
 import type { SpringChain } from './springBones';
-import { collectExcludedBoneNames, filterClipTracks } from './clipPlayer';
+import { startIdleClip } from './clipPlayer';
+import { useCharacterBehavior } from '../../shared/character/useCharacterBehavior';
 import { editableIdEquals } from './sceneOutline';
 import type { EditableId, LightKey } from './sceneOutline';
 import type { LightCfg, RoomProp, RoomLights } from '../../shared/room/roomSettings';
@@ -272,21 +273,6 @@ function enableCharLayer(model: THREE.Object3D): void {
  * all before it can resolve the body route), and which bones are excluded depends on the
  * routes the performer resolved — so the two steps cannot be collapsed back together.
  */
-function startIdleClip(
-  model: THREE.Object3D,
-  clip: THREE.AnimationClip,
-  ownedBones: (THREE.Bone | null)[],
-  springChains: SpringChain[],
-): { mixer: THREE.AnimationMixer; animatedBoneNames: Set<string> } {
-  const excluded = collectExcludedBoneNames(
-    ownedBones[0] ?? null, ownedBones[1] ?? null, ownedBones[2] ?? null, springChains,
-  );
-  const animatedBoneNames = filterClipTracks(clip, excluded);
-  const mixer = new THREE.AnimationMixer(model);
-  mixer.clipAction(clip).setLoop(THREE.LoopRepeat, Infinity).play();
-  return { mixer, animatedBoneNames };
-}
-
 // ─── hook ─────────────────────────────────────────────────────────────────────
 
 export interface RoomSceneAPI {
@@ -332,6 +318,7 @@ export function useRoomScene(
   settings: RoomSettings,
   onCameraPresetsChange: (presets: SceneCameraPreset[]) => void,
 ): RoomSceneAPI {
+  const behavior = useCharacterBehavior('room');
   const refsRef            = useRef<SceneRefs | null>(null);
   const moodRef            = useRef(mood);
   const screenRef = useRef<ScreenDriver | null>(null);
@@ -1038,9 +1025,9 @@ export function useRoomScene(
       const currentMood = moodRef.current;
 
       const directive = getCallDirective(now);
-      const moodExpression: Record<Mood, string> = { '平静': 'neutral', '开心': 'happy', '低落': 'sad', '病娇': 'yandere', '分心': 'thinking', '生气': 'angry', '惊讶': 'surprised' };
-      screenRef.current?.update(now, directive?.expression ?? moodExpression[currentMood],
-        talkingRef.current ? 'speaking' : getCallActivity());
+      const frame = behavior.frame(Date.now(), currentMood, getCallActivity() === 'thinking', directive?.expression);
+      const activity = talkingRef.current ? 'speaking' : frame.activity;
+      screenRef.current?.update(now, frame.expression, activity);
 
       performerRef.current?.prepareFrame();
       mixerRef.current?.update(dt);
@@ -1053,7 +1040,7 @@ export function useRoomScene(
         t, now,
         mood: currentMood,
         directive,
-        talking: talkingRef.current,
+        talking: activity === 'speaking', activity,
         animatedBoneNames: animatedBoneNamesRef.current,
         charGroup: charGroupRef.current,
         hairDrivenByPhysics: springChainsRef.current.length > 0,

@@ -43,7 +43,7 @@ export function CallSpeechPresenter({ name, onPlayingChange }: { name: string; o
     {current && <>
       <VnBubble name={name} text={current.text} nameAlign="left" visible={playing} streaming={false} canAdvance={false}
         style={{ position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)', maxWidth: '78%', minWidth: 200, zIndex: 10 }} />
-      <VoiceMessageBar key={`${token}:${current.id}`} text={current.text} autoPlay scene="video_call" controlsVisible={false}
+      <VoiceMessageBar key={`${token}:${current.id}`} text={current.text} messageId={current.msgId} autoPlay scene="video_call" controlsVisible={false}
         onPlaybackStart={() => {
           if (generation.current !== token || plan.current.lines[0]?.id !== current.id) return;
           setCallPerform(plan.current.start(current.id)); setPlaying(true);

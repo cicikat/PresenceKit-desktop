@@ -93,5 +93,9 @@ last frame's procedural overlay, including properties with constant clip tracks.
 Room then runs Idle Mixer -> external motion Mixer -> performer -> matrices -> springs.
 Head axes are calibrated from the loaded pose; speech amplitude is smoothed;
 breath/shoulder offsets remain bounded. Idle models retain the authored pose.
-Pet still has no Idle Mixer. No GLB, PNG, settings or cross-end contract changes.
+P1/P2 now adds a Pet Idle Mixer and independent PNG driver; see the update below. GLB remains unchanged.
 See `cc-tasks/2026-10-10-tv-idle-motion-audit.md` (relative to repository root).
+
+### GLB 行为层（2026-10-10）
+
+src/shared/character/behaviorState.ts 是桌面临时呈现仲裁器，不复制 StateEngine mood 真值。behaviorParameters.ts 集中微动作和反馈时限；microMotion.ts 只生成偏移目标。桌宠新增复用 Room 的 Idle clip 选择/轨道过滤与 screenDriver；保持原 Mixer 基准恢复顺序。身体与 PNG 生命周期独立，真实音频播放通知优先，接口见 docs/backend-integration.md。

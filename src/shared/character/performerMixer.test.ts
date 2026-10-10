@@ -4,7 +4,7 @@ import { CharacterPerformer } from './performer';
 import { filterClipTracks } from '../../windows/room/clipPlayer';
 
 // Test-only Node IO; the app's DOM-only tsconfig deliberately has no Node types.
-const { readFileSync } = await vi.importActual<{ readFileSync(path: string): {
+const { readFileSync, existsSync } = await vi.importActual<{ existsSync(path: string): boolean; readFileSync(path: string): {
   readUInt32LE(offset: number): number;
   subarray(start: number, end?: number): { toString(): string; readFloatLE(offset: number): number };
 } }>('node:fs');
@@ -77,7 +77,8 @@ function runner(constant = false) {
   return { model, clip, performer, mixer, action, chest, step };
 }
 
-describe('TV v03 real AnimationMixer regression', () => {
+// Private asset regression runs locally; a fresh checkout has no ignored GLB.
+describe.skipIf(!existsSync('public/room/character/TV_Character_Rigged_v03.glb'))('TV v03 real AnimationMixer regression', () => {
   it('demonstrates why a constant Mixer track does not overwrite a procedural edit', () => {
     const model = new THREE.Group();
     const bone = new THREE.Bone(); bone.name = 'chest'; model.add(bone);

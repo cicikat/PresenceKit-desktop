@@ -1,6 +1,9 @@
 import { invokeGated } from './authGate';
 import type { ChatResponse, DesktopWakeResponse, GardenState, CoplayState, DiaryListResponse, DiaryEntry, ChatLogDatesResponse, ChatLogDay, MoodState, ActivityState, SensorRealtimeResponse, UploadIngestResponse, UploadError, PromptAssetsResponse, PromptAssetsPatch, PromptAssetsPatchResponse, HiddenStateDebugResponse, PromptAssetCharacter, PromptAssetOption, ActivePromptAssets, GroupSummary, GroupDetail, GroupSendResponse, GroupSettings, ReplyToPayload } from './types';
 
+import { publishBehavior } from '../character/behaviorEvents';
+import { getActiveCharacterInfo } from '../activeCharacter';
+
 let pendingVoice: { text: string; id: string; expires: number } | undefined;
 
 export async function sendChat(message: string, replyTo?: ReplyToPayload, videoObservationId?: string, audioSource?: { text: string; id: string } | { text: string; id: string }[]): Promise<ChatResponse> {
@@ -9,13 +12,26 @@ export async function sendChat(message: string, replyTo?: ReplyToPayload, videoO
   const audioSources = Array.isArray(audioSource) ? audioSource : audioSource ? [audioSource] : [];
   const lastSource = audioSources[audioSources.length - 1];
   const audioPerceptionId = lastSource?.id || (voice && voice.expires > Date.now() && voice.text.trim() === message.trim() ? voice.id : undefined);
-  return invokeGated<ChatResponse>('send_chat', {
-    message, ...(replyTo ? { replyTo } : {}), ...(audioPerceptionId ? { audioPerceptionId } : {}),
-    ...(lastSource ? { audioPerceptionText: lastSource.text } : {}),
-    // 多段回执（工单 A3）：后端逐个校验并取最差置信度；旧后端忽略此字段，仍按上面的单个回执处理。
-    ...(audioSources.length > 1 ? { voiceReceiptIds: audioSources.map(s => s.id), voiceReceiptTexts: audioSources.map(s => s.text) } : {}),
-    ...(videoObservationId ? { videoObservationId } : {}),
-  });
+  const behaviorId = crypto.randomUUID();
+  const behaviorCharacter = getActiveCharacterInfo().id;
+  const announce = publishBehavior({ kind: 'request-start', id: behaviorId, charId: behaviorCharacter, at: Date.now() });
+  try {
+    const response = await invokeGated<ChatResponse>('send_chat', {
+      message, ...(replyTo ? { replyTo } : {}), ...(audioPerceptionId ? { audioPerceptionId } : {}),
+      ...(lastSource ? { audioPerceptionText: lastSource.text } : {}),
+      // 多段回执（工单 A3）：后端逐个校验并取最差置信度；旧后端忽略此字段，仍按上面的单个回执处理。
+      ...(audioSources.length > 1 ? { voiceReceiptIds: audioSources.map(s => s.id), voiceReceiptTexts: audioSources.map(s => s.text) } : {}),
+      ...(videoObservationId ? { videoObservationId } : {}),
+    });
+    const at = Date.now();
+    void announce.then(() => publishBehavior({ kind: 'request-end', id: behaviorId, charId: behaviorCharacter, at,
+      msgId: response.msg_id, text: response.reply, emotion: response.emotion }));
+    return response;
+  } catch (error) {
+    const at = Date.now();
+    void announce.then(() => publishBehavior({ kind: 'request-end', id: behaviorId, charId: behaviorCharacter, at }));
+    throw error;
+  }
 }
 
 export async function getVideoCallState(): Promise<{ effective: boolean; blocking_reason: string }> {

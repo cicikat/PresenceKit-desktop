@@ -512,7 +512,7 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
         </div>
         {hasText && ttsEnabled && !msg.isStreaming && (
           <div style={{ marginBottom: 8 }}>
-            <VoiceMessageBar text={displayText} emotion={msg.moodLabel?.toLowerCase() ?? 'neutral'} fontSize={assistantFontSize} autoPlay={Boolean(msg.autoPlayTts)} scene="chat" />
+            <VoiceMessageBar text={displayText} messageId={msg.wsMsgId} emotion={msg.moodLabel?.toLowerCase() ?? 'neutral'} fontSize={assistantFontSize} autoPlay={Boolean(msg.autoPlayTts)} scene="chat" />
           </div>
         )}
         {msg.sticker && (

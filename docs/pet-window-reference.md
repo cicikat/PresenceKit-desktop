@@ -258,3 +258,8 @@ Dream UI 应建立在新客户端上，而不是旧 prototype 上。
 验证：petDialogue 两项纯逻辑回归通过；生产构建另见本次施工结果。
 open：真实 Tauri 桌宠分段停留、语音播放时长和多窗口切换尚未实测。
 本单没有新增后端/手机设置、存储或协议；手机仍消费原消息，后端管理面无新增开关。
+### 电视机 GLB 行为（2026-10-10）
+
+Model3DStage 现在复用选定 GLB 的 Idle，并单独加载 screenDriver。每帧先 prepareFrame 撤销上帧偏移，再更新 Idle Mixer、动作库和程序化上身偏移；不写腿/髋，不累积 scale。微动作参数集中在 src/shared/character/behaviorParameters.ts，头和身体分别随机调度，有缓入、停顿、缓出。
+
+请求开始进入 thinking；有效流/文本回复进入短时 speaking；实际 VoiceMessageBar 音频播放成功后进入 speaking，pause/ended/error/卸载释放该播放 ID。活动结束回到有效情绪基线。PNG 和身体独立控制。群聊、Dream、非当前角色与没有有效 start 的流不驱动角色。

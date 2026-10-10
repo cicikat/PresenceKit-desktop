@@ -4,6 +4,16 @@ import { bindScreen, ScreenDriver } from './screenDriver';
 import { parseScreenConfig } from './screenConfig';
 const config = parseScreenConfig({ schemaVersion: '1.0.0', target: { node: 'screen', materialName: 'display' }, clips: { normal: { type: 'image', uri: 'n.png' } }, mappings: { expressions: { neutral: 'normal' }, activityStates: {} } });
 describe('screen material isolation', () => {
+  it('binds the original GLTF name after GLTFLoader sanitization, without guessing another mesh', () => {
+    const material = new THREE.MeshStandardMaterial(); material.name = 'display';
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(), material);
+    mesh.name = THREE.PropertyBinding.sanitizeNodeName('TV_Head_Rigid.002');
+    mesh.userData.name = 'TV_Head_Rigid.002';
+    const cfg = { ...config, target: { node: 'TV_Head_Rigid.002', materialName: 'display' } };
+    expect(bindScreen(mesh, cfg).mesh).toBe(mesh);
+    mesh.userData.name = 'different';
+    expect(() => bindScreen(mesh, cfg)).toThrow('exactly one');
+  });
   it('clones only the target slot and restores without disposing shared resources', () => {
     const material = new THREE.MeshStandardMaterial(); material.name = 'display';
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(), [material]); mesh.name = 'screen';

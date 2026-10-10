@@ -4,7 +4,7 @@ import { splitPetDialogue } from './petDialogue';
 describe('pet dialogue', () => {
   it('splits LF and CRLF paragraphs and skips empty lines', () => {
     expect(splitPetDialogue({ id: 'a', text: ' first\r\n\r\nsecond\nthird ' }))
-      .toEqual(['first', 'second', 'third'].map((text, index) => ({ id: `a:${index}`, text, sticker: undefined })));
+      .toEqual(['first', 'second', 'third'].map((text, index) => ({ id: `a:${index}`, msgId: 'a', text, sticker: undefined, artifacts: undefined })));
   });
   it('keeps a sticker only on the first bubble and supports sticker-only turns', () => {
     const sticker = { kind: 'sticker' as const, data_url: 'data:image/png;base64,test', emotion: 'happy' };

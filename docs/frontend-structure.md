@@ -987,5 +987,9 @@ last frame's procedural overlay, including properties with constant clip tracks.
 Room then runs Idle Mixer -> external motion Mixer -> performer -> matrices -> springs.
 Head axes are calibrated from the loaded pose; speech amplitude is smoothed;
 breath/shoulder offsets remain bounded. Idle models retain the authored pose.
-Pet still has no Idle Mixer. No GLB, PNG, settings or cross-end contract changes.
+P1/P2 now adds a Pet Idle Mixer and independent PNG driver; see the update below. GLB remains unchanged.
 See `cc-tasks/2026-10-10-tv-idle-motion-audit.md` (relative to repository root).
+
+### GLB 聊天行为与屏幕
+
+桌宠 useCharacterRig 与 Room useRoomScene 共享 CharacterBehaviorState/useCharacterBehavior。sendChat 发请求生命周期通知，VoiceMessageBar 发实际音频生命周期通知；canonical、stream 和 perform 沿原事件链消费。PetWindow 在实际音频播放期间暂停对话气泡计时。表情贴图由 screenDriver 管理，身体由 CharacterPerformer 管理；切换角色清理临时行为状态。

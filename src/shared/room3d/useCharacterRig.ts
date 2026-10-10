@@ -12,12 +12,15 @@ import { applyToonBindings } from '../character/toonMaterial';
 import type { ActiveDirective } from '../../windows/room/avatarDirective';
 import { CharacterPerformer } from '../character/performer';
 import type { PerformanceRoutes } from '../character/performanceRoutes';
+import { selectIdleClip, startIdleClip } from '../../windows/room/clipPlayer';
+import { loadScreenDriver, type ScreenDriver } from '../../windows/room/screenDriver';
+import { useCharacterBehavior } from '../character/useCharacterBehavior';
 
 export const RIG_TARGET_H = 1.6;
 
 export interface CharacterRigHandle {
   charGroup: THREE.Group;
-  animate: (t: number, now: number, mood: Mood, directive: ActiveDirective | null) => void;
+  animate: (t: number, now: number, mood: Mood, directive: ActiveDirective | null, thinking?: boolean) => void;
   onNewSpeech: (text: string) => void;
 }
 
@@ -53,25 +56,32 @@ export function normalizeCharacter(model: THREE.Object3D, scaleMul = 1): void {
 /**
  * Pet-window rig. The stage (window, camera, roaming, dragging) stays here; every
  * per-frame write to the character goes through the shared `CharacterPerformer`, so
- * Pet and Room cannot drift apart. Pet has no animation mixer and no spring chains
- * yet, so it reports an empty animated-bone set and no physics-driven hair.
+ * Pet and Room cannot drift apart. Both replay authored Idle clips. Pet does not
+ * run spring chains yet, so its hair remains on the morph fallback.
  */
 export function useCharacterRig(
   characterFile: string,
   boneMap?: BoneMap,
   onModelLoaded?: () => void,
   routes?: PerformanceRoutes,
+  idleClipName?: string,
 ): CharacterRigHandle {
   const charGroupRef = useRef<THREE.Group | null>(null);
+  const behavior = useCharacterBehavior('pet');
+  const screenRef = useRef<ScreenDriver | null>(null);
   if (!charGroupRef.current) charGroupRef.current = new THREE.Group();
   const charGroup = charGroupRef.current;
   const performerRef = useRef<CharacterPerformer | null>(null);
   const pendingSpeechRef = useRef<string | null>(null);
   const motionRef = useRef<MotionLibrary | null>(null);
   const lastTRef = useRef<number | null>(null);
+  const mixerRef = useRef<THREE.AnimationMixer | null>(null);
+  const animatedBonesRef = useRef<ReadonlySet<string>>(new Set());
 
   useEffect(() => {
     let cancelled = false;
+    lastTRef.current = null;
+    screenRef.current?.dispose(); screenRef.current = null;
 
     for (const child of [...charGroup.children]) {
       charGroup.remove(child);
@@ -84,19 +94,31 @@ export function useCharacterRig(
     const loader = new GLTFLoader();
     loadRoomModel(loader, 'character', characterFile,
       (gltf) => {
-        if (cancelled) return;
+        if (cancelled) { disposeRigModel(gltf.scene); return; }
         const model = gltf.scene;
         normalizeCharacter(model);
         charGroup.add(model);
-        void loadCharacterMaterials(characterFile).then(async (materials) => {
+        const materialReady = loadCharacterMaterials(characterFile).then(async (materials) => {
           if (!materials) return;
           const textures = await loadCharacterToonTextures(characterFile, materials);
           if (cancelled) { Object.values(textures).forEach((t) => t.dispose()); return; }
           extra.materials = applyToonBindings(model, materials, { textures });
           publish();
         });
-        const performer = new CharacterPerformer(model, { boneMap, routes, hasIdleClip: false });
+        const idle = selectIdleClip(gltf.animations, idleClipName);
+        const performer = new CharacterPerformer(model, { boneMap, routes, hasIdleClip: idle !== null });
+        if (idle && (performer.routes.body === 'clip' || performer.routes.body === 'clip+procedural')) {
+          const started = startIdleClip(model, idle, performer.ownedBones);
+          mixerRef.current = started.mixer;
+          animatedBonesRef.current = started.animatedBoneNames;
+        }
         performerRef.current = performer;
+        void materialReady.catch(error => console.warn('[screen] Pet material preparation failed:', error))
+          .then(() => loadScreenDriver(characterFile, model, () => !cancelled && performerRef.current === performer))
+          .then(driver => {
+            if (cancelled || performerRef.current !== performer) driver?.dispose();
+            else screenRef.current = driver;
+          });
         const extra: { expressions?: MappingReport; materials?: BindingReport[] } = {};
         const publish = () => { if (!cancelled && performerRef.current === performer) publishCharacterDiagnostics(buildCharacterDiagnostics(performer, extra)); };
         publish();
@@ -135,6 +157,12 @@ export function useCharacterRig(
 
     return () => {
       cancelled = true;
+      screenRef.current?.dispose(); screenRef.current = null;
+      performerRef.current?.prepareFrame();
+      mixerRef.current?.stopAllAction();
+      mixerRef.current = null;
+      animatedBonesRef.current = new Set();
+      motionRef.current?.dispose();
       motionRef.current = null;
       setActiveMotionLibrary(null);
       for (const child of [...charGroup.children]) {
@@ -144,7 +172,7 @@ export function useCharacterRig(
       performerRef.current = null;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [characterFile]);
+  }, [characterFile, boneMap, routes, idleClipName]);
 
   const onNewSpeech = useCallback((text: string) => {
     const performer = performerRef.current;
@@ -152,21 +180,23 @@ export function useCharacterRig(
     else pendingSpeechRef.current = text;
   }, []);
 
-  const EMPTY_BONES: ReadonlySet<string> = new Set();
-  const animate = useCallback((t: number, now: number, mood: Mood, directive: ActiveDirective | null) => {
+  const animate = useCallback((t: number, now: number, mood: Mood, directive: ActiveDirective | null, thinking = false) => {
     const dt = lastTRef.current === null ? 0 : Math.max(0, Math.min(0.1, t - lastTRef.current));
     lastTRef.current = t;
     performerRef.current?.prepareFrame();
+    mixerRef.current?.update(dt);
     motionRef.current?.update(dt);
+    const frame = behavior.frame(Date.now(), mood, thinking, directive?.expression);
+    screenRef.current?.update(now, frame.expression, frame.activity);
     performerRef.current?.update({
       t, now, mood, directive,
-      talking: false,
-      animatedBoneNames: EMPTY_BONES,
+      talking: frame.activity === 'speaking', activity: frame.activity,
+      animatedBoneNames: animatedBonesRef.current,
       charGroup: charGroupRef.current,
       hairDrivenByPhysics: false,
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [behavior]);
 
   return { charGroup, animate, onNewSpeech };
 }

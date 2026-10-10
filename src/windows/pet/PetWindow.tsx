@@ -22,6 +22,7 @@ export function PetWindow() {
   const seenTurns = useRef(new Set<string>());
   const [chatInput, setChatInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [audioPlayingId, setAudioPlayingId] = useState<string | null>(null);
   const [inputFocused, setInputFocused] = useState(false);
   const [ttsEnabled, setTtsEnabled] = useState(false);
   const [ttsAutoPlay, setTtsAutoPlay] = useState<TtsAutoPlaySettings>({ chat: false, dream: false, video_call: false, desktop_pet: false, mobile: false });
@@ -128,10 +129,11 @@ export function PetWindow() {
 
   useEffect(() => {
     if (!turnBubble) return;
+    if (audioPlayingId === turnBubble.id) return;
     const ms = Math.max(6000, turnBubble.text.length * 80, turnBubble.sticker ? 8000 : 0);
     const timer = window.setTimeout(() => setDialogue(previous => previous.slice(1)), ms);
     return () => window.clearTimeout(timer);
-  }, [turnBubble]);
+  }, [turnBubble, audioPlayingId]);
 
   const handleSend = useCallback(async (text: string) => {
     const trimmed = text.trim();
@@ -226,7 +228,9 @@ export function PetWindow() {
             {renderInlineStyled(normalizeChatDisplayText(turnBubble.text))}
             {ttsEnabled && turnBubble.text && (
               <div style={{ marginTop: 9 }}>
-                <VoiceMessageBar key={turnBubble.id} text={turnBubble.text} autoPlay={Boolean(turnBubble.autoPlayTts)} />
+                <VoiceMessageBar key={turnBubble.id} text={turnBubble.text} messageId={turnBubble.msgId} autoPlay={Boolean(turnBubble.autoPlayTts)}
+                  onPlaybackStart={() => setAudioPlayingId(turnBubble.id)}
+                  onPlaybackEnd={() => setAudioPlayingId(current => current === turnBubble.id ? null : current)} />
               </div>
             )}
           </section>

@@ -8,8 +8,8 @@ import { loadPetRippleSettings, savePetRippleSettings, subscribePetRippleSetting
 import { isPlayModeEnabled, setPlayModeEnabled } from '../../../shared/playMode';
 import { getUIPref, setUIPref } from '../../../shared/uiPreferences';
 import { wsClient } from '../../../shared/api/ws';
-import { isSingleRealityMessage } from '../../../shared/api/realityMessageScope';
-import { getActiveCharacterInfo } from '../../../shared/activeCharacter';
+import { isSingleRealityMessage, isSingleRealityStream } from '../../../shared/api/realityMessageScope';
+import { getActiveCharacterInfo, subscribeActiveCharacter } from '../../../shared/activeCharacter';
 
 export function usePetController(engine: StateEngine, onToyOpen?: () => void) {
   const [petVisible, setPetVisible] = useState(false);
@@ -64,14 +64,21 @@ export function usePetController(engine: StateEngine, onToyOpen?: () => void) {
 
   // Keep pet forwarding outside ChatPanel so its dedup/fallback guards cannot swallow a pet turn.
   useEffect(() => {
+    const acceptedStreams = new Set<string>();
     const offs = [
       wsClient.on('channel_message', payload => {
         if (isSingleRealityMessage(payload, getActiveCharacterInfo().id)) void emitPetTurn({ kind: 'channel_message', ...payload });
       }),
-      wsClient.on('message_segments', payload => { void emitPetTurn({ kind: 'message_segments', ...payload }); }),
-      wsClient.on('message_stream_start', payload => { void emitPetTurn({ kind: 'message_stream_start', ...payload }); }),
-      wsClient.on('message_stream_delta', payload => { void emitPetTurn({ kind: 'message_stream_delta', ...payload }); }),
-      wsClient.on('message_stream_end', payload => { void emitPetTurn({ kind: 'message_stream_end', ...payload }); }),
+      wsClient.on('message_segments', payload => { if (isSingleRealityMessage(payload, getActiveCharacterInfo().id)) void emitPetTurn({ kind: 'message_segments', ...payload }); }),
+      wsClient.on('message_stream_start', payload => {
+        if (!isSingleRealityStream(payload, getActiveCharacterInfo().id)) return;
+        acceptedStreams.add(payload.msg_id);
+        if (acceptedStreams.size > 128) acceptedStreams.delete(acceptedStreams.values().next().value!);
+        void emitPetTurn({ kind: 'message_stream_start', ...payload });
+      }),
+      wsClient.on('message_stream_delta', payload => { if (acceptedStreams.has(payload.msg_id) && isSingleRealityMessage(payload, getActiveCharacterInfo().id)) void emitPetTurn({ kind: 'message_stream_delta', ...payload }); }),
+      wsClient.on('message_stream_end', payload => { if (acceptedStreams.delete(payload.msg_id) && isSingleRealityMessage(payload, getActiveCharacterInfo().id)) void emitPetTurn({ kind: 'message_stream_end', ...payload }); }),
+      subscribeActiveCharacter(() => acceptedStreams.clear()),
     ];
     return () => offs.forEach(off => off());
   }, []);

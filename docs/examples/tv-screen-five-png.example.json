@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "1.0.0",
+  "target": { "node": "TV_Head_Rigid.002", "materialName": "TV_Screen_Expressions_Screen", "slot": 0 },
+  "flipY": false,
+  "clips": {
+    "normal": { "type": "image", "uri": "tvface_normal.png" },
+    "thinking": { "type": "image", "uri": "tvface_thinking.png" },
+    "speaking": { "type": "image", "uri": "tvface_speaking.png" },
+    "angry": { "type": "image", "uri": "tvface_angry.png" },
+    "sad": { "type": "image", "uri": "tvface_sad.png" }
+  },
+  "mappings": {
+    "expressions": { "neutral": "normal", "sad": "sad", "angry": "angry", "thinking": "thinking" },
+    "activityStates": { "thinking": "thinking", "speaking": "speaking" }
+  }
+}

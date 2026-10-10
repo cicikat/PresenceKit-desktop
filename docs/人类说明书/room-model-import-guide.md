@@ -761,3 +761,6 @@ agent 在交付结束时，**逐项检查下列素材是否存在，缺的必须
 ## TV screen expressions (2026-10-10)
 
 Room now reads an opt-in `<model>.screen.json` sidecar. The feature contract defines playback; GLB provides only target node/material identifiers. No source geometry or UV remake is required. Image PNG, timed PNG sequences and built-in procedural presets are supported. Static/animated SVG is not supported. Optional package `resources.screen` installs to `<assetId>.screen.json`; PNGs in `textures/` install beside GLB. Pet remains on its original morph path. See [screen contract](../tv-screen-contract.md). No sidecar means no screen material writes. Existing `.expressions.json` still means morph targets only. Actual Windows/model acceptance remains pending.
+### 电视机五态 PNG（2026-10-10）
+
+现有 GLB 可在 Room 和 Pet 复用 Idle 与 screen sidecar。屏幕节点匹配支持 GLTFLoader 规范化 name 及 userData.name 原始节点名，仍须唯一材质槽和 UV。五张 PNG 的示例在 docs/examples/tv-screen-five-png.example.json；用 node scripts/prepare-tv-behavior-assets.mjs --faces <素材目录> 准备本地副本，默认对应 TV v02/v03，先验证并备份 PNG/sidecar，不改 GLB。素材目录没有 GLB 时不会自动建模。

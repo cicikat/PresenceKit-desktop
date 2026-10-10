@@ -1278,3 +1278,8 @@ New local IPC `read_room_screen_config(fileName)` and `read_room_screen_map(file
 ## Room sentence/audio ownership (2026-10-10)
 
 Room uses isolated callDirectiveLayers; legacy Pet directive storage is unchanged. Baseline and sentence expiration are independent. CallSpeechPlan merges canonical msg_id with segments, waits at most 150ms for metadata and preserves turn order; metadata alone never creates speech. Audio start/end owns TTS performance; text mode owns VN performance. Late cues only attach to unique exact normalized text; unavailable metadata falls back to whole-message speech. Queues and metadata are bounded. Character change/unmount cancels old generation. Live2D receives a caller-injected directive getter; its default remains legacy behavior. No new backend WS fields, persisted mood or mobile actions. Actual Tauri/audio acceptance remains pending.
+### 桌面内部 character://behavior
+
+新增 Tauri 跨窗口呈现通知，不改变服务器 REST/WS 或 send_chat 参数。所有通知含 kind、独立 id、捕获的 charId、epoch 毫秒 at。request-start/end 来自 sendChat；end 可含 msgId/text/emotion，失败 end 仅释放请求。audio-start/end 来自 VoiceMessageBar 实际 HTMLAudioElement 播放成功及 pause/ended/error/卸载，另含 scene、可选 msgId。每次重播有新 id；结束只释放自身，角色切换清理。
+
+优先级：有效音频/文本 speaking > 请求或空流 thinking > 有效情绪/normal。等待与丢失结束有 TTL，表最多 128 项；时间参数集中在 behaviorParameters.ts。音频关联回复结束后不重启该回复的文本计时。仅 StateEngine mood、HTTP emotion、有效 perform.expression 提供情绪，不推测文本关键词。stream start 严格核对单角色 reality 范围，delta/end 必须已注册；Pet 转发保留 scope/关联字段，Dream/群聊不驱动该层。
