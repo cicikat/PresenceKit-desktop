@@ -810,6 +810,7 @@ fn pkg_target_name(asset_id: &str, manifest: &serde_json::Value, entry: &str) ->
     if res("materials") == Some(entry) { return Some(format!("{asset_id}.materials.json")); }
     if res("expressions") == Some(entry) { return Some(format!("{asset_id}.expressions.json")); }
     if res("motions") == Some(entry) { return Some(format!("{asset_id}.motions.json")); }
+    if res("screen") == Some(entry) { return Some(format!("{asset_id}.screen.json")); }
     if let Some(rest) = entry.strip_prefix("motions/") {
         if !rest.contains('/') && rest.to_ascii_lowercase().ends_with(".glb") { return Some(format!("motions/{rest}")); }
     }
@@ -842,6 +843,13 @@ fn install_character_package(app: tauri::AppHandle, path: String, replace: bool)
         || !asset_id.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '.' | '_' | '-'))
         || asset_id.starts_with('.') {
         return Err("assetId 不合法".to_string());
+    }
+    if let Some(screen) = manifest["resources"].get("screen") {
+        let name = screen.as_str().ok_or("screen resource must be a path")?;
+        if !pkg_safe_name(name) || !name.ends_with(".json") { return Err("invalid screen resource reference".into()); }
+        let entry = entries.iter().find(|e| e.name == name).ok_or("missing screen resource")?;
+        let bytes = pkg_read_bounded(&mut archive, entry.index, PKG_MAX_MANIFEST)?;
+        let _: serde_json::Value = serde_json::from_slice(&bytes).map_err(|_| "invalid screen JSON")?;
     }
     let expected = manifest["model"]["sha256"].as_str().ok_or("manifest 缺少 model.sha256".to_string())?.to_ascii_lowercase();
 
@@ -878,7 +886,7 @@ fn install_character_package(app: tauri::AppHandle, path: String, replace: bool)
         let _ = fs::remove_dir_all(&prev);
         fs::create_dir_all(prev.join("motions")).map_err(|e| e.to_string())?;
         let mut old_names = planned.clone();
-        for stale in [".materials.json", ".expressions.json", ".motions.json"] {
+        for stale in [".materials.json", ".expressions.json", ".motions.json", ".screen.json"] {
             let n = format!("{asset_id}{stale}");
             if !old_names.contains(&n) { old_names.push(n); }
         }
@@ -4592,5 +4600,33 @@ mod character_package_tests {
         assert_eq!(pkg_target_name("hero", &m, "materials/materials.json").as_deref(), Some("hero.materials.json"));
         assert_eq!(pkg_target_name("hero", &m, "motions/a.glb").as_deref(), Some("motions/a.glb"));
         assert_eq!(pkg_target_name("hero", &m, "preview.png"), None);
+        let screen = serde_json::json!({"resources":{"screen":"screens/screen.json"}});
+        assert_eq!(pkg_target_name("hero", &screen, "screens/screen.json").as_deref(), Some("hero.screen.json"));
+        assert_eq!(pkg_target_name("hero", &screen, "textures/tvface_normal.png").as_deref(), Some("tvface_normal.png"));
+    }
+}
+
+#[cfg(test)]
+mod screen_asset_tests {
+    use super::*;
+    #[test]
+    fn screen_names_are_plain_and_extension_limited() {
+        for name in ["../face.png", "a/b.png", r"a\b.png", "https://x.png", ".face.png", "face.svg", ""] {
+            assert!(!plain_screen_name(name, ".png"), "{name}");
+        }
+        assert!(plain_screen_name("tvface_normal.png", ".png"));
+    }
+    #[test]
+    fn screen_reads_are_bounded_and_missing_is_optional() {
+        let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let dir = std::env::temp_dir().join(format!("screen-{}-{stamp}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let real = dir.canonicalize().unwrap();
+        assert!(bounded_screen_file(&real, "missing.png", 4).unwrap().is_none());
+        fs::write(real.join("face.png"), b"12345").unwrap();
+        assert!(bounded_screen_file(&real, "face.png", 4).is_err());
+        assert_eq!(bounded_screen_file(&real, "face.png", 5).unwrap().unwrap(), b"12345");
+        fs::remove_file(real.join("face.png")).unwrap();
+        fs::remove_dir(&real).unwrap();
     }
 }

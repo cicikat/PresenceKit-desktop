@@ -5,6 +5,7 @@ describe('opt-in screen playback contract', () => {
   it('keeps activity and expression independent with explicit fallback', () => {
     const c = parseScreenConfig(raw()); expect(screenClipId(c, 'angry', 'idle')).toBe('normal'); expect(screenClipId(c, 'angry', 'speaking')).toBe('talk');
   });
+  it('explicit combinations preserve angry expression while speaking', () => { const r: any=raw(); r.mappings.combinations={'angry:speaking':'normal'}; expect(screenClipId(parseScreenConfig(r),'angry','speaking')).toBe('normal'); r.mappings.combinations={'angry:invalid':'normal'}; expect(()=>parseScreenConfig(r)).toThrow(); });
   it('uses variable frame durations and finite end behavior', () => {
     const c = parseScreenConfig(raw()).clips.talk; if (c.type !== 'sequence') throw Error();
     expect(screenFrame(c, 49)).toBe('a.png'); expect(screenFrame(c, 50)).toBe('b.png'); expect(screenFrame(c, 151)).toBe('a.png');

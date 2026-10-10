@@ -30,3 +30,13 @@ describe('CA-01 manifest contract', () => {
     expect(validateCharacterManifest({ ...manifest, model: { uri: 'renamed.glb', sha256: digest } }, entries)).toMatchObject({ ok: false });
   });
 });
+
+
+describe('optional screen package resource', () => {
+  it('checks presence and safe path without changing old manifest behavior', () => {
+    const m = { ...manifest, capabilities: ['screen'], resources: { screen: 'screens/screen.json' } };
+    expect(validateCharacterManifest(m, [...entries,'screens/screen.json'])).toMatchObject({ok:true});
+    expect(validateCharacterManifest(m, entries)).toMatchObject({ok:false});
+    expect(validateCharacterManifest({...m,resources:{screen:'../bad.json'}},entries)).toMatchObject({ok:false});
+  });
+});

@@ -159,7 +159,7 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
     const reset = () => { callDirectiveLayers.reset(); setCallActivity('idle'); };
     reset();
     const unAction = wsClient.on('action', action => {
-      if (action.type === 'avatar_directive') callDirectiveLayers.setBaseline(validateAvatarDirective(action), performance.now());
+      if (action.type === 'avatar_directive' && (!action.char_id || action.char_id === getActiveCharacterInfo().id)) callDirectiveLayers.setBaseline(validateAvatarDirective(action), performance.now());
     });
     const unChar = subscribeActiveCharacter(reset);
     return () => { unAction(); unChar(); reset(); };

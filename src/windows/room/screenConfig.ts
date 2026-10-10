@@ -8,7 +8,7 @@ export interface ScreenConfig {
   target: { node: string; materialName: string; slot?: number };
   flipY: boolean;
   clips: Record<string, ScreenClip>;
-  mappings: { expressions: Record<string, string>; activityStates: Partial<Record<ScreenActivity, string>> };
+  mappings: { expressions: Record<string, string>; activityStates: Partial<Record<ScreenActivity, string>>; combinations?: Record<string, string> };
 }
 const record = (v: unknown): Record<string, any> | null => v !== null && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, any> : null;
 export const safeScreenPng = (v: unknown): v is string => typeof v === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}\.png$/.test(v);
@@ -53,13 +53,22 @@ export function parseScreenConfig(raw: unknown): ScreenConfig {
   };
   const expressions = parseMap(m.expressions, ['neutral','gentle','thinking','happy','sad','surprised','angry','sleepy','yandere']);
   if (!expressions.neutral || clips[expressions.neutral].type !== 'image') throw new Error('neutral image required');
-  return { schemaVersion: '1.0.0', target: { node: t.node, materialName: t.materialName, ...(t.slot === undefined ? {} : { slot: t.slot }) }, flipY: d.flipY ?? false, clips, mappings: { expressions, activityStates: parseMap(m.activityStates, ['idle','listening','thinking','speaking']) } };
+  const combinations: Record<string,string> = {};
+  if (m.combinations !== undefined) {
+    const map = record(m.combinations); if (!map || Object.keys(map).length > 32) throw new Error('invalid combinations');
+    for (const [key,id] of Object.entries(map)) {
+      const parts = key.split(':');
+      if (parts.length !== 2 || !['neutral','gentle','thinking','happy','sad','surprised','angry','sleepy','yandere'].includes(parts[0]) || !['idle','listening','thinking','speaking'].includes(parts[1]) || typeof id !== 'string' || !clips[id]) throw new Error('invalid combination');
+      combinations[key] = id;
+    }
+  }
+  return { schemaVersion: '1.0.0' , target: { node: t.node, materialName: t.materialName, ...(t.slot === undefined ? {} : { slot: t.slot }) }, flipY: d.flipY ?? false, clips, mappings: { expressions, activityStates: parseMap(m.activityStates, ['idle','listening','thinking','speaking']), combinations } };
 }
 export function screenResources(config: ScreenConfig): string[] {
   return [...new Set(Object.values(config.clips).flatMap(c => c.type === 'image' ? [c.uri] : c.type === 'sequence' ? c.frames.map(f => f.uri) : []))];
 }
 export function screenClipId(config: ScreenConfig, expression: string, activity: ScreenActivity): string {
-  return config.mappings.activityStates[activity] ?? config.mappings.expressions[expression] ?? config.mappings.expressions.neutral;
+  return config.mappings.combinations?.[`${expression}:${activity}`] ?? config.mappings.activityStates[activity] ?? config.mappings.expressions[expression] ?? config.mappings.expressions.neutral;
 }
 export function screenFrame(clip: Extract<ScreenClip, { type: 'sequence' }>, elapsed: number): string | null {
   const total = clip.frames.reduce((n, f) => n + f.durationMs, 0);

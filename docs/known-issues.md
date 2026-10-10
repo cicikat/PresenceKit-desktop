@@ -652,4 +652,6 @@ relay 仍只唤醒并回源 poll；后端总账待其仓同步。验证见 9.17 
 
 ## TV screen playback acceptance (2026-10-10)
 
-open: actual Tauri screen image/UV orientation and neutral-light comparison, 10-minute resource observation, Pet integration, restricted SVG parser, package installer extension. Current Room sidecars support static PNG, variable-duration sequence, three built-in presets; fallback is explicit. Source models are not modified. No production/device acceptance claimed.
+open: actual Tauri screen image/UV orientation and neutral-light comparison, 10-minute resource observation, Pet integration, restricted SVG parser, real package installation/replacement acceptance. Current Room sidecars support static PNG, variable-duration sequence, three built-in presets; fallback is explicit. Source models are not modified. No production/device acceptance claimed.
+
+TV implementation checks: 24 Room/character/Pet/Live2D/voice test files passed (183 tests); TypeScript/build and cargo check passed. Scope: no backend/mobile code or persistent emotion changes. Canonical fallback speech has no inferred sentence attribution; metadata arriving after speech is never replayed. No dedicated happy/surprised/gentle/sleepy/yandere artwork yet.

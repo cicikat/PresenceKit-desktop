@@ -105,3 +105,7 @@ The resource file formats are frozen in their respective implementation orders. 
 producer must not set a capability or ship a resource file as a promise of effect until
 that consumer is implemented and validated. A package with optional unsupported
 capabilities may degrade; a package requiring an unsupported extension is rejected.
+
+## Optional Room screen resource (2026-10-10)
+
+`resources.screen` declares one JSON (≤256KiB) installed as `<assetId>.screen.json`; optional capability `screen` describes Room screen support. Textures remain `textures/<plain-name>.png` and flatten beside GLB. No new arbitrary directory extraction, scripts or SVG support. Screen references use installed flat PNG names. Old manifests/install paths are unchanged. Missing/invalid JSON rejects before installing; runtime schema validation and material binding retain the original model on failure. Screen sidecar joins the existing previous-version backup set. Package UI and actual install/replacement acceptance remain pending.

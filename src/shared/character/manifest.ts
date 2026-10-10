@@ -13,6 +13,7 @@ export interface CharacterManifest {
     calibration?: string;
     expressions?: string;
     motions?: string;
+    screen?: string;
   };
   requiredExtensions?: string[];
 }
@@ -23,9 +24,9 @@ export type ManifestResult =
 
 const SUPPORTED_MAJOR = 1;
 const RUNTIME_VERSION = [1, 0, 0];
-const KNOWN_CAPABILITIES = new Set(['humanoid', 'expressions', 'lookAt', 'motions', 'toon']);
+const KNOWN_CAPABILITIES = new Set(['humanoid', 'expressions', 'lookAt', 'motions', 'toon', 'screen']);
 const KNOWN_EXTENSIONS = new Set<string>();
-const RESOURCE_KEYS = ['materials', 'rig', 'calibration', 'expressions', 'motions'] as const;
+const RESOURCE_KEYS = ['materials', 'rig', 'calibration', 'expressions', 'motions', 'screen'] as const;
 const asRecord = (value: unknown): Record<string, unknown> | null =>
   value !== null && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown> : null;
