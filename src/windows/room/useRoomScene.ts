@@ -1042,6 +1042,7 @@ export function useRoomScene(
       screenRef.current?.update(now, directive?.expression ?? moodExpression[currentMood],
         talkingRef.current ? 'speaking' : getCallActivity());
 
+      performerRef.current?.prepareFrame();
       mixerRef.current?.update(dt);
 
       // All morph/bone performance layers live in the shared performer (CA-02) so Room and

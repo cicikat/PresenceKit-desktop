@@ -655,3 +655,17 @@ relay 仍只唤醒并回源 poll；后端总账待其仓同步。验证见 9.17 
 open: actual Tauri screen image/UV orientation and neutral-light comparison, 10-minute resource observation, Pet integration, restricted SVG parser, real package installation/replacement acceptance. Current Room sidecars support static PNG, variable-duration sequence, three built-in presets; fallback is explicit. Source models are not modified. No production/device acceptance claimed.
 
 TV implementation checks: 24 Room/character/Pet/Live2D/voice test files passed (183 tests); TypeScript/build and cargo check passed. Scope: no backend/mobile code or persistent emotion changes. Canonical fallback speech has no inferred sentence attribution; metadata arriving after speech is never replayed. No dedicated happy/surprised/gentle/sleepy/yandere artwork yet.
+
+## TV v03 motion audit (2026-10-10, partial/open)
+
+Fixed: constant AnimationMixer tracks no longer accumulate procedural chest scale,
+translation or shoulder offsets. Real GLB-node/track replay covers 120 simulated seconds,
+normal Idle, constant tracks, missing scale/position tracks, nonuniform scale and crossfade.
+No GLB/PNG/bone structure edits; no backend/mobile/IPC/settings impact.
+Open: real Windows model appearance, sole contact/cloth deformation and screen PNG
+visual regression. Tests replay skeleton/animation data, not rendered/skinned vertices.
+External MotionPlayer immediate replacement and head/eye ownership release still use
+legacy restoration and can jump; this audit does not claim that path fixed.
+Upper-body weight shift has no pelvis motion or IK. It adds zero foot motion relative
+to the clip, but does not correct preexisting foot drift in arbitrary animations.
+See `../cc-tasks/2026-10-10-tv-idle-motion-audit.md`.

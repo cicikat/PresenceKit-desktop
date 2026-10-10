@@ -979,3 +979,13 @@ The Room screen driver is an opt-in local material adapter loaded by useRoomScen
 ## Room sentence/audio ownership (2026-10-10)
 
 Room uses isolated callDirectiveLayers; legacy Pet directive storage is unchanged. Baseline and sentence expiration are independent. CallSpeechPlan merges canonical msg_id with segments, waits at most 150ms for metadata and preserves turn order; metadata alone never creates speech. Audio start/end owns TTS performance; text mode owns VN performance. Late cues only attach to unique exact normalized text; unavailable metadata falls back to whole-message speech. Queues and metadata are bounded. Character change/unmount cancels old generation. Live2D receives a caller-injected directive getter; its default remains legacy behavior. No new backend WS fields, persisted mood or mobile actions. Actual Tauri/audio acceptance remains pending.
+
+## Character motion frame lifecycle (2026-10-10)
+
+Room/Pet call `CharacterPerformer.prepareFrame()` before their mixers to remove
+last frame's procedural overlay, including properties with constant clip tracks.
+Room then runs Idle Mixer -> external motion Mixer -> performer -> matrices -> springs.
+Head axes are calibrated from the loaded pose; speech amplitude is smoothed;
+breath/shoulder offsets remain bounded. Idle models retain the authored pose.
+Pet still has no Idle Mixer. No GLB, PNG, settings or cross-end contract changes.
+See `cc-tasks/2026-10-10-tv-idle-motion-audit.md` (relative to repository root).

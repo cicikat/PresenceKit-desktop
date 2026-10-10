@@ -156,6 +156,7 @@ export function useCharacterRig(
   const animate = useCallback((t: number, now: number, mood: Mood, directive: ActiveDirective | null) => {
     const dt = lastTRef.current === null ? 0 : Math.max(0, Math.min(0.1, t - lastTRef.current));
     lastTRef.current = t;
+    performerRef.current?.prepareFrame();
     motionRef.current?.update(dt);
     performerRef.current?.update({
       t, now, mood, directive,

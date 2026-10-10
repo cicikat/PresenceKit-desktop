@@ -167,11 +167,13 @@ export class CharacterPerformer {
   private readonly leftEyeAxes = { yaw: new THREE.Vector3(0, 1, 0), pitch: new THREE.Vector3(1, 0, 0) };
   private readonly rightEyeAxes = { yaw: new THREE.Vector3(0, 1, 0), pitch: new THREE.Vector3(1, 0, 0) };
   private readonly blink: BlinkState = { phase: 'idle', nextAt: performance.now() + 2000, startedAt: 0 };
-  private chestBasePosY = 0;
-  private chestBaseScale = 1;
-  private chestBaseRotX = 0;
-  private shoulderLBaseY = 0;
-  private shoulderRBaseY = 0;
+  private readonly proceduralBases = new Map<THREE.Bone, { position: THREE.Vector3; quaternion: THREE.Quaternion; scale: THREE.Vector3 }>();
+  private readonly motionAxes = new Map<THREE.Bone, { up: THREE.Vector3; pitch: THREE.Vector3; roll: THREE.Vector3 }>();
+  private readonly headRestQ = new THREE.Quaternion();
+  private readonly headTarget = new THREE.Quaternion();
+  private lastFrameTime: number | null = null;
+  private frameDt = 1 / 60;
+  private speechWeight = 0;
   private talkEndsAt = 0;
   /** Smoothed gaze target in normalized -1..1 screen-ish space, shared by both gaze drivers. */
   private gazeX = 0;
@@ -207,27 +209,29 @@ export class CharacterPerformer {
     this.yieldEyes = options.yield?.eyes === true;
     this.refreshCapability();
 
-    // Standing pose is applied once, here, before the procedural bases are recorded — so
-    // breath and posture build on top of the relaxed rest instead of fighting it. The GLB's
-    // bind pose is untouched; these are deltas on the loaded local rotations.
+    // A clip keeps its authored pose and foot contact. Without one, apply the legacy
+    // relaxed pose once. Neither path changes the GLB's bind pose.
     const present = this.bones.presentRoles();
     const intactGroups = this.bones.intactPoseGroups();
     this.standing = reportStanding(present, intactGroups);
-    this.standingPose = buildStandingPose(measureArmDropDeg(resolved), present, intactGroups);
-    this.applyStandingPose();
+    this.standingPose = this.hasIdleClip ? {} : buildStandingPose(measureArmDropDeg(resolved), present, intactGroups);
+    if (!this.hasIdleClip) this.applyStandingPose();
+    model.updateWorldMatrix(true, true);
+    if (this.headBone) this.headRestQ.copy(this.headBone.quaternion);
+    for (const bone of [this.headBone, resolved.chest ?? resolved.spine, resolved.shoulderL, resolved.shoulderR]) {
+      if (!bone) continue;
+      const parentQ = (bone.parent ?? model).getWorldQuaternion(new THREE.Quaternion());
+      const toParent = parentQ.invert().multiply(model.getWorldQuaternion(new THREE.Quaternion()));
+      this.motionAxes.set(bone, {
+        up: new THREE.Vector3(0, 1, 0).applyQuaternion(toParent),
+        pitch: new THREE.Vector3(1, 0, 0).applyQuaternion(toParent),
+        roll: new THREE.Vector3(0, 0, 1).applyQuaternion(toParent),
+      });
+    }
     this.idleMotionSafe = intactGroups.has('torso');
     if (!this.idleMotionSafe) {
       this.standing.notes.push('idle breath, shoulder and head micro-motion skipped: the torso chain is broken in this export');
     }
-
-    const breathBone = resolved.chest ?? resolved.spine;
-    if (breathBone) {
-      this.chestBasePosY = breathBone.position.y;
-      this.chestBaseScale = breathBone.scale.x;
-      this.chestBaseRotX = breathBone.rotation.x;
-    }
-    if (resolved.shoulderL) this.shoulderLBaseY = resolved.shoulderL.position.y;
-    if (resolved.shoulderR) this.shoulderRBaseY = resolved.shoulderR.position.y;
   }
 
   private refreshCapability(): void {
@@ -297,8 +301,24 @@ export class CharacterPerformer {
     this.talkEndsAt = performance.now() + Math.max(6000, text.length * 80);
   }
 
+  /** Remove last frame's overlay BEFORE either mixer updates. Constant tracks may skip
+   * PropertyBinding.setValue, so a track's presence does not guarantee a fresh pose. */
+  prepareFrame(): void {
+    for (const [bone, base] of this.proceduralBases) {
+      bone.position.copy(base.position);
+      bone.quaternion.copy(base.quaternion);
+      bone.scale.copy(base.scale);
+    }
+    this.proceduralBases.clear();
+  }
+
   /** Runs every performance layer in contract order. Callers add stage effects after this. */
   update(ctx: FrameContext): void {
+    if (ctx.animatedBoneNames.size === 0) this.prepareFrame();
+    this.frameDt = this.lastFrameTime === null || ctx.t <= this.lastFrameTime ? 1 / 60 : Math.min(0.1, ctx.t - this.lastFrameTime);
+    this.lastFrameTime = ctx.t;
+    const speaking = ctx.directive?.speaking ?? (ctx.talking || ctx.now < this.talkEndsAt);
+    this.speechWeight += ((speaking ? 1 : 0) - this.speechWeight) * (1 - Math.exp(-this.frameDt / 0.4));
     this.updateHair(ctx);
     this.updateFace(ctx);
     this.updateMouth(ctx);
@@ -423,19 +443,26 @@ export class CharacterPerformer {
     if (!head || this.yieldHead) return;
     const rest = this.headRest;
     const directive = ctx.directive;
+    const axes = this.motionAxes.get(head)!;
     if (directive?.gesture) {
       const elapsedMs = ctx.now - directive.receivedAt;
       const rampIn = Math.min(1, elapsedMs / 200);
       const osc = Math.sin(elapsedMs * 0.015) * rampIn * energyMul;
+      let pitch = 0, yaw = 0, roll = 0;
       switch (directive.gesture) {
-        case 'nod':   head.rotation.set(rest.x + osc * 0.15, rest.y, rest.z); return;
-        case 'shake': head.rotation.set(rest.x, rest.y + osc * 0.15, rest.z); return;
+        case 'nod': pitch = osc * 0.15; break;
+        case 'shake': yaw = osc * 0.15; break;
         case 'tilt':
-        case 'tilt_r': head.rotation.set(rest.x, rest.y, rest.z + rampIn * 0.18); return;
-        case 'tilt_l': head.rotation.set(rest.x, rest.y, rest.z - rampIn * 0.18); return;
-        case 'dip':   head.rotation.set(rest.x + rampIn * 0.22, rest.y, rest.z); return;
-        default: head.rotation.copy(rest); return;
+        case 'tilt_r': roll = rampIn * 0.18; break;
+        case 'tilt_l': roll = -rampIn * 0.18; break;
+        case 'dip': pitch = rampIn * 0.22; break;
       }
+      this.headTarget.setFromAxisAngle(axes.up, yaw)
+        .multiply(new THREE.Quaternion().setFromAxisAngle(axes.pitch, pitch))
+        .multiply(new THREE.Quaternion().setFromAxisAngle(axes.roll, roll))
+        .multiply(this.headRestQ);
+      head.quaternion.slerp(this.headTarget, 1 - Math.exp(-this.frameDt / 0.16));
+      return;
     }
     // No gesture: ease back to rest plus micro-drift. The noise is folded into the target
     // rather than added to the current value, so its amplitude cannot accumulate per frame.
@@ -443,12 +470,13 @@ export class CharacterPerformer {
     const drift = this.idleMotionSafe ? 1 : 0;
     const gazeYaw = this.routes.gaze === 'headOnly' ? this.gazeX * 0.25 : 0;
     const gazePitch = this.routes.gaze === 'headOnly' ? this.gazeY * 0.18 : 0;
-    const driftX = rest.x + drift * microNoise(ctx.t, 11) * 0.015 - gazePitch;
-    const driftY = rest.y + drift * microNoise(ctx.t, 23) * 0.020 + gazeYaw;
-    const driftZ = rest.z + drift * microNoise(ctx.t, 37) * 0.010;
-    head.rotation.x += (driftX - head.rotation.x) * 0.1;
-    head.rotation.y += (driftY - head.rotation.y) * 0.1;
-    head.rotation.z += (driftZ - head.rotation.z) * 0.1;
+    if (!this.idleMotionSafe && gazeYaw === 0 && gazePitch === 0) { head.rotation.copy(rest); return; }
+    const gain = 1 + 0.35 * this.speechWeight;
+    this.headTarget.setFromAxisAngle(axes.up, drift * microNoise(ctx.t, 23) * 0.020 * gain + gazeYaw);
+    this.headTarget.multiply(new THREE.Quaternion().setFromAxisAngle(axes.pitch, drift * microNoise(ctx.t, 11) * 0.012 * gain - gazePitch));
+    this.headTarget.multiply(new THREE.Quaternion().setFromAxisAngle(axes.roll, drift * microNoise(ctx.t, 37) * 0.006));
+    this.headTarget.multiply(this.headRestQ);
+    head.quaternion.slerp(this.headTarget, 1 - Math.exp(-this.frameDt / 0.16));
   }
 
   /**
@@ -475,45 +503,42 @@ export class CharacterPerformer {
   }
 
   /**
-   * Breath and shoulder micro-noise. Bones the mixer already wrote this frame get `+=`
-   * (the base value is this frame's clip pose, so offsets cannot accumulate); bones with
-   * no clip track get an absolute write from the load-time base, since nothing else
-   * touches them. Posture offsets fold into the same single write per property.
+   * Overlay the current mixer pose, saved for removal by prepareFrame next frame.
+   * Never rely on animatedBoneNames to imply a property was actually rewritten.
    */
   private updateProcedural(ctx: FrameContext, posture: { chestRotX: number; shoulderY: number }): void {
     if (this.routes.body === 'off' || this.routes.body === 'clip') return;
     if (!this.idleMotionSafe) return;
     const resolved = this.bones.resolved;
-    const animated = ctx.animatedBoneNames;
     const moodEntry = MOOD_TABLE[ctx.mood];
     const energy = ctx.directive?.energy ?? 0.5;
     const period = ((moodEntry?.breathePeriod as number | undefined) ?? 4200) / 1000;
-    const depth = ((moodEntry?.breatheDepth as number | undefined) ?? 0.022) * (0.7 + 0.6 * energy);
+    const depth = Math.min(0.006, ((moodEntry?.breatheDepth as number | undefined) ?? 0.022) * (0.7 + 0.6 * energy));
     const breath = Math.sin((ctx.t / period) * Math.PI * 2);
 
     const breathBone = resolved.chest ?? resolved.spine;
-    if (breathBone) {
-      const posOffset = breath * depth * 0.06;
-      const scaleOffset = breath * depth * 0.5;
-      if (animated.has(breathBone.name)) {
-        breathBone.position.y += posOffset;
-        breathBone.scale.x += scaleOffset;
-        breathBone.scale.y += scaleOffset;
-        breathBone.scale.z += scaleOffset;
-        breathBone.rotation.x += posture.chestRotX;
-      } else {
-        breathBone.position.y = this.chestBasePosY + posOffset;
-        breathBone.scale.setScalar(this.chestBaseScale + scaleOffset);
-        breathBone.rotation.x = this.chestBaseRotX + posture.chestRotX;
-      }
-    }
-    const shoulder = (bone: THREE.Bone | undefined, seed: number, base: number) => {
-      if (!bone) return;
-      const offset = microNoise(ctx.t, seed) * 0.004 + posture.shoulderY;
-      if (animated.has(bone.name)) bone.position.y += offset;
-      else bone.position.y = base + offset;
+    const save = (bone: THREE.Bone) => {
+      const base = { position: bone.position.clone(), quaternion: bone.quaternion.clone(), scale: bone.scale.clone() };
+      this.proceduralBases.set(bone, base);
+      return base;
     };
-    shoulder(resolved.shoulderL, 5, this.shoulderLBaseY);
-    shoulder(resolved.shoulderR, 9, this.shoulderRBaseY);
+    if (breathBone) {
+      const base = save(breathBone);
+      const axes = this.motionAxes.get(breathBone)!;
+      const shift = microNoise(ctx.t * 0.32, 71) * 0.005 * (1 + 0.35 * this.speechWeight);
+      breathBone.position.copy(base.position).addScaledVector(axes.up, breath * depth * 0.06);
+      breathBone.scale.copy(base.scale).multiplyScalar(1 + breath * depth * 0.5);
+      breathBone.quaternion.setFromAxisAngle(axes.roll, shift)
+        .multiply(new THREE.Quaternion().setFromAxisAngle(axes.pitch, posture.chestRotX))
+        .multiply(base.quaternion);
+    }
+    const shoulder = (bone: THREE.Bone | undefined, seed: number) => {
+      if (!bone) return;
+      const pose = save(bone);
+      const offset = (microNoise(ctx.t * 0.45, seed) * 0.00025 + breath * 0.00015) * (1 + 0.35 * this.speechWeight) + posture.shoulderY;
+      bone.position.copy(pose.position).addScaledVector(this.motionAxes.get(bone)!.up, offset);
+    };
+    shoulder(resolved.shoulderL, 5);
+    shoulder(resolved.shoulderR, 9);
   }
 }
