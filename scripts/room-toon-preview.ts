@@ -1,7 +1,14 @@
-// Local WebGL evidence fixture. No backend, Tauri mocks, storage or animation writes.
+// Local WebGL evidence fixture. No backend, Tauri mocks or animation writes; editor=1 uses local UI preferences.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { RoomToonValidation } from '../src/windows/room/roomToonValidation';
+import { DEFAULT_CEL } from '../src/shared/room/celConfig';
+import { createElement, useEffect, useState } from 'react';
+import { createRoot } from 'react-dom/client';
+import { MaterialSection } from '../src/windows/room/MaterialSection';
+import { DEFAULT_ROOM_SETTINGS, loadRoomSettings, subscribeRoomSettings } from '../src/shared/room/roomSettings';
+import { initUIPrefs } from '../src/shared/uiPreferences';
+import '../src/windows/room/EditorPanel.css';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(1); renderer.setSize(innerWidth, innerHeight); document.body.append(renderer.domElement);
@@ -31,16 +38,18 @@ model.traverse(o => { const mesh = o as THREE.Mesh; if (!mesh.isMesh) return;
   }
 });
 const mode = new URLSearchParams(location.search).get('look') ?? 'before';
+let effectiveMode = mode;
 function snapshot() {
   const nodes: { object: THREE.Object3D; material?: THREE.Material | THREE.Material[]; matrix: number[]; visible: boolean; cast: boolean; receive: boolean }[] = [];
   scene.traverse(object => nodes.push({ object, material: (object as THREE.Mesh).material,
     matrix: object.matrix.toArray(), visible: object.visible, cast: object.castShadow, receive: object.receiveShadow }));
   return nodes;
 }
-function render() { if (mode === 'toon') toon.render(model, room); else renderer.render(scene, camera); }
+function render() { if (effectiveMode === 'toon' || effectiveMode === 'soft' || effectiveMode === 'cel') toon.render(model, room); else renderer.render(scene, camera); }
 scene.updateMatrixWorld(true);
 const initial = snapshot(); const initialBackground = scene.background;
 const toon = new RoomToonValidation(renderer, scene, camera, innerWidth, innerHeight);
+toon.apply({ ...DEFAULT_CEL, mode: mode === 'cel' ? 'cel' : 'soft' });
 for (let frame = 0; frame < 5; frame++) render();
 const restored = initial.every(({ object, material, matrix, visible, cast, receive }) =>
   (object as THREE.Mesh).material === material && object.visible === visible &&
@@ -51,5 +60,22 @@ document.body.dataset.mismatches = initial.filter(({ object, material, matrix, v
   (object as THREE.Mesh).material !== material || object.visible !== visible || object.castShadow !== cast ||
   object.receiveShadow !== receive || object.matrix.toArray().some((v, i) => v !== matrix[i])).map(s => s.object.name || s.object.type).join(',');
 document.body.dataset.ready = mode;
+if (new URLSearchParams(location.search).get('editor') === '1') {
+  await initUIPrefs();
+  const root = document.createElement('div'); root.className = 'room-editor-panel';
+  root.style.overflowY = 'auto'; root.style.display = 'block'; document.body.append(root);
+  function EditorFixture() {
+    const [settings, setSettings] = useState({ ...DEFAULT_ROOM_SETTINGS, ...loadRoomSettings(), characterFile: 'TV_Character_Rigged_v03.glb' });
+    useEffect(() => {
+      const update = (next: typeof settings) => {
+        setSettings(next); const cfg = next.toon ?? { ...DEFAULT_CEL, mode: 'original' as const };
+        effectiveMode = cfg.mode; toon.apply(cfg); render(); document.body.dataset.mode = cfg.mode;
+      };
+      update(settings); return subscribeRoomSettings(update);
+    }, []);
+    return createElement(MaterialSection, { settings });
+  }
+  createRoot(root).render(createElement(EditorFixture));
+}
 addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); toon.setSize(innerWidth, innerHeight);
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); render(); });

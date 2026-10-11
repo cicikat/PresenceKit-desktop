@@ -1,4 +1,5 @@
 import { getUIPref, setUIPref } from '../uiPreferences';
+import { validateCel, validateCelPresets, type CelConfig, type CelPreset } from './celConfig';
 import { validatePerformanceRoutes, type PerformanceRoutes } from '../character/performanceRoutes';
 import { ALL_ROLES, type BoneRole } from '../character/humanoid';
 import { validateGrade, type GradeCfg } from './gradeConfig';
@@ -102,6 +103,8 @@ export interface RoomSettings {
   lights: RoomLights;
   /** Screen-level color grade (work order 4). Absent means the neutral default. */
   grade?: GradeCfg;
+  toon?: CelConfig;
+  toonPresets?: Record<string, CelPreset>;
   props: RoomProp[];
   // Legacy global fields — migrated into `perCharacter[characterFile]` on load (see `validate`).
   // Kept optional here only so old persisted blobs still type-check through the migration path.
@@ -383,6 +386,8 @@ function validate(raw: unknown): RoomSettings {
     anchorMode: r.anchorMode === 'floor' ? 'floor' : 'free',
     lights: validateLights(r.lights),
     grade: validateGrade(r.grade),
+    toon: validateCel(r.toon),
+    toonPresets: validateCelPresets(r.toonPresets),
     props: Array.isArray(r.props)
       ? (r.props as unknown[]).map(validateProp).filter((p): p is RoomProp => p !== null)
       : [],

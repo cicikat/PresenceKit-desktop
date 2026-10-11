@@ -714,3 +714,6 @@ Room 通过临时 URL roomToon=1 和 TV v02/v03 白名单进入独立 RoomToonVa
 无跨端影响，不新增落盘设置或通信合同。真实 v03 浏览器对比已保存；
 真实 Tauri、v02、动态动作、复杂地面和 GPU 性能验收 open。
 详见 docs/room-toon-validation.md（docs 内对应 room-toon-validation.md）。
+## Room TV 赛璐璐与预设（2026-10-12，partial）
+
+编辑模式 MaterialSection 提供原版/旧浅色/赛璐璐切换、五类材质配色和本机预设。celConfig 校验 room.settings；celShader 生成硬阴影与光照交界藏色；CelOutline 使用全角色 normal/depth mask 描边。真实 WebGL 与本机预设刷新已验证，Tauri、动态穿插和 GPU 性能仍 open。无跨端影响，详见 docs/room-cel-materials.md。

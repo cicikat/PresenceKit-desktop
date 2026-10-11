@@ -1,4 +1,7 @@
 import * as THREE from 'three';
+import { DEFAULT_CEL, type CelConfig } from '../../shared/room/celConfig';
+import { patchCelShader } from './celShader';
+import { CelOutline } from './celOutline';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { OutlinePass } from 'three/examples/jsm/postprocessing/OutlinePass.js';
@@ -32,6 +35,8 @@ export class RoomToonValidation {
   private contact: THREE.Mesh;
   private contactMap: THREE.DataTexture;
   private disposed = false;
+  private celOutline = new CelOutline();
+  private cfg: CelConfig = { ...DEFAULT_CEL, mode: 'soft' };
 
   constructor(private renderer: THREE.WebGLRenderer, private scene: THREE.Scene,
     private camera: THREE.PerspectiveCamera, width: number, height: number) {
@@ -80,11 +85,21 @@ export class RoomToonValidation {
       vertexShader: 'varying vec2 vUv; void main(){vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
       fragmentShader: 'uniform sampler2D tDiffuse; uniform sampler2D glow; varying vec2 vUv; void main(){vec4 b=texture2D(tDiffuse,vUv); gl_FragColor=vec4(b.rgb+texture2D(glow,vUv).rgb,b.a);}',
     });
-    this.base.addPass(this.combine); this.base.addPass(new OutputPass()); this.setSize(width, height);
+    this.base.addPass(this.combine); this.base.addPass(this.celOutline.pass);
+    this.celOutline.pass.enabled = false;
+    this.base.addPass(new OutputPass()); this.setSize(width, height);
   }
 
   setSize(width: number, height: number): void {
     this.base.setSize(width, height); this.glow.setSize(width, height);
+    this.celOutline.setSize(width, height, this.renderer.getPixelRatio(), this.cfg.outlinePx, this.cfg.structurePx);
+  }
+
+  apply(cfg: CelConfig): void {
+    if (JSON.stringify(cfg) === JSON.stringify(this.cfg)) return;
+    this.cfg = cfg; this.cache.forEach(m => m.dispose()); this.cache.clear();
+    this.outline.enabled = cfg.mode === 'soft'; this.celOutline.pass.enabled = cfg.mode === 'cel';
+    this.celOutline.setWidths(cfg.outlinePx, cfg.structurePx, this.renderer.getPixelRatio());
   }
 
   private material(source: Source, character: boolean): THREE.Material {
@@ -123,6 +138,10 @@ export class RoomToonValidation {
             '#include <opaque_fragment>',
             'outgoingLight += vec3(0.55,0.68,1.0)*tvRim*pow(1.0-max(dot(normal,normalize(vViewPosition)),0.0),3.0);\n#include <opaque_fragment>');
         };
+        if (this.cfg.mode === 'cel') {
+          if (source.color) toon.color.copy(source.color);
+          patchCelShader(toon, toon.color, this.cfg);
+        }
         material = toon;
       }
       cache.set(source, material);
@@ -179,6 +198,7 @@ export class RoomToonValidation {
       this.outline.selectedObjects = [character];
       // UnrealBloomPass output includes the masked source; add only its blurred texture.
       this.combine.uniforms.glow.value = this.bloom.renderTargetsHorizontal[0].texture;
+      if (this.cfg.mode === 'cel') this.celOutline.render(this.renderer, this.scene, this.camera, charSet);
       this.base.render();
     } finally {
       meshes.forEach(({ mesh, original, cast, receive }) => { mesh.material = original; mesh.castShadow = cast; mesh.receiveShadow = receive; });
@@ -197,6 +217,7 @@ export class RoomToonValidation {
     if (this.disposed) return; this.disposed = true;
     for (const c of [this.base, this.glow]) { c.passes.forEach(p => p.dispose()); c.dispose(); }
     for (const cache of [this.cache, this.backdropCache]) { cache.forEach(m => m.dispose()); cache.clear(); }
+    this.celOutline.dispose();
     this.black.dispose(); this.ramp.dispose(); this.background.dispose(); this.contactMap.dispose();
     this.contact.geometry.dispose(); (this.contact.material as THREE.Material).dispose();
     this.scene.remove(this.rig, this.contact);

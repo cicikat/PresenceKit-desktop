@@ -13,6 +13,7 @@ import type { RoomSettings, ExtraLightCfg, ExtraLightType } from '../../shared/r
 import { saveRoomSettings, EXTRA_LIGHT_TYPES, MAX_EXTRA_LIGHTS } from '../../shared/room/roomSettings';
 import { Row, SliderNum, Divider } from './EditorControls';
 import { GradeSection } from './GradeSection';
+import { MaterialSection } from './MaterialSection';
 import { MotionPreview } from './MotionPreview';
 import { LookSection } from './LookSection';
 import { useI18n } from '../../shared/i18n';
@@ -132,6 +133,7 @@ export function EditorPanel({ settings, loadedSceneFile, stage }: EditorPanelPro
       <Divider />
 
       <LookSection settings={settings} stage={stage} />
+      <MaterialSection settings={settings} />
       <MotionPreview />
 
       <GradeSection settings={settings} />

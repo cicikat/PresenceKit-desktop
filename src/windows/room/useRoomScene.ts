@@ -35,6 +35,7 @@ import type { LightCfg, RoomProp, RoomLights } from '../../shared/room/roomSetti
 import { DEFAULT_GRADE } from '../../shared/room/gradeConfig';
 import { GradeRenderer } from './gradePass';
 import { RoomToonValidation, supportsRoomToon } from './roomToonValidation';
+import { resolveCel } from '../../shared/room/celConfig';
 import { ExtraLightRig, LightHelperSet, fitDirectionalShadow } from './extraLights';
 import { extraLightKey, extraLightId, isExtraLightKey, getLightCfg } from './sceneOutline';
 
@@ -1087,7 +1088,10 @@ export function useRoomScene(
 
       controls.update();
       if (placementModeRef.current) helpers.update();
-      if (toonRef.current && supportsRoomToon(settingsRef.current.characterFile) && charGroup.children.length) {
+      const cel = resolveCel(settingsRef.current.toon, toonRequested.current);
+      if (cel.mode !== 'original' && supportsRoomToon(settingsRef.current.characterFile) && charGroup.children.length) {
+        if (!toonRef.current) toonRef.current = new RoomToonValidation(renderer, scene, camera, mount.clientWidth, mount.clientHeight);
+        toonRef.current.apply(cel);
         toonRef.current.render(charGroup, roomGroup);
       } else (gradeRef.current ?? { render: () => renderer.render(scene, camera) }).render();
     }

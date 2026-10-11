@@ -26,11 +26,14 @@ vi.mock('three/examples/jsm/postprocessing/UnrealBloomPass.js', () => ({ UnrealB
 vi.mock('three/examples/jsm/postprocessing/ShaderPass.js', () => ({ ShaderPass: harness.Pass }));
 vi.mock('three/examples/jsm/postprocessing/OutputPass.js', () => ({ OutputPass: harness.Pass }));
 import { RoomToonValidation, supportsRoomToon } from './roomToonValidation';
+import { DEFAULT_CEL } from '../../shared/room/celConfig';
 
 describe('Room toon isolation', () => {
-  it.each([false, true])('restores live screen material, lights and transforms after render (failure=%s)', fail => {
+  it.each([[false, false], [true, false], [false, true], [true, true]])('restores live screen material, lights and transforms (failure=%s, cel=%s)', (fail, cel) => {
     harness.state.fail = fail; harness.state.renders = 0;
-    const renderer = { toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.4,
+    const renderer = { getPixelRatio: () => 1, getRenderTarget: () => null, getClearAlpha: () => 1,
+      getClearColor: (c: THREE.Color) => c.set('red'), setClearColor: () => {}, setRenderTarget: () => {}, clear: () => {}, render: () => {},
+      toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.4,
       shadowMap: { enabled: true } } as THREE.WebGLRenderer;
     const scene = new THREE.Scene(); const background = new THREE.Color('red'); scene.background = background;
     const character = new THREE.Group(), room = new THREE.Group(); scene.add(character, room);
@@ -41,6 +44,7 @@ describe('Room toon isolation', () => {
     const matrix = mesh.matrix.toArray(), texture = source.map;
     const light = new THREE.DirectionalLight(); scene.add(light);
     const look = new RoomToonValidation(renderer, scene, new THREE.PerspectiveCamera(), 320, 560);
+    if (cel) look.apply(DEFAULT_CEL);
     if (fail) expect(() => look.render(character, room)).toThrow('GPU failure');
     else look.render(character, room);
     expect(mesh.material).toBe(source); expect(source.map).toBe(texture);

@@ -13,7 +13,7 @@
    附加灯（平行/点/聚光，`lights.extra`），可开阴影（`lights.shadows`，默认关，吃帧率）。
 2. **画面调色（grade）**：决定整体色调与质感（曝光/色调映射/色温/色调/饱和/对比/暗部提亮/暗角/泛光），
    与模型和场景无关，`settings.grade`，默认关（关闭时画面与未调色一致，不创建 EffectComposer）。
-3. **材质**：toon 材质由角色资产作者在模型旁的 `<model>.materials.json` 配置，本编辑器不碰。
+3. **材质**：通用 toon 绑定仍由 `<model>.materials.json` 配置；TV v02/v03 另有编辑模式「角色材质」实验切换、分类配色和本机预设，见 `room-cel-materials.md`。
 
 外观预设（Look）把 光照 + 调色 打成命名预设，5 个内置只读 + 用户预设，按 `sceneFile` 记忆（`lookByScene`），
 切场景时自动套用。
@@ -1019,3 +1019,7 @@ Room 通过临时 URL roomToon=1 和 TV v02/v03 白名单进入独立 RoomToonVa
 无跨端影响，不新增落盘设置或通信合同。真实 v03 浏览器对比已保存；
 真实 Tauri、v02、动态动作、复杂地面和 GPU 性能验收 open。
 详见 docs/room-toon-validation.md（docs 内对应 room-toon-validation.md）。
+
+## Room TV 赛璐璐与预设（2026-10-12，partial）
+
+编辑模式 MaterialSection 提供原版/旧浅色/赛璐璐切换、五类材质配色和本机预设。celConfig 校验 room.settings；celShader 生成硬阴影与光照交界藏色；CelOutline 使用全角色 normal/depth mask 描边。真实 WebGL 与本机预设刷新已验证，Tauri、动态穿插和 GPU 性能仍 open。无跨端影响，详见 docs/room-cel-materials.md。
