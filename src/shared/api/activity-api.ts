@@ -65,7 +65,14 @@ export interface ReadingGroundingFacts {
   filename?: string;
 }
 
-export interface ReadingChatResult {
+export interface ActivityDialogueIdentity {
+  turn_id?: string;
+  msg_id?: string;
+  request_id?: string;
+  source_ref?: string;
+}
+
+export interface ReadingChatResult extends ActivityDialogueIdentity {
   session_id: string;
   reply: string;
   control?: Record<string, unknown>;
@@ -97,8 +104,8 @@ export const readingApi = {
     invokeActivity('activity_reading_turn_page', { payload: { session_id, direction, uid: options?.uid } }),
   close: (session_id: string, options?: ReadingSessionOptions): Promise<{ status: string }> =>
     invokeActivity('activity_reading_close', { payload: { session_id, uid: options?.uid } }),
-  chat: (params: { session_id: string; message: string; uid?: string }): Promise<ReadingChatResult> =>
-    invokeActivity('activity_reading_chat', { payload: { session_id: params.session_id, message: params.message, uid: params.uid } }),
+  chat: (params: { session_id: string; message: string; request_id?: string; uid?: string }): Promise<ReadingChatResult> =>
+    invokeActivity('activity_reading_chat', { payload: { session_id: params.session_id, message: params.message, request_id: params.request_id ?? crypto.randomUUID(), uid: params.uid } }),
   library: (): Promise<ReadingLibraryResult> =>
     invokeActivity('activity_reading_library'),
   addBook: (filePath: string): Promise<ReadingLibraryBook> =>
@@ -146,7 +153,7 @@ export interface GomokuStartRequest {
   ai_response_mode?: GomokuAiResponseMode;
 }
 
-export interface GomokuCommentResult {
+export interface GomokuCommentResult extends ActivityDialogueIdentity {
   session_id: string;
   comment: string | null;
   grounding?: GomokuGroundingFacts;
@@ -173,7 +180,7 @@ export interface GomokuGroundingFacts {
   last_ai_move_facts?: GomokuAiMoveFacts;
 }
 
-export interface GomokuChatResult {
+export interface GomokuChatResult extends ActivityDialogueIdentity {
   session_id: string;
   reply: string;
   control?: Record<string, unknown>;
@@ -194,8 +201,8 @@ export const gomokuApi = {
     invokeActivity('activity_gomoku_move', { payload: params }),
   close: (session_id: string): Promise<{ status: string }> =>
     invokeActivity('activity_gomoku_close', { payload: { session_id } }),
-  chat: (params: { session_id: string; message: string }): Promise<GomokuChatResult> =>
-    invokeActivity('activity_gomoku_chat', { payload: { session_id: params.session_id, message: params.message } }),
+  chat: (params: { session_id: string; message: string; request_id?: string }): Promise<GomokuChatResult> =>
+    invokeActivity('activity_gomoku_chat', { payload: { session_id: params.session_id, message: params.message, request_id: params.request_id ?? crypto.randomUUID() } }),
   aiMove: (session_id: string): Promise<Omit<GomokuState, 'session_id'>> =>
     invokeActivity('activity_gomoku_ai_move', { payload: { session_id } }),
   comment: (session_id: string): Promise<GomokuCommentResult> =>
@@ -258,14 +265,14 @@ export interface ChessGroundingFacts {
   turn?: string;
 }
 
-export interface ChessChatResult {
+export interface ChessChatResult extends ActivityDialogueIdentity {
   session_id: string;
   reply: string;
   control?: Record<string, unknown>;
   grounding?: ChessGroundingFacts;
 }
 
-export interface ChessCommentResult {
+export interface ChessCommentResult extends ActivityDialogueIdentity {
   session_id: string;
   comment: string | null;
   grounding?: ChessGroundingFacts;
@@ -285,8 +292,8 @@ export const chessApi = {
     invokeActivity('activity_chess_legal_moves', { payload: { session_id } }),
   close: (session_id: string): Promise<{ status: string }> =>
     invokeActivity('activity_chess_close', { payload: { session_id } }),
-  chat: (params: { session_id: string; message: string }): Promise<ChessChatResult> =>
-    invokeActivity('activity_chess_chat', { payload: { session_id: params.session_id, message: params.message } }),
+  chat: (params: { session_id: string; message: string; request_id?: string }): Promise<ChessChatResult> =>
+    invokeActivity('activity_chess_chat', { payload: { session_id: params.session_id, message: params.message, request_id: params.request_id ?? crypto.randomUUID() } }),
   aiMove: (session_id: string): Promise<ChessMoveResult> =>
     invokeActivity('activity_chess_ai_move', { payload: { session_id } }),
   comment: (session_id: string): Promise<ChessCommentResult> =>

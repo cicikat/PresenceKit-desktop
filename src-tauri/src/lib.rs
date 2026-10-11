@@ -2725,6 +2725,7 @@ struct GomokuMovePayload {
 struct GomokuChatPayload {
     session_id: String,
     message: String,
+    request_id: Option<String>,
     uid: Option<String>,
 }
 
@@ -2874,7 +2875,7 @@ async fn activity_gomoku_chat(app: tauri::AppHandle, payload: GomokuChatPayload)
     activity_llm_post(
         &app,
         "/activity/gomoku/chat",
-        serde_json::json!({ "session_id": payload.session_id, "message": payload.message, "uid": payload.uid.unwrap_or_default() }),
+        serde_json::json!({ "session_id": payload.session_id, "message": payload.message, "request_id": payload.request_id.unwrap_or_default(), "uid": payload.uid.unwrap_or_default() }),
     )
     .await
 }
@@ -2943,7 +2944,7 @@ async fn activity_chess_chat(app: tauri::AppHandle, payload: GomokuChatPayload) 
     activity_llm_post(
         &app,
         "/activity/chess/chat",
-        serde_json::json!({ "session_id": payload.session_id, "message": payload.message, "uid": payload.uid.unwrap_or_default() }),
+        serde_json::json!({ "session_id": payload.session_id, "message": payload.message, "request_id": payload.request_id.unwrap_or_default(), "uid": payload.uid.unwrap_or_default() }),
     )
     .await
 }
@@ -2968,7 +2969,7 @@ async fn activity_reading_chat(app: tauri::AppHandle, payload: GomokuChatPayload
     activity_llm_post(
         &app,
         "/activity/reading/chat",
-        serde_json::json!({ "session_id": payload.session_id, "message": payload.message, "uid": payload.uid.unwrap_or_default() }),
+        serde_json::json!({ "session_id": payload.session_id, "message": payload.message, "request_id": payload.request_id.unwrap_or_default(), "uid": payload.uid.unwrap_or_default() }),
     )
     .await
 }

@@ -220,6 +220,11 @@ export interface MoodState {
   previous: string;
   updated_at: number;
   pending: string | null;
+  has_signal?: boolean;
+  source_turn_id?: string;
+  source_at?: number;
+  expires_at?: number;
+  version?: number;
 }
 
 export interface ActivityState {

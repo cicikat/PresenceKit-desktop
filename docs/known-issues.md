@@ -673,3 +673,8 @@ See `../cc-tasks/2026-10-10-tv-idle-motion-audit.md`.
 ### open：电视机 P1/P2 真实桌面验收
 
 浏览器已用真实 v03 GLB/五张 PNG、生产 React 舞台和 HTMLAudioElement 验证；Tauri transport 与 TTS 合成采用 fixture。仍需 Windows Tauri 实际后端聊天、真实 TTS、多窗口热切换和衣服/鞋底观感验收。上身侧倾只表现重心变化，未新增足底 IK，不能修正输入动画自身接地。私有 GLB/PNG 不随 Git 交付；准备脚本及五态 sidecar 示例见施工单。
+
+
+## 工单284交付验收边界（2026-10-11，observe）
+
+current：Reality真实对话统一canonical历史，结构化活动按引用查询，独立交互界面保留；随机ambient/成长等级与强制情绪链已退役。observe：真实设备/模型、桌面3D/Pet/Live2D/视频与手机真机尚未验收；生产服务未由本单重启。现有sensor协议无独立设备身份，设备切换隔离不能据夹具宣称完成。状态revision CAS限单后端进程；活动原文查询返回有界但扫描成本随存量增长。未进行历史私有数据导入或删除。

@@ -1283,3 +1283,14 @@ Room uses isolated callDirectiveLayers; legacy Pet directive storage is unchange
 新增 Tauri 跨窗口呈现通知，不改变服务器 REST/WS 或 send_chat 参数。所有通知含 kind、独立 id、捕获的 charId、epoch 毫秒 at。request-start/end 来自 sendChat；end 可含 msgId/text/emotion，失败 end 仅释放请求。audio-start/end 来自 VoiceMessageBar 实际 HTMLAudioElement 播放成功及 pause/ended/error/卸载，另含 scene、可选 msgId。每次重播有新 id；结束只释放自身，角色切换清理。
 
 优先级：有效音频/文本 speaking > 请求或空流 thinking > 有效情绪/normal。等待与丢失结束有 TTL，表最多 128 项；时间参数集中在 behaviorParameters.ts。音频关联回复结束后不重启该回复的文本计时。仅 StateEngine mood、HTTP emotion、有效 perform.expression 提供情绪，不推测文本关键词。stream start 严格核对单角色 reality 范围，delta/end 必须已注册；Pet 转发保留 scope/关联字段，Dream/群聊不驱动该层。
+
+
+## 工单284当前合同
+
+Reality 活动对话由同一 owner/char 的 canonical turn sink 落盘，使用原有脱敏、来源与回合去重。阅读、棋局和 Minecraft 保留独立交互界面；回复只由调用窗口消费，不进行全局主聊天伪流转播。结构化棋步、页面正文、文件和工具回执不批量转换成聊天消息。Dream 隔离不变。
+
+活动请求可携带 request_id，重试须复用同一值；返回 turn_id、msg_id、request_id、source_ref。配置 owner 是服务端身份，客户端不能用 uid 切换用户。新状态使用 revision 比较写入，旧快照拒绝覆盖；state_events 保留实际状态变化。活动对话的 canonical event 携带 activity_record 引用，派生记忆可通过源 event 回到完整分页记录。旧局部 transcript 可原地查询，不自动导入历史或增加指标。
+
+GET /activity/records（state.read）默认仅列来源元数据；指定 source_ref 才读取原文。query_activity_records 使用 dispatcher 身份；未指定引用时关键词/时间查询跨当前身份的活动原文。概要是 revision 绑定的分段摘录，标注 coverage/pending，回复发送后构建；失败保留原文，后续对话或关闭重试。canonical 撤回也遮蔽已关联的局部召回，并使旧概要失效。
+
+表达状态 has_signal=false 表示无短时信号，区别于明确 neutral。来源 turn/source_at/version/expires_at 可观测，最多30分钟且只读不续期；旧固定 mood 不转成新余韵。prompt 的 expression_afterglow 是可裁剪层，prompt_eligible 表示资格，实际注入以 prompt 观测为准。没有新增模型情绪检测、随机活动或成长等级控制开关。

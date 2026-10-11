@@ -19,6 +19,14 @@ beforeEach(() => {
   invokeMock.mockResolvedValue({});
 });
 
+it('retains caller request identity across activity retries', async () => {
+  const request = { session_id: 'sess-1', message: 'hello', request_id: 'retry-1' };
+  await chessApi.chat(request);
+  await chessApi.chat(request);
+  expect(invokeMock.mock.calls[0]).toEqual(invokeMock.mock.calls[1]);
+  expect(invokeMock.mock.calls[0][1].payload.request_id).toBe('retry-1');
+});
+
 describe('readingApi', () => {
   it('start() invokes activity_reading_start with filePath', async () => {
     await readingApi.start('/tmp/book.pdf');
@@ -54,7 +62,7 @@ describe('readingApi', () => {
   it('chat() invokes activity_reading_chat with session_id/message', async () => {
     await readingApi.chat({ session_id: 'sess-1', message: 'hi' });
     expect(invokeMock).toHaveBeenCalledWith('activity_reading_chat', {
-      payload: { session_id: 'sess-1', message: 'hi' },
+      payload: { session_id: 'sess-1', message: 'hi', request_id: expect.any(String) },
     });
   });
 
@@ -138,7 +146,7 @@ describe('gomokuApi', () => {
   it('chat() invokes activity_gomoku_chat with session_id/message', async () => {
     await gomokuApi.chat({ session_id: 'sess-1', message: 'nice move' });
     expect(invokeMock).toHaveBeenCalledWith('activity_gomoku_chat', {
-      payload: { session_id: 'sess-1', message: 'nice move' },
+      payload: { session_id: 'sess-1', message: 'nice move', request_id: expect.any(String) },
     });
   });
 
@@ -188,7 +196,7 @@ describe('chessApi', () => {
   it('chat() invokes activity_chess_chat with session_id/message', async () => {
     await chessApi.chat({ session_id: 'sess-1', message: 'good game' });
     expect(invokeMock).toHaveBeenCalledWith('activity_chess_chat', {
-      payload: { session_id: 'sess-1', message: 'good game' },
+      payload: { session_id: 'sess-1', message: 'good game', request_id: expect.any(String) },
     });
   });
 
