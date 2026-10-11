@@ -34,6 +34,7 @@ import type { EditableId, LightKey } from './sceneOutline';
 import type { LightCfg, RoomProp, RoomLights } from '../../shared/room/roomSettings';
 import { DEFAULT_GRADE } from '../../shared/room/gradeConfig';
 import { GradeRenderer } from './gradePass';
+import { RoomToonValidation, supportsRoomToon } from './roomToonValidation';
 import { ExtraLightRig, LightHelperSet, fitDirectionalShadow } from './extraLights';
 import { extraLightKey, extraLightId, isExtraLightKey, getLightCfg } from './sceneOutline';
 
@@ -334,6 +335,8 @@ export function useRoomScene(
   onCameraPresetsChangeRef.current = onCameraPresetsChange;
   const disposedRef        = useRef(false);
   const gradeRef           = useRef<GradeRenderer | null>(null);
+  const toonRef = useRef<RoomToonValidation | null>(null);
+  const toonRequested = useRef(new URLSearchParams(window.location.search).get('roomToon') === '1');
   const applyShadowsRef    = useRef<(() => void) | null>(null);
   const freeLookRef        = useRef(false);
   const [freeLook, setFreeLook] = useState(false);
@@ -854,6 +857,7 @@ export function useRoomScene(
         camera.updateProjectionMatrix();
         renderer.setSize(nw, nh);
         gradeRef.current?.setSize(nw, nh);
+        toonRef.current?.setSize(nw, nh);
       }),
       targetLightColor,
       targetLightIntensity,
@@ -883,6 +887,7 @@ export function useRoomScene(
     const propsGroup = new THREE.Group();
     scene.add(propsGroup);
     propsGroupRef.current = propsGroup;
+    if (toonRequested.current) toonRef.current = new RoomToonValidation(renderer, scene, camera, w, h);
 
     // Shadows are opt-in (settings.lights.shadows). Also refits directional shadow frusta to the
     // current scene bounds, and is re-run after any model finishes loading. A no-op while off
@@ -1082,7 +1087,9 @@ export function useRoomScene(
 
       controls.update();
       if (placementModeRef.current) helpers.update();
-      (gradeRef.current ?? { render: () => renderer.render(scene, camera) }).render();
+      if (toonRef.current && supportsRoomToon(settingsRef.current.characterFile) && charGroup.children.length) {
+        toonRef.current.render(charGroup, roomGroup);
+      } else (gradeRef.current ?? { render: () => renderer.render(scene, camera) }).render();
     }
 
     refs.clock.getDelta();
@@ -1119,6 +1126,8 @@ export function useRoomScene(
 
       if (objChangeThrottle) clearTimeout(objChangeThrottle);
 
+      toonRef.current?.dispose();
+      toonRef.current = null;
       refs.scene.traverse((obj) => {
         if ((obj as THREE.Mesh).isMesh) {
           const mesh = obj as THREE.Mesh;

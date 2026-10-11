@@ -1010,3 +1010,12 @@ Rig Profile 与动作诊断并入既有 CharacterDiagnostics；没有新诊断�
 RoomWindow 的字幕分支同时判断 TTS 总开关和 video_call 自动播放，不再仅看场景偏好。
 关闭 TTS 时复用原 VN 文本呈现；跨窗口设置刷新使用既有 Tauri 通知，卸载取消旧回读。
 真实窗口验收，以及 TTS 开启但合成失败时的文字回退仍 open。
+
+## Room 电视机 toon 验证（2026-10-11，partial）
+
+Room 通过临时 URL roomToon=1 和 TV v02/v03 白名单进入独立 RoomToonValidation；
+不改变动作链，渲染时替换/恢复材质与灯光，采用三档 toon/rim、OutlinePass、
+选择性 UnrealBloomPass、unlit 渐变背景及假接触阴影。默认仍用 GradeRenderer。
+无跨端影响，不新增落盘设置或通信合同。真实 v03 浏览器对比已保存；
+真实 Tauri、v02、动态动作、复杂地面和 GPU 性能验收 open。
+详见 docs/room-toon-validation.md（docs 内对应 room-toon-validation.md）。

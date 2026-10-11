@@ -705,3 +705,12 @@ TTS enabled. Both existing settings now decide ownership, with cross-window refr
 boolean combinations are covered by pure logic tests. Native Tauri visual acceptance remains
 open. When TTS is enabled but synthesis/playback fails, CallSpeechPresenter still lacks a text
 fallback; this separate failure path remains open and must not be called fixed by this change.
+
+## Room 电视机 toon 验证（2026-10-11，partial）
+
+Room 通过临时 URL roomToon=1 和 TV v02/v03 白名单进入独立 RoomToonValidation；
+不改变动作链，渲染时替换/恢复材质与灯光，采用三档 toon/rim、OutlinePass、
+选择性 UnrealBloomPass、unlit 渐变背景及假接触阴影。默认仍用 GradeRenderer。
+无跨端影响，不新增落盘设置或通信合同。真实 v03 浏览器对比已保存；
+真实 Tauri、v02、动态动作、复杂地面和 GPU 性能验收 open。
+详见 docs/room-toon-validation.md（docs 内对应 room-toon-validation.md）。
