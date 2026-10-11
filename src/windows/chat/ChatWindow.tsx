@@ -131,11 +131,20 @@ export function ChatWindow({ onToyOpen, onRoomOpen, isCovered = false }: { onToy
       }
       void loadCharacterAvatar(info.id || null);
     });
-    void getPromptAssets({ force: true })
-      .then(assets => updateActiveCharacterFromAssets(assets))
-      .then(info => loadCharacterAvatar(info.id || null))
-      .catch(() => { void loadCharacterAvatar(getActiveCharacterInfo().id || null); });
-    return unsubscribe;
+    let disposed = false;
+    const refresh = () => {
+      void getPromptAssets({ force: true })
+        .then(assets => { if (!disposed) updateActiveCharacterFromAssets(assets); })
+        .catch(() => { if (!disposed) void loadCharacterAvatar(getActiveCharacterInfo().id || null); });
+    };
+    // Restore cached identity immediately, then reconcile with the backend. A
+    // backend that starts after this WebView must get another chance on connect.
+    void loadCharacterAvatar(characterId || null);
+    refresh();
+    const unsubscribeConnection = wsClient.on('state', state => {
+      if (state === 'connected') refresh();
+    });
+    return () => { disposed = true; avatarRequestRef.current++; unsubscribe(); unsubscribeConnection(); };
   }, [loadCharacterAvatar]);
 
   const mouseRef       = useRef({ x: window.innerWidth / 2, y: window.innerHeight / 2 });

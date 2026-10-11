@@ -1,5 +1,8 @@
 ## 引用精确锚点（F6）
 
+角色头像启动恢复见 [avatar-startup-recovery.md](avatar-startup-recovery.md)：ChatWindow 在
+WS connected 后重读 prompt-assets 与角色头像；既有 IPC/REST 字段、scope 和落盘结构不变。
+
 280 长文档：现有 `/upload/ingest`、Bearer/chat scope 和 media_refs 不变。后端保存 TXT/MD/DOCX 完整解析正文，角色可分页回读并用分块概要/进度接续。422 的既有 `{code,message}` 新增 `document_text_too_large`（解析正文超过50万字符）与 `document_archive_failed`；不把保存失败当成功。旧 DOC 请转换为 DOCX。桌面无新设置/工具权限/消息协议，真实上传与模型效果仍 observe。
 
 桌面/手机 reply_to 新增可选 message_id，由已绑定 turn_id 与 user/assistant 作者组成。后端核验作者、原文和完整带时区时间；旧 text+ts 标为未经核验，不能精确展开。角色工具 read_message_context 可查上/下最多10条保留现实消息；遗忘、跨角色或不存在的锚点不可用。分段气泡引用整条原始消息。构建/回归不代表真实设备或模型验收。
