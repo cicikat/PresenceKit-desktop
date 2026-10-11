@@ -3,6 +3,7 @@ import type { CharacterPerformer } from './performer';
 import type { BindingReport } from './toonMaterial';
 import type { MappingReport } from '../../windows/room/morphController';
 import { ALL_ROLES, LEG_ROLES, type BoneRole } from './humanoid';
+import type { MotionStatus } from './motionLibrary';
 
 export interface CharacterDiagnostics {
   schema: 1;
@@ -19,6 +20,8 @@ export interface CharacterDiagnostics {
   degraded: BodyDegradation[];
   /** Degradation reasons from routing, standing pose and rig topology, in load order. */
   notes: string[];
+  rig?: { id: string; version: number; convention: string; exportMode: string; cacheHit: boolean; errors: string[]; missingOptional: string[] };
+  motions?: MotionStatus[];
 }
 
 export interface BodyDegradation {
@@ -45,7 +48,7 @@ export function describeBodyDegradation(present: ReadonlySet<BoneRole>): BodyDeg
 
 export function buildCharacterDiagnostics(
   performer: CharacterPerformer,
-  extra: { expressions?: MappingReport; materials?: BindingReport[] } = {},
+  extra: { expressions?: MappingReport; materials?: BindingReport[]; motions?: MotionStatus[] } = {},
 ): CharacterDiagnostics {
   const present = performer.bones.presentRoles();
   const { routes, standing } = performer;
@@ -62,6 +65,10 @@ export function buildCharacterDiagnostics(
     notes: [...routes.notes, ...standing.notes, ...performer.bones.warnings],
   };
   if (extra.expressions) out.expressions = { ...extra.expressions };
+  const p = performer.rigProfile;
+  out.rig = { id: p.id, version: p.version, convention: p.convention, exportMode: p.exportMode, cacheHit: p.cacheHit,
+    errors: [...p.errors], missingOptional: [...p.missingOptional] };
+  if (extra.motions) out.motions = extra.motions.map(m => ({ ...m, missingRoles: [...m.missingRoles] }));
   if (extra.materials) {
     out.materials = {
       applied: extra.materials.filter((m) => m.status === 'applied').length,

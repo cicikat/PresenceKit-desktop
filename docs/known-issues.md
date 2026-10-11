@@ -6,7 +6,7 @@
 
 - **真实窗口验收（open）**：Toon 材质与描边、表情映射、站姿、动作库、诊断，在 Room 与 Pet、开发与 Windows 发行版里一项都没有目检；Blender 参考场景比对也没做。
 - **`.ptchar` 前端导入（open）**：后端 `inspect_character_package` / `install_character_package` 已有，缺前端入口、替换确认、revision 比较提示、`.prev/` 回滚入口；没有用真实包做过端到端和发行路径验证；安装/回滚流程只有路径、重复、映射的单测，摘要校验与替换回滚没有测过。
-- **动作无触发入口（open，需后端契约）**：perform 指令不能带动作 id，动作库已进帧循环但用户不可见；设置面板预览按钮未做。变更在 Emerald-presence 侧，需要先定义契约。
+- **动作触发与素材（partial）**：2026-10-11 已接公共动作库及既有 perform 的头部/表情选择入口，不需要新增后端字段。任意 motion id、特殊摄像机动作仍不在后端契约中；预览 UI、缺失 authored 动作与真实窗口验收保持 open。见 `avatar-shared-motion-library.md`。
 - **设置面板诊断入口（open）**：诊断快照与 `degraded` 可读可复制，但设置面板没有查看/复制按钮；Room 设置页曾有未提交改动，现已合入，可接。
 - **本机覆盖管理界面（open）**：骨名映射、材质、表情、动作的预览与覆盖管理（CA-07）未做。
 - **脸部 SDF 阴影（open，缺素材）**：需要用户提供与脸底色同 UV 的灰度阈值图，实现也未做。
@@ -678,3 +678,15 @@ See `../cc-tasks/2026-10-10-tv-idle-motion-audit.md`.
 ## 工单284交付验收边界（2026-10-11，observe）
 
 current：Reality真实对话统一canonical历史，结构化活动按引用查询，独立交互界面保留；随机ambient/成长等级与强制情绪链已退役。observe：真实设备/模型、桌面3D/Pet/Live2D/视频与手机真机尚未验收；生产服务未由本单重启。现有sensor协议无独立设备身份，设备切换隔离不能据夹具宣称完成。状态revision CAS限单后端进程；活动原文查询返回有界但扫描成本随存量增长。未进行历史私有数据导入或删除。
+
+## Avatar shared motion library (2026-10-11, partial/open)
+
+P1-P3 have code plus actual private-GLB numeric evidence. TV v02/v03 share one cached Clip;
+full.glb (ARP-like) and yexuan_base_v006.glb retarget; Yexuan_toon_v008.glb has actual semantic
+chain breaks and is rejected. Profile export mode remains unknown: GLB metadata cannot prove
+ARP Humanoid versus Universal. Cache is per WebView, bounded and nonpersistent.
+Only authored idle exists locally. head_tilt/thinking/arms_crossed/camera_reach resources and
+camera_closeup choreography are missing; no procedural motion is counted as those clips.
+Real crossed-arm/chin-touch penetration, contact IK, clothing/finger creasing, live backend
+perform -> Tauri, native skin switching and camera restoration remain open. Diagnostic UI
+and special-interaction buttons remain roadmap. See avatar-shared-motion-library.md.

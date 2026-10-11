@@ -764,3 +764,12 @@ Room now reads an opt-in `<model>.screen.json` sidecar. The feature contract def
 ### 电视机五态 PNG（2026-10-10）
 
 现有 GLB 可在 Room 和 Pet 复用 Idle 与 screen sidecar。屏幕节点匹配支持 GLTFLoader 规范化 name 及 userData.name 原始节点名，仍须唯一材质槽和 UV。五张 PNG 的示例在 docs/examples/tv-screen-five-png.example.json；用 node scripts/prepare-tv-behavior-assets.mjs --faces <素材目录> 准备本地副本，默认对应 TV v02/v03，先验证并备份 PNG/sidecar，不改 GLB。素材目录没有 GLB 时不会自动建模。
+
+## 2026-10-11：公共动作库与 Rig Profile 增量
+
+以 docs/avatar-shared-motion-library.md（本目录对应 ../avatar-shared-motion-library.md）为增量权威。
+单个 character/motions/library.json 供所有皮肤共用，旧 <model>.motions.json 只是可选覆盖。
+骨名不要求重命名：继续支持 ARP/Rigify/Mixamo，hips 表示 pelvis，新增已有手指语义。
+异构重定向通过真实绑定矩阵和中间祖先旋转烘焙，不再只依赖同父级的局部 rest 公式。
+已有 perform 头部/表情可以选择动作，但任意 motion id 和特殊镜头动作仍不在 WS 合同中。
+接触 IK、动作预览 UI、缺失素材和真实模型窗口穿模验收仍 open，不改变源 GLB/蒙皮/材质。

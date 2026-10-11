@@ -1,0 +1,113 @@
+{
+  "status": "partial",
+  "validation": "actual private GLB numeric replay, not native visual acceptance",
+  "models": [
+    {
+      "file": "TV_Character_Rigged_v02.glb",
+      "rigId": "rig-v1-8b88193c",
+      "convention": "rigify-like",
+      "exportMode": "unknown",
+      "errors": [],
+      "resolved": 45,
+      "missingOptional": [
+        "pinky1L",
+        "pinky2L",
+        "pinky3L",
+        "pinky1R",
+        "pinky2R",
+        "pinky3R"
+      ],
+      "kind": "direct",
+      "tracks": 108,
+      "reasons": [],
+      "replayChestAngle": 0.006630358123965294
+    },
+    {
+      "file": "TV_Character_Rigged_v03.glb",
+      "rigId": "rig-v1-8b88193c",
+      "convention": "rigify-like",
+      "exportMode": "unknown",
+      "errors": [],
+      "resolved": 45,
+      "missingOptional": [
+        "pinky1L",
+        "pinky2L",
+        "pinky3L",
+        "pinky1R",
+        "pinky2R",
+        "pinky3R"
+      ],
+      "kind": "direct",
+      "tracks": 108,
+      "reasons": [],
+      "replayChestAngle": 0.006630358123965294
+    },
+    {
+      "file": "full.glb",
+      "rigId": "rig-v1-97e9ca73",
+      "convention": "arp-like",
+      "exportMode": "unknown",
+      "errors": [],
+      "resolved": 51,
+      "missingOptional": [],
+      "kind": "retarget",
+      "tracks": 35,
+      "reasons": [],
+      "replayChestAngle": 0.01018817775833632
+    },
+    {
+      "file": "yexuan_base_v006.glb",
+      "rigId": "rig-v1-c15eaefc",
+      "convention": "rigify-like",
+      "exportMode": "unknown",
+      "errors": [],
+      "resolved": 53,
+      "missingOptional": [],
+      "kind": "retarget",
+      "tracks": 35,
+      "reasons": [],
+      "replayChestAngle": 0.010188182619888731
+    },
+    {
+      "file": "Yexuan_toon_v008.glb",
+      "rigId": "rig-v1-5c4d6ad1",
+      "convention": "rigify-like",
+      "exportMode": "unknown",
+      "errors": [
+        "broken semantic chain: shoulderL",
+        "broken semantic chain: shoulderR",
+        "broken semantic chain: leftEye",
+        "broken semantic chain: rightEye",
+        "broken semantic chain: upperArmL",
+        "broken semantic chain: upperArmR",
+        "broken semantic chain: upperLegL",
+        "broken semantic chain: upperLegR"
+      ],
+      "resolved": 53,
+      "missingOptional": [],
+      "kind": "incompatible",
+      "tracks": 0,
+      "reasons": [
+        "broken semantic chain: shoulderL",
+        "broken semantic chain: shoulderR",
+        "broken semantic chain: leftEye",
+        "broken semantic chain: rightEye",
+        "broken semantic chain: upperArmL",
+        "broken semantic chain: upperArmR",
+        "broken semantic chain: upperLegL",
+        "broken semantic chain: upperLegR"
+      ],
+      "replayChestAngle": 0
+    }
+  ],
+  "sourceRig": "rig-v1-ebc8f7d",
+  "sourceSha256": "c7bfab94a9eeb89ad73e076a81d1cbc9ebb7d12cee36543d2b01de744b743da2",
+  "sharedClipSha256": "d9f26a4dd6f240f0bb6be096a19ddc1cb4550e392929072c840469e85f1f514f",
+  "sameRigSharedClipIdentity": true,
+  "replaySeconds": 120,
+  "assertedMaxAddedFootDistance": 1E-06,
+  "assertedMaxBreathScaleRatioDelta": 0.003001,
+  "nativeWindow": "not-run",
+  "penetration": "not-run: authored motions unavailable",
+  "liveBackend": "not-run"
+}

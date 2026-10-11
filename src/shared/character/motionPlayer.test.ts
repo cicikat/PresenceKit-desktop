@@ -19,6 +19,19 @@ const clip = () => new THREE.AnimationClip('Wave', 1, [
 ]);
 
 describe('CA-05 motion player', () => {
+  it('an out-of-frame stop clears procedural snapshots before restoring the current base', () => {
+    const root=new THREE.Group(); const chain=['Hips','Spine','Chest','Neck','Head'].map(name=>{const b=new THREE.Bone();b.name=name;return b;});
+    root.add(chain[0]); chain.slice(1).forEach((b,i)=>chain[i].add(b));
+    const performer=new CharacterPerformer(root,{hasIdleClip:true}), player=new MotionPlayer(root,performer), chest=chain[2];
+    const q=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,1),0.2);
+    const action=new THREE.AnimationClip('wave',1,[new THREE.QuaternionKeyframeTrack('Chest.quaternion',[0,1],[...q.toArray(),...q.toArray()])]);
+    player.play(desc({loop:true}),action); player.prepareFrame(); player.update(0.5);
+    performer.update({t:1,now:1000,mood:'平静',directive:null,talking:false,activity:'idle',animatedBoneNames:new Set(['Chest']),charGroup:null,hairDrivenByPhysics:false});
+    player.stop(true); performer.prepareFrame();
+    expect(chest.quaternion.clone().normalize().angleTo(new THREE.Quaternion())).toBeLessThan(1e-6);
+    expect(chest.scale.distanceTo(new THREE.Vector3(1,1,1))).toBeLessThan(1e-6);
+    expect(chest.position.length()).toBeLessThan(1e-6);
+  });
   it('plays a one-shot to the end, then releases', () => {
     const { root, player } = setup();
     expect(player.play(desc(), clip())).toBe(true);

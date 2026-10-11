@@ -13,11 +13,11 @@ import { CharacterPerformer } from '../../shared/character/performer';
 import { setupCharacter } from './characterSetup';
 import { collectSceneCameraPresets, placementFromSceneCamera } from './sceneCameraPresets';
 import type { SceneCameraPreset } from './sceneCameraPresets';
-import { MotionLibrary, setActiveMotionLibrary } from '../../shared/character/motionLibrary';
+import { MotionLibrary, setActiveMotionLibrary, type MotionStatus } from '../../shared/character/motionLibrary';
 import { buildCharacterDiagnostics, publishCharacterDiagnostics } from '../../shared/character/diagnostics';
 import type { BindingReport } from '../../shared/character/toonMaterial';
 import type { MappingReport } from './morphController';
-import { loadRoomModel, loadCharacterMaterials, loadCharacterToonTextures, loadCharacterExpressions, loadCharacterMotions, loadMotionFileUrl } from '../../shared/room/roomAssets';
+import { loadRoomModel, loadCharacterMaterials, loadCharacterToonTextures, loadCharacterExpressions, loadAvatarMotions, loadMotionFileUrl } from '../../shared/room/roomAssets';
 import { applyToonBindings } from '../../shared/character/toonMaterial';
 import type { RoomSettings } from '../../shared/room/roomSettings';
 import {
@@ -493,7 +493,7 @@ export function useRoomScene(
         enableCharLayer(model);
         charGroup.add(model);
         applyShadowsRef.current?.();
-        const diagExtra: { expressions?: MappingReport; materials?: BindingReport[] } = {};
+        const diagExtra: { expressions?: MappingReport; materials?: BindingReport[]; motions?: MotionStatus[] } = {};
         const publishDiag = () => {
           if (!cancelled && !disposedRef.current && performerRef.current) publishCharacterDiagnostics(buildCharacterDiagnostics(performerRef.current, diagExtra));
         };
@@ -517,13 +517,14 @@ export function useRoomScene(
         void loadCharacterExpressions(s.characterFile).then((cfg) => {
           if (cfg && !cancelled && !disposedRef.current && performerRef.current === setup.performer) { diagExtra.expressions = setup.performer.applyExpressions(cfg); publishDiag(); }
         });
-        void loadCharacterMotions(s.characterFile).then(async (cfg) => {
+        void loadAvatarMotions(s.characterFile).then(async (cfg) => {
           if (!cfg || cancelled || disposedRef.current || performerRef.current !== setup.performer) return;
           const lib = new MotionLibrary(model, setup.performer, gltf.animations);
           await lib.load(cfg, loadMotionFileUrl);
           if (cancelled || disposedRef.current || performerRef.current !== setup.performer) { lib.dispose(); return; }
           motionRef.current = lib;
           setActiveMotionLibrary(lib);
+          diagExtra.motions = lib.status; publishDiag();
         });
         publishDiag();
         springChainsRef.current = setup.springChains;
@@ -989,6 +990,15 @@ export function useRoomScene(
           activeSettings.idleClip, startIdleClip,
         );
         performerRef.current = setup.performer;
+        void loadAvatarMotions(activeSettings.characterFile).then(async cfg => {
+          if (disposedRef.current || performerRef.current !== setup.performer) return;
+          const lib = new MotionLibrary(model, setup.performer, gltf.animations);
+          await lib.load(cfg, loadMotionFileUrl);
+          if (disposedRef.current || performerRef.current !== setup.performer) { lib.dispose(); return; }
+          motionRef.current = lib;
+          setActiveMotionLibrary(lib);
+          publishCharacterDiagnostics(buildCharacterDiagnostics(setup.performer, { motions: lib.status }));
+        });
         void loadScreenDriver(activeSettings.characterFile, model,
           () => !disposedRef.current && performerRef.current === setup.performer).then(driver => {
           if (disposedRef.current || performerRef.current !== setup.performer) driver?.dispose();
@@ -1030,7 +1040,9 @@ export function useRoomScene(
       screenRef.current?.update(now, frame.expression, activity);
 
       performerRef.current?.prepareFrame();
+      motionRef.current?.prepareFrame();
       mixerRef.current?.update(dt);
+      motionRef.current?.drivePresentation(now, activity, directive);
 
       // All morph/bone performance layers live in the shared performer (CA-02) so Room and
       // Pet cannot drift apart. Room keeps only its own stage concerns: the physics chains

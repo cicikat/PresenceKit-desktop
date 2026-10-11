@@ -1082,6 +1082,23 @@ fn read_room_motion_config(app: tauri::AppHandle, file_name: String) -> Result<O
     read_character_sidecar(&app, &file_name, "motions")
 }
 
+/// Shared catalog; fixed name, canonical containment, bounded UTF-8 JSON. No backend request.
+#[tauri::command]
+fn read_shared_motion_config(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    let mut dirs = vec![room_live_dir(&app, "character")?.join("motions")];
+    if let Ok(dir) = room_assets_dir(&app, "character") { dirs.push(dir.join("motions")); }
+    for dir in dirs {
+        let path = dir.join("library.json");
+        if !path.is_file() { continue; }
+        let real = path.canonicalize().map_err(|e| e.to_string())?;
+        let real_dir = dir.canonicalize().map_err(|e| e.to_string())?;
+        if real.parent() != Some(real_dir.as_path()) { return Err("Shared motion catalog escaped motions directory".into()); }
+        if fs::metadata(&real).map_err(|e| e.to_string())?.len() > 256 * 1024 { return Err("Shared motion catalog exceeds 256KiB".into()); }
+        return fs::read_to_string(real).map(Some).map_err(|e| e.to_string());
+    }
+    Ok(None)
+}
+
 #[tauri::command]
 fn list_room_assets(app: tauri::AppHandle, kind: String) -> Result<serde_json::Value, String> {
     if kind != "character" && kind != "scene" {
@@ -3812,6 +3829,7 @@ pub fn run() {
             read_room_screen_map,
             read_room_motion_config,
             read_room_motion_file,
+            read_shared_motion_config,
             read_room_material_map,
             list_room_props,
             list_live2d_models,

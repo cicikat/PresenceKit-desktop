@@ -99,3 +99,12 @@ See `cc-tasks/2026-10-10-tv-idle-motion-audit.md` (relative to repository root).
 ### GLB 行为层（2026-10-10）
 
 src/shared/character/behaviorState.ts 是桌面临时呈现仲裁器，不复制 StateEngine mood 真值。behaviorParameters.ts 集中微动作和反馈时限；microMotion.ts 只生成偏移目标。桌宠新增复用 Room 的 Idle clip 选择/轨道过滤与 screenDriver；保持原 Mixer 基准恢复顺序。身体与 PNG 生命周期独立，真实音频播放通知优先，接口见 docs/backend-integration.md。
+
+## Avatar shared motion library (2026-10-11, partial)
+
+Skin/Rig/Motion/Avatar boundaries and validation: docs/avatar-shared-motion-library.md.
+CharacterPerformer captures the bind-based RigProfile before posing. MotionLibrary reads one
+shared catalog, caches successful data-only adaptations, and feeds the existing MotionPlayer.
+Room initial load/reload and Pet use the same loading contract; AvatarMotionDriver selects
+existing semantic IDs from trusted performance, without another event bus or emotion store.
+Raw GLB/material/screen resources remain unchanged. Real Tauri/visual acceptance is open.

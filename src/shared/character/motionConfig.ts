@@ -43,6 +43,7 @@ export function parseMotionsConfig(raw: unknown): MotionsResult {
   if (!data) return { ok: false, errors: ['motions must be an object'] };
   if (typeof data.schemaVersion !== 'string' || !/^1\.\d+\.\d+$/.test(data.schemaVersion)) errors.push('unsupported schemaVersion');
   if (!Array.isArray(data.motions)) errors.push('motions must be an array');
+  else if (data.motions.length > 128) errors.push('motions exceeds 128 entries');
   const motions: MotionDescriptor[] = [];
   const ids = new Set<string>();
   const list = Array.isArray(data.motions) ? data.motions.slice(0, 128) : [];

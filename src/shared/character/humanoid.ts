@@ -22,7 +22,14 @@ export const HUMANOID_ROLES = [
   'upperLegR', 'lowerLegR', 'footR', 'toesR',
 ] as const;
 
-export const ALL_ROLES = [...CORE_ROLES, ...HUMANOID_ROLES] as const;
+/** Optional deform joints. Existing `hips` is the pelvis; no second pelvis truth. */
+export const FINGER_ROLES = [
+  'thumb1L', 'thumb2L', 'thumb3L', 'index1L', 'index2L', 'index3L',
+  'middle1L', 'middle2L', 'middle3L', 'ring1L', 'ring2L', 'ring3L', 'pinky1L', 'pinky2L', 'pinky3L',
+  'thumb1R', 'thumb2R', 'thumb3R', 'index1R', 'index2R', 'index3R',
+  'middle1R', 'middle2R', 'middle3R', 'ring1R', 'ring2R', 'ring3R', 'pinky1R', 'pinky2R', 'pinky3R',
+] as const;
+export const ALL_ROLES = [...CORE_ROLES, ...HUMANOID_ROLES, ...FINGER_ROLES] as const;
 
 export type CoreBoneRole = typeof CORE_ROLES[number];
 export type HumanoidBoneRole = typeof HUMANOID_ROLES[number];
@@ -47,12 +54,21 @@ export const LEG_ROLES: readonly BoneRole[] = [
  * case-insensitive and an exact match on the whole name — substring matching would make
  * `hand` claim `handle` or `DEF-thumb`.
  */
+const FINGER_CANDIDATES = Object.fromEntries(FINGER_ROLES.map(role => {
+  const [, digit, joint, side] = /^(thumb|index|middle|ring|pinky)([123])([LR])$/.exec(role)!;
+  const lower = side.toLowerCase(), hand = side === 'L' ? 'Left' : 'Right';
+  const title = digit[0].toUpperCase() + digit.slice(1);
+  return [role, [`DEF-${digit}.0${joint}.${side}`, `DEF-f_${digit}.0${joint}.${side}`,
+    `c_${digit}${joint}.${lower}`, `${digit}${joint}.${lower}`, `${digit}_${String(joint).padStart(2, '0')}.${lower}`,
+    `mixamorig${hand}Hand${title}${joint}`, `${hand}Hand${title}${joint}`]];
+})) as unknown as Record<typeof FINGER_ROLES[number], readonly string[]>;
 export const ROLE_CANDIDATES: Record<BoneRole, readonly string[]> = {
+  ...FINGER_CANDIDATES,
   head:      ['DEF-spine.006', 'DEF-spine.005', 'DEF-head', 'head', 'Head', 'mixamorigHead', 'head.x'],
   neck:      ['DEF-spine.004', 'DEF-neck', 'neck', 'Neck', 'mixamorigNeck', 'neck.x'],
   chest:     ['DEF-spine.003', 'DEF-spine.002', 'chest', 'Chest', 'UpperChest', 'spine.003', 'mixamorigSpine2', 'spine_02.x', 'spine_03.x'],
   spine:     ['DEF-spine.001', 'DEF-spine', 'spine', 'Spine', 'mixamorigSpine', 'spine_01.x'],
-  hips:      ['DEF-hips', 'DEF-pelvis', 'hips', 'Hips', 'pelvis', 'Pelvis', 'mixamorigHips', 'root.x', 'c_root.x'],
+  hips:      ['DEF-hips', 'DEF-pelvis', 'DEF-spine', 'hips', 'Hips', 'pelvis', 'Pelvis', 'mixamorigHips', 'root.x', 'c_root.x'],
   shoulderL: ['DEF-shoulder.L', 'shoulder.L', 'DEF-clavicle.L', 'LeftShoulder', 'mixamorigLeftShoulder', 'shoulder.l'],
   shoulderR: ['DEF-shoulder.R', 'shoulder.R', 'DEF-clavicle.R', 'RightShoulder', 'mixamorigRightShoulder', 'shoulder.r'],
   upperArmL: ['DEF-upper_arm.L', 'upper_arm.L', 'LeftArm', 'mixamorigLeftArm', 'arm_stretch.l', 'arm.l'],
@@ -82,6 +98,10 @@ export const ROLE_CANDIDATES: Record<BoneRole, readonly string[]> = {
  * rig can never pass one and fail the other.
  */
 export const SEMANTIC_PARENT: Partial<Record<BoneRole, BoneRole>> = {
+  ...Object.fromEntries(FINGER_ROLES.map(role => {
+    const side = role.slice(-1), joint = Number(role.slice(-2, -1));
+    return [role, joint === 1 ? `hand${side}` : `${role.slice(0, -2)}${joint - 1}${side}`];
+  })),
   spine: 'hips', chest: 'spine', neck: 'chest', head: 'neck',
   shoulderL: 'chest', shoulderR: 'chest',
   upperArmL: 'shoulderL', upperArmR: 'shoulderR',
@@ -130,6 +150,7 @@ export const POSE_GROUP_LINKS: Record<PoseGroup, readonly BoneRole[]> = {
 
 /** Left/right counterpart of a role, for detecting mirrored or swapped mappings. */
 export const MIRRORED_ROLE: Partial<Record<BoneRole, BoneRole>> = {
+  ...Object.fromEntries(FINGER_ROLES.map(role => [role, `${role.slice(0, -1)}${role.endsWith('L') ? 'R' : 'L'}`])),
   shoulderL: 'shoulderR', shoulderR: 'shoulderL',
   upperArmL: 'upperArmR', upperArmR: 'upperArmL',
   lowerArmL: 'lowerArmR', lowerArmR: 'lowerArmL',

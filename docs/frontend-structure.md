@@ -993,3 +993,10 @@ See `cc-tasks/2026-10-10-tv-idle-motion-audit.md` (relative to repository root).
 ### GLB 聊天行为与屏幕
 
 桌宠 useCharacterRig 与 Room useRoomScene 共享 CharacterBehaviorState/useCharacterBehavior。sendChat 发请求生命周期通知，VoiceMessageBar 发实际音频生命周期通知；canonical、stream 和 perform 沿原事件链消费。PetWindow 在实际音频播放期间暂停对话气泡计时。表情贴图由 screenDriver 管理，身体由 CharacterPerformer 管理；切换角色清理临时行为状态。
+
+## 共享 Avatar 动作（2026-10-11，partial）
+
+Room 的首次载入、角色文件切换和 Pet 的 useCharacterRig 均加载公共 motions/library.json。
+Rig Profile 与动作诊断并入既有 CharacterDiagnostics；没有新诊断面板或动作编辑器。
+表演选择器消费已有句级/基调指令，特殊镜头动作仅预留显式入口，不能随机触发。
+完整资源边界、缓存失效、逐帧顺序与 open 验收见 avatar-shared-motion-library.md。

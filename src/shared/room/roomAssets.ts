@@ -137,3 +137,20 @@ export async function loadCharacterMotions(fileName: string): Promise<MotionsCon
 /** Data URL of `motions/<name>.glb`, or null when it does not exist. */
 export const loadMotionFileUrl = (motionName: string): Promise<string | null> =>
   invoke<string | null>('read_room_motion_file', { motionName });
+
+/** One shared catalog for every Skin. Per-model sidecars remain optional legacy overrides. */
+export async function loadAvatarMotions(fileName: string): Promise<MotionsConfig> {
+  let shared: MotionsConfig = { schemaVersion: '1.0.0', motions: [] };
+  try {
+    const text = await invoke<string | null>('read_shared_motion_config');
+    if (text) {
+      const result = parseMotionsConfig(JSON.parse(text));
+      if (result.ok === true) shared = result.config;
+      else console.warn('[motions] shared catalog invalid:', result.errors);
+    }
+  } catch (error) { console.warn('[motions] shared catalog unavailable:', error); }
+  const local = await loadCharacterMotions(fileName);
+  const motions = new Map(shared.motions.map(d => [d.id, d]));
+  for (const d of local?.motions ?? []) motions.set(d.id, d);
+  return { schemaVersion: '1.0.0', motions: [...motions.values()] };
+}

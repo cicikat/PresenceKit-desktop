@@ -84,6 +84,7 @@ describe('chat transport compatibility', () => {
 
 it('forwards a voice receipt once and drops it when transcript is edited', async () => {
   invokeGated.mockReset();
+  invokeGated.mockResolvedValue({ reply: 'fixture reply', msg_id: 'fixture-message' });
   invokeGated.mockResolvedValueOnce({ text: 'hello', audio_perception_id: 'fixture-receipt' });
   await transcribeAudio('fixture-audio');
   await sendChat('hello');

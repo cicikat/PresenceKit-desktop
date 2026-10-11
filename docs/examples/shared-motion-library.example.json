@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "1.0.0",
+  "motions": [
+    { "id": "idle", "file": "tv-idle-v1.glb", "clip": "idle", "loop": true, "mask": "upper", "headEye": "performer", "sourceRig": "rigify-like" },
+    { "id": "head_tilt", "file": "head-tilt-v1.glb", "clip": "head_tilt", "mask": "upper", "headEye": "clip", "priority": 2 },
+    { "id": "thinking", "file": "thinking-v1.glb", "clip": "thinking", "mask": "upper", "headEye": "clip", "priority": 3 },
+    { "id": "arms_crossed", "file": "arms-crossed-v1.glb", "clip": "arms_crossed", "mask": "arms", "priority": 3 },
+    { "id": "camera_reach", "file": "camera-reach-v1.glb", "clip": "camera_reach", "mask": "upper", "headEye": "clip", "priority": 10 }
+  ]
+}

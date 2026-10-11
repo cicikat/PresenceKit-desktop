@@ -31,6 +31,7 @@ import {
   resolveRoutes, faceUsesMorphs, gazeUsesBones, gazeUsesMorphs,
   type PerformanceRoutes, type ResolvedRoutes, type RigCapability,
 } from './performanceRoutes';
+import { createRigProfile, type RigProfile } from './rigProfile';
 
 export interface PerformerOptions {
   boneMap?: BoneMap;
@@ -151,6 +152,7 @@ function eyeAxesInParent(
 }
 
 export class CharacterPerformer {
+  readonly rigProfile: RigProfile;
   readonly morph: MorphController;
   readonly bones: BoneResolver;
   capability!: RigCapability;
@@ -197,8 +199,9 @@ export class CharacterPerformer {
   standingPose: PoseOffsets = {};
 
   constructor(model: THREE.Object3D, options: PerformerOptions = {}) {
+    this.rigProfile = createRigProfile(model, options.boneMap);
     this.morph = new MorphController(model);
-    this.bones = new BoneResolver(model, options.boneMap);
+    this.bones = new BoneResolver(model, { ...this.rigProfile.side.names, ...options.boneMap });
     const resolved = this.bones.resolved;
 
     this.headBone = resolved.head ?? findHeadBone(model);
@@ -300,6 +303,9 @@ export class CharacterPerformer {
       this.yieldEyes = group.eyes;
     }
   }
+
+  /** An auto procedural fallback may gain external clips; explicit body policy stays authoritative. */
+  get allowsExternalMotion(): boolean { return this.routes.body !== 'off' && this.requestedRoutes?.body !== 'procedural'; }
 
   onNewSpeech(text: string): void {
     // Keep mouth-open duration on the same order as the pet bubble's own TTL
