@@ -34,7 +34,7 @@ describe('Room toon isolation', () => {
     const renderer = { getPixelRatio: () => 1, getRenderTarget: () => null, getClearAlpha: () => 1,
       getClearColor: (c: THREE.Color) => c.set('red'), setClearColor: () => {}, setRenderTarget: () => {}, clear: () => {}, render: () => {},
       toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.4,
-      shadowMap: { enabled: true } } as THREE.WebGLRenderer;
+      shadowMap: { enabled: true } } as unknown as THREE.WebGLRenderer;
     const scene = new THREE.Scene(); const background = new THREE.Color('red'); scene.background = background;
     const character = new THREE.Group(), room = new THREE.Group(); scene.add(character, room);
     const source = new THREE.MeshStandardMaterial({ name: 'TV_Screen_Expressions_Screen' });
