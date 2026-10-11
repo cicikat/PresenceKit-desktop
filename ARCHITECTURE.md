@@ -1,5 +1,9 @@
 # PresenceKit-desktop 当前架构
 
+2026-10-11 增量：现有 MotionLibrary 接入本机 UAL 派生共享 Clip；Room EditorPanel 的
+MotionPreview 提供播放/暂停/继续/恢复 idle，预览临时暂停自动选择，关闭恢复。无新架构或 WS
+字段。ChatWindow 在连接恢复时刷新角色头像。详见 docs/motion-assets/tv-ual-import.md。
+
 本仓是 Tauri + React + TypeScript 桌面客户端。后端负责业务状态、生成、权限与数据；
 桌面负责呈现、本机授权及受控动作。施工入口为 `AGENTS.md`。
 

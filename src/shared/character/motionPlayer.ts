@@ -32,6 +32,10 @@ export class MotionPlayer {
   }
 
   get playingId(): string | null { return this.active?.descriptor.id ?? null; }
+  get paused(): boolean { return this.active?.action.paused ?? false; }
+  setPaused(paused: boolean): void {
+    if (this.active && !this.active.fadingOut) this.active.action.paused = paused;
+  }
 
   /**
    * Start a motion. A running motion is only replaced by one of equal or higher priority;
@@ -111,7 +115,8 @@ export class MotionPlayer {
     if (!this.prepared) this.prepareFrame();
     this.prepared = false;
     before.rest.forEach((value, node) => { value[0].copy(node.position); value[1].copy(node.quaternion); value[2].copy(node.scale); });
-    this.mixer.update(dt);
+    // Freeze loop time AND fade time while preview is paused.
+    this.mixer.update(before.action.paused && !before.fadingOut ? 0 : dt);
     const a = this.active;
     // The mixer may write cached poses or finish synchronously. Restore the current
     // base and apply just one weighted motion layer, keeping breath additive afterwards.

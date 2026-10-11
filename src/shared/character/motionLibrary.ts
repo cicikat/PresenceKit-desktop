@@ -55,6 +55,7 @@ export class MotionLibrary {
   readonly player: MotionPlayer;
   readonly driver: AvatarMotionDriver;
   private disposed = false;
+  private previewing = false;
 
   constructor(
     private readonly model: THREE.Object3D,
@@ -110,6 +111,7 @@ export class MotionLibrary {
     for (const id of AVATAR_MOTION_IDS) if (!this.status.some(s => s.id === id)) {
       this.status.push({ id, ready: false, missingRoles: [], reason: id === 'camera_closeup' ? 'camera choreography is not installed' : 'motion resource not configured' });
     }
+    if (active === this) listeners.forEach(fn => fn());
   }
 
   ids(): string[] { return [...this.clips.keys()]; }
@@ -121,8 +123,15 @@ export class MotionLibrary {
   }
   prepareFrame(): void { this.player.prepareFrame(); }
   drivePresentation(now: number, activity: string, directive: ActiveDirective | null): void {
-    if (!this.disposed) this.driver.update(now, activity, directive);
+    if (!this.disposed && !this.previewing) this.driver.update(now, activity, directive);
   }
+  preview(id: string): boolean {
+    if (!this.clips.has(id) || !this.performer.allowsExternalMotion || this.disposed) return false;
+    this.player.stop(true);
+    this.previewing = this.play(id);
+    return this.previewing;
+  }
+  resumePresentation(): void { this.player.setPaused(false); this.stop(); this.previewing = false; }
   stop(): void { this.player.stop(); }
   update(dt: number): void { this.player.update(dt); }
   dispose(): void { this.disposed = true; this.player.dispose(); this.clips.clear(); }

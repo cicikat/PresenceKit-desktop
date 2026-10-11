@@ -1,5 +1,12 @@
 # docs/known-issues.md — 已知问题与技术债
 
+## TV 真实动作导入（2026-10-11，partial）
+
+已实播环胸/聊天，及点头/摇头/扶栏预览；证据见 [导入报告](motion-assets/tv-ual-import.md)。
+环胸 900ms 插值过渡中双手/宽袖靠近或穿插，缺独立进入/退出动作；最终手腕、肩饰接触还需精修。
+thinking 托腮、camera_reach、真实 Tauri/后端联调与其它皮肤目检仍 open。
+头像启动失败后连接恢复刷新已通过生产主窗口浏览器夹具，真实退出重启为 observe。
+
 ## 角色资产与表演（CA-00～CA-09）遗留（2026-10-04，open）
 
 工单：`cc-tasks/2026-09-27-character-assets-and-performance.md`。下列均**未做**，自动检查（vitest、tsc、cargo check）通过不代表验收。

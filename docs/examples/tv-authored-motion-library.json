@@ -1,0 +1,78 @@
+{
+  "schemaVersion": "1.0.0",
+  "motions": [
+    {
+      "id": "idle",
+      "file": "tv-idle-v1.glb",
+      "clip": "idle",
+      "loop": true,
+      "mask": "upper",
+      "headEye": "performer",
+      "sourceRig": "rigify-like"
+    },
+    {
+      "id": "arms_crossed",
+      "clip": "Idle_FoldArms_Loop",
+      "file": "quaternius-tv-v1.glb",
+      "loop": true,
+      "fadeInMs": 900,
+      "fadeOutMs": 900,
+      "mask": "upper",
+      "priority": 10,
+      "rootMotion": "inPlace",
+      "headEye": "performer",
+      "sourceRig": "Quaternius Unreal-Godot"
+    },
+    {
+      "id": "nod",
+      "clip": "Yes",
+      "file": "quaternius-tv-v1.glb",
+      "loop": false,
+      "fadeInMs": 900,
+      "fadeOutMs": 900,
+      "mask": "upper",
+      "priority": 10,
+      "rootMotion": "inPlace",
+      "headEye": "clip",
+      "sourceRig": "Quaternius Unreal-Godot"
+    },
+    {
+      "id": "head_shake",
+      "clip": "Idle_No_Loop",
+      "file": "quaternius-tv-v1.glb",
+      "loop": true,
+      "fadeInMs": 900,
+      "fadeOutMs": 900,
+      "mask": "upper",
+      "priority": 10,
+      "rootMotion": "inPlace",
+      "headEye": "clip",
+      "sourceRig": "Quaternius Unreal-Godot"
+    },
+    {
+      "id": "relaxed_lean",
+      "clip": "Idle_Rail_Loop",
+      "file": "quaternius-tv-v1.glb",
+      "loop": true,
+      "fadeInMs": 900,
+      "fadeOutMs": 900,
+      "mask": "upper",
+      "priority": 10,
+      "rootMotion": "inPlace",
+      "headEye": "performer",
+      "sourceRig": "Quaternius Unreal-Godot"
+    },
+    {
+      "id": "talking",
+      "clip": "Idle_Talking_Loop",
+      "file": "quaternius-tv-v1.glb",
+      "loop": true,
+      "fadeInMs": 700,
+      "fadeOutMs": 700,
+      "mask": "upper",
+      "priority": 5,
+      "rootMotion": "inPlace",
+      "headEye": "performer"
+    }
+  ]
+}

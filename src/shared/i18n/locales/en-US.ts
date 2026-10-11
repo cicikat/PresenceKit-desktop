@@ -2,6 +2,17 @@ import type { MessageKey } from './zh-CN';
 
 
 export const enUS: Record<MessageKey, string> = {
+"room.motion.title": "Authored motion preview",
+"room.motion.armsCrossed": "Fold arms",
+"room.motion.talking": "Talking gestures",
+"room.motion.nod": "Nod",
+"room.motion.headShake": "Shake head",
+"room.motion.rail": "Lean on rail",
+"room.motion.play": "Play",
+"room.motion.pause": "Pause",
+"room.motion.resume": "Resume",
+"room.motion.idle": "Return to idle",
+"room.motion.unavailable": "Motion unavailable. Check assets and motion diagnostics.",
 "chat.send.failed": "Send failed",
 "chat.send.retry": "Retry",
 "help.announcement.release": "PresenceKit v1.1.0 is now available.",

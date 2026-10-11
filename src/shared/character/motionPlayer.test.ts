@@ -19,6 +19,18 @@ const clip = () => new THREE.AnimationClip('Wave', 1, [
 ]);
 
 describe('CA-05 motion player', () => {
+  it('freezes authored time and fades during pause, resumes and can fade back to idle', () => {
+    const { root, player } = setup();
+    player.play(desc({loop:true,fadeInMs:1000,fadeOutMs:200}),clip());
+    player.update(0.4);
+    const y = root.getObjectByName('Arm')!.position.y;
+    player.setPaused(true); player.update(2);
+    expect(root.getObjectByName('Arm')!.position.y).toBeCloseTo(y, 6);
+    player.setPaused(false); player.update(0.1);
+    expect(root.getObjectByName('Arm')!.position.y).toBeGreaterThan(y);
+    player.setPaused(true); player.stop(); player.update(0.3);
+    expect(player.playingId).toBeNull();
+  });
   it('an out-of-frame stop clears procedural snapshots before restoring the current base', () => {
     const root=new THREE.Group(); const chain=['Hips','Spine','Chest','Neck','Head'].map(name=>{const b=new THREE.Bone();b.name=name;return b;});
     root.add(chain[0]); chain.slice(1).forEach((b,i)=>chain[i].add(b));

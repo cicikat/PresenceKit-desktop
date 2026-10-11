@@ -6,6 +6,15 @@ import { MotionPlayer } from './motionPlayer';
 import type { MotionDescriptor } from './motionConfig';
 
 describe('perform -> existing motion player', () => {
+  it('starts talking with actual speaking, releases on silence and bounds looped idle arms',()=>{
+    let current:string|null=null;
+    const stop=vi.fn(()=>{current=null;});
+    const driver=new AvatarMotionDriver({ready:id=>['talking','arms_crossed'].includes(id),play:id=>{current=id;return true;},stop,playingId:()=>current},()=>0);
+    driver.update(0,'speaking',null);expect(current).toBe('talking');
+    driver.update(1000,'idle',null);expect(stop).toHaveBeenCalledTimes(1);
+    driver.update(21000,'idle',null);expect(current).toBe('arms_crossed');
+    driver.update(28000,'idle',null);expect(current).toBeNull();
+  });
   it('sentence tilt actually rotates a bone; no repeated restart on subsequent frames', () => {
     const root = new THREE.Group(), head = new THREE.Bone(); head.name = 'Head'; root.add(head);
     const player = new MotionPlayer(root, null);

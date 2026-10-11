@@ -1,5 +1,9 @@
 # docs/frontend-structure.md — 前端结构指南
 
+2026-10-11：Room 编辑面板新增 MotionPreview，复用当前窗口 MotionLibrary，关闭恢复自动演出。
+支持五个真实 UAL 动作，截图与边界见 [导入报告](motion-assets/tv-ual-import.md)。头像启动/连接恢复
+流程见 [头像恢复](avatar-startup-recovery.md)。无后端/手机新 UI 或协议。
+
 ## 视频通话可视化编辑器（2026-10-01，partial）
 
 通话窗口的「编辑模式」（底栏 🛠；3D 下即 `placementMode`，Live2D 下为 `live2dEdit`，外壳统一叫 `editMode`）

@@ -1,0 +1,233 @@
+{
+  "schemaVersion": 1,
+  "importedAt": "2026-10-11",
+  "sources": [
+    {
+      "id": "UAL1",
+      "file": ".tmp/ual/ual1/Animation Library[Standard]/Godot/AnimationLibrary_Godot_Standard.glb",
+      "url": "https://opengameart.org/sites/default/files/universal_animation_librarystandard.zip",
+      "license": "CC0-1.0",
+      "author": "Quaternius",
+      "sha256": "1b7bf67866360665426bb99e4c71bd619f19b408453c24e30f0c3071601eee5c",
+      "zipSha256": "18ff1a7215f4852b320203e8aaf02a1578b5c8eef9027fbaedfcedc7b85a3ac2",
+      "clips": [
+        "A_TPose",
+        "Crouch_Fwd_Loop",
+        "Crouch_Idle_Loop",
+        "Dance_Loop",
+        "Death01",
+        "Driving_Loop",
+        "Fixing_Kneeling",
+        "Hit_Chest",
+        "Hit_Head",
+        "Idle_Loop",
+        "Idle_Talking_Loop",
+        "Idle_Torch_Loop",
+        "Interact",
+        "Jog_Fwd_Loop",
+        "Jump_Land",
+        "Jump_Loop",
+        "Jump_Start",
+        "PickUp_Table",
+        "Pistol_Aim_Down",
+        "Pistol_Aim_Neutral",
+        "Pistol_Aim_Up",
+        "Pistol_Idle_Loop",
+        "Pistol_Reload",
+        "Pistol_Shoot",
+        "Punch_Cross",
+        "Punch_Enter",
+        "Punch_Jab",
+        "Push_Loop",
+        "Roll",
+        "Roll_RM",
+        "Sitting_Enter",
+        "Sitting_Exit",
+        "Sitting_Idle_Loop",
+        "Sitting_Talking_Loop",
+        "Spell_Simple_Enter",
+        "Spell_Simple_Exit",
+        "Spell_Simple_Idle_Loop",
+        "Spell_Simple_Shoot",
+        "Sprint_Loop",
+        "Swim_Fwd_Loop",
+        "Swim_Idle_Loop",
+        "Sword_Attack",
+        "Sword_Attack_RM",
+        "Sword_Idle",
+        "Walk_Formal_Loop",
+        "Walk_Loop"
+      ]
+    },
+    {
+      "id": "UAL2",
+      "file": ".tmp/ual/ual2/Universal Animation Library 2 [Standard]/Unreal-Godot/UAL2_Standard.glb",
+      "url": "https://opengameart.org/sites/default/files/universal_animation_library_2standard.zip",
+      "license": "CC0-1.0",
+      "author": "Quaternius",
+      "sha256": "0815dd05531cae9bc313fc9c0ba81330bc72f8e19ec45f73738e74ddc5796a43",
+      "zipSha256": "ec0e40d6d78fe9aaad59e322f40865a8675c22f0745e291622e54520391a9217",
+      "clips": [
+        "A_TPose",
+        "Chest_Open",
+        "ClimbUp_1m_RM",
+        "Consume",
+        "Farm_Harvest",
+        "Farm_PlantSeed",
+        "Farm_Watering",
+        "Hit_Knockback",
+        "Hit_Knockback_RM",
+        "Idle_FoldArms_Loop",
+        "Idle_Lantern_Loop",
+        "Idle_No_Loop",
+        "Idle_Rail_Call",
+        "Idle_Rail_Loop",
+        "Idle_Shield_Break",
+        "Idle_Shield_Loop",
+        "Idle_TalkingPhone_Loop",
+        "LayToIdle",
+        "Melee_Hook",
+        "Melee_Hook_Rec",
+        "NinjaJump_Idle_Loop",
+        "NinjaJump_Land",
+        "NinjaJump_Start",
+        "OverhandThrow",
+        "Shield_Dash_RM",
+        "Shield_OneShot",
+        "Slide_Exit",
+        "Slide_Loop",
+        "Slide_Start",
+        "Sword_Block",
+        "Sword_Dash_RM",
+        "Sword_Regular_A",
+        "Sword_Regular_A_Rec",
+        "Sword_Regular_B",
+        "Sword_Regular_B_Rec",
+        "Sword_Regular_C",
+        "Sword_Regular_Combo",
+        "TreeChopping_Loop",
+        "Walk_Carry_Loop",
+        "Yes",
+        "Zombie_Idle_Loop",
+        "Zombie_Scratch",
+        "Zombie_Walk_Fwd_Loop"
+      ]
+    }
+  ],
+  "target": {
+    "file": "TV_Character_Rigged_v03.glb",
+    "sha256": "c7bfab94a9eeb89ad73e076a81d1cbc9ebb7d12cee36543d2b01de744b743da2"
+  },
+  "derived": {
+    "file": "quaternius-tv-v1.glb",
+    "sha256": "b31684a6786eac3999f2b1202c6410822725278631e07f9c3b5e97d00924facc",
+    "bytes": 375748,
+    "method": "30FPS authored world-rotation delta, bind-segment direction and averaged foot-forward alignment",
+    "clips": [
+      {
+        "name": "Idle_FoldArms_Loop",
+        "tracks": 36
+      },
+      {
+        "name": "Idle_No_Loop",
+        "tracks": 36
+      },
+      {
+        "name": "Idle_Rail_Loop",
+        "tracks": 36
+      },
+      {
+        "name": "Yes",
+        "tracks": 36
+      },
+      {
+        "name": "Idle_Talking_Loop",
+        "tracks": 36
+      }
+    ]
+  },
+  "mapping": [
+    {
+      "id": "arms_crossed",
+      "clip": "Idle_FoldArms_Loop",
+      "file": "quaternius-tv-v1.glb",
+      "loop": true,
+      "fadeInMs": 900,
+      "fadeOutMs": 900,
+      "mask": "upper",
+      "priority": 10,
+      "rootMotion": "inPlace",
+      "headEye": "performer",
+      "sourceRig": "Quaternius Unreal-Godot",
+      "source": "UAL2"
+    },
+    {
+      "id": "nod",
+      "clip": "Yes",
+      "file": "quaternius-tv-v1.glb",
+      "loop": false,
+      "fadeInMs": 900,
+      "fadeOutMs": 900,
+      "mask": "upper",
+      "priority": 10,
+      "rootMotion": "inPlace",
+      "headEye": "clip",
+      "sourceRig": "Quaternius Unreal-Godot",
+      "source": "UAL2"
+    },
+    {
+      "id": "head_shake",
+      "clip": "Idle_No_Loop",
+      "file": "quaternius-tv-v1.glb",
+      "loop": true,
+      "fadeInMs": 900,
+      "fadeOutMs": 900,
+      "mask": "upper",
+      "priority": 10,
+      "rootMotion": "inPlace",
+      "headEye": "clip",
+      "sourceRig": "Quaternius Unreal-Godot",
+      "source": "UAL2"
+    },
+    {
+      "id": "relaxed_lean",
+      "clip": "Idle_Rail_Loop",
+      "file": "quaternius-tv-v1.glb",
+      "loop": true,
+      "fadeInMs": 900,
+      "fadeOutMs": 900,
+      "mask": "upper",
+      "priority": 10,
+      "rootMotion": "inPlace",
+      "headEye": "performer",
+      "sourceRig": "Quaternius Unreal-Godot",
+      "source": "UAL2"
+    },
+    {
+      "id": "talking",
+      "clip": "Idle_Talking_Loop",
+      "file": "quaternius-tv-v1.glb",
+      "loop": true,
+      "fadeInMs": 700,
+      "fadeOutMs": 700,
+      "mask": "upper",
+      "priority": 5,
+      "rootMotion": "inPlace",
+      "headEye": "performer",
+      "source": "UAL1"
+    }
+  ],
+  "referenceOnly": {
+    "thinking": "UAL2 Idle_TalkingPhone_Loop is NOT chin-rest",
+    "camera_reach": [
+      "UAL1 Interact",
+      "UAL1 PickUp_Table"
+    ]
+  },
+  "acceptance": {
+    "browser": "passed",
+    "productionPetStage": "passed",
+    "tauri": "not-run",
+    "contactAndTransition": "partial"
+  }
+}
