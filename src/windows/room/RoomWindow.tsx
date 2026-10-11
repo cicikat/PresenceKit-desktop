@@ -23,7 +23,9 @@ import { VnBubble } from './VnBubble';
 import { getActiveCharacterInfo, getActiveCharacterName, subscribeActiveCharacter } from '../../shared/activeCharacter';
 import { isSingleRealityMessage } from '../../shared/api/realityMessageScope';
 import { useVideoCallCamera } from './useVideoCallCamera';
-import { getTtsAutoPlay } from '../../shared/api/runtimeSettings';
+import { getTtsAutoPlay, getDesktopTtsEnabled } from '../../shared/api/runtimeSettings';
+import { listen } from '@tauri-apps/api/event';
+import { shouldUseCallAudio } from './callPresentationMode';
 import { CallSpeechPresenter } from './CallSpeechPresenter';
 import type { SceneCameraPreset } from './sceneCameraPresets';
 
@@ -112,11 +114,23 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
   const [ttsAutoPlay, setTtsAutoPlay] = useState(false);
   const [audioTalking, setAudioTalking] = useState(false);
   useEffect(() => {
-    void getTtsAutoPlay().then(auto => setTtsAutoPlay(auto.video_call)).catch(() => {});
-    const refresh = () => void getTtsAutoPlay().then(auto => setTtsAutoPlay(auto.video_call)).catch(() => {});
+    let alive = true, revision = 0;
+    const nativeCleanup: (() => void)[] = [];
+    const refresh = () => {
+      const request = ++revision;
+      void Promise.all([getDesktopTtsEnabled(), getTtsAutoPlay()]).then(([enabled, auto]) => {
+        if (alive && request === revision) setTtsAutoPlay(shouldUseCallAudio(enabled, auto.video_call));
+      }).catch(() => { if (alive && request === revision) setTtsAutoPlay(false); });
+    };
+    refresh();
     window.addEventListener('desktop-tts-settings', refresh);
     window.addEventListener('tts-auto-play-settings', refresh);
+    for (const event of ['desktop-tts-settings', 'tts-auto-play-settings']) {
+      void listen(event, refresh).then(unlisten => { if (alive) nativeCleanup.push(unlisten); else unlisten(); }).catch(() => {});
+    }
     return () => {
+      alive = false; revision++;
+      nativeCleanup.forEach(unlisten => unlisten());
       window.removeEventListener('desktop-tts-settings', refresh);
       window.removeEventListener('tts-auto-play-settings', refresh);
     };

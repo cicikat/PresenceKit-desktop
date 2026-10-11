@@ -1000,3 +1000,9 @@ Room 的首次载入、角色文件切换和 Pet 的 useCharacterRig 均加载�
 Rig Profile 与动作诊断并入既有 CharacterDiagnostics；没有新诊断面板或动作编辑器。
 表演选择器消费已有句级/基调指令，特殊镜头动作仅预留显式入口，不能随机触发。
 完整资源边界、缓存失效、逐帧顺序与 open 验收见 avatar-shared-motion-library.md。
+
+## Room 纯文字字幕恢复（2026-10-11，partial）
+
+RoomWindow 的字幕分支同时判断 TTS 总开关和 video_call 自动播放，不再仅看场景偏好。
+关闭 TTS 时复用原 VN 文本呈现；跨窗口设置刷新使用既有 Tauri 通知，卸载取消旧回读。
+真实窗口验收，以及 TTS 开启但合成失败时的文字回退仍 open。

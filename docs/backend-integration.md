@@ -1303,3 +1303,10 @@ UTF-8 limit. Motion bytes reuse read_room_motion_file and its 20MB GLB limit. No
 authorization, performance field, ack or backend setting. Existing message_segments.perform
 feeds Room's scoped sentence timeline and then the existing motion player; camera interaction
 is a local explicit entry, not a newly supported backend action. Native acceptance is open.
+
+## Room text subtitle ownership (2026-10-11)
+
+Room reads existing get_desktop_tts and get_tts_auto_play together. Audio owns subtitles only
+when enabled and video_call are both true; otherwise the existing text VN presenter owns them.
+Existing local and Tauri desktop-tts-settings / tts-auto-play-settings events refresh both reads.
+No new backend or IPC contract, payload, permission, persistence or mobile behavior.

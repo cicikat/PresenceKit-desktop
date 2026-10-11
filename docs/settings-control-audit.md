@@ -262,3 +262,11 @@ backend docs/tool-discovery.md and docs/three-repo-interface-catalog.md.
 ### 2026-10-10 GLB 播放反馈
 
 本轮复用现有 TTS 场景设置与跨窗口播放队列；没有新增 TTS 开关、后端权限或客户端配置。character://behavior 仅观察播放成功/结束，合成准备不算 speaking。后端管理面仍控制 TTS/performance_mapping；手机沿原 mobile 场景消费，未增加 GLB/PNG 行为能力。
+
+## 2026-10-11 Room subtitle effective presentation
+
+No setting or UI switch added. Room consumes both existing desktop TTS enabled and video_call
+auto-play, instead of treating the scene preference as effective TTS availability. Native and
+local settings notifications refresh both; stale reads cannot overwrite newer settings. Mobile,
+backend controls and voice synthesis policy are unchanged. Native-window verification remains
+observe; enabled-service synthesis failure text fallback remains open.

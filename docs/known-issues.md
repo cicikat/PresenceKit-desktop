@@ -690,3 +690,11 @@ camera_closeup choreography are missing; no procedural motion is counted as thos
 Real crossed-arm/chin-touch penetration, contact IK, clothing/finger creasing, live backend
 perform -> Tauri, native skin switching and camera restoration remain open. Diagnostic UI
 and special-interaction buttons remain roadmap. See avatar-shared-motion-library.md.
+
+## Room text subtitles with TTS disabled (2026-10-11, partial)
+
+Fixed the branch that selected audio-only subtitles from video_call auto-play while ignoring
+TTS enabled. Both existing settings now decide ownership, with cross-window refresh. Four
+boolean combinations are covered by pure logic tests. Native Tauri visual acceptance remains
+open. When TTS is enabled but synthesis/playback fails, CallSpeechPresenter still lacks a text
+fallback; this separate failure path remains open and must not be called fixed by this change.
