@@ -380,7 +380,7 @@ export const enUS: Record<MessageKey, string> = {
   'settings.characterModelRouting.saveFailed': 'Failed to save',
   'settings.characterModelRouting.groupHint': 'The binding follows the character and applies the same way in solo and group chats.',
   'settings.diarySync.title': 'Obsidian diary sync',
-  'settings.diarySync.description': 'Only nested YYYY-MM-DD.md files are synced. The local directory path stays in desktop config and is never uploaded.',
+  'settings.diarySync.description': 'YYYY-MM-DD.md files sync only to the character bound when selecting the directory. The path stays local. Select older unbound directories again.',
   'settings.diarySync.configured': 'Diary directory selected',
   'settings.diarySync.notConfigured': 'No diary directory selected',
   'settings.diarySync.tracked': '{count} tracked entries',

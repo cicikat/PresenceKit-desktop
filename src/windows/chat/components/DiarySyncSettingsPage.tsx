@@ -90,6 +90,7 @@ export function DiarySyncSettingsPage() {
       </div>
       <div className="mono" style={{ fontSize: 10.5, color: 'var(--ink-2)', lineHeight: 1.6 }}>
         {status?.configured ? t('settings.diarySync.configured') : t('settings.diarySync.notConfigured')}
+        {status?.charId && ` · ${status.charId}`}
         {status && ` · ${t('settings.diarySync.tracked').replace('{count}', String(status.trackedEntries))}`}
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

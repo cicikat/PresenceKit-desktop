@@ -41,6 +41,8 @@ pub struct DiaryManifestEntry {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct DiarySyncConfig {
     #[serde(default)]
+    pub char_id: Option<String>,
+    #[serde(default)]
     pub obsidian_path: Option<String>,
     #[serde(default)]
     pub manifest: BTreeMap<String, DiaryManifestEntry>,

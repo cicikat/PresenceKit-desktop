@@ -19,6 +19,7 @@ const MAX_SCAN_ENTRIES: usize = 2000;
 #[serde(rename_all = "camelCase")]
 pub struct DiarySyncStatus {
     pub configured: bool,
+    pub char_id: Option<String>,
     pub tracked_entries: usize,
     pub last_sync_at: Option<f64>,
 }
@@ -27,6 +28,9 @@ pub struct DiarySyncStatus {
 #[serde(rename_all = "camelCase")]
 pub struct DiarySyncSummary {
     pub status: String,
+    pub configured: bool,
+    pub char_id: Option<String>,
+    pub last_sync_at: Option<f64>,
     pub scanned_entries: usize,
     pub uploaded_entries: usize,
     pub tombstones: usize,
@@ -385,6 +389,7 @@ async fn post_batch(
         .map_err(|_| "could not create backend connection".to_string())?;
     let response = client
         .post(backend_url(cfg, "/integrations/diary/sync"))
+        .query(&[("char_id", cfg.diary_sync.char_id.as_deref().ok_or("diary character is not configured; select the directory again")?)])
         .bearer_auth(&cfg.admin_token)
         .json(&serde_json::json!({ "generation": generation, "entries": batch }))
         .send()
@@ -403,7 +408,8 @@ async fn post_batch(
 pub fn get_diary_sync_status(app: tauri::AppHandle) -> DiarySyncStatus {
     let cfg = load_client_config(&app);
     DiarySyncStatus {
-        configured: cfg.diary_sync.obsidian_path.is_some(),
+        configured: cfg.diary_sync.obsidian_path.is_some() && cfg.diary_sync.char_id.is_some(),
+        char_id: cfg.diary_sync.char_id.clone(),
         tracked_entries: cfg
             .diary_sync
             .manifest
@@ -415,7 +421,10 @@ pub fn get_diary_sync_status(app: tauri::AppHandle) -> DiarySyncStatus {
 }
 
 #[tauri::command]
-pub fn set_diary_directory(app: tauri::AppHandle, path: String) -> Result<DiarySyncStatus, String> {
+pub fn set_diary_directory(app: tauri::AppHandle, path: String, char_id: String) -> Result<DiarySyncStatus, String> {
+    if char_id.is_empty() || !char_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+        return Err("invalid diary character".to_string());
+    }
     let candidate = PathBuf::from(path.trim());
     if !candidate.is_absolute() || !candidate.is_dir() {
         return Err("selected diary directory is unavailable".to_string());
@@ -424,6 +433,11 @@ pub fn set_diary_directory(app: tauri::AppHandle, path: String) -> Result<DiaryS
         .canonicalize()
         .map_err(|_| "selected diary directory is unavailable".to_string())?;
     let mut cfg = load_client_config(&app).diary_sync;
+    if cfg.char_id.as_deref() != Some(&char_id) {
+        cfg.manifest.clear();
+        cfg.last_sync_at = None;
+    }
+    cfg.char_id = Some(char_id);
     let next_path = canonical.to_string_lossy().to_string();
     if cfg.obsidian_path.as_deref() != Some(next_path.as_str()) {
         cfg.manifest.clear();
@@ -443,6 +457,9 @@ pub fn clear_diary_directory(app: tauri::AppHandle) -> Result<DiarySyncStatus, S
 #[tauri::command]
 pub async fn sync_diary(app: tauri::AppHandle) -> Result<DiarySyncSummary, String> {
     let cfg = load_client_config(&app);
+    if cfg.diary_sync.char_id.is_none() {
+        return Err("diary character is not configured; select the directory again".to_string());
+    }
     let root = configured_directory(&cfg)?;
     let current = scan_directory(&root, &cfg.diary_sync.manifest)?;
     let pending = pending_entries(&cfg, &current);
@@ -450,6 +467,9 @@ pub async fn sync_diary(app: tauri::AppHandle) -> Result<DiarySyncSummary, Strin
     if pending.is_empty() {
         return Ok(DiarySyncSummary {
             status: "no_changes".to_string(),
+            configured: true,
+            char_id: cfg.diary_sync.char_id.clone(),
+            last_sync_at: cfg.diary_sync.last_sync_at,
             scanned_entries: current.len(),
             uploaded_entries: 0,
             tombstones: 0,
@@ -482,6 +502,9 @@ pub async fn sync_diary(app: tauri::AppHandle) -> Result<DiarySyncSummary, Strin
     diary_sync.last_sync_at = Some((now_millis() as f64) / 1000.0);
     persist_diary_config(&app, &diary_sync)?;
     Ok(DiarySyncSummary {
+        configured: true,
+        char_id: cfg.diary_sync.char_id.clone(),
+        last_sync_at: diary_sync.last_sync_at,
         status: if conflicts > 0 {
             "conflict"
         } else if stale > 0 {

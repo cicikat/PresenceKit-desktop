@@ -1,7 +1,9 @@
 import { invokeGated } from './authGate';
+import { getPromptAssets } from './backend';
 
 export interface DiarySyncStatus {
   configured: boolean;
+  charId?: string | null;
   trackedEntries: number;
   lastSyncAt: number | null;
 }
@@ -19,8 +21,11 @@ export function getDiarySyncStatus(): Promise<DiarySyncStatus> {
   return invokeGated<DiarySyncStatus>('get_diary_sync_status');
 }
 
-export function setDiaryDirectory(path: string): Promise<DiarySyncStatus> {
-  return invokeGated<DiarySyncStatus>('set_diary_directory', { path });
+export async function setDiaryDirectory(path: string): Promise<DiarySyncStatus> {
+  const assets = await getPromptAssets({ force: true });
+  const charId = assets.active.active_character;
+  if (!charId) throw new Error('diary character is not configured');
+  return invokeGated<DiarySyncStatus>('set_diary_directory', { path, charId });
 }
 
 export function clearDiaryDirectory(): Promise<DiarySyncStatus> {

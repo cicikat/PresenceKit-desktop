@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const invokeMock = vi.fn();
+vi.mock('./backend', () => ({ getPromptAssets: async () => ({active:{active_character:'alpha'}}) }));
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
 }));
@@ -22,6 +23,7 @@ describe('diary sync command contract', () => {
     await setDiaryDirectory('selected-diary-directory');
     expect(invokeMock).toHaveBeenCalledWith('set_diary_directory', {
       path: 'selected-diary-directory',
+      charId: 'alpha',
     });
   });
 

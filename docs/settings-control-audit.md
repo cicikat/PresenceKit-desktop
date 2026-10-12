@@ -270,3 +270,7 @@ auto-play, instead of treating the scene preference as effective TTS availabilit
 local settings notifications refresh both; stale reads cannot overwrite newer settings. Mobile,
 backend controls and voice synthesis policy are unchanged. Native-window verification remains
 observe; enabled-service synthesis failure text fallback remains open.
+
+## 288 日记归属
+
+选目录时固定 charId；本地 DiarySyncConfig 保留该归属，所有同步批次使用同一个 char_id query。切换角色不重认领目录，重新绑定时重置同步 manifest。旧无归属目录需重新选择才可同步；后端镜像和注入按角色隔离。状态返回 charId，设置页显示绑定角色；本机目录路径不上传。用户凭据和目录配置仍是客户端基础设施。手机没有这条 Obsidian 同步链。Rust 日记单测、IPC 合同及 TypeScript 验证通过；真实 Tauri 同步未运行。

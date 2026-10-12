@@ -377,7 +377,7 @@ export const zhCN = {
   'settings.characterModelRouting.saveFailed': '保存失败',
   'settings.characterModelRouting.groupHint': '绑定跟随角色，在单聊与群聊中一致生效',
   'settings.diarySync.title': 'Obsidian 日记同步',
-  'settings.diarySync.description': '只同步嵌套目录中的 YYYY-MM-DD.md；本地目录路径只保存在桌面端配置，不会上传。',
+  'settings.diarySync.description': '只向选目录时绑定的角色同步 YYYY-MM-DD.md；目录路径只保存在桌面端。旧版未绑定的目录需重新选择。',
   'settings.diarySync.configured': '已选择日记目录',
   'settings.diarySync.notConfigured': '尚未选择日记目录',
   'settings.diarySync.tracked': '已记录 {count} 篇',
