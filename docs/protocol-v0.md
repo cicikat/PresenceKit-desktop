@@ -1,3 +1,5 @@
+工单 288 C2：health_state（生理期、睡眠、传感器与 HDS）按 uid+char_id 保存。设备输入缺省归属接收时的当前角色；prompt、工具和主动心率链使用本轮角色。旧同角色 profile 可导入；旧 global 健康账本只经 migrate_character_user_facts.py --artifact health_state 显式归属，默认 dry-run，不覆盖目标且保留原件。GET/PUT/DELETE /period 可传 char_id，省略时使用当前角色。共享连接、鉴权与运行日志不属于角色记忆。
+
 # PresenceKit-desktop 协议 v0.1
 
 Brief 253.6 兼容扩展：POST /transcribe 保留 text，可返回 tone/audio_perception_id。
