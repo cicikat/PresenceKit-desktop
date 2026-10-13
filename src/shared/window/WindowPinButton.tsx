@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { isTauri } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { useI18n } from '../../../shared/i18n';
+import { useI18n } from '../i18n';
 
 export function WindowPinButton() {
   const { t } = useI18n();
@@ -35,17 +35,14 @@ export function WindowPinButton() {
   };
 
   const label = t(failed ? 'window.pin.failed' : !isTauri() ? 'window.pin.desktopOnly' : pinned ? 'window.pin.disable' : 'window.pin.enable');
-  return <button type="button" title={label} aria-label={label} aria-pressed={pinned}
-    disabled={!ready || busy} onClick={() => void toggle()} style={{
-      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      padding: '5px 8px', border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-sm)',
-      background: pinned ? 'var(--paper-3)' : 'var(--paper-2)',
-      color: pinned ? 'var(--accent)' : 'var(--ink)', cursor: ready && !busy ? 'pointer' : 'default',
-      opacity: ready ? 1 : 0.5,
-    }}>
-    <svg width="14" height="14" viewBox="0 0 24 24" fill={pinned ? 'currentColor' : 'none'}
+  return <button type="button" className="main-titlebar__button" title={label} aria-label={label} aria-pressed={pinned}
+    disabled={!ready || busy} onClick={() => void toggle()}>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
       stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M8 3h8l-1 7 4 4v2H5v-2l4-4z" /><path d="M12 16v5" />
+      <g transform="rotate(35 12 12)">
+        <path d="M8 3h8l-1 7 3 4v2H6v-2l3-4z" fill={pinned ? 'currentColor' : 'none'} />
+        <path d="M12 16v6" />
+      </g>
     </svg>
   </button>;
 }

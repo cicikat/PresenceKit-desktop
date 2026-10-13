@@ -2,6 +2,11 @@ import type { MessageKey } from './zh-CN';
 
 
 export const enUS: Record<MessageKey, string> = {
+"window.minimize": "Minimize",
+"window.maximize": "Maximize",
+"window.restore": "Restore window",
+"window.close": "Close window",
+"window.actionFailed": "Window action failed. Please retry.",
 "window.pin.enable": "Keep window on top",
 "window.pin.disable": "Stop keeping window on top",
 "window.pin.failed": "Could not change window pinning",

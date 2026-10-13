@@ -1,5 +1,6 @@
 import React, { Component, lazy, Suspense, type ErrorInfo, type ReactNode } from "react";
 import ReactDOM from "react-dom/client";
+import { MainWindowFrame } from "./shared/window/MainWindowFrame";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
 import { wsClient } from "./shared/api/ws";
@@ -124,12 +125,16 @@ if (isMainWindow) {
     .catch(error => console.warn("[avatar] 初始化失败:", error));
 }
 
+const roleContent = (
+  <RoleLoadBoundary>
+    <Suspense fallback={<LoadingView />}>
+      <RoleRoot />
+    </Suspense>
+  </RoleLoadBoundary>
+);
+
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <RoleLoadBoundary>
-      <Suspense fallback={<LoadingView />}>
-        <RoleRoot />
-      </Suspense>
-    </RoleLoadBoundary>
+    {isMainWindow ? <MainWindowFrame>{roleContent}</MainWindowFrame> : roleContent}
   </React.StrictMode>,
 );

@@ -1,4 +1,9 @@
 export const zhCN = {
+"window.minimize": "最小化",
+"window.maximize": "最大化",
+"window.restore": "还原窗口",
+"window.close": "关闭窗口",
+"window.actionFailed": "窗口操作失败，请重试",
 "window.pin.enable": "保持窗口最前",
 "window.pin.disable": "取消窗口置顶",
 "window.pin.failed": "切换窗口置顶失败",

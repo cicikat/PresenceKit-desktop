@@ -1,0 +1,15 @@
+.main-window-frame { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+.main-titlebar { position: relative; z-index: 2147483647; flex: 0 0 32px; display: flex; align-items: stretch; background: var(--paper); color: var(--ink); border-bottom: 1px solid var(--paper-edge); user-select: none; }
+.main-titlebar__drag { flex: 1; min-width: 0; display: flex; align-items: center; padding-left: 12px; font-size: 12px; }
+.main-titlebar__drag span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
+.main-titlebar__controls { display: flex; flex-shrink: 0; }
+.main-titlebar__button { width: 46px; padding: 0; border: 0; border-radius: 0; background: transparent; color: inherit; display: inline-flex; align-items: center; justify-content: center; }
+.main-titlebar__button svg { fill: none; stroke: currentColor; stroke-width: 1.5; }
+.main-titlebar__button:hover:not(:disabled) { background: var(--paper-3); }
+.main-titlebar__button[aria-pressed="true"] { color: var(--accent); background: var(--paper-2); }
+.main-titlebar__button:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
+.main-titlebar__button:disabled { opacity: 0.5; }
+.main-titlebar__close:hover:not(:disabled) { background: #c42b1c; color: white; }
+.main-titlebar__error { align-self: center; font-size: 11px; color: var(--danger); }
+/* Establish a containing block so fixed Room/Toy/Dream/modals stay below the title bar. */
+.main-window-frame__content { flex: 1; min-height: 0; position: relative; transform: translateZ(0); overflow: hidden; }

@@ -7,7 +7,6 @@ import { useState, useEffect, useRef, useCallback, useMemo, useSyncExternalStore
 import { createPortal } from 'react-dom';
 import { format, subDays, parseISO } from 'date-fns';
 import { Tag, Icon, Btn } from './UIKit';
-import { WindowPinButton } from './WindowPinButton';
 import { MOOD_HUE, MOOD_LABEL_EN, FOCUS_LABEL_EN } from './UIKit';
 import { MOOD_TABLE } from '../../../shared/state/store';
 import { avatarStore } from '../../../shared/avatars/store';
@@ -2003,7 +2002,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
             </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><WindowPinButton /><Btn icon="settings" dense onClick={onOpenPrefs}>偏好</Btn></div>
+            <Btn icon="settings" dense onClick={onOpenPrefs}>偏好</Btn>
             <span className="mono" style={{ fontSize: chatThemeFontSize(9.5), color: 'var(--ink-4)', letterSpacing: 1.4 }}>
               {messages.filter(m => m.role === 'user' || m.role === 'assistant').length} ENTRIES
             </span>

@@ -1319,9 +1319,12 @@ No new backend or IPC contract, payload, permission, persistence or mobile behav
 选目录时固定 charId；本地 DiarySyncConfig 保留该归属，所有同步批次使用同一个 char_id query。切换角色不重认领目录，重新绑定时重置同步 manifest。旧无归属目录需重新选择才可同步；后端镜像和注入按角色隔离。状态返回 charId，设置页显示绑定角色；本机目录路径不上传。用户凭据和目录配置仍是客户端基础设施。手机没有这条 Obsidian 同步链。Rust 日记单测、IPC 合同及 TypeScript 验证通过；真实 Tauri 同步未运行。
 
 
-## 主聊天窗口置顶（2026-10-13，partial）
+## 主窗口标题栏图钉（2026-10-13，partial）
 
-右上角偏好左侧新增 WindowPinButton 图钉，通过 Tauri window API 读取和切换当前主窗口 always-on-top。
-仅 main capability 授予 set-always-on-top；默认跟随原生窗口状态，不落盘、不新增后端或手机设置，无跨端影响。
-请求期间禁用按钮，成功回读状态，失败通过语义 i18n 提示；浏览器预览禁用。
-真实 Windows 窗口遮挡、取消置顶和发行版验收仍 open。
+MainWindowFrame 位于主窗口 RoleRoot 外层；关闭 main 原生 decorations，自绘标题栏按图钉、最小化、最大化/还原、关闭排列。
+原聊天页偏好左侧图钉已移除；WindowPinButton 迁至 shared/window，采用经典斜图钉，读取原生置顶状态、不落盘。
+main capability 仅新增标题栏需要的 start-dragging、minimize、toggle-maximize、close；沿用 set-always-on-top。
+标题栏支持拖动与双击最大化，resize 同步还原图标；内容容器约束 fixed overlay，Room/Toy/Dream/引导和错误页面在标题栏下方。
+独立 Pet/日记/来电/satellite 保留原窗口装饰；无 REST/WS、后端或手机设置变更，无跨端影响。
+真实 Windows 置顶遮挡、拖动/双击、边缘缩放、Win+方向键贴靠与发行包验收仍 open；自绘最大化按钮未实现原生悬停 Snap Layout 菜单。
+工单见 [window-pin-2026-10-13.md](window-pin-2026-10-13.md)。

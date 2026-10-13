@@ -161,7 +161,7 @@ export function ChatWindow({ onToyOpen, onRoomOpen, isCovered = false }: { onToy
   }, [engine]);
 
   return (
-    <div style={{ height: '100vh', position: 'relative', background: 'var(--paper)' }}>
+    <div style={{ height: '100%', position: 'relative', background: 'var(--paper)' }}>
       <div
         className="chat-ui"
         style={{

@@ -719,9 +719,12 @@ Room 通过临时 URL roomToon=1 和 TV v02/v03 白名单进入独立 RoomToonVa
 编辑模式 MaterialSection 提供原版/旧浅色/赛璐璐切换、五类材质配色和本机预设。celConfig 校验 room.settings；celShader 生成硬阴影与光照交界藏色；CelOutline 使用全角色 normal/depth mask 描边。真实 WebGL 与本机预设刷新已验证，Tauri、动态穿插和 GPU 性能仍 open。无跨端影响，详见 docs/room-cel-materials.md。
 
 
-## 主聊天窗口置顶（2026-10-13，partial）
+## 主窗口标题栏图钉（2026-10-13，partial）
 
-右上角偏好左侧新增 WindowPinButton 图钉，通过 Tauri window API 读取和切换当前主窗口 always-on-top。
-仅 main capability 授予 set-always-on-top；默认跟随原生窗口状态，不落盘、不新增后端或手机设置，无跨端影响。
-请求期间禁用按钮，成功回读状态，失败通过语义 i18n 提示；浏览器预览禁用。
-真实 Windows 窗口遮挡、取消置顶和发行版验收仍 open。
+MainWindowFrame 位于主窗口 RoleRoot 外层；关闭 main 原生 decorations，自绘标题栏按图钉、最小化、最大化/还原、关闭排列。
+原聊天页偏好左侧图钉已移除；WindowPinButton 迁至 shared/window，采用经典斜图钉，读取原生置顶状态、不落盘。
+main capability 仅新增标题栏需要的 start-dragging、minimize、toggle-maximize、close；沿用 set-always-on-top。
+标题栏支持拖动与双击最大化，resize 同步还原图标；内容容器约束 fixed overlay，Room/Toy/Dream/引导和错误页面在标题栏下方。
+独立 Pet/日记/来电/satellite 保留原窗口装饰；无 REST/WS、后端或手机设置变更，无跨端影响。
+真实 Windows 置顶遮挡、拖动/双击、边缘缩放、Win+方向键贴靠与发行包验收仍 open；自绘最大化按钮未实现原生悬停 Snap Layout 菜单。
+工单见 [window-pin-2026-10-13.md](window-pin-2026-10-13.md)。
