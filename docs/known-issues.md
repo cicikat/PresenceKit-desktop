@@ -717,3 +717,11 @@ Room 通过临时 URL roomToon=1 和 TV v02/v03 白名单进入独立 RoomToonVa
 ## Room TV 赛璐璐与预设（2026-10-12，partial）
 
 编辑模式 MaterialSection 提供原版/旧浅色/赛璐璐切换、五类材质配色和本机预设。celConfig 校验 room.settings；celShader 生成硬阴影与光照交界藏色；CelOutline 使用全角色 normal/depth mask 描边。真实 WebGL 与本机预设刷新已验证，Tauri、动态穿插和 GPU 性能仍 open。无跨端影响，详见 docs/room-cel-materials.md。
+
+
+## 主聊天窗口置顶（2026-10-13，partial）
+
+右上角偏好左侧新增 WindowPinButton 图钉，通过 Tauri window API 读取和切换当前主窗口 always-on-top。
+仅 main capability 授予 set-always-on-top；默认跟随原生窗口状态，不落盘、不新增后端或手机设置，无跨端影响。
+请求期间禁用按钮，成功回读状态，失败通过语义 i18n 提示；浏览器预览禁用。
+真实 Windows 窗口遮挡、取消置顶和发行版验收仍 open。

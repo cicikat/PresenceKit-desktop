@@ -2,6 +2,10 @@ import type { MessageKey } from './zh-CN';
 
 
 export const enUS: Record<MessageKey, string> = {
+"window.pin.enable": "Keep window on top",
+"window.pin.disable": "Stop keeping window on top",
+"window.pin.failed": "Could not change window pinning",
+"window.pin.desktopOnly": "Window pinning is available in the desktop app",
 "room.material.title": "Character materials",
 "room.material.hex": "HEX value",
 "room.material.preset": "Material preset",

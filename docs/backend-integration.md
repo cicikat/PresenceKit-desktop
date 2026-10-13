@@ -1317,3 +1317,11 @@ No new backend or IPC contract, payload, permission, persistence or mobile behav
 ## 288 日记归属
 
 选目录时固定 charId；本地 DiarySyncConfig 保留该归属，所有同步批次使用同一个 char_id query。切换角色不重认领目录，重新绑定时重置同步 manifest。旧无归属目录需重新选择才可同步；后端镜像和注入按角色隔离。状态返回 charId，设置页显示绑定角色；本机目录路径不上传。用户凭据和目录配置仍是客户端基础设施。手机没有这条 Obsidian 同步链。Rust 日记单测、IPC 合同及 TypeScript 验证通过；真实 Tauri 同步未运行。
+
+
+## 主聊天窗口置顶（2026-10-13，partial）
+
+右上角偏好左侧新增 WindowPinButton 图钉，通过 Tauri window API 读取和切换当前主窗口 always-on-top。
+仅 main capability 授予 set-always-on-top；默认跟随原生窗口状态，不落盘、不新增后端或手机设置，无跨端影响。
+请求期间禁用按钮，成功回读状态，失败通过语义 i18n 提示；浏览器预览禁用。
+真实 Windows 窗口遮挡、取消置顶和发行版验收仍 open。

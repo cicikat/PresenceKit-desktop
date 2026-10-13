@@ -1,4 +1,8 @@
 export const zhCN = {
+"window.pin.enable": "保持窗口最前",
+"window.pin.disable": "取消窗口置顶",
+"window.pin.failed": "切换窗口置顶失败",
+"window.pin.desktopOnly": "窗口置顶仅在桌面应用中可用",
 "room.material.title": "角色材质",
 "room.material.hex": "色值（HEX）",
 "room.material.preset": "材质预设",
