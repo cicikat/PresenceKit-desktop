@@ -14,6 +14,9 @@ import {
   type Live2DSettings,
 } from './live2dSettings';
 import { MOOD_TO_EXPRESSION, MOOD_PARAMS, matchExpressionName } from './live2dExpressions';
+import { availableProfile, expressionFor, findNativeMotion, listNativeMotions, protectedParameters, readModelProfile, type ModelProfile } from './modelProfile';
+import { NativeMotionPlayer } from './nativeMotionPlayer';
+import { registerStageControls } from './stageControls';
 import { MOOD_TABLE } from '../state/store';
 import type { Mood } from '../state/store';
 import { backendMoodToFrontend } from '../state/mood-mapping';
@@ -23,6 +26,8 @@ import { getActiveDirective, type ActiveDirective } from '../../windows/room/ava
 import { microNoise } from '../../windows/room/boneResolver';
 import {
   attachDriver,
+  attachFinalDriver,
+  getRuntimeModel,
   disableBuiltinEyeBlink,
   getExpressionNames,
   getMotionGroupNames,
@@ -172,6 +177,22 @@ export function useLive2DStage(
 
     let disposed = false;
     let detachDriver: (() => void) | null = null;
+    let detachNative: (() => void) | null = null;
+    let nativePlayer: NativeMotionPlayer | null = null;
+    let profile: ModelProfile | null = null;
+    let activeNativeFile: string | null = null;
+    let manualExpression: string | null = null;
+    let manualUntil = 0;
+    let lastDirectiveKey: string | null = null;
+    let activeExpression: string | null = null;
+    let expressionGeneration = 0;
+    let protectedIds = new Set<string>();
+    let speaking = false;
+    let lastVoiceAt = -Infinity;
+    function writeParam(core: CoreModel, id: string, value: number): void {
+      if (protectedIds.has(id) && !(speaking && id === settingsRef.current.mouthParam)) return;
+      setParam(core, id, value);
+    }
 
     const app = new PIXI.Application({
       resizeTo: mount,
@@ -249,6 +270,17 @@ export function useLive2DStage(
 
     async function loadModel(dir: string): Promise<void> {
       const token = ++loadTokenRef.current;
+      detachNative?.();
+      detachNative = null;
+      nativePlayer = null;
+      profile = null;
+      activeNativeFile = null;
+      manualExpression = null;
+      manualUntil = 0;
+      lastVoiceAt = -Infinity;
+      activeExpression = null;
+      expressionGeneration++;
+      lastDirectiveKey = null;
       if (modelRef.current) {
         detachDriver?.();
         detachDriver = null;
@@ -316,8 +348,91 @@ export function useLive2DStage(
           const offscreenCount = nativeModel?.offscreens?.count ?? 0;
           console.info(`[live2d] 模型「${dir}」offscreens.count=${offscreenCount}`);
         } catch { /* diagnostic only, never block model load */ }
+        const runtime = getRuntimeModel(model);
+        profile = readModelProfile(runtime?.settings?.json?.EmeraldProfile);
+        const motions = listNativeMotions(runtime?.motionManager.definitions);
+        const available = getExpressionNames(model);
+        profile = availableProfile(profile, motions, available);
+        if (runtime) {
+          const player = new NativeMotionPlayer({
+            stop: () => runtime.motionManager.stopAllMotions(),
+            play: async (file, isCurrent, loop) => {
+              const motion = findNativeMotion(motions, file);
+              if (!motion) return false;
+              const loaded = await runtime.motionManager.loadMotion(motion.group, motion.index) as { setIsLoop?: (value: boolean) => void } | undefined;
+              if (!isCurrent() || disposed || token !== loadTokenRef.current || !cubism4) return false;
+              if (!loaded) return false;
+              loaded.setIsLoop?.(loop);
+              return model.motion(motion.group, motion.index, cubism4.MotionPriority.FORCE, { resetExpression: false });
+            },
+          });
+          nativePlayer = player;
+          const onStart = (group: string, index: number) => {
+            activeNativeFile = motions.find(m => m.group === group && m.index === index)?.file ?? null;
+            // StartMotion restores expressions in some library versions. Reapply once after start.
+            if (profile) lastExpressionRef.current = null;
+          };
+          const onFinish = () => { activeNativeFile = null; player.finish(); };
+          runtime.motionManager.on('motionStart', onStart);
+          runtime.motionManager.on('motionFinish', onFinish);
+          const previewAction = (name: string) => {
+            const action = profile?.actions[name];
+            if (!action) return;
+            manualUntil = performance.now() + 8000;
+            lastDirectiveKey = 'preview';
+            player.request(action, `preview:${name}:${performance.now()}`, manualUntil);
+          };
+          const unregister = registerStageControls({
+            model: dir, expressions: available, motions: [...new Set(motions.map(m => m.file))],
+            actions: Object.keys(profile?.actions ?? {}),
+            playExpression: name => {
+              if (name !== null && !available.includes(name)) return;
+              manualExpression = name;
+              lastExpressionRef.current = null;
+            },
+            playMotion: file => {
+              if (!findNativeMotion(motions, file)) return;
+              manualUntil = performance.now() + 8000;
+              lastDirectiveKey = 'preview';
+              player.request({ enter: file }, `preview:${file}:${manualUntil}`, manualUntil);
+            },
+            playAction: previewAction,
+            stop: () => {
+              if (disposed || token !== loadTokenRef.current) return;
+              manualUntil = 0;
+              manualExpression = null;
+              expressionGeneration++;
+              activeExpression = null;
+              lastExpressionRef.current = null;
+              lastDirectiveKey = null;
+              player.stop();
+              activeNativeFile = null;
+              runtime.motionManager.expressionManager?.resetExpression();
+            },
+          });
+          const pointerTap = (event: PIXI.FederatedPointerEvent) => {
+            // A drag must not also trigger an authored touch reaction.
+            if (Math.hypot(event.global.x - pointerDown.x, event.global.y - pointerDown.y) > 6) return;
+            const hit = model.hitTest(event.global.x, event.global.y);
+            const action = hit.map(name => profile?.hitAreas[name]).find(Boolean);
+            if (action) previewAction(action);
+          };
+          const pointerDown = { x: 0, y: 0 };
+          const onDown = (event: PIXI.FederatedPointerEvent) => { pointerDown.x = event.global.x; pointerDown.y = event.global.y; };
+          model.eventMode = 'static';
+          model.on('pointerdown', onDown);
+          model.on('pointertap', pointerTap);
+          detachNative = () => {
+            unregister();
+            runtime.motionManager.off('motionStart', onStart);
+            runtime.motionManager.off('motionFinish', onFinish);
+            model.off('pointerdown', onDown);
+            model.off('pointertap', pointerTap);
+            player.dispose();
+          };
+        }
         disableBuiltinEyeBlink(model);
-        detachDriver = attachDriver(model, driveFrame);
+        detachDriver = profile ? attachFinalDriver(model, driveFrame) : attachDriver(model, driveFrame);
         modelRef.current = model;
         app.stage.addChild(model);
         setError(null);
@@ -335,10 +450,31 @@ export function useLive2DStage(
       const directive = (optsRef.current.getDirective ?? getActiveDirective)(performance.now());
       const mood = directive?.expression ? backendMoodToFrontend(directive.expression) : optsRef.current.getMood();
       const intensity = directive?.expression ? directive.intensity : 0.85;
+      const now = performance.now();
+      speaking = directive?.speaking ?? optsRef.current.getTalking();
+      if ((optsRef.current.getVolume?.() ?? 0) > 0) lastVoiceAt = now;
+      if (now - lastVoiceAt < 180) speaking = true;
+      nativePlayer?.tick(now);
+      if (now >= manualUntil) {
+        const gesture = directive?.gesture;
+        const actionName = gesture && profile?.actions[gesture] ? gesture
+          : directive?.posture && profile?.actions[directive.posture] ? directive.posture
+          : speaking && profile?.actions.speaking ? 'speaking' : null;
+        const key = actionName === 'speaking' ? 'speaking'
+          : actionName && directive ? `${directive.origin}:${directive.receivedAt}:${actionName}` : null;
+        if (key !== lastDirectiveKey) {
+          lastDirectiveKey = key;
+          nativePlayer?.request(actionName ? profile!.actions[actionName] : null, key,
+            actionName !== 'speaking' && directive ? directive.receivedAt + directive.ttl_ms : Infinity);
+        }
+      }
+      protectedIds = protectedParameters(profile, activeNativeFile ?? nativePlayer?.currentFile ?? null, activeExpression);
 
       // ── expression layer (priority) / param fallback ──
       const availableNames = getExpressionNames(modelRef.current);
-      const matched = matchExpressionName(availableNames, mood);
+      const matched = manualExpression
+        ?? expressionFor(profile, directive?.expression ?? MOOD_TO_EXPRESSION[mood], availableNames)
+        ?? matchExpressionName(availableNames, mood);
 
       // Reset target for a param is its model default (NOT 0 — eyes default open at 1);
       // mood poses blend from the default toward the table value by `intensity`.
@@ -353,17 +489,33 @@ export function useLive2DStage(
 
       if (matched) {
         if (lastExpressionRef.current !== matched) {
-          modelRef.current?.expression(matched).catch(() => {});
+          const generation = ++expressionGeneration;
+          const expressionModel = modelRef.current;
           lastExpressionRef.current = matched;
+          expressionModel?.expression(matched).then(started => {
+            if (generation === expressionGeneration && expressionModel === modelRef.current) {
+              activeExpression = started ? matched : null;
+            }
+          }).catch(() => {
+            if (generation === expressionGeneration) {
+              activeExpression = null;
+              lastExpressionRef.current = null;
+            }
+          });
         }
-        for (const key of ALL_PARAM_KEYS) {
+        for (const key of profile?.preserveNativeParameters ? [] : ALL_PARAM_KEYS) {
           const def = paramDefault(key);
           const cur = paramStateRef.current.get(key) ?? def;
           const next = lerp(cur, def, 0.08);
           paramStateRef.current.set(key, next);
-          setParam(coreModel, key, next);
+          writeParam(coreModel, key, next);
         }
       } else {
+        if (lastExpressionRef.current && profile) {
+          expressionGeneration++;
+          getRuntimeModel(modelRef.current)?.motionManager.expressionManager?.resetExpression();
+          activeExpression = null;
+        }
         lastExpressionRef.current = null;
         const targets = MOOD_PARAMS[mood] ?? {};
         for (const key of ALL_PARAM_KEYS) {
@@ -373,12 +525,12 @@ export function useLive2DStage(
           const cur = paramStateRef.current.get(key) ?? def;
           const next = lerp(cur, target, 0.08);
           paramStateRef.current.set(key, next);
-          setParam(coreModel, key, next);
+          writeParam(coreModel, key, next);
         }
       }
 
       // P2 sweetener: fire a matching motion group once per mood transition, best-effort.
-      if (lastMotionMoodRef.current !== mood) {
+      if (!profile && lastMotionMoodRef.current !== mood) {
         lastMotionMoodRef.current = mood;
         const groupToken = MOOD_TO_EXPRESSION[mood]?.toLowerCase();
         const matchedGroup = getMotionGroupNames(modelRef.current).find(g => g.toLowerCase() === groupToken);
@@ -410,7 +562,7 @@ export function useLive2DStage(
       }
       if (reactionCheek > 0) {
         const baselineCheek = getParamValue(coreModel, 'ParamCheek') ?? 0;
-        setParam(coreModel, 'ParamCheek', Math.max(baselineCheek, reactionCheek));
+        writeParam(coreModel, 'ParamCheek', Math.max(baselineCheek, reactionCheek));
       }
 
       // ── blink ──
@@ -418,7 +570,7 @@ export function useLive2DStage(
       for (const id of ['ParamEyeLOpen', 'ParamEyeROpen']) {
         const baseline = getParamValue(coreModel, id) ?? 1;
         const openTarget = Math.min(1.4, baseline + reactionEyeBoost);
-        setParam(coreModel, id, Math.min(openTarget, 1 - blinkPulse));
+        writeParam(coreModel, id, Math.min(openTarget, 1 - blinkPulse));
       }
 
       // ── mouth / lipsync ──
@@ -431,7 +583,9 @@ export function useLive2DStage(
         mouthTarget = talking ? (0.5 + 0.5 * Math.sin(t * 12)) * settings.lipsyncStrength : 0;
       }
       mouthValueRef.current = lerp(mouthValueRef.current, mouthTarget, 0.5);
-      setParam(coreModel, settings.mouthParam, mouthValueRef.current);
+      if (!profile?.preserveNativeParameters || speaking) {
+        writeParam(coreModel, settings.mouthParam, mouthValueRef.current);
+      }
 
       // ── gaze (angle + eyeball) ──
       let gazeAngleXTarget = 0;
@@ -455,8 +609,8 @@ export function useLive2DStage(
       gazeAngleYRef.current = lerp(gazeAngleYRef.current, gazeAngleYTarget, 0.05);
       eyeBallXRef.current = lerp(eyeBallXRef.current, eyeXTarget, 0.05);
       eyeBallYRef.current = lerp(eyeBallYRef.current, eyeYTarget, 0.05);
-      setParam(coreModel, 'ParamEyeBallX', eyeBallXRef.current);
-      setParam(coreModel, 'ParamEyeBallY', eyeBallYRef.current);
+      writeParam(coreModel, 'ParamEyeBallX', eyeBallXRef.current);
+      writeParam(coreModel, 'ParamEyeBallY', eyeBallYRef.current);
 
       // ── gesture (head angle pulses) + idle micro-noise fallback ──
       // energy: perform-layer amplitude scalar (Brief 12 §6.3); 0.5 (no directive) = baseline.
@@ -466,7 +620,7 @@ export function useLive2DStage(
       let gestureAngleY = 0;
       let gestureAngleZ = 0;
       let leanScaleTarget = 1;
-      if (directive?.gesture) {
+      if (directive?.gesture && !(profile?.actions[directive.gesture] && nativePlayer && !nativePlayer.failed)) {
         const elapsedMs = performance.now() - directive.receivedAt;
         const rampIn = Math.min(1, elapsedMs / 200);
         const osc = Math.sin(elapsedMs * 0.015) * rampIn * energyMul;
@@ -491,7 +645,7 @@ export function useLive2DStage(
             leanScaleTarget = 1 + rampIn * 0.03;
             break;
         }
-      } else {
+      } else if (!profile?.preserveNativeParameters) {
         gestureAngleZ = microNoise(t, 37) * 3;
       }
       leanScaleRef.current = lerp(leanScaleRef.current, leanScaleTarget, 0.15);
@@ -504,16 +658,16 @@ export function useLive2DStage(
       // the model lacks that param); shrink/straighten have no Live2D-side mapping yet — silently
       // ignored. // TODO: shrink/straighten body-angle mapping once a suitable param is settled on.
       let postureBodyAngleXTarget = 0;
-      if (directive?.posture === 'lean_in' || directive?.posture === 'lean_back') {
+      if ((directive?.posture === 'lean_in' || directive?.posture === 'lean_back') && !(profile?.actions[directive.posture] && nativePlayer && !nativePlayer.failed)) {
         const postureRamp = Math.min(1, (performance.now() - directive.receivedAt) / 300);
         postureBodyAngleXTarget = (directive.posture === 'lean_in' ? 8 : -8) * postureRamp * energyMul;
       }
       postureBodyAngleRef.current = lerp(postureBodyAngleRef.current, postureBodyAngleXTarget, 0.1);
-      setParam(coreModel, 'ParamBodyAngleX', postureBodyAngleRef.current);
+      writeParam(coreModel, 'ParamBodyAngleX', postureBodyAngleRef.current);
 
-      setParam(coreModel, 'ParamAngleX', gazeAngleXRef.current + gestureAngleX);
-      setParam(coreModel, 'ParamAngleY', gazeAngleYRef.current + gestureAngleY);
-      setParam(coreModel, 'ParamAngleZ', gestureAngleZ + reactionAngleZ);
+      writeParam(coreModel, 'ParamAngleX', gazeAngleXRef.current + gestureAngleX);
+      writeParam(coreModel, 'ParamAngleY', gazeAngleYRef.current + gestureAngleY);
+      writeParam(coreModel, 'ParamAngleZ', gestureAngleZ + reactionAngleZ);
     }
 
     const resizeObs = new ResizeObserver(() => applyLayout());
@@ -536,6 +690,8 @@ export function useLive2DStage(
     return () => {
       disposed = true;
       loadTokenRef.current++;
+      detachNative?.();
+      detachNative = null;
       resizeObs.disconnect();
       unsubscribe();
       if (modelRef.current) {

@@ -6,7 +6,7 @@
 
 > 与 `docs/room-model-import-guide.md`（Three.js 3D 角色）平行的独立渲染模式。
 > 目标：把 Cubism 4/5 模型丢进指定目录，Chat 偏好里选一下就能用，不用改代码。
-> 只支持 Cubism 4/5（`.model3.json`）。**不支持 Cubism 2**（`.model.json`）。
+> 支持 Cubism 3–5 的 `.model3.json` 运行资源（旧 MOC3 也须实际验证）。**不支持 Cubism 2**（`.model.json`）。
 
 ---
 
@@ -99,7 +99,7 @@ public/live2d/
 
 - **口型没反应**：先看模型的口型参数是否叫 `ParamMouthOpenY`（Cubism 官方默认）。不是的话去设置面板「口型参数名」里改成模型实际用的参数 ID。
 - **没有待机动作**：模型没有 `Idle` 动作组时不会报错，但也不会有待机循环，只剩微弱的呼吸类噪声兜底。想要待机动作就在 Cubism Editor 里把动作组命名为 `Idle`（或在设置面板「待机动作组」里填模型实际的组名，大小写不敏感）。
-- **Cubism 2 模型（`.model.json`）不支持**：渲染层写死只接 Cubism 4/5 的 `.model3.json`，老模型需要用 Cubism Editor 重新导出或另找 Cubism 4/5 版本。
+- **Cubism 2 模型（`.model.json`）不支持**：渲染层只接 `.model3.json` 格式，老模型需要用 Cubism Editor 重新导出或另找 Cubism 4/5 版本。
 - **模型加载了但没有表情/眨眼变化**：多半是模型缺少对应参数（比如没有 `ParamBrowLY`），这是正常降级，不是 bug——核心参数写入前会先检查参数是否存在，不存在就跳过那一项，不影响其它参数。
 - **换模型后没有热更新**：确认是在设置面板的下拉里选的（写入 `Live2DSettings.modelDir`），而不是手动改了文件却没有刷新目录扫描；目录扫描走 Tauri command `list_live2d_models`，新增/删除模型目录后重新打开设置面板下拉即可看到最新列表。
 - **视频通话切到 Live2D 后看不到「摆放模式」/「自由视角」/「保存视角」按钮**：这三个按钮是 3D 模式专属，Live2D 模式下不适用，属预期行为。
@@ -109,3 +109,57 @@ public/live2d/
 ## 4. 与 3D 模式（`docs/room-model-import-guide.md`）的关系
 
 两者是**平行且互斥**的渲染模式，由 `roomSettings.renderMode` 切换（`model3d` | `live2d`），共享同一套 mood 情绪映射语义、同一个 `avatar_directive` WS 指令（表情 / 注视 / 手势 / 说话）和同一个 VN 气泡 UI；渲染驱动层各自独立（`src/shared/room3d/` 对 `src/shared/live2d/`），互不影响，切换即时生效。
+
+## 5. 游戏资源转换与模型专属映射（2026-10-17）
+
+本机已安装 `hlr_yexuan_mingyun_base`（基础角色版）：11 个表情、26 个原生动作，支持点头、摇头、前倾、后仰和说话映射。在偏好 → 桌宠与互动 → Live2D 选择它。原始模型未修改；游戏配饰槽未完整恢复，见 [转换与验收说明](../live2d-resource-import.md)。这是基础角色适配版，不是完整游戏角色资源包。
+
+### 可重复转换
+
+先准备已解包且恢复名称的 `资源索引.json`，然后在仓库根运行（路径由本机资料位置决定）：
+
+```powershell
+python -m pip install lz4==4.4.5 texture2ddecoder==1.0.6 Pillow==12.2.0
+python scripts/import-hlr-live2d.py --source <解包资料目录> --output <新的runtime目录> --model yexuan_mingyun --base-only --install-dir public/live2d/models/hlr_yexuan_mingyun_base
+```
+
+脚本只接受已观察并验证的 LZ4 + ETC2 RGBA8 引擎纹理，缺文件、重复名称、未知纹理格式、专用 drawableSettings 均报错，不伪造依赖。输出或安装目录已存在时拒绝覆盖。`source-manifest.json` 保留包内路径、偏移、源/输出 SHA-256 与转换操作。
+
+`--base-only` 必须在确认重复槽用途后使用：重复指向主图的配饰槽换成明确记录的透明占位图，原始槽和省略原因写入清单。该开关不恢复配饰，也不适用于未经检查的任意模型。普通完整模型不用此开关。
+
+### 模型自带 EmeraldProfile
+
+可在 `.model3.json` 顶层添加可选 `EmeraldProfile`。不添加时保留既有驱动。它属于本机美术资产配置，不是后端设置或新 WS 字段。
+
+```json
+{
+  "version": 1,
+  "preserveNativeParameters": true,
+  "expressions": { "neutral": "idle.exp3.json", "happy": "weixiao.exp3.json" },
+  "actions": {
+    "nod": { "enter": "motions/diantou.motion3.json" },
+    "lean_in": {
+      "enter": "motions/qianqing_on.motion3.json",
+      "loop": "motions/qianqing_loop.motion3.json",
+      "exit": "motions/qianqing_off.motion3.json"
+    },
+    "speaking": { "loop": "motions/talk01.motion3.json" }
+  },
+  "hitAreas": {},
+  "motionParameters": { "motions/diantou.motion3.json": ["ParamAngleX", "ParamAngleY"] },
+  "expressionParameters": { "weixiao.exp3.json": ["ParamMouthForm"] }
+}
+```
+
+- `expressions` 左边沿用后端已有表达词；右边必须是该模型真实的 Expression Name。游戏拼音到语义的转换是可审核候选，不能仅凭名称保证实际观感。病娇等没有对应资源的能力不强行补映射。
+- `actions` 引用 `FileReferences.Motions` 内真实文件路径，空名称分组同样可精确定位，不随机抽一个。既有 gesture/posture 优先于 speaking；说话只跟随已有 talking/实际音量信号（180ms 音量间隙缓冲）。
+- `enter`/`exit` 单次播放，`loop` 保持到指令清除/TTL 结束。新动作打断旧动作；过期进入 exit，再返回模型待机。未声明或依赖不完整的动作不宣称可用。
+- `motionParameters` 和 `expressionParameters` 应由真实曲线生成，完整列出参数 ID；保护当前原生动作/表情的参数。显式说话时口型仍可覆盖口部开合。启用 preserve 时不再叠加库内程序化头部呼吸晃动。
+- `hitAreas` 可将模型真实 HitArea Name 绑定到 actions 的键；默认留空，不把“有点击区域”误当作“已恢复游戏点击反应”。拖拽超过 6px 不触发点击动作。
+- 待机仍使用现有 `idleMotionGroup`。转换器在存在真实 `motions/idle_loop.motion3.json` 时增加 Idle 分组引用，不制作假待机动作。
+
+### 人工预览
+
+视频通话窗口选择 Live2D，打开编辑模式，可查看并预览当前模型全部原生表情、动作与已配置动作。预览只作用于当前窗口；预览保持最多 8 秒后播放退出动作。停止预览或关闭编辑面板会恢复自动表现，不给后端发消息，也不改真实情绪状态。
+
+当前已验证 Chromium 中真实 Core/Pixi/React 路径，Tauri 模型列表传输使用夹具；真实 Tauri 双窗口和发行版仍须独立验收。

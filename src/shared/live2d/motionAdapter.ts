@@ -77,3 +77,52 @@ export function getParamDefault(coreModel: CoreModel, id: string): number {
   if (Number.isFinite(value)) return value as number;
   return id === 'ParamEyeLOpen' || id === 'ParamEyeROpen' ? 1 : 0;
 }
+
+export interface RuntimeModel {
+  coreModel: CoreModel;
+  updateNaturalMovements?: (dt: number, now: number) => void;
+  settings?: { json?: { EmeraldProfile?: unknown } };
+  motionManager: {
+    definitions?: Record<string, { File: string }[]>;
+    loadMotion: (group: string, index: number) => Promise<unknown>;
+    stopAllMotions: () => void;
+    expressionManager?: { resetExpression: () => void };
+    on: (event: string, listener: (...args: never[]) => void) => void;
+    off: (event: string, listener: (...args: never[]) => void) => void;
+  };
+  on: (event: string, listener: () => void) => void;
+  off: (event: string, listener: () => void) => void;
+}
+
+export function getRuntimeModel(model: unknown): RuntimeModel | null {
+  const runtime = (model as { internalModel?: RuntimeModel })?.internalModel;
+  const manager = runtime?.motionManager;
+  return runtime?.coreModel && manager
+    && typeof manager.loadMotion === 'function' && typeof manager.stopAllMotions === 'function'
+    && typeof manager.on === 'function' && typeof manager.off === 'function' ? runtime : null;
+}
+
+/** Profiled assets drive after expressions/physics, rather than stomping their baselines. */
+export function attachFinalDriver(model: unknown, drive: (core: CoreModel, nowMs: number) => void): (() => void) | null {
+  const runtime = getRuntimeModel(model);
+  if (!runtime || typeof runtime.on !== 'function' || typeof runtime.off !== 'function') return null;
+  const natural = runtime.updateNaturalMovements;
+  const silent = () => {};
+  // Authored native idle/actions own breathing and angles on opted-in assets.
+  // Do not add library procedural head movement on top of them.
+  const preserve = (runtime.settings?.json?.EmeraldProfile as { preserveNativeParameters?: boolean } | undefined)?.preserveNativeParameters;
+  if (preserve && natural) runtime.updateNaturalMovements = silent;
+  let warned = false;
+  const listener = () => {
+    try { drive(runtime.coreModel, performance.now()); }
+    catch (error) {
+      if (!warned) console.warn('[live2d] native driver failed; authored update continues', error);
+      warned = true;
+    }
+  };
+  runtime.on('beforeModelUpdate', listener);
+  return () => {
+    runtime.off('beforeModelUpdate', listener);
+    if (natural && runtime.updateNaturalMovements === silent) runtime.updateNaturalMovements = natural;
+  };
+}

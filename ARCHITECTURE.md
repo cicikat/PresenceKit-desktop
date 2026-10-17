@@ -135,3 +135,7 @@ main capability 仅新增标题栏需要的 start-dragging、minimize、toggle-m
 独立 Pet/日记/来电/satellite 保留原窗口装饰；无 REST/WS、后端或手机设置变更，无跨端影响。
 真实 Windows 置顶遮挡、拖动/双击、边缘缩放、Win+方向键贴靠与发行包验收仍 open；自绘最大化按钮未实现原生悬停 Snap Layout 菜单。
 工单见 [window-pin-2026-10-13.md](docs/window-pin-2026-10-13.md)。
+
+## Live2D 原生资源档案（2026-10-17）
+
+`shared/live2d/modelProfile.ts` 解析模型自带可选 EmeraldProfile；`nativeMotionPlayer.ts` 执行单通道原生动作与退出生命周期。`stageControls.ts` 只注册当前窗口的人工预览端口，Room 编辑面板消费它。已有 directive 词汇不变；无后端/手机新接口或状态。普通无档案模型保持原驱动，3D 不变。边界与验收见 [资源导入说明](docs/live2d-resource-import.md)。

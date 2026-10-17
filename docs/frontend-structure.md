@@ -25,7 +25,7 @@
 `shared/room/gradeConfig.ts`，预设在 `shared/room/lookPresets.ts`。
 摆放模式下 settings→scene 的同步 effect 被暂停，所以面板对光/道具/人物/预设的修改走
 `useRoomScene` 的 `applyLightPatch` / `applyPropPatch` / `applyCharacterPatch` / `applyLookSettings`
-直接写 three 对象并镜像进 settings。Live2D 下只有调色（`ColorMatrixFilter`，曝光/色调映射/暗角/泛光不支持并置灰）。
+直接写 three 对象并镜像进 settings。Live2D 下支持调色与原生表情/动作预览（`ColorMatrixFilter`，曝光/色调映射/暗角/泛光不支持并置灰）。
 灯光参数不再在偏好页（`CallSettingsPage`）重复提供。仅本机渲染与 `room.settings` 偏好，无后端/手机改动。
 真实 Tauri 窗口目检未完成，见 `known-issues.md` 与 `../cc-tasks/room-visual-editor.md`。
 
@@ -1034,3 +1034,7 @@ main capability 仅新增标题栏需要的 start-dragging、minimize、toggle-m
 独立 Pet/日记/来电/satellite 保留原窗口装饰；无 REST/WS、后端或手机设置变更，无跨端影响。
 真实 Windows 置顶遮挡、拖动/双击、边缘缩放、Win+方向键贴靠与发行包验收仍 open；自绘最大化按钮未实现原生悬停 Snap Layout 菜单。
 工单见 [window-pin-2026-10-13.md](window-pin-2026-10-13.md)。
+
+## Live2D 原生表情与动作预览（2026-10-17）
+
+Live2D 编辑模式除调色外，增加 `Live2DPerformancePanel`，复用现有面板控件样式。窗口内 `stageControls` 提供当前模型原生表情/动作列表、播放、停止；关闭面板恢复自动表现。档案与动作状态仅在渲染实例内存在，不新增全局偏好或后端业务状态。资产转换、原生参数所有权和真实验收边界见 [导入说明](live2d-resource-import.md)。

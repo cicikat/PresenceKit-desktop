@@ -534,6 +534,21 @@ export const zhCN = {
   'dreamReplay.mechanism.unknown': '未知退出机制',
   'dreamReplay.readOnly': '只读回放',
   'dreamReplay.returnToCurrent': '返回当前梦境',
+  'live2d.performance.title': '原生表情与动作',
+  'live2d.performance.waiting': '等待当前窗口加载模型',
+  'live2d.performance.expression': '表情',
+  'live2d.performance.motion': '动作',
+  'live2d.performance.follow': '跟随对话',
+  'live2d.performance.choose': '选择动作',
+  'live2d.performance.play': '播放',
+  'live2d.performance.stop': '停止预览',
+  'live2d.performance.actions': '已配置的动作',
+  'live2d.performance.hint': '仅预览当前窗口。保持最多 8 秒后播放退出动作；停止后恢复对话表现。',
+  'live2d.performance.nod': '点头',
+  'live2d.performance.shake': '摇头',
+  'live2d.performance.leanIn': '前倾',
+  'live2d.performance.leanBack': '后仰',
+  'live2d.performance.speaking': '说话',
 } as const;
 
 export type MessageKey = keyof typeof zhCN;

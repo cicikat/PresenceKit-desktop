@@ -2,6 +2,7 @@
 // set of controls that would do nothing, it shows one line saying so plus the color grade.
 import type { RoomSettings } from '../../shared/room/roomSettings';
 import { GradeSection } from './GradeSection';
+import { Live2DPerformancePanel } from './Live2DPerformancePanel';
 import { useI18n } from '../../shared/i18n';
 import './EditorPanel.css';
 
@@ -10,6 +11,7 @@ export function Live2DEditorPanel({ settings }: { settings: RoomSettings }) {
   return (
     <div className="room-editor-panel" role="region" aria-label={t('room.editor.title')}>
       <div className="room-editor-panel__list">
+        <Live2DPerformancePanel />
         <div className="room-editor-panel__group">
           <div className="room-editor-panel__group-title">{t('room.editor.group.light')}</div>
           <div className="room-editor-panel__params room-editor-panel__params--flat">

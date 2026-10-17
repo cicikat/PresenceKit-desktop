@@ -1,5 +1,10 @@
 # docs/known-issues.md — 已知问题与技术债
 
+## HLR Live2D 导入（2026-10-17，partial）
+
+基础角色 `hlr_yexuan_mingyun_base` 已转换并通过真实浏览器渲染与动作链路检查。12 个重复配饰纹理槽尚未恢复，已用透明占位明确省略并记录来源清单；不能称为完整游戏外观。其它模型批量转换、游戏专用混合、原版点击反应、真实 Tauri 双窗和发行验收仍 open。见 [导入说明](live2d-resource-import.md) 和 `cc-tasks/2026-10-17-live2d-resource-import.md`。无新后端/手机契约。
+
+
 ## TV 真实动作导入（2026-10-11，partial）
 
 已实播环胸/聊天，及点头/摇头/扶栏预览；证据见 [导入报告](motion-assets/tv-ual-import.md)。
