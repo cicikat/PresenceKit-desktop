@@ -3,6 +3,8 @@ import { getClientConfig, invalidateClientConfig } from '../../../shared/api/con
 import { getTokenStatus, testBackendAuth, saveClientConfig } from '../../../shared/api/connectionSettings';
 import type { TokenStatus } from '../../../shared/api/connectionSettings';
 import { wsClient } from '../../../shared/api/ws';
+import { followBackendWebsocket } from '../../../shared/api/connectionUrls';
+import { useI18n } from '../../../shared/i18n';
 import { getAdminBridgeStatus, openAdminPanel, stopAdminBridge, type AdminBridgeStatus } from '../../../shared/api/adminBridge';
 
 // ─── local styles (kept local to avoid coupling to ChatWindow.tsx internals) ──
@@ -67,6 +69,7 @@ function ConfirmDialog({ message, onConfirm, onCancel }: { message: string; onCo
 }
 
 export function ConnectionSettingsPage() {
+  const { t } = useI18n();
   const [loading, setLoading] = useState(true);
   const [backendBase, setBackendBase] = useState('');
   const [websocketBase, setWebsocketBase] = useState('');
@@ -133,12 +136,15 @@ export function ConnectionSettingsPage() {
       const token = tokenInput.trim() || undefined;
       await saveClientConfig(backendBase.trim(), websocketBase.trim(), token);
       invalidateClientConfig();
+      const cfg = await getClientConfig();
+      setWebsocketBase(cfg.websocketBase);
+      wsClient.reconnect(cfg.websocketBase);
       const status = await getTokenStatus();
       setTokenStatus(status);
       setTokenInput('');
       setTestResult(null);
       setShowReconnect(true);
-      setSaveResult({ ok: true, msg: '已保存。HTTP 请求即时生效（每次调用重读配置）；WebSocket 需重连才能恢复推送。' });
+      setSaveResult({ ok: true, msg: t('connection.settings.saved') });
     } catch (e) {
       setSaveResult({ ok: false, msg: `保存失败：${String(e)}` });
     } finally {
@@ -208,12 +214,15 @@ export function ConnectionSettingsPage() {
         <input
           style={inputStyle}
           value={backendBase}
-          onChange={e => setBackendBase(e.target.value)}
+          onChange={e => {
+            setWebsocketBase(followBackendWebsocket(backendBase, websocketBase, e.target.value));
+            setBackendBase(e.target.value);
+          }}
           placeholder="http://127.0.0.1:8080"
         />
       </Row>
 
-      <Row label="WebSocket 地址" hint="原生 WS bridge 连接地址">
+      <Row label={t('connection.settings.websocketLabel')} hint={t('connection.settings.websocketHint')}>
         <input
           style={inputStyle}
           value={websocketBase}

@@ -219,6 +219,109 @@ mod tests {
     use super::*;
 
     #[test]
+    fn secure_websocket_initiates_tls_with_the_default_connector() {
+        // A real TCP peer observes ClientHello. Without the TLS Cargo feature,
+        // connect_async returns TlsFeatureNotEnabled before sending these bytes.
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                use tokio::io::AsyncReadExt;
+                let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+                let address = listener.local_addr().unwrap();
+                let url = format!("wss://localhost:{}/ws/desktop", address.port());
+                let request = build_authorized_request(&url, "test-token").unwrap();
+                let server = async {
+                    let (mut socket, _) = listener.accept().await.unwrap();
+                    let mut header = [0; 3];
+                    socket.read_exact(&mut header).await.map(|_| header)
+                };
+                let (result, header) = tokio::time::timeout(
+                    std::time::Duration::from_secs(5),
+                    futures_util::future::join(tokio_tungstenite::connect_async(request), server),
+                )
+                .await
+                .expect("TLS probe must finish");
+                assert!(result.is_err(), "probe peer does not provide a certificate");
+                assert_eq!(
+                    header.unwrap()[..2],
+                    [0x16, 0x03],
+                    "expected a TLS handshake record"
+                );
+            });
+    }
+
+    #[test]
+    fn local_websocket_keeps_bearer_hello_and_heartbeat_working() {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+                let url = format!("ws://{}/ws/desktop", listener.local_addr().unwrap());
+                let server = async {
+                    let (socket, _) = listener.accept().await.unwrap();
+                    let mut ws = tokio_tungstenite::accept_hdr_async(
+                        socket,
+                        |request: &tokio_tungstenite::tungstenite::handshake::server::Request,
+                         response| {
+                            assert_eq!(request.headers()[AUTHORIZATION], "Bearer test-token");
+                            assert_eq!(request.uri().path(), "/ws/desktop");
+                            Ok(response)
+                        },
+                    )
+                    .await
+                    .unwrap();
+                    let hello = ws.next().await.unwrap().unwrap().into_text().unwrap();
+                    assert_eq!(
+                        serde_json::from_str::<serde_json::Value>(&hello).unwrap()["type"],
+                        "hello"
+                    );
+                    ws.send(Message::Text(
+                        r#"{"type":"hello_ack","server_version":"0.1"}"#.into(),
+                    ))
+                    .await
+                    .unwrap();
+                    ws.send(Message::Text(r#"{"type":"ping"}"#.into()))
+                        .await
+                        .unwrap();
+                    let pong = ws.next().await.unwrap().unwrap().into_text().unwrap();
+                    assert_eq!(
+                        serde_json::from_str::<serde_json::Value>(&pong).unwrap()["type"],
+                        "pong"
+                    );
+                };
+                let client = async {
+                    let request = build_authorized_request(&url, "test-token").unwrap();
+                    let (mut ws, _) = tokio_tungstenite::connect_async(request).await.unwrap();
+                    ws.send(Message::Text(
+                        r#"{"type":"hello","client":"emerald-client","version":"0.1"}"#.into(),
+                    ))
+                    .await
+                    .unwrap();
+                    for expected in ["hello_ack", "ping"] {
+                        let message = ws.next().await.unwrap().unwrap().into_text().unwrap();
+                        assert_eq!(
+                            serde_json::from_str::<serde_json::Value>(&message).unwrap()["type"],
+                            expected
+                        );
+                    }
+                    ws.send(Message::Text(r#"{"type":"pong"}"#.into()))
+                        .await
+                        .unwrap();
+                };
+                tokio::time::timeout(
+                    std::time::Duration::from_secs(5),
+                    futures_util::future::join(server, client),
+                )
+                .await
+                .expect("local WS handshake and heartbeat must finish");
+            });
+    }
+
+    #[test]
     fn websocket_url_removes_token_query_and_preserves_other_params() {
         let sanitized = sanitize_websocket_url(
             "ws://127.0.0.1:8080/ws/desktop?token=secret-value&client=emerald",

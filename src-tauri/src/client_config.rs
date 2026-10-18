@@ -237,6 +237,30 @@ fn trim_trailing_slash(value: String) -> String {
     value.trim_end_matches('/').to_string()
 }
 
+fn resolve_websocket_base(backend_base: &str, websocket_base: &str) -> String {
+    // Empty/missing and the legacy loopback default follow the HTTP endpoint.
+    // Explicit non-default WS addresses remain available for split deployments.
+    if !websocket_base.trim().is_empty() && websocket_base.trim() != DEFAULT_WEBSOCKET_BASE {
+        return websocket_base.trim().to_string();
+    }
+    let Ok(mut url) = url::Url::parse(backend_base.trim()) else {
+        return websocket_base.to_string();
+    };
+    let scheme = match url.scheme() {
+        "http" => "ws",
+        "https" => "wss",
+        _ => return websocket_base.to_string(),
+    };
+    let _ = url.set_scheme(scheme);
+    let path = format!("{}/ws/desktop", url.path().trim_end_matches('/'));
+    url.set_path(&path);
+    url.set_query(None);
+    url.set_fragment(None);
+    let _ = url.set_username("");
+    let _ = url.set_password(None);
+    url.into()
+}
+
 pub(crate) fn read_json(path: &PathBuf) -> Option<String> {
     std::fs::read_to_string(path)
         .ok()
@@ -298,6 +322,8 @@ pub fn load_client_config<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Clien
             break;
         }
     }
+
+    cfg.websocket_base = resolve_websocket_base(&cfg.backend_base, &cfg.websocket_base);
 
     // P0-1: 诊断「clone 后接上原数据」问题的关键日志——client.local.json 可能命中
     // 编译期烧死的绝对路径（CARGO_MANIFEST_DIR），与当前 exe 所在盘符无关。
@@ -492,7 +518,7 @@ pub fn save_client_config(
     let merged = merge_client_config_json(
         existing,
         &backend_base,
-        &websocket_base,
+        &resolve_websocket_base(&backend_base, &websocket_base),
         admin_token.as_deref(),
     );
     let serialized = serde_json::to_string_pretty(&merged).map_err(|e| e.to_string())?;
@@ -538,6 +564,38 @@ pub fn save_visual_perception_config(
 #[cfg(test)]
 mod save_config_tests {
     use super::*;
+
+    #[test]
+    fn websocket_defaults_follow_remote_http_including_proxy_prefix() {
+        for value in ["", DEFAULT_WEBSOCKET_BASE] {
+            assert_eq!(
+                resolve_websocket_base("https://backend.example:8443/presence/", value),
+                "wss://backend.example:8443/presence/ws/desktop"
+            );
+        }
+        assert_eq!(
+            resolve_websocket_base(DEFAULT_BACKEND_BASE, DEFAULT_WEBSOCKET_BASE),
+            DEFAULT_WEBSOCKET_BASE
+        );
+        assert_eq!(
+            resolve_websocket_base("http://[::1]:8080/", ""),
+            "ws://[::1]:8080/ws/desktop"
+        );
+    }
+
+    #[test]
+    fn explicit_websocket_endpoint_is_preserved() {
+        let custom = "wss://push.example/custom?client=desktop";
+        assert_eq!(resolve_websocket_base("https://backend.example", custom), custom);
+    }
+
+    #[test]
+    fn derived_websocket_does_not_copy_http_credentials_or_query() {
+        assert_eq!(
+            resolve_websocket_base("https://name:password@backend.example/api?token=secret#part", ""),
+            "wss://backend.example/api/ws/desktop"
+        );
+    }
 
     #[test]
     fn merge_preserves_unknown_keys_and_overwrites_known_ones() {

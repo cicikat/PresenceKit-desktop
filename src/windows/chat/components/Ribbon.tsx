@@ -112,10 +112,10 @@ export function Ribbon({
             <div
               title={
                 connState === 'connecting'
-                  ? '连接中'
+                  ? t('connection.status.connecting')
                   : connState === 'auth-failed'
-                    ? 'WebSocket 认证被拒：token 无效或缺少 ws.desktop scope'
-                    : '已断开，正在重连'
+                    ? t('connection.status.authFailed')
+                    : t('connection.status.disconnected')
               }
               style={{
                 position: 'absolute', bottom: -2, right: -2,

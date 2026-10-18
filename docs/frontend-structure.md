@@ -1,5 +1,10 @@
 # docs/frontend-structure.md — 前端结构指南
 
+2026-10-18：TokenSetupForm 与 ConnectionSettingsPage 共用 shared/api/connectionUrls.ts，
+默认 WS 地址随 HTTP 编辑更新（HTTPS→WSS），自定义独立 WS 地址保留。连接设置保存后重读
+有效配置并自动重连；Ribbon 只订阅 wsClient，hello_ack 成功后才隐藏角标。中英文提示明确为
+后端实时推送连接；不新增业务状态或移动端设置。真实云端验收见远程连接工单。
+
 2026-10-11：Room 编辑面板新增 MotionPreview，复用当前窗口 MotionLibrary，关闭恢复自动演出。
 支持五个真实 UAL 动作，截图与边界见 [导入报告](motion-assets/tv-ual-import.md)。头像启动/连接恢复
 流程见 [头像恢复](avatar-startup-recovery.md)。无后端/手机新 UI 或协议。

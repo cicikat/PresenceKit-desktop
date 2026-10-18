@@ -42,6 +42,8 @@ Room 的 GLB 透视相机预设由 ThreeCallStage 的场景加载过程提取，
 
 HTTP 经 `src/shared/api/` → Tauri command → Rust reqwest（显式 no_proxy）；WebView 不直接 fetch 后端。
 WS 经 `ws_bridge.rs` 原生 Bearer 握手与 Tauri 事件，token 不进入 URL 或 WebView。
+原生 WS 支持系统证书校验的 WSS；默认地址随 HTTP 配置推导，自定义 WS 地址保留。
+首启与连接设置页共享地址联动逻辑，保存后自动重连；Ribbon 仍以 hello_ack 判定实时连接。
 协议以 [protocol-v0](docs/protocol-v0.md) 为准，不因产品版本叫 v1 而推定已实现 v1 envelope。
 
 ChatPanel 当前协调发送、流式临时消息、canonical channel、分段补充和按日历史。

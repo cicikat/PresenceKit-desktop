@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { getClientConfig, invalidateClientConfig } from '../../shared/api/config';
+import { followBackendWebsocket } from '../../shared/api/connectionUrls';
 import { testBackendAuth, saveClientConfig } from '../../shared/api/connectionSettings';
 import { setAuthInvalid } from '../../shared/api/authGate';
 import { classifyHttpError } from '../../shared/api/httpError';
@@ -80,7 +81,10 @@ export function TokenSetupForm({ onSuccess }: TokenSetupFormProps) {
             <input
               style={inputStyle}
               value={backendBase}
-              onChange={e => setBackendBase(e.target.value)}
+              onChange={e => {
+                setWebsocketBase(followBackendWebsocket(backendBase, websocketBase, e.target.value));
+                setBackendBase(e.target.value);
+              }}
               placeholder="http://127.0.0.1:8080"
             />
           </div>

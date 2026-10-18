@@ -2,6 +2,12 @@ import type { MessageKey } from './zh-CN';
 
 
 export const enUS: Record<MessageKey, string> = {
+  'connection.status.connecting': 'Connecting to backend live updates',
+  'connection.status.authFailed': 'Backend live updates rejected authentication: invalid token or missing ws.desktop permission',
+  'connection.status.disconnected': 'Backend live updates disconnected; reconnecting. Check the WebSocket address in system settings.',
+  'connection.settings.saved': 'Saved. Reconnecting to backend live updates. The top-left status dot disappears after a successful handshake.',
+  'connection.settings.websocketLabel': 'WebSocket address',
+  'connection.settings.websocketHint': 'Follows the HTTP backend by default (HTTPS uses WSS); a custom address can be entered separately',
 "window.minimize": "Minimize",
 "window.maximize": "Maximize",
 "window.restore": "Restore window",

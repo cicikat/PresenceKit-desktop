@@ -1,5 +1,12 @@
 # docs/known-issues.md — 已知问题与技术债
 
+## 远程后端 WebSocket 状态（2026-10-18，partial）
+
+根因：原生 tokio-tungstenite 默认未启用 TLS，HTTPS 聊天可用时 WSS 推送仍失败；首启只改 HTTP
+而未联动 WS 也会遗留本机地址。已补 native-tls、默认地址推导/联动与保存自动重连，状态角标继续
+等待 hello_ack。HTTP 认证测试不证明 WebSocket 可用。真实 Windows Tauri → 云端的证书、反代
+Upgrade、握手、持续心跳和主动消息验收仍 observe，详见 `../cc-tasks/2026-10-18-remote-websocket-status.md`。
+
 ## HLR Live2D 导入（2026-10-17，partial）
 
 基础角色 `hlr_yexuan_mingyun_base` 已转换并通过真实浏览器渲染与动作链路检查。12 个重复配饰纹理槽尚未恢复，已用透明占位明确省略并记录来源清单；不能称为完整游戏外观。其它模型批量转换、游戏专用混合、原版点击反应、真实 Tauri 双窗和发行验收仍 open。见 [导入说明](live2d-resource-import.md) 和 `cc-tasks/2026-10-17-live2d-resource-import.md`。无新后端/手机契约。

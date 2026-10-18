@@ -1,4 +1,10 @@
 export const zhCN = {
+  'connection.status.connecting': '正在连接后端实时推送',
+  'connection.status.authFailed': '后端实时推送认证被拒：token 无效或缺少 ws.desktop 权限',
+  'connection.status.disconnected': '后端实时推送已断开，正在重连；请在系统设置检查 WebSocket 地址',
+  'connection.settings.saved': '已保存，正在重新连接后端实时推送。左上角状态点会在握手成功后消失。',
+  'connection.settings.websocketLabel': 'WebSocket 地址',
+  'connection.settings.websocketHint': '默认随 HTTP 后端地址更新（HTTPS 使用 WSS）；可单独填写自定义地址',
 "window.minimize": "最小化",
 "window.maximize": "最大化",
 "window.restore": "还原窗口",

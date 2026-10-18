@@ -9,6 +9,17 @@ WS connected 后重读 prompt-assets 与角色头像；既有 IPC/REST 字段、
 
 # docs/backend-integration.md — 后端接口与接入现状
 
+## 远程 WebSocket 连接（2026-10-18，partial）
+
+Ribbon 左上角状态点由原生 WS 的 `hello_ack` 驱动，不是本机 HTTP 探活结果。
+`tokio-tungstenite` 显式启用 `native-tls`，WSS 使用系统证书校验，原有 WS/Bearer 继续可用。
+缺失、空白或遗留 `ws://127.0.0.1:8080/ws/desktop` 的 websocketBase 在 Rust 加载/保存时
+随 backendBase 推导：HTTP→WS、HTTPS→WSS，保留端口和反代路径前缀并追加 `/ws/desktop`。
+首启和连接设置页编辑 HTTP 地址时同步默认 WS；非默认的自定义 WS 保留。保存后自动重连，
+只在 hello_ack 后清除状态点；HTTP 认证测试成功仍不等于实时推送成功。
+没有新增 IPC/REST/WS 字段、权限、队列或落盘文件；手机 HTTP poll/relay 无跨端行为变化。
+回归及真实服务器验收状态见 `../cc-tasks/2026-10-18-remote-websocket-status.md`。
+
 ## Brief 253.6：语音感知
 
 原 transcribe_audio 仍上传录音到 chat scope 的 POST /transcribe。新增可选 audio_perception_id；
@@ -142,7 +153,7 @@ config/client.local.json
 | 字段 | 默认值 | 说明 |
 |---|---|---|
 | `backendBase` | `http://127.0.0.1:8080` | Rust Tauri command 访问后端 HTTP 的 base URL，不包含末尾 `/` |
-| `websocketBase` | `ws://127.0.0.1:8080/ws/desktop` | Rust 原生 WebSocket bridge 连接地址；配置中的 legacy `token` query 会被移除 |
+| `websocketBase` | 从 `backendBase` 推导 | 空白/缺失/遗留本机默认值跟随后端；自定义地址保留；legacy `token` query 会被移除 |
 | `adminToken` | 当前本地开发默认 token | 仅 Rust 侧读取，用于 HTTP / WebSocket Bearer header，不透传给前端日志 |
 | `sensorConfig.enabled` | `true` | 是否启动 Tauri 内嵌 sensor runner |
 | `sensorConfig.windowSeconds` | `30` | sensor 聚合窗口长度 |
@@ -193,8 +204,7 @@ Rust/Tauri HTTP client 统一显式禁用代理并设置超时：普通请求 15
   读→JSON 层面 merge→原子写（先写 `.tmp` 再 `rename`），只覆盖这三个字段，文件内其他自定义键保持不变。
   Token 字段为空则不写入 `adminToken` 键，即不改动磁盘上已有的值。
 - **即时生效范围**：HTTP 请求每次都经 Rust `load_client_config()` 重新读文件，保存后无需重启即可生效；
-  WebSocket 连接不会自动重连，保存成功后页面出现「立即重连」按钮，调用 `wsClient.reconnect(url)`
-  （断开当前连接后用新地址重新连接一次）。
+  WebSocket 在保存成功后自动用重新读取的有效配置调用 `wsClient.reconnect(url)`，页面保留手动重试入口。
 - 前端页面在改动 token 前会弹一次确认对话框（仅当输入框非空、确实要覆盖已保存 token 时触发）。
 
 ---
