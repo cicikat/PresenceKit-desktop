@@ -303,7 +303,7 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
       {/* Character stage container — 3D (Three.js) or Live2D, picked by roomSettings.renderMode */}
       <div className="call-room__stage" style={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
         {renderMode === 'live2d' ? (
-          <Live2DCallStage mood={mood} talking={ttsAutoPlay ? audioTalking : presenter.talking} grade={roomSettings.grade} />
+          <Live2DCallStage mood={mood} talking={ttsAutoPlay ? audioTalking : presenter.talking} grade={roomSettings.grade} editable={live2dEdit} />
         ) : (
           <ThreeCallStage
             ref={threeStageRef}

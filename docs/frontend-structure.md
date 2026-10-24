@@ -1043,3 +1043,13 @@ main capability 仅新增标题栏需要的 start-dragging、minimize、toggle-m
 ## Live2D 原生表情与动作预览（2026-10-17）
 
 Live2D 编辑模式除调色外，增加 `Live2DPerformancePanel`，复用现有面板控件样式。窗口内 `stageControls` 提供当前模型原生表情/动作列表、播放、停止；关闭面板恢复自动表现。档案与动作状态仅在渲染实例内存在，不新增全局偏好或后端业务状态。资产转换、原生参数所有权和真实验收边界见 [导入说明](live2d-resource-import.md)。
+
+## Live2D 清晰度、背景与摆放（2026-10-24）
+
+共享 useLive2DStage 按显示密度配置 renderer/ColorMatrixFilter，跨屏时同步像素密度；layout.ts 根据真实头部 HitArea 计算缩放与边界留白，缺区域使用保守上身锚点。小窗口不足以容纳头部时限制最终画面倍率，用户偏移仍可有意移出边界。
+
+桌宠保留 scaleMul/offset 与 pet.live2d.zoom，通话使用独立 callScaleMul/callOffset；旧偏好迁移继承原布局。通话 Ctrl+滚轮缩放、编辑拖动、侧栏手动摆放使用同一偏好；桌宠普通拖动走原生窗口，Shift+拖动调整人物，Shift+双击复位。缩放输入上限为 8；3D 保持原值。PetWindow 用 LogicalSize 顺序应用窗口尺寸事件并在启动还原，pet capability 允许 set-size。
+
+背景扫描/读取由 live2d_backgrounds.rs 提供有界本地 IPC，backgroundAssets.ts 只提供数据；设置页复用已有 Row/SliderNum/PrefAtoms，背景两个下拉同宽对齐，无刷新按钮，进入/打开下拉自动扫描。Live2DLayoutPanel 复用 Room 控件，未新增背景选择组件。背景纹理由实例独占，布局变化不重复读取图片。
+
+无 REST/WS、后端管理或手机契约变更，无跨端影响；详见 cc-tasks/2026-10-24-live2d-clarity.md。真实 Windows 双窗口/多显示器、设备 GPU 与发行包验收仍 open。

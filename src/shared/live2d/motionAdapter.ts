@@ -62,6 +62,30 @@ export function getModelHeight(model: unknown): number {
   return candidate.internalModel?.height || candidate.height || 1;
 }
 
+export function getHeadAnchor(model: unknown): { x: number; y: number; width?: number; height?: number } {
+  const candidate = model as { pivot?: { x: number; y: number }; internalModel?: {
+    height: number; width: number; hitAreas?: Record<string, { index: number }>;
+    getDrawableBounds?: (index: number) => { x: number; y: number; width: number; height: number };
+    localTransform?: { a?: number; d?: number; apply: (point: { x: number; y: number }) => { x: number; y: number } };
+  } };
+  const internal = candidate.internalModel;
+  const entry = Object.entries(internal?.hitAreas ?? {}).find(([name]) => /head/i.test(name))
+    ?? Object.entries(internal?.hitAreas ?? {}).find(([name]) => /face/i.test(name));
+  try {
+    if (entry && internal?.getDrawableBounds && internal.height > 0) {
+      const bounds = internal.getDrawableBounds(entry[1].index);
+      let center = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
+      center = internal.localTransform?.apply(center) ?? center;
+      const point = { x: (center.x - (candidate.pivot?.x ?? internal.width / 2)) / internal.height,
+        y: (center.y - (candidate.pivot?.y ?? internal.height / 2)) / internal.height };
+      if (Number.isFinite(point.x) && Number.isFinite(point.y)) return { ...point,
+        width: bounds.width * Math.abs(internal.localTransform?.a ?? 1) / internal.height * 1.15,
+        height: bounds.height * Math.abs(internal.localTransform?.d ?? 1) / internal.height * 1.15 };
+    }
+  } catch { /* Models without a usable head region use a conservative upper-body anchor. */ }
+  return { x: 0, y: -0.4, width: 0.12, height: 0.14 };
+}
+
 export function getParamDefault(coreModel: CoreModel, id: string): number {
   const ids = coreModel.parameters?.ids ?? coreModel.getModel?.()?.parameters?.ids;
   const index = coreModel.getParameterIndex?.(id) ?? ids?.indexOf(id) ?? -1;

@@ -18,6 +18,7 @@ mod design_satellite;
 mod ui_prefs;
 mod ws_bridge;
 mod window_lifecycle;
+mod live2d_backgrounds;
 pub mod sensor;
 
 use std::fs;
@@ -3833,6 +3834,8 @@ pub fn run() {
             read_room_material_map,
             list_room_props,
             list_live2d_models,
+            live2d_backgrounds::list_live2d_backgrounds,
+            live2d_backgrounds::read_live2d_background,
             send_chat,
             load_turn_reasoning,
             download_chat_artifact,

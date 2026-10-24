@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
-import { getCurrentWindow } from '@tauri-apps/api/window';
+import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
 import { listenPetSnapshots, listenPetTurn, listenPetPrefs } from '../../shared/pet/bridge';
 import { DEFAULT_PET_SNAPSHOT, type PetSnapshot } from '../../shared/pet/types';
 import { sendChat } from '../../shared/api/backend';
@@ -10,6 +10,7 @@ import { useVoiceInput } from '../../shared/voice/useVoiceInput';
 import { VoiceMessageBar } from '../chat/components/VoiceMessageBar';
 import { normalizeChatDisplayText } from '../chat/chatDisplay';
 import { renderInlineStyled } from '../chat/inlineStyle';
+import { getUIPref } from '../../shared/uiPreferences';
 import { PetStage } from './components/PetStage';
 import { usePetMouse } from './usePetMouse';
 import { usePetRoam } from './usePetRoam';
@@ -62,7 +63,31 @@ export function PetWindow() {
       unlistenEnabled?.();
     };
   }, []);
-  useEffect(() => { let off: (() => void) | undefined; listenPetPrefs(patch => { if (typeof patch.windowScale === 'number') void getCurrentWindow().setSize({ type: 'Logical', width: 340 * patch.windowScale, height: 400 * patch.windowScale } as any); }).then(fn => { off = fn; }); return () => off?.(); }, []);
+  useEffect(() => {
+    let disposed = false;
+    let off: (() => void) | undefined;
+    let pending: number | null = null;
+    let resizing = false;
+    const resize = async (value: number) => {
+      pending = Number.isFinite(value) ? Math.max(0.5, Math.min(2, value)) : 1;
+      if (resizing) return;
+      resizing = true;
+      try {
+        while (!disposed && pending !== null) {
+          const scale = pending;
+          pending = null;
+          await getCurrentWindow().setSize(new LogicalSize(Math.round(340 * scale), Math.round(400 * scale)));
+        }
+      } catch (error) {
+        console.warn('[pet] 调整窗口大小失败:', error);
+      } finally { resizing = false; }
+    };
+    void resize(getUIPref('pet.windowScale', 1));
+    listenPetPrefs(patch => {
+      if (typeof patch.windowScale === 'number') void resize(patch.windowScale);
+    }).then(fn => { if (disposed) fn(); else off = fn; }).catch(console.warn);
+    return () => { disposed = true; off?.(); };
+  }, []);
 
   // Alt+1 global hotkey → toggle voice recording; on stop, auto-send transcribed text
   useEffect(() => {
@@ -163,7 +188,10 @@ export function PetWindow() {
         body::before { display: none !important; }
       `}</style>
       <main
-        onPointerDown={event => { void startDrag(event); }}
+        onPointerDownCapture={event => {
+          if (event.shiftKey || (event.target as HTMLElement).closest('section, input, button, select, textarea')) return;
+          void startDrag(event);
+        }}
         style={{
           width: '100vw',
           height: '100vh',

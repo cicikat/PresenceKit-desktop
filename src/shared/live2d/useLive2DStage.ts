@@ -17,6 +17,8 @@ import { MOOD_TO_EXPRESSION, MOOD_PARAMS, matchExpressionName } from './live2dEx
 import { availableProfile, expressionFor, findNativeMotion, listNativeMotions, protectedParameters, readModelProfile, type ModelProfile } from './modelProfile';
 import { NativeMotionPlayer } from './nativeMotionPlayer';
 import { registerStageControls } from './stageControls';
+import { anchoredLayout } from './layout';
+import { backgroundSource } from './backgroundAssets';
 import { MOOD_TABLE } from '../state/store';
 import type { Mood } from '../state/store';
 import { backendMoodToFrontend } from '../state/mood-mapping';
@@ -32,6 +34,7 @@ import {
   getExpressionNames,
   getMotionGroupNames,
   getModelHeight,
+  getHeadAnchor,
   getParamDefault,
 } from './motionAdapter';
 
@@ -129,6 +132,8 @@ export interface UseLive2DStageOptions {
   getVolume?: () => number;
   transparent: boolean;
   zoom?: number;
+  /** Call-only placement; Pet keeps its existing shared base placement. */
+  layout?: { scaleMul: number; offset: [number, number] };
   /** Screen-level color grade (call window only). Applied as a color-matrix filter on the stage. */
   grade?: GradeCfg;
 }
@@ -152,6 +157,8 @@ export function useLive2DStage(
   const bgSpriteRef = useRef<PIXI.Sprite | null>(null);
   const settingsRef = useRef<Live2DSettings>(loadLive2DSettings());
   const baseScaleRef = useRef(1);
+  const headAnchorRef = useRef({ x: 0, y: -0.4 });
+  const applyLayoutRef = useRef<(() => void) | null>(null);
   const loadTokenRef = useRef(0);
 
   const blinkStateRef = useRef<BlinkState>({ phase: 'idle', nextAt: performance.now() + 2000, startedAt: 0 });
@@ -198,16 +205,49 @@ export function useLive2DStage(
       resizeTo: mount,
       backgroundAlpha: 0,
       antialias: true,
+      // Keep CSS layout in logical pixels while rendering at the screen's pixel density.
+      resolution: window.devicePixelRatio || 1,
+      autoDensity: true,
       autoStart: true,
     });
     appRef.current = app;
     mount.appendChild(app.view as HTMLCanvasElement);
 
+    let densityQuery: MediaQueryList | null = null;
+    function syncPixelDensity(): void {
+      if (disposed) return;
+      const density = window.devicePixelRatio || 1;
+      for (const filter of app.stage.filters ?? []) filter.resolution = density;
+      if (app.renderer.resolution !== density) {
+        app.renderer.resolution = density;
+        app.renderer.resize(mount!.clientWidth, mount!.clientHeight);
+      }
+      // Re-arm for the new density when moving between monitors or changing display scale.
+      densityQuery?.removeEventListener('change', syncPixelDensity);
+      densityQuery = window.matchMedia(`(resolution: ${density}dppx)`);
+      densityQuery.addEventListener('change', syncPixelDensity);
+    }
+    syncPixelDensity();
+    window.addEventListener('resize', syncPixelDensity);
+
     function isForceTransparent(): boolean {
       return optsRef.current.transparent;
     }
 
+    let backgroundToken = 0;
+    let backgroundKey: string | null = null;
+    function fitBackground(): void {
+      const sprite = bgSpriteRef.current;
+      if (!sprite) return;
+      const scale = Math.max(mount!.clientWidth / sprite.texture.width, mount!.clientHeight / sprite.texture.height) || 1;
+      sprite.scale.set(scale);
+      sprite.position.set(mount!.clientWidth / 2, mount!.clientHeight / 2);
+    }
     function applyBackground(settings: Live2DSettings): void {
+      const key = JSON.stringify([isForceTransparent(), settings.bgKind, settings.bgColor, settings.bgImage]);
+      if (key === backgroundKey) return;
+      backgroundKey = key;
+      const token = ++backgroundToken;
       const a = appRef.current;
       if (!a) return;
       const transparent = isForceTransparent() || settings.bgKind === 'transparent';
@@ -232,9 +272,16 @@ export function useLive2DStage(
 
       if (settings.bgKind === 'image' && settings.bgImage) {
         a.renderer.background.alpha = 1;
-        PIXI.Assets.load(settings.bgImage)
+        backgroundSource(settings.bgImage).then(async source => {
+          // Each stage owns its texture; a cancelled load must not destroy another stage's cached texture.
+          const image = new Image();
+          image.crossOrigin = 'anonymous';
+          image.src = source;
+          await image.decode();
+          return new PIXI.Texture(new PIXI.BaseTexture(image));
+        })
           .then((texture: PIXI.Texture) => {
-            if (disposed || settingsRef.current.bgImage !== settings.bgImage) return;
+            if (disposed || token !== backgroundToken) { texture.destroy(true); return; }
             const sprite = new PIXI.Sprite(texture);
             const { clientWidth: w, clientHeight: h } = mount;
             const scale = Math.max(w / texture.width, h / texture.height) || 1;
@@ -245,6 +292,7 @@ export function useLive2DStage(
             sprite.y = h / 2;
             a.stage.addChildAt(sprite, 0);
             bgSpriteRef.current = sprite;
+            fitBackground();
           })
           .catch(() => { /* missing bg image: fall back to plain background color */ });
       }
@@ -257,16 +305,13 @@ export function useLive2DStage(
       if (w === 0 || h === 0) return;
       const settings = settingsRef.current;
       const zoom = optsRef.current.zoom ?? 1;
-      const baseH = getModelHeight(model);
-      const targetH = h * 0.95 * settings.scaleMul * zoom;
-      const scale = targetH / baseH;
-      baseScaleRef.current = scale;
-      model.scale.set(scale, scale);
-      model.x = w / 2 + settings.offset[0] * w;
-      // keep the model's top edge (head) fixed at its zoom=1 screen position as zoom changes
-      const baselineH = h * 0.95 * settings.scaleMul;
-      model.y = h / 2 + settings.offset[1] * h + (targetH - baselineH) / 2;
+      const placement = optsRef.current.layout ?? settings;
+      const layout = anchoredLayout(w, h, getModelHeight(model), placement.scaleMul, zoom, placement.offset, headAnchorRef.current);
+      baseScaleRef.current = layout.scale;
+      model.scale.set(layout.scale);
+      model.position.set(layout.x, layout.y);
     }
+    applyLayoutRef.current = applyLayout;
 
     async function loadModel(dir: string): Promise<void> {
       const token = ++loadTokenRef.current;
@@ -339,6 +384,7 @@ export function useLive2DStage(
           return;
         }
         model.anchor.set(0.5, 0.5);
+        headAnchorRef.current = getHeadAnchor(model);
         // §0 diagnostic (cc-tasks/31): confirm whether Core actually parsed offscreen groups for
         // this moc3 — `_model` is CubismModel's private native-handle field, only present on Core 6+.
         try {
@@ -670,7 +716,7 @@ export function useLive2DStage(
       writeParam(coreModel, 'ParamAngleZ', gestureAngleZ + reactionAngleZ);
     }
 
-    const resizeObs = new ResizeObserver(() => applyLayout());
+    const resizeObs = new ResizeObserver(() => { applyLayout(); fitBackground(); });
     resizeObs.observe(mount);
 
     const unsubscribe = subscribeLive2DSettings(next => {
@@ -689,6 +735,10 @@ export function useLive2DStage(
 
     return () => {
       disposed = true;
+      backgroundToken++;
+      applyLayoutRef.current = null;
+      densityQuery?.removeEventListener('change', syncPixelDensity);
+      window.removeEventListener('resize', syncPixelDensity);
       loadTokenRef.current++;
       detachNative?.();
       detachNative = null;
@@ -722,6 +772,7 @@ export function useLive2DStage(
       return;
     }
     const filter = gradeFilterRef.current ?? new PIXI.ColorMatrixFilter();
+    filter.resolution = app.renderer.resolution;
     filter.matrix = gradeColorMatrix(grade) as unknown as PIXI.ColorMatrix;
     gradeFilterRef.current = filter;
     app.stage.filters = [filter];
@@ -734,22 +785,11 @@ export function useLive2DStage(
     const mount = mountRef.current;
     if (!mount) return;
     const settings = settingsRef.current;
-    const zoom = opts.zoom ?? 1;
-    const { clientHeight: h } = mount;
-    if (h === 0) return;
-    const model = modelRef.current;
-    const baseH = getModelHeight(model);
-    const targetH = h * 0.95 * settings.scaleMul * zoom;
-    const scale = targetH / baseH;
-    baseScaleRef.current = scale;
-    model.scale.set(scale, scale);
-    // keep the model's top edge (head) fixed at its zoom=1 screen position as zoom changes
-    const baselineH = h * 0.95 * settings.scaleMul;
-    model.y = h / 2 + settings.offset[1] * h + (targetH - baselineH) / 2;
+    applyLayoutRef.current?.();
     const transparent = opts.transparent || settings.bgKind === 'transparent';
     app.renderer.background.alpha = transparent ? 0 : app.renderer.background.alpha;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [opts.zoom, opts.transparent]);
+  }, [opts.zoom, opts.transparent, opts.layout]);
 
   return { error, pulse };
 }

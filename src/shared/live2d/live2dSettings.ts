@@ -1,4 +1,5 @@
 import { getUIPref, setUIPref } from '../uiPreferences';
+import { MAX_LIVE2D_SCALE } from './layout';
 
 export type Live2DBgKind = 'transparent' | 'color' | 'image';
 
@@ -6,6 +7,8 @@ export interface Live2DSettings {
   modelDir: string;
   scaleMul: number;
   offset: [number, number];
+  callScaleMul: number;
+  callOffset: [number, number];
   bgKind: Live2DBgKind;
   bgColor: string;
   bgImage: string | null;
@@ -18,6 +21,8 @@ export const DEFAULT_LIVE2D_SETTINGS: Live2DSettings = {
   modelDir: '',
   scaleMul: 1,
   offset: [0, 0],
+  callScaleMul: 1,
+  callOffset: [0, 0],
   bgKind: 'color',
   bgColor: '#1a1d26',
   bgImage: null,
@@ -48,8 +53,11 @@ function validate(raw: unknown): Live2DSettings {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   return {
     modelDir: typeof r.modelDir === 'string' ? r.modelDir : DEFAULT_LIVE2D_SETTINGS.modelDir,
-    scaleMul: clamp(typeof r.scaleMul === 'number' ? r.scaleMul : DEFAULT_LIVE2D_SETTINGS.scaleMul, 0.2, 3),
+    scaleMul: clamp(typeof r.scaleMul === 'number' ? r.scaleMul : DEFAULT_LIVE2D_SETTINGS.scaleMul, 0.2, MAX_LIVE2D_SCALE),
     offset: validateOffset(r.offset),
+    callScaleMul: clamp(typeof r.callScaleMul === 'number' ? r.callScaleMul
+      : typeof r.scaleMul === 'number' ? r.scaleMul : 1, 0.2, MAX_LIVE2D_SCALE),
+    callOffset: validateOffset(r.callOffset ?? r.offset),
     bgKind: (['transparent', 'color', 'image'] as const).includes(r.bgKind as Live2DBgKind)
       ? (r.bgKind as Live2DBgKind)
       : DEFAULT_LIVE2D_SETTINGS.bgKind,
@@ -75,6 +83,10 @@ export function loadLive2DSettings(): Live2DSettings {
 export function saveLive2DSettings(settings: Live2DSettings): void {
   setUIPref<Live2DSettings>(STORAGE_KEY, settings);
   window.dispatchEvent(new CustomEvent(CHANGE_EVENT, { detail: settings }));
+}
+
+export function patchLive2DSettings(patch: Partial<Live2DSettings>): void {
+  saveLive2DSettings(validate({ ...loadLive2DSettings(), ...patch }));
 }
 
 export function subscribeLive2DSettings(fn: (s: Live2DSettings) => void): () => void {

@@ -6,6 +6,7 @@ parser=argparse.ArgumentParser(description='Real Core/Pixi/React Live2D acceptan
 parser.add_argument('--output',type=Path,required=True)
 parser.add_argument('--base-url',default='http://localhost:1420')
 parser.add_argument('--model-dir',default='hlr_yexuan_mingyun_base')
+parser.add_argument('--dpr',type=float,default=1,help='Screen pixel density for high-DPI regression')
 args=parser.parse_args()
 repo=Path(__file__).resolve().parent.parent
 fixture=repo/'.tmp'
@@ -16,7 +17,7 @@ out=args.output.resolve();out.mkdir(parents=True,exist_ok=True);logs=[];errors=[
 
 with sync_playwright() as p:
  browser=p.chromium.launch(headless=True,args=['--use-angle=swiftshader','--enable-unsafe-swiftshader'])
- page=browser.new_page(viewport={'width':1000,'height':900},device_scale_factor=1)
+ page=browser.new_page(viewport={'width':1000,'height':900},device_scale_factor=args.dpr)
  page.on('console',lambda m:logs.append({'type':m.type,'text':m.text}))
  page.on('pageerror',lambda e:errors.append(str(e)))
  page.on('requestfailed',lambda r:failed.append({'url':r.url,'failure':r.failure}))
@@ -34,6 +35,9 @@ with sync_playwright() as p:
   page.evaluate('window.attachCompare()')
   page.screenshot(path=str(out/'01-模型初始.png'))
   report={}
+  report['density']=page.evaluate('''() => {const c=document.querySelector('canvas'),r=c.getBoundingClientRect();return {dpr:devicePixelRatio,width:c.width,height:c.height,cssWidth:r.width,cssHeight:r.height};}''')
+  assert abs(report['density']['width']-report['density']['cssWidth']*args.dpr)<=1
+  assert abs(report['density']['height']-report['density']['cssHeight']*args.dpr)<=1
   report['capabilities']=page.evaluate('({expressions:window.controls().expressions.length,motions:window.controls().motions.length,actions:window.controls().actions})')
   assert report['capabilities']['expressions']==11
   assert report['capabilities']['motions']==26
@@ -99,6 +103,11 @@ with sync_playwright() as p:
   page.wait_for_timeout(600)
   page.screenshot(path=str(out/'05-重载恢复.png'))
   report['unmountReload']=True
+  # Simulate moving to a differently scaled monitor without remounting the stage.
+  cdp=page.context.new_cdp_session(page)
+  cdp.send('Emulation.setDeviceMetricsOverride',dict(width=1100,height=750,deviceScaleFactor=1.5,mobile=False))
+  page.wait_for_function('''() => {const c=document.querySelector('canvas'),r=c.getBoundingClientRect();return devicePixelRatio===1.5 && Math.abs(c.width-r.width*1.5)<=1 && Math.abs(c.height-r.height*1.5)<=1;}''')
+  report['densityChangedWithoutRemount']=True
   assert not errors,errors
   assert not failed,failed
   (out/'browser-performance.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf8')

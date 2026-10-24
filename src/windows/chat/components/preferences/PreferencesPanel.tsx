@@ -21,6 +21,7 @@ import { DiarySyncSettingsPage } from '../DiarySyncSettingsPage';
 import { DesktopTtsSettingsPage } from '../DesktopTtsSettingsPage';
 import { VisualPerceptionSettingsPage } from '../VisualPerceptionSettingsPage';
 import { useI18n, type Language } from '../../../../shared/i18n';
+import { getUIPref, setUIPref } from '../../../../shared/uiPreferences';
 import { emitPetPrefs } from '../../../../shared/pet/bridge';
 import { Icon } from '../UIKit';
 import { MinuteSelect, PrefRange, PrefRow, PrefSwitch, prefActionButtonStyle, prefSelectStyle } from './PrefAtoms';
@@ -28,7 +29,7 @@ import { PeriodDateSettings } from './PeriodDateSettings';
 import { DesignModSettings } from './DesignModSettings';
 import { CHAT_PREFERENCE_TABS, type ChatPreferenceTab } from './preferencesInfoArchitecture';
 export function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHeaderVisible, onChatHeaderToggle, appearance, onAppearanceChange, activeLayout, layoutOptions, onLayoutChange, onCharacterAvatarChange, onCharacterSwitched, petMouseSettings, onPetMouseSettingsChange, petVisualStyle, onPetVisualStyleChange, model3dZoom, onModel3dZoomChange, live2dZoom, onLive2dZoomChange, presenceNagEnabled, onPresenceNagToggle, proactiveGapHours, onProactiveGapChange, playModeEnabled, onPlayModeToggle, petRoamEnabled, onPetRoamToggle, petRippleEnabled, onPetRippleToggle, onYandereOpen }: any) {
-  const [petWindowScale, setPetWindowScale] = useState(() => Number(localStorage.getItem('emerald.ui.pet.windowScale') || 1));
+  const [petWindowScale, setPetWindowScale] = useState(() => getUIPref('pet.windowScale', 1));
   const { language, setLanguage, t } = useI18n();
   const [avatars, setAvatars] = useState(avatarStore.get());
   const [tab, setTab] = useState<ChatPreferenceTab>('interface');
@@ -452,7 +453,7 @@ export function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, 
                 </PrefRow>
                 <PrefRow label="桌宠窗口大小" hint="调整桌宠窗口整体尺寸">
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <input type="range" min={0.5} max={2} step={0.05} value={petWindowScale} aria-label="桌宠窗口大小" style={{ width: 100 }} onChange={e => { const value = Number(e.target.value); setPetWindowScale(value); localStorage.setItem('emerald.ui.pet.windowScale', String(value)); void emitPetPrefs({ windowScale: value }); }} />
+                    <input type="range" min={0.5} max={2} step={0.05} value={petWindowScale} aria-label="桌宠窗口大小" style={{ width: 100 }} onChange={e => { const value = Number(e.target.value); setPetWindowScale(value); setUIPref('pet.windowScale', value); void emitPetPrefs({ windowScale: value }); }} />
                     <span className="mono" style={{ color: 'var(--ink-3)', fontSize: 10, minWidth: 28 }}>{petWindowScale.toFixed(2)}×</span>
                   </div>
                 </PrefRow>
@@ -476,12 +477,12 @@ export function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, 
                 )}
                 {petVisualStyle === 'live2d' && (
                   <>
-                    <PrefRow label="Live2D 缩放" hint="值越大越近">
+                    <PrefRow label="Live2D 缩放" hint={t('live2d.pet.zoomHint')}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <input
                           type="range"
                           min={0.3}
-                          max={4}
+                          max={8}
                           step={0.05}
                           value={live2dZoom ?? 1}
                           onChange={e => onLive2dZoomChange(parseFloat(e.target.value))}

@@ -1338,3 +1338,13 @@ main capability 仅新增标题栏需要的 start-dragging、minimize、toggle-m
 独立 Pet/日记/来电/satellite 保留原窗口装饰；无 REST/WS、后端或手机设置变更，无跨端影响。
 真实 Windows 置顶遮挡、拖动/双击、边缘缩放、Win+方向键贴靠与发行包验收仍 open；自绘最大化按钮未实现原生悬停 Snap Layout 菜单。
 工单见 [window-pin-2026-10-13.md](window-pin-2026-10-13.md)。
+
+## Live2D 本地背景 IPC（2026-10-24）
+
+- `list_live2d_backgrounds()` → `Array<{file:string,label:string}>`，file 为目录相对路径（`/` 分隔），label 保留文件名/子目录。
+- `read_live2d_background({file:string})` → 图片 data URL；不返回任意本机文件，不上传资源。
+- 开发目录为 `public/live2d/backgrounds`，发行资源目录为 `live2d/backgrounds`。PNG/JPG/JPEG/WebP，最多 2000 项、4 层子目录、单文件最多 32 MiB；规范路径必须仍在背景目录内。拒绝越界、绝对路径与非图片扩展名，跳过符号链接。
+- 设置 `bgImage` 使用 `/live2d/backgrounds/<逐段URL编码路径>`，旧自定义 URL 保持兼容。主设置页及通话编辑页进入/打开下拉自动扫描，无手填路径/刷新按钮。
+- 桌宠沿用 `pet://prefs` 的 `windowScale` / `live2dZoom` 字段；窗口尺寸 0.5–2 倍、Live2D 缩放上限 8，pet capability 新增 `core:window:allow-set-size`。不是后端 capability 或手机设置。
+
+无 REST/WS 或后端管理面变更，无跨端影响。

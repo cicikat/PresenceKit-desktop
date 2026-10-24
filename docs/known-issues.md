@@ -740,3 +740,9 @@ main capability 仅新增标题栏需要的 start-dragging、minimize、toggle-m
 独立 Pet/日记/来电/satellite 保留原窗口装饰；无 REST/WS、后端或手机设置变更，无跨端影响。
 真实 Windows 置顶遮挡、拖动/双击、边缘缩放、Win+方向键贴靠与发行包验收仍 open；自绘最大化按钮未实现原生悬停 Snap Layout 菜单。
 工单见 [window-pin-2026-10-13.md](window-pin-2026-10-13.md)。
+
+## Live2D 显示修复的验收边界（2026-10-24）
+
+DPR 画布、调色滤镜降采样、桌宠窗口 set-size 权限/LogicalSize、8 倍缩放与保头构图已修复。真实 Core/Pixi/React 的通话/桌宠交互夹具通过；夹具模拟 Tauri transport，不能证明操作系统窗口实际移动/调整、跨屏密度事件、用户设备 GPU 或发行包资源路径均通过。上述原生与发行验收仍 open，需更新原生进程后实测。
+
+素材另有限制：试点 2048 纹理中 face2 仅约 246×334，大幅放大无法产生原图不存在的细节。自动保头使用模型真实 Head/Face 区域并留白；无此区域的模型用保守回退，批量导入仍须逐模型检查头发与动作幅度。用户主动偏移可能裁切，Shift+双击可复位。

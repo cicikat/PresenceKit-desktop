@@ -130,7 +130,7 @@ export function usePetController(engine: StateEngine, onToyOpen?: () => void) {
   }, []);
 
   const updateLive2dZoom = useCallback((zoom: number) => {
-    const clamped = Math.max(0.3, Math.min(4, zoom));
+    const clamped = Math.max(0.3, Math.min(8, zoom));
     setLive2dZoom(clamped);
     setUIPref('pet.live2d.zoom', clamped);
     void emitPetPrefs({ live2dZoom: clamped });

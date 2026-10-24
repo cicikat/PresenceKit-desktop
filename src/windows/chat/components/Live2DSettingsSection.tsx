@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import {
   loadLive2DSettings,
   saveLive2DSettings,
@@ -8,65 +8,10 @@ import {
 } from '../../../shared/live2d/live2dSettings';
 import { listLive2DModels } from '../../../shared/live2d/live2dAssets';
 import type { Live2DModelAsset } from '../../../shared/live2d/live2dAssets';
+import { backgroundUrl, useLive2DBackgrounds } from '../../../shared/live2d/backgroundAssets';
+import { Row, SliderNum, Divider } from '../../room/EditorControls';
+import { prefSelectStyle as selectStyle } from './preferences/PrefAtoms';
 import { useI18n } from '../../../shared/i18n';
-
-// Local copies of CallSettingsPage's Row/SliderNum/Divider/selectStyle primitives — importing
-// them directly would create a circular dependency (CallSettingsPage renders this section).
-const selectStyle: CSSProperties = {
-  width: '100%', padding: '6px 9px',
-  border: '1px solid var(--paper-edge)',
-  borderRadius: 'var(--radius-sm)',
-  background: 'var(--paper-2)', color: 'var(--ink-2)',
-  fontFamily: 'inherit', fontSize: 11,
-};
-
-function Row({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-      <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink)' }}>{label}</div>
-        {hint && <div className="mono" style={{ fontSize: 9.5, color: 'var(--ink-3)', letterSpacing: 1.1, marginTop: 2 }}>{hint}</div>}
-      </div>
-      <div style={{ flexShrink: 0 }}>{children}</div>
-    </div>
-  );
-}
-
-function SliderNum({
-  min, max, step, value, onChange, unit,
-}: {
-  min: number; max: number; step: number; value: number;
-  onChange: (v: number) => void; unit?: string;
-}) {
-  const numStyle: CSSProperties = {
-    width: 58, padding: '4px 6px', fontSize: 11,
-    border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-sm)',
-    background: 'var(--paper-2)', color: 'var(--ink-2)',
-    fontFamily: 'var(--font-mono, monospace)', textAlign: 'right',
-  };
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: 240 }}>
-      <input
-        type="range" min={min} max={max} step={step} value={value}
-        onChange={e => onChange(Number(e.target.value))}
-        style={{ flex: 1, minWidth: 0 }}
-      />
-      <input
-        type="number" min={min} max={max} step={step} value={value}
-        onChange={e => {
-          const v = parseFloat(e.target.value);
-          if (!isNaN(v)) onChange(Math.max(min, Math.min(max, v)));
-        }}
-        style={numStyle}
-      />
-      {unit && <span className="mono" style={{ fontSize: 10, color: 'var(--ink-3)', width: 18 }}>{unit}</span>}
-    </div>
-  );
-}
-
-function Divider() {
-  return <div style={{ height: 1, background: 'var(--paper-edge)' }} />;
-}
 
 const textInputStyle: CSSProperties = {
   width: 170, padding: '5px 8px', fontSize: 11,
@@ -104,6 +49,9 @@ export function Live2DSettingsSection({ modelOnly = false }: { modelOnly?: boole
     setSettings(next);
     saveLive2DSettings(next);
   }
+
+  const backgrounds = useLive2DBackgrounds(!modelOnly && settings.bgKind === 'image');
+  const knownBackground = !settings.bgImage || backgrounds.files.some(file => backgroundUrl(file.file) === settings.bgImage);
 
   const selectedModel = models.find(m => m.dirName === settings.modelDir);
   const selectedMocVersion = selectedModel?.mocVersion ?? null;
@@ -148,8 +96,8 @@ export function Live2DSettingsSection({ modelOnly = false }: { modelOnly?: boole
       )}
 
       {!modelOnly && <>
-      <Row label="缩放" hint="0.2–3">
-        <SliderNum min={0.2} max={3} step={0.01} value={settings.scaleMul} onChange={v => patch({ scaleMul: v })} />
+      <Row label="缩放" hint="0.2–8">
+        <SliderNum min={0.2} max={8} step={0.01} value={settings.scaleMul} onChange={v => patch({ scaleMul: v })} />
       </Row>
 
       <Row label="X 偏移" hint="画布宽度比例，-1–1">
@@ -169,9 +117,10 @@ export function Live2DSettingsSection({ modelOnly = false }: { modelOnly?: boole
 
       <Row label="背景" hint="跟随窗口=透明">
         <select
+          aria-label={t('live2d.background.kind')}
           value={settings.bgKind}
           onChange={e => patch({ bgKind: e.target.value as Live2DBgKind })}
-          style={{ ...selectStyle, width: 100 }}
+          style={{ ...selectStyle, width: 170 }}
         >
           {BG_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
@@ -188,14 +137,15 @@ export function Live2DSettingsSection({ modelOnly = false }: { modelOnly?: boole
       )}
 
       {settings.bgKind === 'image' && (
-        <Row label="背景图路径" hint="public 下的相对路径，如 /live2d/backgrounds/xx.jpg">
-          <input
-            type="text"
-            value={settings.bgImage ?? ''}
-            onChange={e => patch({ bgImage: e.target.value || null })}
-            placeholder="/live2d/backgrounds/xx.jpg"
-            style={textInputStyle}
-          />
+        <Row label={t('live2d.background.image')} hint={backgrounds.failed ? t('live2d.background.failed') : t('live2d.background.folder')}>
+          <select aria-label={t('live2d.background.image')} value={settings.bgImage ?? ''}
+            onFocus={() => void backgrounds.refresh()} onPointerDown={() => void backgrounds.refresh()}
+            onChange={event => patch({ bgImage: event.target.value || null })}
+            style={{ ...selectStyle, width: 170 }}>
+            <option value="">{t('live2d.background.choose')}</option>
+            {!knownBackground && <option value={settings.bgImage!}>{t('live2d.background.saved')}: {settings.bgImage}</option>}
+            {backgrounds.files.map(file => <option key={file.file} value={backgroundUrl(file.file)}>{file.label}</option>)}
+          </select>
         </Row>
       )}
 

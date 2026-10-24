@@ -44,3 +44,7 @@ public/live2d/models/
 
 # Local browser regression artifacts
 .tmp/
+
+# Local Live2D background images (keep the folder in fresh checkouts).
+public/live2d/backgrounds/*
+!public/live2d/backgrounds/README.md

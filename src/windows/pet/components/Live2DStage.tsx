@@ -3,6 +3,7 @@ import type { PetRendererProps } from '../../../shared/pet/petRenderer';
 import { useLive2DStage } from '../../../shared/live2d/useLive2DStage';
 import { getUIPref } from '../../../shared/uiPreferences';
 import { listenPetPrefs } from '../../../shared/pet/bridge';
+import { loadLive2DSettings, patchLive2DSettings } from '../../../shared/live2d/live2dSettings';
 import type { Mood } from '../../../shared/state/store';
 
 const PET_LIVE2D_ZOOM_KEY = 'pet.live2d.zoom';
@@ -10,6 +11,8 @@ const PET_LIVE2D_ZOOM_KEY = 'pet.live2d.zoom';
 export function Live2DStage({ snapshot, reaction, volume }: PetRendererProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(() => getUIPref<number>(PET_LIVE2D_ZOOM_KEY, 1));
+
+  const panRef = useRef<{ id: number; x: number; y: number; offset: [number, number] } | null>(null);
 
   const moodRef = useRef<Mood>(snapshot.mood);
   useEffect(() => { moodRef.current = snapshot.mood; }, [snapshot.mood]);
@@ -21,7 +24,7 @@ export function Live2DStage({ snapshot, reaction, volume }: PetRendererProps) {
     let disposed = false;
     let unlisten: (() => void) | undefined;
     listenPetPrefs(patch => {
-      if (typeof patch.live2dZoom === 'number') setZoom(patch.live2dZoom);
+      if (typeof patch.live2dZoom === 'number') setZoom(Math.max(0.3, Math.min(8, patch.live2dZoom)));
     }).then(fn => {
       if (disposed) fn();
       else unlisten = fn;
@@ -50,6 +53,31 @@ export function Live2DStage({ snapshot, reaction, volume }: PetRendererProps) {
   return (
     <div
       ref={mountRef}
+      onPointerDownCapture={event => {
+        if (!event.shiftKey || event.button !== 0) return;
+        event.stopPropagation();
+        event.preventDefault();
+        panRef.current = { id: event.pointerId, x: event.clientX, y: event.clientY, offset: loadLive2DSettings().offset };
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }}
+      onPointerMoveCapture={event => {
+        const pan = panRef.current;
+        if (!pan || pan.id !== event.pointerId) return;
+        event.stopPropagation();
+        const bounds = event.currentTarget.getBoundingClientRect();
+        patchLive2DSettings({ offset: [pan.offset[0] + (event.clientX - pan.x) / bounds.width,
+          pan.offset[1] + (event.clientY - pan.y) / bounds.height] });
+      }}
+      onPointerUpCapture={event => {
+        if (!panRef.current || panRef.current.id !== event.pointerId) return;
+        event.stopPropagation();
+        panRef.current = null;
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }}
+      onPointerCancel={() => { panRef.current = null; }}
+      onDoubleClick={event => {
+        if (event.shiftKey) { event.stopPropagation(); patchLive2DSettings({ offset: [0, 0] }); }
+      }}
       style={{ width: '100%', height: '100%', overflow: 'hidden', background: 'transparent', position: 'relative' }}
     >
       {error && (

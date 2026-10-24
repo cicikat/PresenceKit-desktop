@@ -274,3 +274,9 @@ observe; enabled-service synthesis failure text fallback remains open.
 ## 288 日记归属
 
 选目录时固定 charId；本地 DiarySyncConfig 保留该归属，所有同步批次使用同一个 char_id query。切换角色不重认领目录，重新绑定时重置同步 manifest。旧无归属目录需重新选择才可同步；后端镜像和注入按角色隔离。状态返回 charId，设置页显示绑定角色；本机目录路径不上传。用户凭据和目录配置仍是客户端基础设施。手机没有这条 Obsidian 同步链。Rust 日记单测、IPC 合同及 TypeScript 验证通过；真实 Tauri 同步未运行。
+
+## Live2D 本机显示控制（2026-10-24）
+
+现有桌宠窗口大小滑杆写 `pet.windowScale` 并广播 `pet://prefs`；PetWindow 使用原生 LogicalSize 实时应用且启动恢复。Live2D 缩放上限 8，3D 不变。`live2d.settings` 新增独立 `callScaleMul` / `callOffset`，由通话 Ctrl+滚轮、编辑拖动和侧栏缩放/X/Y/复位消费，旧记录从 scaleMul/offset 迁移；桌宠继续使用旧字段和 pet.live2d.zoom，支持 Shift+拖动/双击复位。小窗口自动保头会限制实际画面倍率，偏移是有意构图例外。
+
+背景沿用 bgKind/bgColor/bgImage，由本地扫描目录下拉选择，复用现有控件，无刷新按钮。上述仅为本机 UI 偏好和只读 Tauri 资源 IPC，不新增后端配置、权限真值或手机消费接口，无跨端影响。

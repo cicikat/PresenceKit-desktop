@@ -555,6 +555,23 @@ export const zhCN = {
   'live2d.performance.leanIn': '前倾',
   'live2d.performance.leanBack': '后仰',
   'live2d.performance.speaking': '说话',
+  'live2d.background.image': '背景图片',
+  'live2d.background.choose': '选择背景',
+  'live2d.background.saved': '已保存的背景',
+  'live2d.background.refresh': '刷新文件列表',
+  'live2d.background.failed': '读取背景目录失败，请重试。',
+  'live2d.background.empty': '背景目录暂无图片。放入图片后点击刷新。',
+  'live2d.background.folder': '图片目录：live2d/backgrounds',
+  'live2d.background.kind': '背景',
+  'live2d.background.transparent': '透明',
+  'live2d.background.color': '纯色',
+  'live2d.layout.title': '通话模型与背景',
+  'live2d.pet.zoomHint': '最高 8 倍；拖动移动窗口，Shift＋拖动调整人物位置，Shift＋双击复位。小窗口会优先容纳完整头部。',
+  'live2d.layout.hint': 'Ctrl＋滚轮以头部为中心缩放。编辑时可拖动位置；通话布局不改变桌宠。',
+  'live2d.layout.scale': '通话缩放',
+  'live2d.layout.x': '水平位置（%）',
+  'live2d.layout.y': '垂直位置（%）',
+  'live2d.layout.reset': '重置通话位置与缩放',
 } as const;
 
 export type MessageKey = keyof typeof zhCN;
