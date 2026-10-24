@@ -129,7 +129,7 @@ export interface UseLive2DStageOptions {
   /** Optional caller-owned performance source. Default preserves Pet behavior. */
   getDirective?: (now: number) => ActiveDirective | null;
   getTalking: () => boolean;
-  getVolume?: () => number;
+  getVolume?: () => number | null;
   transparent: boolean;
   zoom?: number;
   /** Call-only placement; Pet keeps its existing shared base placement. */
@@ -498,7 +498,8 @@ export function useLive2DStage(
       const intensity = directive?.expression ? directive.intensity : 0.85;
       const now = performance.now();
       speaking = directive?.speaking ?? optsRef.current.getTalking();
-      if ((optsRef.current.getVolume?.() ?? 0) > 0) lastVoiceAt = now;
+      const measuredVolume = optsRef.current.getVolume?.() ?? null;
+      if (measuredVolume !== null && measuredVolume > 0) lastVoiceAt = now;
       if (now - lastVoiceAt < 180) speaking = true;
       nativePlayer?.tick(now);
       if (now >= manualUntil) {
@@ -620,13 +621,11 @@ export function useLive2DStage(
       }
 
       // ── mouth / lipsync ──
-      const getVolume = optsRef.current.getVolume;
       let mouthTarget: number;
-      if (getVolume) {
-        mouthTarget = Math.max(0, Math.min(1, getVolume())) * settings.lipsyncStrength;
+      if (measuredVolume !== null && Number.isFinite(measuredVolume)) {
+        mouthTarget = Math.max(0, Math.min(1, measuredVolume)) * settings.lipsyncStrength;
       } else {
-        const talking = directive?.speaking ?? optsRef.current.getTalking();
-        mouthTarget = talking ? (0.5 + 0.5 * Math.sin(t * 12)) * settings.lipsyncStrength : 0;
+        mouthTarget = speaking ? (0.5 + 0.5 * Math.sin(t * 12)) * settings.lipsyncStrength : 0;
       }
       mouthValueRef.current = lerp(mouthValueRef.current, mouthTarget, 0.5);
       if (!profile?.preserveNativeParameters || speaking) {

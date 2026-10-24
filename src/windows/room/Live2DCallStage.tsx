@@ -5,6 +5,7 @@ import type { Mood } from '../../shared/state/store';
 import type { GradeCfg } from '../../shared/room/gradeConfig';
 import { loadLive2DSettings, patchLive2DSettings, subscribeLive2DSettings } from '../../shared/live2d/live2dSettings';
 import { wheelScale } from '../../shared/live2d/layout';
+import { usePlaybackLevel } from '../../shared/voice/usePlaybackLevel';
 
 interface Live2DCallStageProps {
   mood: Mood;
@@ -17,7 +18,7 @@ export function Live2DCallStage({ mood, talking, grade, editable = false }: Live
   const mountRef = useRef<HTMLDivElement>(null);
   const moodRef = useRef(mood);
   const talkingRef = useRef(talking);
-  const [audioVolume, setAudioVolume] = useState(0);
+  const getPlaybackLevel = usePlaybackLevel();
   const [placement, setPlacement] = useState(loadLive2DSettings);
   useEffect(() => subscribeLive2DSettings(setPlacement), []);
   const layout = useMemo(() => ({ scaleMul: placement.callScaleMul, offset: placement.callOffset }), [placement.callScaleMul, placement.callOffset]);
@@ -68,20 +69,11 @@ export function Live2DCallStage({ mood, talking, grade, editable = false }: Live
   useEffect(() => { moodRef.current = mood; }, [mood]);
   useEffect(() => { talkingRef.current = talking; }, [talking]);
 
-  useEffect(() => {
-    const handleVoiceVolume = (event: Event) => {
-      const detail = (event as CustomEvent<{ volume: number }>).detail;
-      setAudioVolume(detail.volume ?? 0);
-    };
-    window.addEventListener('voice-volume', handleVoiceVolume);
-    return () => window.removeEventListener('voice-volume', handleVoiceVolume);
-  }, []);
-
   const { error } = useLive2DStage(mountRef, {
     getMood: () => moodRef.current,
     getDirective: getCallDirective,
     getTalking: () => talkingRef.current,
-    getVolume: audioVolume > 0 ? () => audioVolume : undefined,
+    getVolume: getPlaybackLevel,
     transparent: false,
     grade,
     layout,

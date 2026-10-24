@@ -7,6 +7,10 @@
 等待 hello_ack。HTTP 认证测试不证明 WebSocket 可用。真实 Windows Tauri → 云端的证书、反代
 Upgrade、握手、持续心跳和主动消息验收仍 observe，详见 `../cc-tasks/2026-10-18-remote-websocket-status.md`。
 
+## Live2D 实际播音口型（2026-10-25，current / observe）
+
+current：修复输出分析未绑定、Pet 误消费麦克风和 getTalking=false。生产 Pet/Room 的 HTMLAudio/WebAudio 验证覆盖静音、实际输出口型、分析不可用降级、暂停/重播/结束/卸载与 Idle 回归；原生动作的淡出按实际稳定状态验收。跨窗播音状态沿用已有行为事件，跨窗无音量样本时使用备用口型。真实 Windows/Tauri、用户 TTS 与设备仍 observe；见 [播音说明](live2d-playback.md)。剩余 HLR 模型与配饰未因本修复自动恢复。
+
 ## HLR Live2D 导入（2026-10-17，partial）
 
 基础角色 `hlr_yexuan_mingyun_base` 已转换并通过真实浏览器渲染与动作链路检查。12 个重复配饰纹理槽尚未恢复，已用透明占位明确省略并记录来源清单；不能称为完整游戏外观。其它模型批量转换、游戏专用混合、原版点击反应、真实 Tauri 双窗和发行验收仍 open。见 [导入说明](live2d-resource-import.md) 和 `cc-tasks/2026-10-17-live2d-resource-import.md`。无新后端/手机契约。

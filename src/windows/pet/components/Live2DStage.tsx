@@ -5,10 +5,12 @@ import { getUIPref } from '../../../shared/uiPreferences';
 import { listenPetPrefs } from '../../../shared/pet/bridge';
 import { loadLive2DSettings, patchLive2DSettings } from '../../../shared/live2d/live2dSettings';
 import type { Mood } from '../../../shared/state/store';
+import { useCharacterBehavior } from '../../../shared/character/useCharacterBehavior';
+import { usePlaybackLevel } from '../../../shared/voice/usePlaybackLevel';
 
 const PET_LIVE2D_ZOOM_KEY = 'pet.live2d.zoom';
 
-export function Live2DStage({ snapshot, reaction, volume }: PetRendererProps) {
+export function Live2DStage({ snapshot, reaction }: PetRendererProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(() => getUIPref<number>(PET_LIVE2D_ZOOM_KEY, 1));
 
@@ -17,8 +19,8 @@ export function Live2DStage({ snapshot, reaction, volume }: PetRendererProps) {
   const moodRef = useRef<Mood>(snapshot.mood);
   useEffect(() => { moodRef.current = snapshot.mood; }, [snapshot.mood]);
 
-  const volumeRef = useRef(volume ?? 0);
-  useEffect(() => { volumeRef.current = volume ?? 0; }, [volume]);
+  const behavior = useCharacterBehavior('pet');
+  const getPlaybackLevel = usePlaybackLevel();
 
   useEffect(() => {
     let disposed = false;
@@ -37,8 +39,8 @@ export function Live2DStage({ snapshot, reaction, volume }: PetRendererProps) {
 
   const { error, pulse } = useLive2DStage(mountRef, {
     getMood: () => moodRef.current,
-    getTalking: () => false, // pet drives the mouth from `volume` instead — see getVolume below
-    getVolume: () => volumeRef.current,
+    getTalking: () => behavior.frame(Date.now(), moodRef.current).activity === 'speaking',
+    getVolume: getPlaybackLevel,
     transparent: true, // pet window is transparent/always-on-top — ignores Live2DSettings.bgKind
     zoom,
   });

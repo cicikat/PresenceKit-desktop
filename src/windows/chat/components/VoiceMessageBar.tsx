@@ -5,6 +5,7 @@ import { normalizeChatDisplayText } from '../chatDisplay';
 import { renderInlineStyled, spokenInlineText } from '../inlineStyle';
 import { publishBehavior } from '../../../shared/character/behaviorEvents';
 import { getActiveCharacterInfo } from '../../../shared/activeCharacter';
+import { monitorPlaybackLevel } from '../../../shared/voice/playbackLevel';
 
 function audioUrl(audioB64: string, mime: string): string {
   const binary = atob(audioB64);
@@ -16,11 +17,7 @@ function audioUrl(audioB64: string, mime: string): string {
 export function VoiceMessageBar({ text, emotion = 'neutral', fontSize, autoPlay = false, scene = 'desktop_pet', controlsVisible = true, onPlaybackStart, onPlaybackEnd, messageId }: { text: string; emotion?: string; fontSize?: number; autoPlay?: boolean; scene?: 'chat' | 'dream' | 'video_call' | 'desktop_pet'; controlsVisible?: boolean; onPlaybackStart?: () => void; onPlaybackEnd?: () => void; messageId?: string }) {
   const behaviorCharacterRef = useRef(getActiveCharacterInfo().id);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const dataArrayRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
-  const rafRef = useRef<number | null>(null);
+  const disposeAnalysisRef = useRef<(() => void) | null>(null);
   const autoPlayAttemptedRef = useRef(false);
   const mountedRef = useRef(true);
   const preparingRef = useRef<Promise<string> | null>(null);
@@ -48,66 +45,10 @@ export function VoiceMessageBar({ text, emotion = 'neutral', fontSize, autoPlay 
         if (mountGenerationRef.current !== mountGeneration || mountedRef.current) return;
         queuedPlaybackRef.current?.cancel();
         audioRef.current?.pause();
+        disposeAnalysisRef.current?.();
+        disposeAnalysisRef.current = null;
+        audioRef.current = null;
       });
-    };
-  }, []);
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    const initAudioAnalysis = () => {
-      try {
-        if (!audioContextRef.current) {
-          audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-        }
-        const ctx = audioContextRef.current;
-        if (!sourceRef.current) {
-          sourceRef.current = ctx.createMediaElementSource(audio);
-        }
-        if (!analyserRef.current) {
-          analyserRef.current = ctx.createAnalyser();
-          analyserRef.current.fftSize = 256;
-          dataArrayRef.current = new Uint8Array(analyserRef.current.frequencyBinCount);
-          sourceRef.current.connect(analyserRef.current);
-          analyserRef.current.connect(ctx.destination);
-        }
-      } catch (e) {
-        console.warn('[voice] audio analysis init failed:', e);
-      }
-    };
-
-    const updateVolume = () => {
-      if (!analyserRef.current || !dataArrayRef.current) return;
-      analyserRef.current.getByteFrequencyData(dataArrayRef.current);
-      const data = dataArrayRef.current;
-      const avg = data.reduce((a, b) => a + b, 0) / data.length;
-      const normalized = Math.min(1, avg / 255);
-      window.dispatchEvent(new CustomEvent('voice-volume', { detail: { volume: normalized } }));
-      rafRef.current = requestAnimationFrame(updateVolume);
-    };
-
-    audio.addEventListener('play', initAudioAnalysis);
-
-    const onPlayStart = () => {
-      rafRef.current = requestAnimationFrame(updateVolume);
-    };
-
-    const onPlayEnd = () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      window.dispatchEvent(new CustomEvent('voice-volume', { detail: { volume: 0 } }));
-    };
-
-    audio.addEventListener('play', onPlayStart);
-    audio.addEventListener('pause', onPlayEnd);
-    audio.addEventListener('ended', onPlayEnd);
-
-    return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      audio.removeEventListener('play', initAudioAnalysis);
-      audio.removeEventListener('play', onPlayStart);
-      audio.removeEventListener('pause', onPlayEnd);
-      audio.removeEventListener('ended', onPlayEnd);
     };
   }, []);
 
@@ -142,7 +83,15 @@ export function VoiceMessageBar({ text, emotion = 'neutral', fontSize, autoPlay 
   }, [emotion, scene, text, url, onPlaybackEnd]);
 
   const playPreparedAudio = useCallback((nextUrl: string): Promise<void> => new Promise(resolve => {
-    if (!audioRef.current) audioRef.current = new Audio();
+    if (!audioRef.current) {
+      audioRef.current = new Audio();
+      const analysisId = crypto.randomUUID();
+      disposeAnalysisRef.current = monitorPlaybackLevel(audioRef.current, volume => {
+        window.dispatchEvent(new CustomEvent('voice-volume', { detail: {
+          volume: volume ?? 0, available: volume !== null, playbackId: analysisId,
+        } }));
+      });
+    }
     const audio = audioRef.current;
     let settled = false;
     let started = false;

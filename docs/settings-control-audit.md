@@ -280,3 +280,7 @@ observe; enabled-service synthesis failure text fallback remains open.
 现有桌宠窗口大小滑杆写 `pet.windowScale` 并广播 `pet://prefs`；PetWindow 使用原生 LogicalSize 实时应用且启动恢复。Live2D 缩放上限 8，3D 不变。`live2d.settings` 新增独立 `callScaleMul` / `callOffset`，由通话 Ctrl+滚轮、编辑拖动和侧栏缩放/X/Y/复位消费，旧记录从 scaleMul/offset 迁移；桌宠继续使用旧字段和 pet.live2d.zoom，支持 Shift+拖动/双击复位。小窗口自动保头会限制实际画面倍率，偏移是有意构图例外。
 
 背景沿用 bgKind/bgColor/bgImage，由本地扫描目录下拉选择，复用现有控件，无刷新按钮。上述仅为本机 UI 偏好和只读 Tauri 资源 IPC，不新增后端配置、权限真值或手机消费接口，无跨端影响。
+
+## Live2D 播音口型（2026-10-25）
+
+修复本机输出分析生命周期、Pet 播音输入与无分析降级；沿用后台 desktop TTS/场景自动播放/performance_mapping 和客户端 lipsyncStrength/mouthParam。没有新增设置、持久化、后端接口或手机能力；本窗口 voice-volume 为短期展示事件，跨窗继续使用既有角色范围播音事件。真实设备/Tauri/TTS observe，验证与三面核对见 [live2d-playback.md](live2d-playback.md)。
