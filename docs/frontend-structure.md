@@ -1,5 +1,7 @@
 # docs/frontend-structure.md — 前端结构指南
 
+2026-10-25：Live2D Pet 与 Room 共用 `shared/voice/usePlaybackLevel.ts`，VoiceMessageBar 创建实际音频对象时安装 `playbackLevel.ts` 分析；有效静音不触发备用口型，缺分析时由既有说话状态降级。Pet 复用角色范围行为事件，麦克风仍只供录音/粒子。离线模型库按叶瑄、司岚、路辰、艾因、罗夏归档，客户端单层模型路径不变；无新 UI 或跨端业务合同。见 [播音](live2d-playback.md) 与 [模型恢复](hlr-recovery-workflow.md)。
+
 2026-10-18：TokenSetupForm 与 ConnectionSettingsPage 共用 shared/api/connectionUrls.ts，
 默认 WS 地址随 HTTP 编辑更新（HTTPS→WSS），自定义独立 WS 地址保留。连接设置保存后重读
 有效配置并自动重连；Ribbon 只订阅 wsClient，hello_ack 成功后才隐藏角标。中英文提示明确为

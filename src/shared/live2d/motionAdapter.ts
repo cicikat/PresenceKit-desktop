@@ -16,6 +16,21 @@ type MotionManager = {
 };
 type ModelInternals = { internalModel?: { motionManager?: MotionManager; eyeBlink?: unknown } };
 
+/** ls-8 unconditionally releases a clipping manager even when the model has no masks. */
+export function guardRendererRelease(model: unknown): void {
+  type Renderer = { _clippingManager?: { release: () => void } | null; release: () => void };
+  const renderer = (model as { internalModel?: { renderer?: Renderer } }).internalModel?.renderer;
+  if (!renderer || typeof renderer.release !== 'function') return;
+  const release = renderer.release;
+  renderer.release = function () {
+    const clipping = this._clippingManager;
+    // Insert the empty manager only during destruction; draw-time mask detection is untouched.
+    if (!clipping) this._clippingManager = { release() {} };
+    try { release.call(this); }
+    finally { if (!clipping) this._clippingManager = clipping; }
+  };
+}
+
 const INCOMPATIBLE_WARNING = '[live2d] motionManager 结构不符，驱动层禁用，模型以原生动作运行（可能因 pixi-live2d-display 库升级导致）';
 
 export function disableBuiltinEyeBlink(model: unknown): void {

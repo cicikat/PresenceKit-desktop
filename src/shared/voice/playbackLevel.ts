@@ -48,7 +48,16 @@ export function monitorPlaybackLevel(audio: HTMLMediaElement, report: (volume: n
       console.warn('[voice] output analysis unavailable:', error);
     }
   };
-  const waiting = () => { stop(); report(0); };
+  const waiting = () => {
+    stop();
+    const token = generation;
+    const silence = () => {
+      if (disposed || token !== generation) return;
+      report(0);
+      frame = requestAnimationFrame(silence);
+    };
+    silence();
+  };
   audio.addEventListener('playing', start);
   for (const event of ['pause', 'ended', 'error', 'emptied']) audio.addEventListener(event, stop);
   audio.addEventListener('waiting', waiting);

@@ -1,9 +1,29 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { attachDriver, getExpressionNames, getMotionGroupNames, getParamDefault } from './motionAdapter';
+import { attachDriver, getExpressionNames, getMotionGroupNames, getParamDefault, guardRendererRelease } from './motionAdapter';
 
 afterEach(() => vi.restoreAllMocks());
 
 describe('Live2D motion adapter', () => {
+  it('releases an unmasked renderer without adding a fake mask manager during drawing', () => {
+    const released = vi.fn();
+    const renderer = { _clippingManager: undefined as { release: () => void } | undefined,
+      release() { this._clippingManager!.release(); released(); } };
+    guardRendererRelease({ internalModel: { renderer } });
+    expect(renderer._clippingManager).toBeUndefined();
+    renderer.release();
+    expect(released).toHaveBeenCalledOnce();
+    expect(renderer._clippingManager).toBeUndefined();
+  });
+
+  it('preserves actual mask-manager release and unknown renderer shapes', () => {
+    const clipping = { release: vi.fn() };
+    const renderer = { _clippingManager: clipping, release() { this._clippingManager.release(); } };
+    guardRendererRelease({ internalModel: { renderer } });
+    renderer.release();
+    expect(clipping.release).toHaveBeenCalledOnce();
+    expect(renderer._clippingManager).toBe(clipping);
+    expect(() => guardRendererRelease({})).not.toThrow();
+  });
   it('preserves native update, drives a frame, and detaches', () => {
     const native = vi.fn((_coreModel: unknown, _now: number) => true);
     const manager = { update: native };

@@ -7,9 +7,102 @@ import argparse
 import hashlib
 import json
 from pathlib import Path, PurePosixPath
+import uuid
 import shutil
 import struct
 import tempfile
+
+
+def unwrap_resource_data(data):
+    if data.startswith(b'CCCCZZZ4'):
+        import lz4.block
+        expected = struct.unpack_from('<I', data, 8)[0]
+        if expected > 64 * 1024 * 1024:
+            raise ValueError('Resource repository exceeds supported bound')
+        # Observed CCCC envelope has a 20-byte opaque trailer, outside its LZ4 block.
+        data = lz4.block.decompress(data[12:-20], uncompressed_size=expected)
+        if len(data) != expected:
+            raise ValueError('Repository decompression length mismatch')
+    if data.startswith(b'.MESSIAH'):
+        if len(data) < 16:
+            raise ValueError('Truncated MESSIAH payload')
+        version, size = struct.unpack_from('<II', data, 8)
+        if version != 1 or len(data) != 16 + size:
+            raise ValueError('Unsupported MESSIAH payload layout')
+        data = data[16:]
+    return data
+
+
+def read_resource_repository(data):
+    """Parse observed Messiah v1 records, not the first UUID occurrence in dependency arrays."""
+    data = unwrap_resource_data(data)
+    if len(data) < 8 or struct.unpack_from('<I', data)[0] != 1:
+        raise ValueError('Unsupported resource repository version')
+    count = struct.unpack_from('<I', data, 4)[0]
+    if count > 1000000:
+        raise ValueError('Resource repository entry count exceeds supported bound')
+    cursor = 8
+
+    def take(size):
+        nonlocal cursor
+        if size < 0 or cursor + size > len(data):
+            raise ValueError('Truncated resource repository')
+        result = data[cursor:cursor + size]
+        cursor += size
+        return result
+
+    def string():
+        return take(struct.unpack('<H', take(2))[0]).decode('utf-8')
+
+    string()  # root label
+    types, directories = string().split(';'), string().split(';')
+    records = {}
+    for _ in range(count):
+        offset = cursor
+        flags = take(5).hex()
+        identity = str(uuid.UUID(bytes=take(16)))
+        name = string()
+        directory, kind, dependencies = struct.unpack('<HHH', take(6))
+        if directory >= len(directories) or kind >= len(types) or identity in records:
+            raise ValueError('Invalid or duplicate resource repository record')
+        deps = [str(uuid.UUID(bytes=take(16))) for _ in range(dependencies)]
+        records[identity] = dict(name=name, directory=directories[directory], kind=types[kind],
+                                 dependencies=deps, offset=offset, flags=flags)
+    if cursor != len(data):
+        raise ValueError('Unparsed resource repository bytes; refusing guessed mapping')
+    return records
+
+
+def load_source_rows(source):
+    rows = json.loads((source / '资源索引.json').read_text(encoding='utf-8'))
+    repository_rows = [row for row in rows if row.get('source') == 'Package/resource.repository']
+    if not repository_rows:
+        return rows, {}
+    if len(repository_rows) != 1:
+        raise ValueError('Ambiguous resource repository')
+    data = safe_file(source, repository_rows[0]['file']).read_bytes()
+    records = read_resource_repository(data)
+    digest = hashlib.sha256(data).hexdigest()
+    recovered = []
+    for original in rows:
+        row = dict(original)
+        try:
+            identity = str(uuid.UUID(PurePosixPath(row['source']).name.split('.')[0]))
+        except ValueError:
+            identity = None
+        record = records.get(identity)
+        if record:
+            row['original_name'] = record['name']
+            row['name_evidence'] = dict(uuid=identity, recordOffset=record['offset'], repositorySha256=digest)
+        recovered.append(row)
+    return recovered, records
+
+
+def model_id_from_config(row, config):
+    moc_name = PurePosixPath(config['FileReferences']['Moc']).stem
+    suffix = '_' + moc_name + '.model3.json'
+    original = row.get('original_name', '')
+    return original[:-len(suffix)] if original.endswith(suffix) else moc_name
 
 
 def decode_texture(data):
@@ -34,14 +127,15 @@ def safe_file(root, rel):
     path = PurePosixPath(rel.replace('\\', '/'))
     if path.is_absolute() or '..' in path.parts or ':' in rel:
         raise ValueError(f'Unsafe reference: {rel}')
-    dest = root.joinpath(*path.parts).resolve()
-    if not dest.is_relative_to(root.resolve()):
+    resolved_root = root.resolve()
+    dest = resolved_root.joinpath(*path.parts).resolve()
+    if not dest.is_relative_to(resolved_root):
         raise ValueError(f'Reference escapes output: {rel}')
     return dest
 
 
-def convert(source, output, model, base_only=False):
-    rows = json.loads((source / '资源索引.json').read_text(encoding='utf-8'))
+def convert(source, output, model, base_only=False, source_rows=None, config_row=None):
+    rows = source_rows if source_rows is not None else load_source_rows(source)[0]
     by_name = {}
     for row in rows:
         if row.get('original_name'):
@@ -52,8 +146,11 @@ def convert(source, output, model, base_only=False):
             raise ValueError(f'Expected one source for {name}, found {len(matches)}')
         row = matches[0]
         return row, safe_file(source, row['file'])
-    config_row, config_path = resolve(f'{model}_{model}.model3.json')
-    config = json.loads(config_path.read_bytes())
+    if config_row is None:
+        config_row, config_path = resolve(f'{model}_{model}.model3.json')
+    else:
+        config_path = safe_file(source, config_row['file'])
+    config = json.loads(unwrap_resource_data(config_path.read_bytes()))
     if config.get('drawableSettings'):
         raise ValueError('Game-specific drawableSettings require separate rendering validation')
     refs = config['FileReferences']
@@ -81,12 +178,13 @@ def convert(source, output, model, base_only=False):
     provenance = []
     motions, expressions = {}, {}
     for ref, (row, path) in resolved.items():
-        data = path.read_bytes()
+        original_data = path.read_bytes()
+        data = unwrap_resource_data(original_data)
         if ref.endswith('.moc3') and (len(data) < 5 or data[:4] != b'MOC3'):
             raise ValueError(f'Invalid MOC3 payload: {ref}')
         dest = safe_file(output, ref)
         dest.parent.mkdir(parents=True, exist_ok=True)
-        operation = 'copy'
+        operation = 'copy' if data == original_data else 'unwrap MESSIAH/CCCC payload; preserve inner bytes'
         if ref.lower().endswith('.png') and not data.startswith(b'\x89PNG'):
             decode_texture(data).save(dest)
             operation = 'LZ4 + ETC2 RGBA8 -> PNG'
@@ -98,8 +196,9 @@ def convert(source, output, model, base_only=False):
         if ref.endswith('.exp3.json'):
             expressions[ref] = [x['Id'] for x in json.loads(data).get('Parameters', [])]
         provenance.append(dict(file=ref, source=row['source'], pack=row['pack'], offset=row['offset'],
-                               operation=operation, sourceSha256=hashlib.sha256(data).hexdigest(),
-                               outputSha256=hashlib.sha256(dest.read_bytes()).hexdigest()))
+                               operation=operation, sourceSha256=hashlib.sha256(original_data).hexdigest(),
+                               outputSha256=hashlib.sha256(dest.read_bytes()).hexdigest(),
+                               resourceName=row.get('original_name'), nameEvidence=row.get('name_evidence')))
     available_expr = {x['Name'].removesuffix('.exp3.json'): x['Name'] for x in refs.get('Expressions', [])}
     # Explicit, reviewable candidates inferred from original names, not a global alias table.
     aliases = {'neutral': 'idle', 'happy': 'weixiao', 'sad': 'shiwang', 'thinking': 'yihuo',

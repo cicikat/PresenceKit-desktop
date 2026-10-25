@@ -15,6 +15,8 @@ current：修复输出分析未绑定、Pet 误消费麦克风和 getTalking=fal
 
 ## HLR Live2D 导入（2026-10-17，partial）
 
+2026-10-25：统一批量实播验证发现并修复无 mask 模型卸载时 clippingManager.release 空引用；仅在释放瞬间补空 manager，绘制和真实遮罩释放不变。8 个无重复槽候选已完成浏览器画面/口型/动作及卸载重载检查，逐模型来源和最终基线见 [新版包恢复流程](hlr-recovery-workflow.md)。其余缺纹理或配饰绑定者仍阻塞，不用透明占位标作完整恢复。无跨端影响。
+
 基础角色 `hlr_yexuan_mingyun_base` 已转换并通过真实浏览器渲染与动作链路检查。12 个重复配饰纹理槽尚未恢复，已用透明占位明确省略并记录来源清单；不能称为完整游戏外观。其它模型批量转换、游戏专用混合、原版点击反应、真实 Tauri 双窗和发行验收仍 open。见 [导入说明](live2d-resource-import.md) 和 `cc-tasks/2026-10-17-live2d-resource-import.md`。无新后端/手机契约。
 
 

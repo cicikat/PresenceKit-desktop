@@ -36,6 +36,7 @@ import {
   getModelHeight,
   getHeadAnchor,
   getParamDefault,
+  guardRendererRelease,
 } from './motionAdapter';
 
 // pixi-live2d-display-lipsyncpatch's Cubism4 core model type isn't exported from the package's public
@@ -379,6 +380,7 @@ export function useLive2DStage(
           idleMotionGroup: settingsRef.current.idleMotionGroup || undefined,
           autoInteract: false,
         });
+        guardRendererRelease(model);
         if (token !== loadTokenRef.current || disposed) {
           model.destroy();
           return;

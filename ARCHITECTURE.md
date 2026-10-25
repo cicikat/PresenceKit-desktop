@@ -144,6 +144,8 @@ main capability 仅新增标题栏需要的 start-dragging、minimize、toggle-m
 
 ## Live2D 清晰度、背景与摆放（2026-10-24）
 
+2026-10-25 播音增量：VoiceMessageBar 在 Audio 创建时绑定 shared/voice/playbackLevel，按 playing/pause/ended/error/卸载管理分析图；usePlaybackLevel 区分有效静音和分析缺失。Pet Live2D 复用已有 CharacterBehaviorState 的角色范围与播音/正文生命周期，Room 沿用 talking；不再用麦克风驱动嘴。motionAdapter 仅在无遮罩 renderer 释放时处理空 clipping manager，不改变绘制。见 [播音说明](docs/live2d-playback.md)。离线 HLR 工具按五人物整理成品和版本清单，运行目录/Core/素材不入 Git，见 [恢复流程](docs/hlr-recovery-workflow.md)。无跨端影响。
+
 共享 useLive2DStage 按显示密度配置 renderer/ColorMatrixFilter，跨屏时同步像素密度；layout.ts 根据真实头部 HitArea 计算缩放与边界留白，缺区域使用保守上身锚点。小窗口不足以容纳头部时限制最终画面倍率，用户偏移仍可有意移出边界。
 
 桌宠保留 scaleMul/offset 与 pet.live2d.zoom，通话使用独立 callScaleMul/callOffset；旧偏好迁移继承原布局。通话 Ctrl+滚轮缩放、编辑拖动、侧栏手动摆放使用同一偏好；桌宠普通拖动走原生窗口，Shift+拖动调整人物，Shift+双击复位。缩放输入上限为 8；3D 保持原值。PetWindow 用 LogicalSize 顺序应用窗口尺寸事件并在启动还原，pet capability 允许 set-size。

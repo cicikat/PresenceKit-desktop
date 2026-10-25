@@ -13,6 +13,14 @@
   },
   "cases": [
     {
+      "id": "hlr-browser-playback-and-recovery",
+      "area": "automated",
+      "scenario": "Real Core/Pixi/React browser: output audio drives Pet/Room mouth movement; eight recovered models load expressions, start native motions and reload. Tauri transport is mocked.",
+      "status": "passed",
+      "evidence": "2026-10-25: .tmp/hlr-playback-final-2026-10-25/playback-report.json; HLR library batch 2026-10-25-validation-final/validation.json; reproduction and limitations: docs/hlr-recovery-workflow.md",
+      "requirements": "cc-tasks/2026-10-25-hlr-recovery-and-lipsync.md"
+    },
+    {
       "id": "ca-00-anonymous-glb-fixtures",
       "area": "automated",
       "scenario": "Parse six anonymous GLB variants covering ordinary, morph-only, alternate bones, missing eyes and upper-body cases.",
