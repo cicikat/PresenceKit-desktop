@@ -13,6 +13,14 @@
   },
   "cases": [
     {
+      "id": "yexuan-reviewed-slot-variants",
+      "area": "automated",
+      "scenario": "Inspect 13 source MOCs with real Core; restore native eye/book/clothing atlas bindings; eleven base variants pass expression/motion/mouth/reload and separate image review. Bingfeng has no matching eye atlas and is excluded from installation.",
+      "status": "passed",
+      "evidence": "2026-10-25 HLR batch: 2026-10-25-yexuan-slots-r1/slots.json and atlas-bindings.json; 2026-10-25-yexuan-validation-r3/validation.json and visual-review.json; 2026-10-25-yexuan-candidates-r3/installed-models.json. Limits and reproduction: docs/hlr-recovery-workflow.md section 5.",
+      "requirements": "cc-tasks/2026-10-25-yexuan-remaining-models.md"
+    },
+    {
       "id": "hlr-browser-playback-and-recovery",
       "area": "automated",
       "scenario": "Real Core/Pixi/React browser: output audio drives Pet/Room mouth movement; eight recovered models load expressions, start native motions and reload. Tauri transport is mocked.",

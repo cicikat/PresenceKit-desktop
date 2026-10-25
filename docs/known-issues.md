@@ -2,6 +2,10 @@
 
 # docs/known-issues.md — 已知问题与技术债
 
+## 叶瑄剩余皮肤恢复（2026-10-25，主体可用 / 配饰 partial）
+
+已逐 MOC 检查 13 份配置，找回独立眼图/素描本/额外服装绑定，新增 11 个主体皮肤变体。普通重复槽自动转换并未穷尽恢复可能，且清空 slot4 会删掉实际眼睛。冰峰腿/披风已找回，所需眼图 UV 仍不匹配本包通用眼图，未作为可用模型安装。其它未恢复的冠饰、帽子、狐耳或额外换装仍记录为省略，不能称完整游戏外观。工单见 cc-tasks/2026-10-25-yexuan-remaining-models.md，流程见 hlr-recovery-workflow.md 第 5 节。无跨端业务影响；真实 Tauri/GPU/TTS 仍 observe。
+
 ## 远程后端 WebSocket 状态（2026-10-18，partial）
 
 根因：原生 tokio-tungstenite 默认未启用 TLS，HTTPS 聊天可用时 WSS 推送仍失败；首启只改 HTTP

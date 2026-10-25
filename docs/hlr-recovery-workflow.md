@@ -58,3 +58,22 @@ python scripts/organize-hlr-models.py --snapshot '<恢复快照>' --library '<�
 每轮保存：提取快照、恢复快照、baseline/diff、validation.json、截图、目检说明和已安装目录清单。新包只处理新增/内容变化/新增可恢复项；工具升级或验收协议变更应重验相应旧项。提交脚本、测试和说明，素材/Core/凭据不进 Git；保留其它工作区修改。
 
 回归顺序：`python scripts/test_hlr_live2d_import.py` → `python scripts/test_hlr_recovery.py` → 统一浏览器验收；客户端驱动变化再运行相关前端测试和 production build。不能用历史通过记录给新版背书。
+
+## 5. 重复槽的逐模型恢复（叶瑄补充）
+
+blocked_accessory_slots 是自动转换停止点，不是调查终点。叶瑄存在眼睛与游戏配饰混用同一重复槽、服装/腿部放在额外槽的情况。不能批量隐藏这些槽后，只凭动作与口型测试通过就发布：生日版会没有眼睛，魔法师和冰峰会缺腿。统一浏览器验收不能替代逐图目检。
+
+先用原 MOC 的 Core 数据检查每个槽，再记录原图集绑定：
+
+```powershell
+python scripts/inspect-hlr-slots.py --source '<提取目录>' --snapshot '<完整审计快照>' --output '<新的槽证据目录>' --models '<源配置ID1>' '<源配置ID2>'
+python scripts/recover-hlr-reviewed-slots.py --source '<提取目录>' --snapshot '<完整审计快照>' --slots '<槽证据目录/slots.json>' --bindings '<逐模型atlas-bindings.json>' --output '<新的主体候选快照>' --reviewed-models '<已审查源配置ID1>' '<已审查源配置ID2>'
+```
+
+slots.json 保存原 MOC SHA-256、逐 drawable 的槽/UV/部件/默认可见性和参数。atlas-bindings.json 使用 hlr-slot-bindings-v1：models 以源配置 ID 为键，每项包含原配置 fingerprint；slots 包含整数 slot、准确资源名 resource、完整网格 ID 列表 drawables 和可审核 evidence。新版必须重新读 MOC、源图集与画面，不能照搬旧 UV。配置或任一源依赖改变会拒绝旧审计；绑定的网格集合、源资源唯一性也须验证。主体变体指纹包括额外绑定图集内容哈希，共享眼图变化也应比较变体，而不只比较原配置。
+
+实际找回 yexuan_eyemask00 眼图、yexuan_suxieben 素描本、yexuan_magic_ac2_01 下半身、yexuan_bingfeng2 腿/披风；按单模型 UV 和实际图像绑定。冰峰眼部 UV 不匹配通用眼图，撤销错误绑定并保留 blocked，不能用同名人物的其它眼图充数。
+
+该工具生成 _base 主体变体，未解决的冠饰、狐耳、帽子或额外换装槽继续列入 omittedTextureSlots，不能称全配饰完整恢复。原 MOC、动作、物理不改；已恢复槽移除透明占位，每个补图保存源/输出哈希。候选继续用第 3、4 步验收/目检/安装；无眼、错眼、缺主体衣物者，即使 browser_pass 也不安装。需比较浅色背景，深色裤子可能与默认深色背景混在一起。
+
+完整原包 baseline 保留全量配置；主体候选快照只是选定变体，不能替换全量 baseline。今后先比较全量原包，主体变体按该槽证据协议重建，再比较变体 models.json。保留 visual-review.json 的失败原因，而不只交付通过项。

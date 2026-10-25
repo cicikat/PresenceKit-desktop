@@ -18,6 +18,9 @@ extract_spec.loader.exec_module(extractor)
 organize_spec = importlib.util.spec_from_file_location('hlr_organize', Path(__file__).with_name('organize-hlr-models.py'))
 organizer = importlib.util.module_from_spec(organize_spec)
 organize_spec.loader.exec_module(organizer)
+review_spec = importlib.util.spec_from_file_location('hlr_review', Path(__file__).with_name('recover-hlr-reviewed-slots.py'))
+reviewed = importlib.util.module_from_spec(review_spec)
+review_spec.loader.exec_module(reviewed)
 
 
 def string(value):
@@ -30,6 +33,58 @@ def record(identity, name, deps=()):
 
 
 class RecoveryValidation(unittest.TestCase):
+    def test_reviewed_variant_refuses_source_config_changed_after_audit(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, snapshot, output = root / 'source', root / 'snapshot', root / 'output'
+            source.mkdir()
+            snapshot.mkdir()
+            (source / 'config.json').write_text('{}', encoding='utf-8')
+            (source / '资源索引.json').write_text(json.dumps([dict(source='Package/config', file='config.json')]), encoding='utf-8')
+            item = dict(id='yexuan_test', fingerprint='original', missingCount=0, configSource='Package/config',
+                        configFile='config.json', configSha256='old-bytes')
+            (snapshot / 'models.json').write_text(json.dumps(dict(models=[item])), encoding='utf-8')
+            slots = root / 'slots.json'
+            slots.write_text(json.dumps(dict(schema='hlr-slots-v1', models=[dict(id='yexuan_test', fingerprint='original')])), encoding='utf-8')
+            with patch('sys.argv', ['review', '--source', str(source), '--snapshot', str(snapshot),
+                       '--slots', str(slots), '--output', str(output), '--reviewed-models', 'yexuan_test']):
+                with self.assertRaisesRegex(ValueError, 'Source config changed'):
+                    reviewed.main()
+            self.assertFalse((output / 'models.json').exists())
+            self.assertEqual((source / 'config.json').read_text(), '{}')
+
+    def test_reviewed_atlas_binding_keeps_source_bytes_and_records_only_resolved_slot(self):
+        from PIL import Image
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, destination = root / 'source', root / 'runtime'
+            source.mkdir()
+            (destination / '_omitted').mkdir(parents=True)
+            Image.new('RGBA', (2, 2), (1, 2, 3, 255)).save(source / 'eye.png')
+            (destination / '_omitted/slot1.png').write_bytes(b'unresolved')
+            before = (source / 'eye.png').read_bytes()
+            manifest = dict(assets=[], omittedTextureSlots=[dict(slot=1), dict(slot=2)])
+            config = dict(FileReferences=dict(Textures=['body.png', '_omitted/slot1.png', 'other.png']))
+            binding = dict(slot=1, resource='native_eye_atlas', drawables=['eye'], evidence='exact native UV review')
+            rows = [dict(original_name='native_eye_atlas', file='eye.png', source='Package/eye', pack=0, offset=0)]
+            reviewed.bind_slots(destination, manifest, config, dict(repeatedTextureSlots=[1, 2]),
+                dict(drawables=[dict(id='eye', texture=1)]), [binding], rows, source)
+            self.assertEqual((destination / config['FileReferences']['Textures'][1]).read_bytes(), before)
+            self.assertEqual((source / 'eye.png').read_bytes(), before)
+            self.assertEqual(manifest['omittedTextureSlots'], [dict(slot=2)])
+            self.assertEqual(manifest['assets'][0]['resourceName'], 'native_eye_atlas')
+            self.assertFalse((destination / '_omitted/slot1.png').exists())
+
+    def test_reviewed_atlas_binding_rejects_wrong_geometry_or_ambiguous_source(self):
+        item = dict(repeatedTextureSlots=[1])
+        proof = dict(drawables=[dict(id='actual_eye', texture=1)])
+        binding = dict(slot=1, resource='eye', drawables=['different_eye'], evidence='review')
+        with self.assertRaisesRegex(ValueError, 'drawable evidence'):
+            reviewed.bind_slots(Path('.'), {}, {}, item, proof, [binding], [], Path('.'))
+        binding['drawables'] = ['actual_eye']
+        with self.assertRaisesRegex(ValueError, 'exactly once'):
+            reviewed.bind_slots(Path('.'), {}, {}, item, proof, [binding], [dict(original_name='eye')] * 2, Path('.'))
+
     def test_five_character_names_and_aliases_preserve_user_order(self):
         self.assertEqual([name for _, name, _ in CHARACTERS], ['叶瑄', '司岚', '路辰', '艾因', '罗夏'])
         for source, expected in [('hlr_yexuan_mingyun_base', 'yexuan'), ('silan_xiaofu', 'silan'),

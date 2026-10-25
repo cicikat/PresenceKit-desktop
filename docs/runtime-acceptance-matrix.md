@@ -1,5 +1,7 @@
 # Desktop runtime acceptance matrix
 
+2026-10-25 叶瑄续作：13 个原 MOC 槽/UV 检查，11 个主体变体的浏览器及逐图目检通过，110 表情/293 动作、口型和重载通过；冰峰缺正确眼图未安装，未恢复配饰仍 partial。该批次只登记 automated，详见 JSON 的 yexuan-reviewed-slot-variants，原 Windows/Tauri 验收状态不变。
+
 2026-10-25 补充：HLR 真实 Core/Pixi/React 浏览器及 HTMLAudio/WebAudio 播放验证已通过，记录在 JSON 的 automated 项。八个新增模型已逐图检查，分类与来源核对见 docs/hlr-recovery-workflow.md。Tauri 传输仍为模拟；原 Windows Live2D/WebGL、双窗、真实用户 TTS/GPU 与发行包项继续 not-run，不继承浏览器证据或旧 environment。
 
 This v1 matrix separates automated evidence from real desktop and macOS
