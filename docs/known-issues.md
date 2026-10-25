@@ -1,3 +1,5 @@
+> observe（2026-10-25）：情绪指令已补角色/来源/过期校验，原生切角和表演恢复仍待设备验收，见 [情绪接入合同](affective-engine-integration.md)。
+
 # docs/known-issues.md — 已知问题与技术债
 
 ## 远程后端 WebSocket 状态（2026-10-18，partial）

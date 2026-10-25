@@ -1,5 +1,6 @@
 import type { DesktopActionPayload, PerformSpec } from '../../shared/api/types';
 import { wsClient } from '../../shared/api/ws';
+import { getActiveCharacterInfo } from '../../shared/activeCharacter';
 
 const VALID_EXPRESSIONS = new Set([
   'neutral', 'gentle', 'thinking', 'happy', 'sad',
@@ -37,6 +38,7 @@ export interface AvatarDirective {
 export interface ActiveDirective extends AvatarDirective {
   receivedAt: number;
   origin: 'ws' | 'local';
+  sourceCharId?: string;
 }
 
 let _active: ActiveDirective | null = null;
@@ -88,6 +90,10 @@ export function validateAvatarDirective(raw: DesktopActionPayload): AvatarDirect
 
 export function getActiveDirective(now: number): ActiveDirective | null {
   if (!_active) return null;
+  if (_active.origin === 'ws' && _active.sourceCharId !== getActiveCharacterInfo().id) {
+    _active = null;
+    return null;
+  }
   if (now - _active.receivedAt > _active.ttl_ms) {
     _active = null;
     return null;
@@ -98,7 +104,8 @@ export function getActiveDirective(now: number): ActiveDirective | null {
 export function setupAvatarDirectiveListener(): () => void {
   return wsClient.on('action', (action) => {
     if (action.type !== 'avatar_directive') return;
-    _active = { ...validateAvatarDirective(action), receivedAt: performance.now(), origin: 'ws' };
+    _active = { ...validateAvatarDirective(action), receivedAt: performance.now(), origin: 'ws',
+      sourceCharId: typeof action.char_id === 'string' ? action.char_id : getActiveCharacterInfo().id };
   });
 }
 

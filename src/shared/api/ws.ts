@@ -16,6 +16,9 @@ import { isToolActivity, type ToolActivity } from './toolActivity';
 import { isPresenceNagEnabled } from '../presenceNag';
 import { getActiveCharacterInfo } from '../activeCharacter';
 import { actionType, actionParams, stringParam } from './wsActionParams';
+import { createAvatarDirectiveGate } from './avatarDirectiveGate';
+
+const acceptAvatarDirective = createAvatarDirectiveGate();
 
 type EventMap = {
   tool_activity: ToolActivity;
@@ -189,6 +192,10 @@ class WSClient {
         });
         break;
       case 'action':
+        if (!acceptAvatarDirective(msg.action, getActiveCharacterInfo().id)) {
+          this._send({ type: 'ack', msg_id: msg.msg_id, ok: true });
+          break;
+        }
         this.emit('action', msg.action);
         void this._handleAction(msg.msg_id, msg.action);
         break;

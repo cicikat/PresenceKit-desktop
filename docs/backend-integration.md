@@ -1,3 +1,5 @@
+> 2026-10-25：情绪 v3 保留明确表达 ABI；avatar 来源校验及验收边界见 [情绪接入合同](affective-engine-integration.md)。
+
 ## 引用精确锚点（F6）
 
 角色头像启动恢复见 [avatar-startup-recovery.md](avatar-startup-recovery.md)：ChatWindow 在
