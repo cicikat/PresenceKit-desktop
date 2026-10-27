@@ -224,23 +224,28 @@ export function PetWindow() {
 
         {turnBubble && (
           <section
+            key={turnBubble.id}
             onPointerDown={event => event.stopPropagation()}
             style={{
               position: 'absolute',
-              left: bubbleLayout.side === 'right' ? bubbleLayout.petLeft + bubbleLayout.stageWidth + 12 : 12,
-              width: Math.max(0, bubbleLayout.wing - 24),
+              left: bubbleLayout.side === 'right' ? bubbleLayout.petLeft + bubbleLayout.stageWidth + 12 : undefined,
+              right: bubbleLayout.side === 'left' ? bubbleLayout.stageWidth + 12 : undefined,
+              width: 'max-content',
+              maxWidth: `min(${Math.max(0, bubbleLayout.wing - 24)}px, 21em)`,
               boxSizing: 'border-box',
               top: 32,
               maxHeight: 'calc(100% - 64px)',
               display: 'flex',
               flexDirection: 'column',
               visibility: bubbleLayout.wing > 32 ? 'visible' : 'hidden',
-              padding: '12px 14px',
+              padding: '10px 12px',
               borderRadius: 12,
-              background: 'rgba(18, 12, 32, 0.94)',
-              border: '1px solid rgba(224, 210, 255, 0.22)',
-              boxShadow: '0 10px 26px rgba(12, 8, 24, 0.28)',
-              color: 'rgba(255, 255, 255, 0.9)',
+              background: 'rgba(18, 12, 32, 0.48)',
+              border: '1px solid rgba(224, 210, 255, 0.18)',
+              boxShadow: '0 4px 14px rgba(12, 8, 24, 0.12)',
+              color: 'rgba(255, 255, 255, 0.96)',
+              textShadow: '0 1px 3px rgba(12, 8, 24, 0.7)',
+              animation: 'petBubbleIn 160ms ease-out',
               fontSize: 12,
               lineHeight: 1.65,
               cursor: 'default',
@@ -248,12 +253,12 @@ export function PetWindow() {
             data-pet-bubble={bubbleLayout.side}
           >
             <span aria-hidden="true" style={{
-              position: 'absolute', top: 22, width: 16, height: 20,
+              position: 'absolute', top: 14, width: 16, height: 16,
               [bubbleLayout.side === 'right' ? 'left' : 'right']: -15,
-              background: 'rgba(18, 12, 32, 0.94)',
+              background: 'rgba(18, 12, 32, 0.48)',
               clipPath: bubbleLayout.side === 'right' ? 'polygon(100% 0, 0 70%, 100% 100%)' : 'polygon(0 0, 100% 70%, 0 100%)',
             }} />
-            <div style={{ overflowY: 'auto', overflowWrap: 'anywhere', minHeight: 0, userSelect: 'text' }}>
+            <div style={{ overflowY: 'auto', overflowWrap: 'anywhere', textWrap: 'pretty', lineBreak: 'strict', minHeight: 0, userSelect: 'text' }}>
             {turnBubble.sticker && (
               <img
                 src={turnBubble.sticker.data_url}
@@ -315,6 +320,10 @@ export function PetWindow() {
         </section>
       </main>
       <style>{`
+        @keyframes petBubbleIn {
+          from { opacity: 0; transform: translateY(3px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
         @keyframes petActivityIn {
           from { opacity: 0; transform: translateY(-2px); }
           to { opacity: 1; transform: translateY(0); }

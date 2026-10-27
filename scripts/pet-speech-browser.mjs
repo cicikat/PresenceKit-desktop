@@ -78,10 +78,13 @@ try {
  await page.goto('http://localhost:1420/.tmp/pet-speech-fixture.html');
  await page.waitForSelector('canvas');
  await page.waitForTimeout(1000);
- await page.evaluate(()=>window.reply('multi','第一段：气泡在立绘旁边。\n第二段：现在这一段也会张嘴。\n第三段：每一段独立驱动口型。'));
+ await page.evaluate(()=>window.reply('multi','第一段：你好。\n第二段：现在这一段也会张嘴。\n第三段：这是一段比较长的文字，气泡应该适当地自动换行，让阅读更加轻松，也不会出现很长的单行文字挡住桌面。'));
  const bubble=page.locator('[data-pet-bubble]');
  await bubble.waitFor();
  await page.waitForFunction(()=>window.native.width===640 && window.audit.activity==='speaking');
+ const shortWidth=await bubble.evaluate(e=>e.getBoundingClientRect().width);
+ assert(shortWidth<150,'Short text should shrink to fit');
+ assert.match(await bubble.evaluate(e=>getComputedStyle(e).backgroundColor),/0\.48/);
  const geometry=async()=>page.evaluate(()=>{
    const s=document.querySelector('[data-pet-stage]').getBoundingClientRect();
    const b=document.querySelector('[data-pet-bubble]')?.getBoundingClientRect();
@@ -94,17 +97,21 @@ try {
  assert.deepEqual(await geometry(),{anchor:1300,stageWidth:340,overlap:0});
  await page.screenshot({path:'.tmp/pet-bubble-left.png',clip:{x:0,y:0,width:640,height:400}});
  await page.waitForFunction(()=>document.querySelector('[data-pet-bubble]')?.textContent.includes('第二段'),null,{timeout:10000});
- assert.equal(await page.evaluate(()=>window.audit.activity),'speaking');
+ await page.waitForFunction(()=>window.audit.activity==='speaking');
  await page.evaluate(async()=>{const m=await import('/src/shared/activeCharacter.ts');m.setActiveCharacterInfo({id:'fixture',name:'updated avatar',avatarRevision:1});});
  await page.waitForTimeout(300);
- assert.equal(await page.evaluate(()=>window.audit.activity),'speaking');
+ await page.waitForFunction(()=>window.audit.activity==='speaking');
  assert.match(await bubble.textContent(),/第二段/);
  await page.waitForFunction(()=>document.querySelector('[data-pet-bubble]')?.textContent.includes('第三段'),null,{timeout:10000});
- assert.equal(await page.evaluate(()=>window.audit.activity),'speaking');
+ await page.waitForFunction(()=>window.audit.activity==='speaking');
+ const longSize=await bubble.evaluate(e=>({width:e.getBoundingClientRect().width,height:e.getBoundingClientRect().height}));
+ assert(longSize.width>shortWidth && longSize.width<=252,'Long text should grow up to the readable maximum');
+ assert(longSize.height>60,'Long text should wrap');
+ await page.screenshot({path:'.tmp/pet-bubble-wrapped.png',clip:{x:0,y:0,width:640,height:400}});
  await page.waitForFunction(()=>!document.querySelector('[data-pet-bubble]') && window.native.width===340 && window.audit.activity==='idle',null,{timeout:10000});
  assert.equal((await geometry()).anchor,1300);
  assert.deepEqual(errors,[]);
- fs.writeFileSync('.tmp/pet-speech-report.json',JSON.stringify({geometry:await geometry(),segments:3,errors},null,2));
+ fs.writeFileSync('.tmp/pet-speech-report.json',JSON.stringify({geometry:await geometry(),segments:3,shortWidth,longSize,errors},null,2));
  console.log('PASS: production PetWindow/GLB, left/right non-overlap and stable anchor, three text segments speaking, final idle and collapse. Native geometry mocked.');
 } finally {
  await browser.close();
