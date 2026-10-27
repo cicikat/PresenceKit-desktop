@@ -1,5 +1,7 @@
 # Desktop runtime acceptance matrix
 
+2026-10-27 叶瑄增量：115 原始配置审计、114 最终候选真实 Core/Pixi 实播；83 人物配置经单独目检安装，850 原生表情/2203 原生动作、口型与重载通过，本地425配饰预设分开计数。27 卡面/场景层、4 附属件分列，卡面合成和可选游戏换装仍 partial。600 前端测试、27 Python 测试通过。JSON 的 yexuan-incremental-20261027 仅为 automated；真实 Windows Tauri/TTS/GPU/发行包状态不继承。原25日冰峰阻塞已由新包 eye05 修复，历史证据保留。
+
 2026-10-25 叶瑄续作：13 个原 MOC 槽/UV 检查，11 个主体变体的浏览器及逐图目检通过，110 表情/293 动作、口型和重载通过；冰峰缺正确眼图未安装，未恢复配饰仍 partial。该批次只登记 automated，详见 JSON 的 yexuan-reviewed-slot-variants，原 Windows/Tauri 验收状态不变。
 
 2026-10-25 补充：HLR 真实 Core/Pixi/React 浏览器及 HTMLAudio/WebAudio 播放验证已通过，记录在 JSON 的 automated 项。八个新增模型已逐图检查，分类与来源核对见 docs/hlr-recovery-workflow.md。Tauri 传输仍为模拟；原 Windows Live2D/WebGL、双窗、真实用户 TTS/GPU 与发行包项继续 not-run，不继承浏览器证据或旧 environment。

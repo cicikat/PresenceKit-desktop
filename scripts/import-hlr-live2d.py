@@ -1,7 +1,7 @@
 """Restore a runtime from an extracted MPK index. Assets remain outside Git.
 
 Requires Python, lz4==4.4.5, texture2ddecoder==1.0.6, Pillow (see --help).
-Only the observed Messiah 0x2001 ETC2 RGBA8 layout is accepted.
+Only validated Messiah mip chains with ETC2 RGB/RGBA or raw RGBA pixels are accepted.
 """
 import argparse
 import hashlib
@@ -11,6 +11,7 @@ import uuid
 import shutil
 import struct
 import tempfile
+from functools import lru_cache
 
 
 def unwrap_resource_data(data):
@@ -109,27 +110,58 @@ def decode_texture(data):
     import lz4.block
     import texture2ddecoder
     from PIL import Image
-    if data[:4] != bytes.fromhex('02020201') or struct.unpack_from('<I', data, 4)[0] != 0x12001:
+    if len(data) < 40 or data[:4] != bytes.fromhex('02020201'):
         raise ValueError('Unsupported texture header; refusing to guess a decoder')
+    format_ = struct.unpack_from('<I', data, 4)[0]
+    base, levels = (format_ >> 8) & 255, (format_ >> 16) & 255
     width, height = struct.unpack_from('<HH', data, 12)
-    if not (0 < width <= 16384 and 0 < height <= 16384) or data[56:60] != b'ZZZ4':
-        raise ValueError('Unsupported texture dimensions or compression layout')
-    size = struct.unpack_from('<I', data, 60)[0]
-    expected = ((width + 3) // 4) * ((height + 3) // 4) * 16
-    if size != expected:
-        raise ValueError('ETC2 RGBA8 payload size does not match dimensions')
-    raw = lz4.block.decompress(data[64:], uncompressed_size=size)
-    bgra = texture2ddecoder.decode_etc2a8(raw, width, height)
-    return Image.frombytes('RGBA', (width, height), bgra, 'raw', 'BGRA')
+    if not (0 < width <= 16384 and 0 < height <= 16384) or not 1 <= levels <= 16 or base not in (3, 0x1f, 0x20):
+        raise ValueError('Unsupported texture dimensions, mip count or pixel format')
+    cursor, mips = 40, []
+    for _ in range(levels):
+        if cursor + 20 > len(data):
+            raise ValueError('Truncated texture mip record')
+        size, w, h, flags, declared = struct.unpack_from('<IHHII', data, cursor)
+        if size < 20 or cursor + size > len(data) or not 0 < w <= width or not 0 < h <= height:
+            raise ValueError('Texture mip boundary or dimensions invalid')
+        expected = w * h * 4 if base == 3 else ((w + 3) // 4) * ((h + 3) // 4) * (8 if base == 0x1f else 16)
+        if expected > 256 * 1024 * 1024:
+            raise ValueError('Texture mip exceeds supported bound')
+        block = data[cursor + 16:cursor + size]
+        if block[:4] == b'ZZZ4':
+            if len(block) < 8 or struct.unpack_from('<I', block, 4)[0] != expected:
+                raise ValueError('Texture mip compressed length header mismatch')
+            raw = lz4.block.decompress(block[8:], uncompressed_size=expected)
+        elif block[:4] == b'NNNN':
+            raw = block[4:]
+        else:
+            raise ValueError('Unsupported texture mip compression')
+        if declared not in (0, expected) or len(raw) != expected:
+            raise ValueError('Texture mip decoded length mismatch')
+        mips.append((w, h, raw)); cursor += size
+    if cursor != len(data):
+        raise ValueError('Unparsed texture bytes')
+    w, h, raw = max(mips, key=lambda mip: mip[0] * mip[1])
+    if (w, h) != (width, height):
+        raise ValueError('Missing full-resolution mip')
+    if base == 3:
+        return Image.frombytes('RGBA', (w, h), raw)
+    bgra = (texture2ddecoder.decode_etc2 if base == 0x1f else texture2ddecoder.decode_etc2a8)(raw, w, h)
+    return Image.frombytes('RGBA', (w, h), bgra, 'raw', 'BGRA')
+
+
+@lru_cache(maxsize=512)
+def resolved_root(root):
+    return root.resolve()
 
 
 def safe_file(root, rel):
     path = PurePosixPath(rel.replace('\\', '/'))
     if path.is_absolute() or '..' in path.parts or ':' in rel:
         raise ValueError(f'Unsafe reference: {rel}')
-    resolved_root = root.resolve()
-    dest = resolved_root.joinpath(*path.parts).resolve()
-    if not dest.is_relative_to(resolved_root):
+    canonical_root = resolved_root(root.absolute())
+    dest = canonical_root.joinpath(*path.parts).resolve()
+    if not dest.is_relative_to(canonical_root):
         raise ValueError(f'Reference escapes output: {rel}')
     return dest
 
@@ -187,7 +219,7 @@ def convert(source, output, model, base_only=False, source_rows=None, config_row
         operation = 'copy' if data == original_data else 'unwrap MESSIAH/CCCC payload; preserve inner bytes'
         if ref.lower().endswith('.png') and not data.startswith(b'\x89PNG'):
             decode_texture(data).save(dest)
-            operation = 'LZ4 + ETC2 RGBA8 -> PNG'
+            operation = 'Validated Messiah texture -> original-size PNG'
         else:
             dest.write_bytes(data)
         if ref.endswith('.motion3.json'):
@@ -195,7 +227,8 @@ def convert(source, output, model, base_only=False, source_rows=None, config_row
             motions[ref] = sorted({x['Id'] for x in motion.get('Curves', []) if x.get('Target') == 'Parameter'})
         if ref.endswith('.exp3.json'):
             expressions[ref] = [x['Id'] for x in json.loads(data).get('Parameters', [])]
-        provenance.append(dict(file=ref, source=row['source'], pack=row['pack'], offset=row['offset'],
+        provenance.append(dict(file=ref, source=row['source'], pack=row.get('pack'), offset=row.get('offset'),
+                               sourceFile=row['file'], origin=row.get('origin'), sourceIdentity=row.get('identity'),
                                operation=operation, sourceSha256=hashlib.sha256(original_data).hexdigest(),
                                outputSha256=hashlib.sha256(dest.read_bytes()).hexdigest(),
                                resourceName=row.get('original_name'), nameEvidence=row.get('name_evidence')))

@@ -1,5 +1,7 @@
 # docs/frontend-structure.md — 前端结构指南
 
+2026-10-27：shared/live2d/drawableVisibility.ts 只执行模型档案指定的原始 drawable 渲染显隐，用于一个 part 内的眼镜/企鹅眼罩分离。舞台清理时恢复 getter；原生眼睛、参数和动作曲线不改，普通表情保留当前配饰选择。现有人工表情预览列表消费标记为装配的本地静态预设，不增加后端情绪或手机 UI/设置。无跨端影响。叶瑄增量恢复/验收与后续 agent 入口见 hlr-recovery-workflow.md。
+
 2026-10-25：Live2D Pet 与 Room 共用 `shared/voice/usePlaybackLevel.ts`，VoiceMessageBar 创建实际音频对象时安装 `playbackLevel.ts` 分析；有效静音不触发备用口型，缺分析时由既有说话状态降级。Pet 复用角色范围行为事件，麦克风仍只供录音/粒子。离线模型库按叶瑄、司岚、路辰、艾因、罗夏归档，客户端单层模型路径不变；无新 UI 或跨端业务合同。见 [播音](live2d-playback.md) 与 [模型恢复](hlr-recovery-workflow.md)。
 
 2026-10-18：TokenSetupForm 与 ConnectionSettingsPage 共用 shared/api/connectionUrls.ts，

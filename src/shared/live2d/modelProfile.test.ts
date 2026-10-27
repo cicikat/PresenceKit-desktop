@@ -2,6 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { availableProfile, expressionFor, findNativeMotion, listNativeMotions, protectedParameters, readModelProfile } from './modelProfile';
 
 describe('asset-owned Live2D capabilities', () => {
+  it('keeps exact asset overlay IDs while filtering malformed mask entries', () => {
+    const profile = readModelProfile({ version: 1, drawableVisibility: {
+      defaultHidden: ['glass2', 9], byExpression: { glasses: ['penguin', null], invalid: false },
+    } });
+    expect(profile?.drawableVisibility).toEqual({
+      defaultHidden: ['glass2'], byExpression: { glasses: ['penguin'], invalid: [] },
+    });
+    expect(readModelProfile({ version: 1 })?.drawableVisibility).toBeUndefined();
+  });
   it('addresses empty groups precisely without random selection', () => {
     const motions = listNativeMotions({ '': [{ File: 'nod' }, { File: 'shake' }], Idle: [{ File: 'idle' }] });
     expect(findNativeMotion(motions, 'shake')).toEqual({ group: '', index: 1, file: 'shake' });

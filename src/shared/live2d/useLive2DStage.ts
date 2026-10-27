@@ -16,6 +16,7 @@ import {
 import { MOOD_TO_EXPRESSION, MOOD_PARAMS, matchExpressionName } from './live2dExpressions';
 import { availableProfile, expressionFor, findNativeMotion, listNativeMotions, protectedParameters, readModelProfile, type ModelProfile } from './modelProfile';
 import { NativeMotionPlayer } from './nativeMotionPlayer';
+import { attachDrawableVisibility } from './drawableVisibility';
 import { registerStageControls } from './stageControls';
 import { anchoredLayout } from './layout';
 import { backgroundSource } from './backgroundAssets';
@@ -480,6 +481,9 @@ export function useLive2DStage(
           };
         }
         disableBuiltinEyeBlink(model);
+        const detachVisibility = attachDrawableVisibility(model, profile?.drawableVisibility, () => activeExpression);
+        const detachNativeBeforeVisibility = detachNative;
+        detachNative = () => { detachVisibility(); detachNativeBeforeVisibility(); };
         detachDriver = profile ? attachFinalDriver(model, driveFrame) : attachDriver(model, driveFrame);
         modelRef.current = model;
         app.stage.addChild(model);

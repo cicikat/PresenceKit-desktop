@@ -18,6 +18,7 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--models', nargs='+', required=True)
     parser.add_argument('--base-url', default='http://localhost:1420')
+    parser.add_argument('--uv-triangles', action='store_true', help='Retain exact UV vertices/triangles for ambiguous atlas comparison')
     args = parser.parse_args()
     if args.output.exists():
         raise ValueError('Evidence directory exists; choose a new directory')
@@ -26,8 +27,9 @@ def main():
     models = {m['id']: m for m in report['models']}
     repo = Path(__file__).resolve().parent.parent
     fixture = repo / '.tmp/hlr-slot-inspection.html'
-    fixture.write_text('<script type="module">import {ensureCubismCore} from "/src/shared/live2d/cubismCore.ts";'
-                       'await ensureCubismCore();window.probeReady=true;</script>', encoding='utf-8')
+    fixture_content = '<script type="module">import {ensureCubismCore} from "/src/shared/live2d/cubismCore.ts";await ensureCubismCore();window.probeReady=true;</script>'
+    if not fixture.exists() or fixture.read_text(encoding='utf-8') != fixture_content:
+        fixture.write_text(fixture_content, encoding='utf-8')
     results = []
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
@@ -43,7 +45,7 @@ def main():
                 raise ValueError('MOC dependency is not resolved')
             payload = importer.unwrap_resource_data(importer.safe_file(args.source, dependency['file']).read_bytes())
             page.route('**/__hlr_probe.moc3', lambda route: route.fulfill(body=payload, content_type='application/octet-stream'))
-            core = page.evaluate('''async()=>{
+            core = page.evaluate('''async retainUvs=>{
                 const C=window.Live2DCubismCore;
                 const moc=C.Moc.fromArrayBuffer(await (await fetch('/__hlr_probe.moc3')).arrayBuffer());
                 const model=C.Model.fromMoc(moc);model.update();
@@ -55,13 +57,14 @@ def main():
                     const uv=Array.from(d.vertexUvs[i]);
                     const x=uv.filter((_,k)=>k%2===0),y=uv.filter((_,k)=>k%2===1);
                     return {id,texture:d.textureIndices[i],opacity:d.opacities[i],part:parent,
+                        ...(retainUvs?{uvVertices:uv,indices:Array.from(d.indices[i])}:{}),
                         partChain:chain,vertices:d.vertexCounts[i],uv:[Math.min(...x),Math.min(...y),Math.max(...x),Math.max(...y)]};
                 });
                 const result={version:C.Version.csmGetVersion(),drawables,
                     parts:Array.from(p.ids,(id,i)=>({id,opacity:p.opacities[i],parent:p.parentIndices?.[i]})),
                     parameters:Array.from(params.ids,(id,i)=>({id,value:params.values[i],default:params.defaultValues[i],min:params.minimumValues[i],max:params.maximumValues[i]}))};
                 model.release();moc._release();return result;
-            }''')
+            }''', args.uv_triangles)
             page.unroute('**/__hlr_probe.moc3')
             core.update(id=identity, model=item['model'], fingerprint=item['fingerprint'],
                         mocSha256=hashlib.sha256(payload).hexdigest(), textureReferences=config['FileReferences']['Textures'])

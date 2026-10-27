@@ -144,6 +144,8 @@ main capability 仅新增标题栏需要的 start-dragging、minimize、toggle-m
 
 ## Live2D 清晰度、背景与摆放（2026-10-24）
 
+2026-10-27 资产增量：modelProfile 增加可选 drawableVisibility，由 useLive2DStage 安装渲染 getter 过滤器，按准确 drawable ID 分离共享 part 的配饰；不写 Core opacity 数组，卸载恢复 getter。普通模型无该字段时保持原行为。离线 HLR 工具支持补丁来源、多 mip 纹理、精确三角 UV 与独立成品/截图/原始 baseline；人物、卡面与附属件分开验收。无新后端/手机设置或 IPC/REST/WS 契约，无跨端影响。复现见 docs/hlr-recovery-workflow.md。
+
 2026-10-25 播音增量：VoiceMessageBar 在 Audio 创建时绑定 shared/voice/playbackLevel，按 playing/pause/ended/error/卸载管理分析图；usePlaybackLevel 区分有效静音和分析缺失。Pet Live2D 复用已有 CharacterBehaviorState 的角色范围与播音/正文生命周期，Room 沿用 talking；不再用麦克风驱动嘴。motionAdapter 仅在无遮罩 renderer 释放时处理空 clipping manager，不改变绘制。见 [播音说明](docs/live2d-playback.md)。离线 HLR 工具按五人物整理成品和版本清单，运行目录/Core/素材不入 Git，见 [恢复流程](docs/hlr-recovery-workflow.md)。无跨端影响。
 
 共享 useLive2DStage 按显示密度配置 renderer/ColorMatrixFilter，跨屏时同步像素密度；layout.ts 根据真实头部 HitArea 计算缩放与边界留白，缺区域使用保守上身锚点。小窗口不足以容纳头部时限制最终画面倍率，用户偏移仍可有意移出边界。

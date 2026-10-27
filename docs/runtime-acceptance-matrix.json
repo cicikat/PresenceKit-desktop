@@ -13,6 +13,14 @@
   },
   "cases": [
     {
+      "id": "yexuan-incremental-20261027",
+      "area": "automated",
+      "scenario": "Audit 115 source configs and validate 114 final Core/Pixi candidates. Install 83 separately visually reviewed person configurations: native mouth, 850 original expressions, 2203 original motions, reload and exact optional-overlay masks. Preserve 27 card layers and four attachments separately; full game composition and optional wardrobe remain partial.",
+      "status": "passed",
+      "evidence": "2026-10-27: Yexuan subset/模型搭建-2026-10-27/叶瑄成品-20261027-r2 contains validation.json, visual-review.json, installed-models.json, source-audit and local evidence screenshots. Playback: 播音回归-20261027/playback-report.json. Unit validation: 600 frontend tests and 27 Python tests. Real Tauri/TTS/GPU and release artifact remain observe.",
+      "requirements": "cc-tasks/2026-10-27-yexuan-incremental-runtime.md"
+    },
+    {
       "id": "yexuan-reviewed-slot-variants",
       "area": "automated",
       "scenario": "Inspect 13 source MOCs with real Core; restore native eye/book/clothing atlas bindings; eleven base variants pass expression/motion/mouth/reload and separate image review. Bingfeng has no matching eye atlas and is excluded from installation.",

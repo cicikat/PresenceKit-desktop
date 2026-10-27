@@ -74,6 +74,9 @@ class RecoveryValidation(unittest.TestCase):
             self.assertEqual(manifest['omittedTextureSlots'], [dict(slot=2)])
             self.assertEqual(manifest['assets'][0]['resourceName'], 'native_eye_atlas')
             self.assertFalse((destination / '_omitted/slot1.png').exists())
+            reviewed.bind_slots(destination, manifest, config, dict(repeatedTextureSlots=[1, 2]),
+                dict(drawables=[dict(id='eye', texture=1)]), [binding], rows, source)
+            self.assertEqual(len(manifest['assets']), 1, 'Rebinding must replace the stale output hash entry')
 
     def test_reviewed_atlas_binding_rejects_wrong_geometry_or_ambiguous_source(self):
         item = dict(repeatedTextureSlots=[1])

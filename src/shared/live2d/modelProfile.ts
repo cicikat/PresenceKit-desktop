@@ -1,4 +1,5 @@
 /** Optional, asset-owned mapping. No backend vocabulary or global model-name heuristics. */
+import type { DrawableVisibility } from './drawableVisibility';
 export interface NativeAction { enter?: string; loop?: string; exit?: string }
 export interface ModelProfile {
   version: 1;
@@ -8,6 +9,7 @@ export interface ModelProfile {
   hitAreas: Record<string, string>;
   motionParameters: Record<string, string[]>;
   expressionParameters: Record<string, string[]>;
+  drawableVisibility?: DrawableVisibility;
 }
 export interface NativeMotion { file: string; group: string; index: number }
 
@@ -32,6 +34,11 @@ export function readModelProfile(value: unknown): ModelProfile | null {
   }
   return { version: 1, preserveNativeParameters: raw.preserveNativeParameters === true,
     expressions: strings(raw.expressions), actions, hitAreas: strings(raw.hitAreas),
+    ...(raw.drawableVisibility && typeof raw.drawableVisibility === 'object' ? { drawableVisibility: {
+      defaultHidden: Array.isArray(object(raw.drawableVisibility).defaultHidden)
+        ? (object(raw.drawableVisibility).defaultHidden as unknown[]).filter((id): id is string => typeof id === 'string') : [],
+      byExpression: parameters(object(raw.drawableVisibility).byExpression),
+    } } : {}),
     motionParameters: parameters(raw.motionParameters), expressionParameters: parameters(raw.expressionParameters) };
 }
 

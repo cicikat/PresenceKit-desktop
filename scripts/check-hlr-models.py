@@ -4,7 +4,6 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
-import shutil
 from urllib.parse import unquote, urlparse
 from playwright.sync_api import sync_playwright
 
@@ -16,17 +15,30 @@ parser.add_argument('--snapshot', type=Path, required=True)
 parser.add_argument('--output', type=Path, required=True, help='Fresh evidence directory')
 parser.add_argument('--base-url', default='http://localhost:1420')
 parser.add_argument('--models', nargs='*', help='Optional exact model IDs for a focused rerun')
+parser.add_argument('--background', default='#cbd0d7', help='Plain inspection backdrop; light default exposes missing dark clothing')
+parser.add_argument('--prepare-only', action='store_true', help='Prepare immutable fixtures before concurrent browser runs')
 args = parser.parse_args()
 snapshot, out = args.snapshot.resolve(), args.output.resolve()
 if out.exists():
     raise ValueError('Evidence directory already exists; use a new directory')
-out.mkdir(parents=True)
+if not args.prepare_only:
+    out.mkdir(parents=True)
 report = json.loads((snapshot / 'models.json').read_text(encoding='utf-8'))
 repo = Path(__file__).resolve().parent.parent
 fixture = repo / '.tmp'
 fixture.mkdir(exist_ok=True)
-shutil.copyfile(repo / 'scripts/fixtures/live2d-import.tsx', fixture / 'hlr-live2d-fixture.tsx')
-(fixture / 'hlr-live2d-fixture.html').write_text('<div id="root"></div><script type="module" src="./hlr-live2d-fixture.tsx"></script>', encoding='utf-8')
+fixture_name = 'hlr-' + hashlib.sha256((str(snapshot)+'|'+str(out)).encode()).hexdigest()[:10]
+fixture_bytes = (repo / 'scripts/fixtures/live2d-import.tsx').read_bytes()
+fixture_tsx = fixture / (fixture_name + '.tsx')
+if not fixture_tsx.exists() or fixture_tsx.read_bytes() != fixture_bytes:
+    fixture_tsx.write_bytes(fixture_bytes)
+fixture_html = fixture / (fixture_name + '.html')
+fixture_text = '<div id="root"></div><script type="module" src="./'+fixture_name+'.tsx"></script>'
+if not fixture_html.exists() or fixture_html.read_text(encoding='utf-8') != fixture_text:
+    fixture_html.write_text(fixture_text, encoding='utf-8')
+if args.prepare_only:
+    print('PREPARED', fixture_name)
+    raise SystemExit(0)
 results = []
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True, args=['--use-angle=swiftshader', '--enable-unsafe-swiftshader'])
@@ -69,8 +81,10 @@ with sync_playwright() as p:
         result = dict(id=item['id'], fingerprint=item['fingerprint'], sourceConfigSha256=item['configSha256'],
                       runtimeConfigSha256=manifest['runtimeConfigSha256'], status='failed')
         try:
-            page.goto(args.base_url + '/.tmp/hlr-live2d-fixture.html', wait_until='networkidle')
+            page.goto(args.base_url + '/.tmp/'+fixture_name+'.html', wait_until='networkidle')
             page.wait_for_function('window.controls?.()&&window.audit.frames>20', timeout=45000)
+            page.evaluate('''async color=>{const settings=await import('/src/shared/live2d/live2dSettings.ts');
+                settings.patchLive2DSettings({bgKind:'color',bgColor:color});}''', args.background)
             page.evaluate('window.attachCompare()')
             result['parameters'] = page.evaluate("Array.from(window.auditModel.internalModel.coreModel.getModel().parameters.ids)")
             result['drawables'] = page.evaluate('window.auditModel.internalModel.coreModel.getModel().drawables.count')
@@ -79,6 +93,7 @@ with sync_playwright() as p:
             page.screenshot(path=str(out / (item['id'] + '-initial.png')))
             expressions = page.evaluate('window.controls().expressions')
             motions = page.evaluate('window.controls().motions')
+            accessory_previews = []
             for name in expressions:
                 assert page.evaluate('''async name=>{
                     const m=window.auditModel.internalModel.motionManager.expressionManager;
@@ -88,6 +103,27 @@ with sync_playwright() as p:
                 page.evaluate('(name)=>window.controls().playExpression(name)', name)
                 page.wait_for_function('''name=>{const m=window.auditModel.internalModel.motionManager.expressionManager;
                     return m.currentExpression===m.expressions[m.definitions.findIndex(x=>x.Name===name)];}''', arg=name, timeout=5000)
+                if name.startswith('装配_'):
+                    page.wait_for_timeout(250)
+                    preview = item['id'] + '-accessory-' + str(len(accessory_previews)).zfill(2) + '.png'
+                    page.screenshot(path=str(out / preview))
+                    parts = page.evaluate('''()=>{const p=window.auditModel.internalModel.coreModel.getModel().parts;
+                        return Object.fromEntries(Array.from(p.ids,(id,i)=>[id,p.opacities[i]]));}''')
+                    visibility = json.loads((runtime / model_json).read_text(encoding='utf-8')).get('EmeraldProfile', {}).get('drawableVisibility')
+                    mask_check = None
+                    if visibility and name in visibility['byExpression']:
+                        mask_check = page.evaluate('''hidden=>{const core=window.auditModel.internalModel.coreModel;
+                            const d=core.getModel().drawables;const masked=new Set(hidden);
+                            return Array.from(d.ids,(id,i)=>({id,native:d.opacities[i],render:core.getDrawableOpacity(i),hidden:masked.has(id)}));
+                        }''', visibility['byExpression'][name])
+                        assert all(abs(d['render']-(0 if d['hidden'] else d['native'])) < .00001 for d in mask_check), 'render mask differs from exact reviewed IDs'
+                    accessory_previews.append(dict(name=name,file=preview,partOpacities=parts,
+                        renderMaskVerified=mask_check is not None,
+                        overlayDrawables=[d for d in (mask_check or []) if d['id'].lower().startswith(('glass','xiaoqieyanzhao'))]))
+            neutral_accessory = next((name for name in expressions if name.startswith('装配_无配饰')), None)
+            if neutral_accessory:
+                page.evaluate('(name)=>window.controls().playExpression(name)', neutral_accessory)
+                page.wait_for_timeout(350)
             page.evaluate('window.controls().playExpression(null)')
             for file in motions:
                 count = page.evaluate('window.audit.starts.length')
@@ -97,7 +133,8 @@ with sync_playwright() as p:
                 page.wait_for_timeout(100)
             page.evaluate('window.controls().stop()')
             page.wait_for_timeout(300)
-            result.update(expressions=len(expressions), motions=len(motions), actions=page.evaluate('window.controls().actions'))
+            result.update(expressions=len(expressions), originalExpressions=sum(not n.startswith('装配_') for n in expressions),
+                          accessoryPreviews=accessory_previews, motions=len(motions), actions=page.evaluate('window.controls().actions'))
             if 'ParamMouthOpenY' in result['parameters']:
                 page.evaluate('window.talking=true;window.volume=0.8')
                 page.wait_for_timeout(400)

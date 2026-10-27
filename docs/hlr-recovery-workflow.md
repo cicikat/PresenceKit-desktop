@@ -2,6 +2,8 @@
 
 固定协议：`hlr-extraction-v1` → `hlr-recovery-v1` → `hlr-browser-v1`。从客户端仓库根用 PowerShell 执行；运行资产不进 Git，原 APK、解包和分类硬链接只读。所有输出使用新目录，工具拒绝覆盖。
 
+Python 依赖按 `python -m pip install -r scripts/requirements-hlr.txt` 安装，浏览器按 `python -m playwright install chromium` 准备。Node 依赖使用本仓锁文件；Core 使用本机已安装且获授权的运行时，不提交资源或 Core。中文命令输出可用 `python -X utf8`。
+
 ## 1. 新版包提取
 
 ```powershell
@@ -59,6 +61,8 @@ python scripts/organize-hlr-models.py --snapshot '<恢复快照>' --library '<�
 
 回归顺序：`python scripts/test_hlr_live2d_import.py` → `python scripts/test_hlr_recovery.py` → 统一浏览器验收；客户端驱动变化再运行相关前端测试和 production build。不能用历史通过记录给新版背书。
 
+本轮 Windows 全量测试使用 `npm.cmd test -- --maxWorkers=2 --testTimeout=15000`，避免默认并发与软件 WebGL/大型 GLB 测试争用资源造成超时。依次完成模型实播、全量测试和构建；超时必须重验，不可据此直接标模型通过。
+
 ## 5. 重复槽的逐模型恢复（叶瑄补充）
 
 blocked_accessory_slots 是自动转换停止点，不是调查终点。叶瑄存在眼睛与游戏配饰混用同一重复槽、服装/腿部放在额外槽的情况。不能批量隐藏这些槽后，只凭动作与口型测试通过就发布：生日版会没有眼睛，魔法师和冰峰会缺腿。统一浏览器验收不能替代逐图目检。
@@ -72,8 +76,48 @@ python scripts/recover-hlr-reviewed-slots.py --source '<提取目录>' --snapsho
 
 slots.json 保存原 MOC SHA-256、逐 drawable 的槽/UV/部件/默认可见性和参数。atlas-bindings.json 使用 hlr-slot-bindings-v1：models 以源配置 ID 为键，每项包含原配置 fingerprint；slots 包含整数 slot、准确资源名 resource、完整网格 ID 列表 drawables 和可审核 evidence。新版必须重新读 MOC、源图集与画面，不能照搬旧 UV。配置或任一源依赖改变会拒绝旧审计；绑定的网格集合、源资源唯一性也须验证。主体变体指纹包括额外绑定图集内容哈希，共享眼图变化也应比较变体，而不只比较原配置。
 
-实际找回 yexuan_eyemask00 眼图、yexuan_suxieben 素描本、yexuan_magic_ac2_01 下半身、yexuan_bingfeng2 腿/披风；按单模型 UV 和实际图像绑定。冰峰眼部 UV 不匹配通用眼图，撤销错误绑定并保留 blocked，不能用同名人物的其它眼图充数。
+2026-10-25 的旧包找回 yexuan_eyemask00 眼图、yexuan_suxieben 素描本、yexuan_magic_ac2_01 下半身、yexuan_bingfeng2 腿/披风；当时冰峰眼部 UV 不匹配通用眼图而保留 blocked。2026-10-27 增量素材新增调查找到了 yexuan_eyemask05 专用布局，必须按新版实际画面重验后更新状态，不能沿用旧 blocked 或拿通用眼图充数。
 
 该工具生成 _base 主体变体，未解决的冠饰、狐耳、帽子或额外换装槽继续列入 omittedTextureSlots，不能称全配饰完整恢复。原 MOC、动作、物理不改；已恢复槽移除透明占位，每个补图保存源/输出哈希。候选继续用第 3、4 步验收/目检/安装；无眼、错眼、缺主体衣物者，即使 browser_pass 也不安装。需比较浅色背景，深色裤子可能与默认深色背景混在一起。
 
 完整原包 baseline 保留全量配置；主体候选快照只是选定变体，不能替换全量 baseline。今后先比较全量原包，主体变体按该槽证据协议重建，再比较变体 models.json。保留 visual-review.json 的失败原因，而不只交付通过项。
+
+## 6. 下载补丁、精确 UV 和配饰装配（2026-10-27）
+
+下载补丁索引可能没有 pack/offset。保留 sourceFile、origin、sourceIdentity 和原始/输出 SHA-256，缺失字段为 null，不伪造包内位置。新纹理头包含原始尺寸、像素格式和 mip 数；逐层验证精确边界、解压长度与最大尺寸，仅导出与原始尺寸相符的最高 mip。支持已验证的 ETC2 RGB、ETC2 RGBA 和 raw RGBA，未知格式或尾部字节必须报错。
+
+先对重复槽生成候选；有相近图集时追加精确三角网格审计。矩形 UV 包围盒可能误收不匹配图集，或因为图集包含未使用部件而漏选真实眼图。任何评分都不能替代原图裁片及实播目检。
+
+```powershell
+python scripts/inspect-hlr-slots.py --source '<叶瑄子库>' --snapshot '<全量审计>' --output '<新UV证据>' --uv-triangles --models '<待查源ID>'
+python scripts/propose-hlr-atlases.py --source '<叶瑄子库>' --snapshot '<全量审计>' --slots '<新UV证据/slots.json>' --output '<新绑定候选>'
+python scripts/recover-hlr-reviewed-slots.py --source '<叶瑄子库>' --snapshot '<全量审计>' --slots '<槽证据/slots.json>' --bindings '<审核绑定/atlas-bindings.json>' --output '<新转换候选>' --variant-suffix '_版本日期' --reviewed-models '<源ID>'
+python scripts/assemble-hlr-variants.py --source '<叶瑄子库>' --snapshot '<全量审计>' --slots '<槽证据/slots.json>' --bindings '<审核绑定/atlas-bindings.json>' --candidates '<转换候选>' --output '<新装配候选>' --suffix '_版本日期'
+python scripts/check-hlr-models.py --snapshot '<装配候选>' --output '<新浏览器证据>'
+python scripts/make-hlr-contact-sheet.py --validation '<新浏览器证据>' --output '<目检联系表>' --phase initial
+python scripts/make-hlr-contact-sheet.py --validation '<新浏览器证据>' --output '<目检联系表>' --phase preview
+```
+
+等待每个生产步骤完成后再读取其 JSON，不能把进行中的部分清单当最终结果。装配输出带输入文件哈希；工具算法变化也须换新输出目录，不能在已验收快照内补写。相同源配置的多个候选只交付最终选中的版本，原始完整审计保留不变。
+
+配饰显隐由原 MOC 的 part 层级建立标准 pose3 和明确标记的本地静态表情预设，原 MOC、物理、原生动作曲线及原生表情不改。只有 marker-only part 能作为可切换锚点；没有安全锚点就不提供切换预设，任何原生眼睛的祖先 part 都不能被当配饰隐藏。眼镜与企鹅眼罩共享一个 part 时，由资源配置 EmeraldProfile.drawableVisibility 按准确 drawable ID 控制渲染可见性，普通表情保留当前配饰，选择无配饰预设恢复默认。舞台卸载恢复原 getter，不写原生 Core opacity 数组、骨骼或业务状态。此字段只用于本机资产，后端、管理面板和手机端没有新增设置或契约。
+
+逐项记录原生表情数量与本地装配预设数量。未解决的配饰槽继续留在来源清单，不能把“主体可用”写成完整游戏换装。卡面、半身原作、Q 版头部、手部、烟花和道具分别归档；能加载的附属件不能作为完整皮肤安装，卡面原本没有嘴参数则标 unavailable。
+
+两份同名配置必须比较实际配置名、配置哈希和全部依赖，不能按目录名随便选。已确认完整的一份可生成带明确选择依据的子审计；缺件的旧别名仍留在全量清单中。新增纹理或共享配饰变化时也应重新比较装配变体的图集来源哈希，不能仅依赖原 config/MOC 是否改变。
+
+小山海的主体在 slot11/12/13，玩偶在 slot10；帝国的补充眼睛在 slot1，帝国 zero 在 slot2。不能按固定槽号判断眼睛或配饰。公共配饰须完整匹配 drawable 家族；其余槽搜索本模型原图集，疑难项保存精确三角 UV 证据。源图集含未使用部件会降低整体覆盖分，人工仍须看逐网格裁片与实播。单面辅助材质、缺少唯一匹配的换装和游戏渲染到纹理不能凭最高分硬绑。
+
+## 7. 独立成品包与下轮交接
+
+把最终批次按顺序输入，后面只替换本批已验收的同 ID；失败候选不能以旧通过记录顶替。目检 JSON 的 models 以最终 ID 为键，每项至少包含 fingerprint、category、status 和 reason。只有真正看过 initial/preview 与人物面部后才能写 visual_pass；卡面合成待恢复使用 partial。
+
+```powershell
+python scripts/package-hlr-reviewed.py --parent-snapshot '<全量原始审计>' --review '<最终目检.json>' --output '<新的独立成品包>' --batch '<候选快照1>' '<证据1>' --batch '<修复候选2>' '<修复证据2>'
+```
+
+成品内的 runtime 是运行模型，source-audit 保留字节不变的全量原始 baseline，evidence 保存实际截图及其 SHA-256，模型总览.html 可离线搜索。模型及部分截图使用派生目录间的硬链接节省空间，原始包未改；禁止在候选、成品或分类链接中原地写资产，改动必须复制到新目录。独立成品中的原始审计可作下一轮 baseline，含日期后缀的运行变体清单不能代替原包 baseline。
+
+后续用 installed-models.json 识别本轮真正安装的人物，而非把所有配置/卡面/道具都计为皮肤。先原包增量比较，再按模型主体与附属层恢复，最后以最终运行配置、每个资产哈希和目检指纹共同决定可用性。安装前仍运行第 4 节的严格安装器，成品包本身不会自动切换用户角色。保留旧版本 ID。
+
+交付为运行用 model3/moc3，不是可编辑 cmo3。布眼罩、绑带、玩偶样式、部分本地换装、绘画内容或原版卡面合成未因主体通过而完成。眼镜与企鹅眼罩的分离预设依赖本客户端 drawableVisibility，不能保证其它查看器识别扩展档案。默认主体的来源、像素、网格和原生曲线保留；实际 Windows Tauri/TTS/GPU 与发行包仍单独 observe。

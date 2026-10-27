@@ -4,6 +4,7 @@ import copy
 import hashlib
 import importlib.util
 import json
+import re
 from pathlib import Path
 from hlr_characters import character_catalog
 
@@ -28,6 +29,7 @@ def bind_slots(destination, manifest, config, item, proof, bindings, rows, sourc
         raw = importer.safe_file(source, row['file']).read_bytes()
         data = importer.unwrap_resource_data(raw)
         relative = '_restored/slot_' + str(slot).zfill(2) + '.png'
+        manifest['assets'] = [entry for entry in manifest['assets'] if entry['file'] != relative]
         target = importer.safe_file(destination, relative)
         target.parent.mkdir(exist_ok=True)
         if data.startswith(b'\x89PNG'):
@@ -39,10 +41,11 @@ def bind_slots(destination, manifest, config, item, proof, bindings, rows, sourc
         manifest['omittedTextureSlots'] = [entry for entry in manifest['omittedTextureSlots'] if entry['slot'] != slot]
         if old.startswith('_omitted/') and old not in config['FileReferences']['Textures']:
             importer.safe_file(destination, old).unlink()
-        manifest['assets'].append(dict(file=relative, source=row['source'], pack=row['pack'], offset=row['offset'],
+        manifest['assets'].append(dict(file=relative, source=row['source'], pack=row.get('pack'), offset=row.get('offset'),
+            sourceFile=row['file'], origin=row.get('origin'), sourceIdentity=row.get('identity'),
             sourceSha256=hashlib.sha256(raw).hexdigest(), outputSha256=hashlib.sha256(target.read_bytes()).hexdigest(),
             resourceName=row['original_name'], nameEvidence=row.get('name_evidence'),
-            operation='Reviewed original atlas binding; ETC2 decoding when required',
+            operation='Reviewed original atlas binding; validated Messiah decoding when required',
             slot=slot, drawableIds=actual_ids, bindingEvidence=binding['evidence']))
 
 
@@ -54,7 +57,10 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--reviewed-models', nargs='+', required=True)
     parser.add_argument('--bindings', type=Path, help='Explicit original atlas bindings, keyed by source model ID with fingerprint and exact drawable IDs')
+    parser.add_argument('--variant-suffix', default='_base', help='New stable model ID suffix; keep older installed variants intact')
     args = parser.parse_args()
+    if not re.fullmatch(r'_[a-zA-Z0-9_-]+', args.variant_suffix):
+        raise ValueError('Variant suffix must be a safe underscore-prefixed ID')
     if args.output.exists():
         raise ValueError('Output exists; choose a fresh snapshot')
     args.output.mkdir(parents=True)
@@ -95,7 +101,7 @@ def main():
             raise ValueError('No visible primary-skin geometry')
         item['sourceModelId'] = identity
         item['sourceFingerprint'] = item['fingerprint']
-        item['id'] = identity + '_base'
+        item['id'] = identity + args.variant_suffix
         item['runtime'] = 'runtime/' + item['id']
         destination = importer.safe_file(args.output, item['runtime'])
         result = importer.convert(args.source, destination, item['model'], base_only=True, source_rows=rows, config_row=config_row)
