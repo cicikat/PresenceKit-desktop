@@ -8,6 +8,7 @@ export type BehaviorNotice =
   | { kind: 'request-end'; id: string; charId: string; at: number; msgId?: string; text?: string; emotion?: string }
   | { kind: 'audio-start' | 'audio-end'; id: string; charId: string; at: number; msgId?: string; scene: string };
 export interface BehaviorFrame { activity: MotionActivity; expression: string }
+export interface TextPresentation { id: string; until: number }
 const EXPRESSIONS = new Set(['neutral', 'gentle', 'thinking', 'happy', 'sad', 'surprised', 'angry', 'sleepy', 'yandere']);
 const MOOD_EXPRESSION: Record<string, string> = { '平静': 'neutral', '开心': 'happy', '低落': 'sad', '病娇': 'yandere', '分心': 'thinking', '生气': 'angry', '惊讶': 'surprised' };
 export function trustedExpression(value: unknown): string | null {
@@ -18,6 +19,9 @@ interface Reply { order: number; expires: number; textUntil: number; streaming: 
 /** Transient presentation arbitration, not a copy of StateEngine's mood. All times
  * are epoch ms across Webviews. Each completion only releases its own lease. */
 export class CharacterBehaviorState {
+  // undefined retains the existing Room/event-driven policy; null means an idle Pet queue.
+  private presentation: TextPresentation | null | undefined;
+  setTextPresentation(value: TextPresentation | null | undefined): void { this.presentation = value; }
   private serial = 0;
   private requests = new Map<string, { expires: number; order: number }>();
   private replies = new Map<string, Reply>();
@@ -27,6 +31,7 @@ export class CharacterBehaviorState {
   private lastMood: string | null = null;
   private snapshotThinkingSince: number | null = null;
   reset(): void {
+    if (this.presentation !== undefined) this.presentation = null;
     this.requests.clear(); this.replies.clear(); this.audio.clear(); this.audioEnded.clear();
     this.emotion = null; this.lastMood = null; this.snapshotThinkingSince = null; this.serial = 0;
   }
@@ -116,7 +121,10 @@ export class CharacterBehaviorState {
     if (snapshotThinking) this.snapshotThinkingSince ??= now;
     else this.snapshotThinkingSince = null;
     const replies = [...this.replies.values()];
-    const speaking = this.audio.size > 0 || replies.some(r => r.textUntil > now && !r.audioDone);
+    const textSpeaking = this.presentation === undefined
+      ? replies.some(r => r.textUntil > now && !r.audioDone)
+      : Boolean(this.presentation && this.presentation.until > now);
+    const speaking = this.audio.size > 0 || textSpeaking;
     const thinking = this.requests.size > 0 || replies.some(r => r.streaming && !r.visible)
       || (this.snapshotThinkingSince !== null && now - this.snapshotThinkingSince < P.feedback.requestTtlMs);
     return { activity: speaking ? 'speaking' : thinking ? 'thinking' : 'idle',

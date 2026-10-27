@@ -263,3 +263,11 @@ open：真实 Tauri 桌宠分段停留、语音播放时长和多窗口切换尚
 Model3DStage 现在复用选定 GLB 的 Idle，并单独加载 screenDriver。每帧先 prepareFrame 撤销上帧偏移，再更新 Idle Mixer、动作库和程序化上身偏移；不写腿/髋，不累积 scale。微动作参数集中在 src/shared/character/behaviorParameters.ts，头和身体分别随机调度，有缓入、停顿、缓出。
 
 请求开始进入 thinking；有效流/文本回复进入短时 speaking；实际 VoiceMessageBar 音频播放成功后进入 speaking，pause/ended/error/卸载释放该播放 ID。活动结束回到有效情绪基线。PNG 和身体独立控制。群聊、Dream、非当前角色与没有有效 start 的流不驱动角色。
+
+## 桌宠侧边气泡与逐段口型（2026-10-27）
+
+PetWindow 在现有透明原生窗口内按需增加侧翼，模型舞台仍为独立的 340×400 × windowScale 区域，输入框跟随模型；不新增 WebView 或 IPC。usePetBubbleLayout 用物理坐标与所在显示器工作区选边：偏左向右，偏右向左，中线保留 24 逻辑像素迟滞；窗口扩展、换边和收起保留模型屏幕锚点，必要时按工作区夹紧。长文/贴纸在气泡内部滚动。鼠标互动距离和方向以模型舞台计算，漫游仍约束完整原生窗口。
+
+PetTextPresentation 仅在 PetStage 子树提供当前段的文本租约；CharacterBehaviorState 的原消息仍处理请求/情绪/实际音频，但桌宠文本 speaking 不再由整条消息的接收时间决定。逐段显示/到期驱动口型；音频暂停/结束释放当前段，下一段获得新租约；切换角色清空队列，同角色头像刷新不清空。Room 未提供此 context，沿用原策略。无设置、存储、REST/WS/IPC 或权限变更，无跨端影响。
+
+验证：17 项纯逻辑回归、tsc/生产构建；scripts/pet-speech-browser.mjs 用实际 PetWindow/GLB 覆盖左右不重叠、屏幕锚点、三段 speaking、末段 idle 与收起。截图与报告在 .tmp/pet-bubble-{left,right}.png / .tmp/pet-speech-report.json。原生位置/DPI 为模拟，不代表真实 Windows 多显示器、拖动漫游、用户 TTS/Live2D/GPU 或发行验收；这些仍 observe。极窄工作区无法容纳舞台与侧翼时，需减小桌宠缩放。

@@ -1,5 +1,10 @@
 > observe（2026-10-25）：情绪指令已补角色/来源/过期校验，原生切角和表演恢复仍待设备验收，见 [情绪接入合同](affective-engine-integration.md)。
 
+## 桌宠侧边气泡（2026-10-27，current / observe）
+
+current：侧边漫画气泡不覆盖立绘，按工作区左右位置选边；纯文本口型跟随每个显示段，修复后续段不张嘴。逻辑与实际 React/GLB 浏览器验证通过，原生坐标为模拟。真实 Windows 多显示器/DPI、拖动漫游、用户 TTS、Live2D 与发行窗口仍 observe；极窄工作区需要减小桌宠缩放以容纳侧翼。详见 cc-tasks/2026-10-27-pet-speech-bubble.md。无跨端影响。
+
+
 # docs/known-issues.md — 已知问题与技术债
 
 ## 叶瑄增量成品（2026-10-27，主体可用 / 游戏合成 partial）

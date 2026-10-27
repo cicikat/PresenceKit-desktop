@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject, type PointerEvent as ReactPointerEvent } from 'react';
 import {
   availableMonitors,
   cursorPosition,
@@ -68,7 +68,7 @@ function randomBotherDelay(settings: PetMouseSettings) {
   return (settings.botherMinMinutes + Math.random() * range) * 60_000;
 }
 
-export function usePetMouse({ shy }: { shy: boolean }) {
+export function usePetMouse({ shy, stageRef }: { shy: boolean; stageRef?: RefObject<HTMLElement | null> }) {
   const petWindow = useMemo(() => getCurrentWindow(), []);
   const [settings, setSettings] = useState(loadPetMouseSettings);
   const [pinned, setPinned] = useState(false);
@@ -112,8 +112,10 @@ export function usePetMouse({ shy }: { shy: boolean }) {
         petWindow.outerSize(),
         availableMonitors(),
       ]);
-      const centerX = position.x + size.width / 2;
-      const centerY = position.y + size.height / 2;
+      const stage = stageRef?.current?.getBoundingClientRect();
+      const dpi = window.devicePixelRatio || 1;
+      const centerX = position.x + (stage ? (stage.left + stage.width / 2) * dpi : size.width / 2);
+      const centerY = position.y + (stage ? (stage.top + stage.height / 2) * dpi : size.height / 2);
       let dx = centerX - cursor.x;
       let dy = centerY - cursor.y;
       let distance = Math.hypot(dx, dy);
@@ -148,7 +150,7 @@ export function usePetMouse({ shy }: { shy: boolean }) {
     } finally {
       movingRef.current = false;
     }
-  }, [petWindow]);
+  }, [petWindow, stageRef]);
 
   useEffect(() => subscribePetMouseSettings(setSettings), []);
 
@@ -187,7 +189,10 @@ export function usePetMouse({ shy }: { shy: boolean }) {
           petWindow.outerPosition(),
           petWindow.outerSize(),
         ]);
-        if (pointToRectDistance(cursor.x, cursor.y, position.x, position.y, size.width, size.height) <= SHY_RADIUS) {
+        const stage = stageRef?.current?.getBoundingClientRect();
+        const dpi = window.devicePixelRatio || 1;
+        if (pointToRectDistance(cursor.x, cursor.y, position.x + (stage?.left ?? 0) * dpi,
+          position.y + (stage?.top ?? 0) * dpi, stage ? stage.width * dpi : size.width, stage ? stage.height * dpi : size.height) <= SHY_RADIUS) {
           if (await moveWindow('away')) triggerReaction('shy');
         }
       } catch {
@@ -197,7 +202,7 @@ export function usePetMouse({ shy }: { shy: boolean }) {
       }
     }, POLL_MS);
     return () => window.clearInterval(timer);
-  }, [moveWindow, petWindow, settings.enabled, shy, triggerReaction]);
+  }, [moveWindow, petWindow, settings.enabled, shy, triggerReaction, stageRef]);
 
   useEffect(() => {
     if (!settings.enabled) return;

@@ -1,16 +1,23 @@
-import { useEffect, useRef } from 'react';
+import { createContext, useContext, useEffect, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { getActiveCharacterInfo, subscribeActiveCharacter } from '../activeCharacter';
 import { listenPetTurn, type PetTurnEvent } from '../pet/bridge';
 import { wsClient } from '../api/ws';
 import { isSingleRealityMessage, isSingleRealityStream } from '../api/realityMessageScope';
-import { BEHAVIOR_EVENT, CharacterBehaviorState, type BehaviorNotice } from './behaviorState';
+import { BEHAVIOR_EVENT, CharacterBehaviorState, type BehaviorNotice, type TextPresentation } from './behaviorState';
+
+export const PetTextPresentation = createContext<TextPresentation | null | undefined>(undefined);
 
 /** One controller per stage; scopes and token lifetimes survive React re-renders. */
 export function useCharacterBehavior(surface: 'pet' | 'room'): CharacterBehaviorState {
   const ref = useRef<CharacterBehaviorState | null>(null);
   if (!ref.current) ref.current = new CharacterBehaviorState();
   const state = ref.current;
+  const presentation = useContext(PetTextPresentation);
+  useEffect(() => {
+    if (surface === 'pet') state.setTextPresentation(presentation);
+    return () => { if (surface === 'pet') state.setTextPresentation(undefined); };
+  }, [surface, state, presentation]);
   useEffect(() => {
     let alive = true;
     const off: (() => void)[] = [];
@@ -19,7 +26,12 @@ export function useCharacterBehavior(surface: 'pet' | 'room'): CharacterBehavior
       catch (error) { console.warn('[character] behavior subscription unavailable:', error); }
     };
     const reset = () => state.reset();
-    off.push(subscribeActiveCharacter(reset));
+    let characterId = getActiveCharacterInfo().id;
+    off.push(subscribeActiveCharacter(info => {
+      if (info.id === characterId) return;
+      characterId = info.id;
+      reset();
+    }));
     void add(listen<BehaviorNotice>(BEHAVIOR_EVENT, e => {
       if (alive && e.payload.charId === getActiveCharacterInfo().id) state.notice(e.payload, Date.now());
     }));

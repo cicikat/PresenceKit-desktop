@@ -3,6 +3,35 @@ import { CharacterBehaviorState } from './behaviorState';
 import { CHARACTER_BEHAVIOR as P } from './behaviorParameters';
 const charId = 'test';
 describe('character chat/audio arbitration', () => {
+  it('Pet text follows each presented segment, never the queued canonical message', () => {
+    const s = new CharacterBehaviorState();
+    s.setTextPresentation(null);
+    s.canonical('msg', 'first\nsecond\nthird', 0);
+    s.canonical('queued', 'later message', 1);
+    expect(s.frame(1, '平静').activity).toBe('idle');
+    s.setTextPresentation({ id: 'msg:0', until: 6000 });
+    expect(s.frame(5000, '平静').activity).toBe('speaking');
+    expect(s.frame(6000, '平静').activity).toBe('idle');
+    s.setTextPresentation({ id: 'msg:1', until: 12000 });
+    expect(s.frame(6001, '平静').activity).toBe('speaking');
+    s.setTextPresentation({ id: 'msg:2', until: 18000 });
+    expect(s.frame(12001, '平静').activity).toBe('speaking');
+    s.setTextPresentation(null); // empty/sticker-only bubble or queue complete
+    expect(s.frame(12002, '平静').activity).toBe('idle');
+  });
+  it('Pet audio outlives the text lease; ending it does not suppress the next segment', () => {
+    const s = new CharacterBehaviorState();
+    s.setTextPresentation({ id: 'msg:0', until: 6000 });
+    s.notice({ kind: 'audio-start', id: 'a', charId, at: 1, msgId: 'msg', scene: 'desktop_pet' });
+    expect(s.frame(9000, '平静').activity).toBe('speaking');
+    s.notice({ kind: 'audio-end', id: 'a', charId, at: 9001, msgId: 'msg', scene: 'desktop_pet' });
+    s.setTextPresentation(null);
+    expect(s.frame(9001, '平静').activity).toBe('idle');
+    s.setTextPresentation({ id: 'msg:1', until: 15002 });
+    expect(s.frame(9002, '平静').activity).toBe('speaking');
+    s.reset();
+    expect(s.frame(9003, '平静').activity).toBe('idle');
+  });
   it('send -> thinking -> stream/text speaking -> idle without losing trusted sadness', () => {
     const s = new CharacterBehaviorState();
     s.notice({ kind: 'request-start', id: 'req', charId, at: 0 });

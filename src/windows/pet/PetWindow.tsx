@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
-import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
-import { listenPetSnapshots, listenPetTurn, listenPetPrefs } from '../../shared/pet/bridge';
+import { listenPetSnapshots, listenPetTurn } from '../../shared/pet/bridge';
 import { DEFAULT_PET_SNAPSHOT, type PetSnapshot } from '../../shared/pet/types';
 import { sendChat } from '../../shared/api/backend';
 import { getDesktopTtsEnabled, getTtsAutoPlay, type TtsAutoPlaySettings } from '../../shared/api/runtimeSettings';
@@ -10,16 +9,22 @@ import { useVoiceInput } from '../../shared/voice/useVoiceInput';
 import { VoiceMessageBar } from '../chat/components/VoiceMessageBar';
 import { normalizeChatDisplayText } from '../chat/chatDisplay';
 import { renderInlineStyled } from '../chat/inlineStyle';
-import { getUIPref } from '../../shared/uiPreferences';
+import { getActiveCharacterInfo, subscribeActiveCharacter } from '../../shared/activeCharacter';
+import { PetTextPresentation } from '../../shared/character/useCharacterBehavior';
+import { usePetBubbleLayout } from './usePetBubbleLayout';
 import { PetStage } from './components/PetStage';
 import { usePetMouse } from './usePetMouse';
 import { usePetRoam } from './usePetRoam';
-import { splitPetDialogue, type PetDialogue } from './petDialogue';
+import { splitPetDialogue, petDialogueDuration, type PetDialogue } from './petDialogue';
 
 export function PetWindow() {
   const [snapshot, setSnapshot] = useState<PetSnapshot>(DEFAULT_PET_SNAPSHOT);
   const [dialogue, setDialogue] = useState<PetDialogue[]>([]);
   const turnBubble = dialogue[0] ?? null;
+  const bubbleLayout = usePetBubbleLayout(Boolean(turnBubble));
+  const [audioEndedId, setAudioEndedId] = useState<string | null>(null);
+  const textPresentation = useMemo(() => turnBubble?.text.trim() && audioEndedId !== turnBubble.id
+    ? { id: turnBubble.id, until: Date.now() + petDialogueDuration(turnBubble) } : null, [turnBubble, audioEndedId]);
   const seenTurns = useRef(new Set<string>());
   const [chatInput, setChatInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -29,7 +34,8 @@ export function PetWindow() {
   const [ttsAutoPlay, setTtsAutoPlay] = useState<TtsAutoPlaySettings>({ chat: false, dream: false, video_call: false, desktop_pet: false, mobile: false });
   const ttsEnabledRef = useRef(ttsEnabled);
   const ttsAutoPlayRef = useRef(ttsAutoPlay);
-  const { pinned, reaction, startDrag, draggingRef, movingRef } = usePetMouse({ shy: snapshot.mood === '惊讶' });
+  const stageRef = useRef<HTMLDivElement>(null);
+  const { pinned, reaction, startDrag, draggingRef, movingRef } = usePetMouse({ shy: snapshot.mood === '惊讶', stageRef });
   usePetRoam({ draggingRef, movingRef });
 
   const voice = useVoiceInput();
@@ -64,29 +70,15 @@ export function PetWindow() {
     };
   }, []);
   useEffect(() => {
-    let disposed = false;
-    let off: (() => void) | undefined;
-    let pending: number | null = null;
-    let resizing = false;
-    const resize = async (value: number) => {
-      pending = Number.isFinite(value) ? Math.max(0.5, Math.min(2, value)) : 1;
-      if (resizing) return;
-      resizing = true;
-      try {
-        while (!disposed && pending !== null) {
-          const scale = pending;
-          pending = null;
-          await getCurrentWindow().setSize(new LogicalSize(Math.round(340 * scale), Math.round(400 * scale)));
-        }
-      } catch (error) {
-        console.warn('[pet] 调整窗口大小失败:', error);
-      } finally { resizing = false; }
-    };
-    void resize(getUIPref('pet.windowScale', 1));
-    listenPetPrefs(patch => {
-      if (typeof patch.windowScale === 'number') void resize(patch.windowScale);
-    }).then(fn => { if (disposed) fn(); else off = fn; }).catch(console.warn);
-    return () => { disposed = true; off?.(); };
+    let characterId = getActiveCharacterInfo().id;
+    return subscribeActiveCharacter(info => {
+      if (info.id === characterId) return;
+      characterId = info.id;
+      setDialogue([]);
+      setAudioPlayingId(null);
+      setAudioEndedId(null);
+      seenTurns.current.clear();
+    });
   }, []);
 
   // Alt+1 global hotkey → toggle voice recording; on stop, auto-send transcribed text
@@ -155,7 +147,7 @@ export function PetWindow() {
   useEffect(() => {
     if (!turnBubble) return;
     if (audioPlayingId === turnBubble.id) return;
-    const ms = Math.max(6000, turnBubble.text.length * 80, turnBubble.sticker ? 8000 : 0);
+    const ms = petDialogueDuration(turnBubble);
     const timer = window.setTimeout(() => setDialogue(previous => previous.slice(1)), ms);
     return () => window.clearTimeout(timer);
   }, [turnBubble, audioPlayingId]);
@@ -202,12 +194,16 @@ export function PetWindow() {
           fontFamily: '"Microsoft YaHei", "Noto Sans SC", sans-serif',
         }}
       >
-        <PetStage snapshot={snapshot} reaction={reaction} volume={voice.isRecording ? voice.volume : 0} />
+        <div ref={stageRef} data-pet-stage style={{ position: 'absolute', left: bubbleLayout.petLeft, top: 0, width: bubbleLayout.stageWidth, height: '100%' }}>
+          <PetTextPresentation.Provider value={textPresentation}>
+            <PetStage snapshot={snapshot} reaction={reaction} volume={voice.isRecording ? voice.volume : 0} />
+          </PetTextPresentation.Provider>
+        </div>
 
         {(voice.isRecording || pinned) && (
           <section style={{
             position: 'absolute',
-            right: 14,
+            left: bubbleLayout.petLeft + 14,
             top: 12,
             display: 'flex',
             alignItems: 'center',
@@ -231,12 +227,17 @@ export function PetWindow() {
             onPointerDown={event => event.stopPropagation()}
             style={{
               position: 'absolute',
-              left: 18,
-              right: 18,
-              bottom: 56,
+              left: bubbleLayout.side === 'right' ? bubbleLayout.petLeft + bubbleLayout.stageWidth + 12 : 12,
+              width: Math.max(0, bubbleLayout.wing - 24),
+              boxSizing: 'border-box',
+              top: 32,
+              maxHeight: 'calc(100% - 64px)',
+              display: 'flex',
+              flexDirection: 'column',
+              visibility: bubbleLayout.wing > 32 ? 'visible' : 'hidden',
               padding: '12px 14px',
               borderRadius: 12,
-              background: 'rgba(18, 12, 32, 0.82)',
+              background: 'rgba(18, 12, 32, 0.94)',
               border: '1px solid rgba(224, 210, 255, 0.22)',
               boxShadow: '0 10px 26px rgba(12, 8, 24, 0.28)',
               color: 'rgba(255, 255, 255, 0.9)',
@@ -244,7 +245,15 @@ export function PetWindow() {
               lineHeight: 1.65,
               cursor: 'default',
             }}
+            data-pet-bubble={bubbleLayout.side}
           >
+            <span aria-hidden="true" style={{
+              position: 'absolute', top: 22, width: 16, height: 20,
+              [bubbleLayout.side === 'right' ? 'left' : 'right']: -15,
+              background: 'rgba(18, 12, 32, 0.94)',
+              clipPath: bubbleLayout.side === 'right' ? 'polygon(100% 0, 0 70%, 100% 100%)' : 'polygon(0 0, 100% 70%, 0 100%)',
+            }} />
+            <div style={{ overflowY: 'auto', overflowWrap: 'anywhere', minHeight: 0, userSelect: 'text' }}>
             {turnBubble.sticker && (
               <img
                 src={turnBubble.sticker.data_url}
@@ -257,10 +266,11 @@ export function PetWindow() {
             {ttsEnabled && turnBubble.text && (
               <div style={{ marginTop: 9 }}>
                 <VoiceMessageBar key={turnBubble.id} text={turnBubble.text} messageId={turnBubble.msgId} autoPlay={Boolean(turnBubble.autoPlayTts)}
-                  onPlaybackStart={() => setAudioPlayingId(turnBubble.id)}
-                  onPlaybackEnd={() => setAudioPlayingId(current => current === turnBubble.id ? null : current)} />
+                  onPlaybackStart={() => { setAudioPlayingId(turnBubble.id); setAudioEndedId(null); }}
+                  onPlaybackEnd={() => { setAudioPlayingId(current => current === turnBubble.id ? null : current); setAudioEndedId(turnBubble.id); }} />
               </div>
             )}
+            </div>
           </section>
         )}
 
@@ -268,8 +278,9 @@ export function PetWindow() {
           onPointerDown={event => event.stopPropagation()}
           style={{
             position: 'absolute',
-            left: 10,
-            right: 10,
+            left: bubbleLayout.petLeft + 10,
+            width: bubbleLayout.stageWidth - 20,
+            boxSizing: 'border-box',
             bottom: 10,
             display: 'flex',
             alignItems: 'center',

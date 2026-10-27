@@ -10,6 +10,10 @@ export interface PetDialogue {
   autoPlayTts?: boolean;
 }
 
+export function petDialogueDuration(message: PetDialogue): number {
+  return Math.max(6000, message.text.length * 80, message.sticker ? 8000 : 0);
+}
+
 /** Use the call window's newline segmentation and display normalization. */
 export function splitPetDialogue(message: PetDialogue): PetDialogue[] {
   const { parts } = effectiveParts(turnFromChannelMessage(message.id, message.text, 0));
