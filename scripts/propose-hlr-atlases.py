@@ -30,6 +30,21 @@ def eye_family(meshes):
     return bool(meshes) and all(re.fullmatch(r'[lr](?:light|ball|white|lash|brow|smileeye|closeeye)[0-9]*', d['id'], re.I) for d in meshes)
 
 
+def requires_native_eye_review(meshes):
+    # Occupied alpha can score perfectly while sampling another eyelid through the same UVs.
+    # Includes shifted imperial eye slots; slot number alone cannot identify an eye binding.
+    return any(re.fullmatch(r'[lr](?:ball|white|lash|smileeye|closeeye)[0-9]*', d['id'], re.I) for d in meshes)
+
+
+def accept_binding_proposal(meshes, scored):
+    if requires_native_eye_review(meshes):
+        return False
+    if [d['id'] for d in meshes] == ['yexuan_suxieben'] and scored:
+        return True
+    return bool(scored and scored[0]['score'] >= .95 and
+                (len(scored) == 1 or scored[0]['score'] - scored[1]['score'] >= .025))
+
+
 def uv_score(drawables, alpha):
     mask = Image.new('L', alpha.size)
     supported = 0
@@ -115,10 +130,9 @@ def main():
             regular = next((r for r in scored if r['resource'] == 'yexuan_eyemask00'), None)
             if slot == 4 and regular and regular['support'] >= .9 and scored[0]['score'] - regular['score'] < .03:
                 scored.remove(regular); scored.insert(0, regular)
-            accepted = bool(scored and scored[0]['score'] >= .95 and (len(scored)==1 or scored[0]['score']-scored[1]['score']>=.025))
-            if ids == ['yexuan_suxieben'] and scored: accepted = True
-            if scored and slot == 4 and scored[0]['score'] >= .92: accepted = True
-            rankings.append(dict(id=item['id'], slot=slot, drawables=ids, proposed=accepted, candidates=scored[:5]))
+            accepted = accept_binding_proposal(meshes, scored)
+            rankings.append(dict(id=item['id'], slot=slot, drawables=ids, proposed=accepted, candidates=scored[:5],
+                                 requiresNativeEyeReview=requires_native_eye_review(meshes)))
             if accepted:
                 bindings.append(dict(slot=slot, resource=scored[0]['resource'], drawables=ids,
                     evidence=reason + '; scores=' + json.dumps(scored[:2])))

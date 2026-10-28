@@ -1,0 +1,444 @@
+{
+  "schema": "hlr-reviewed-eye-bindings-v1",
+  "revision": "20261028",
+  "sourceAtlas": "yexuan_eyemask00",
+  "sourceAtlasSha256": "71b6b3a82724b41c5e3fdbae08f53d4fd0d7a639fbd4f63225e4c1a951e10458",
+  "reason": "Native geometry and original atlas render comparison; alpha occupancy alone cannot accept a native eye binding",
+  "models": [
+    {
+      "id": "hlr_yexuan_2023zhounian_20261027",
+      "mocSha256": "3c1c0e82059c3ec7b21b73967bd65619b17ab8bf8123d5f0ca648df50a67da4b",
+      "bindings": [
+        {
+          "slot": 4,
+          "old": "_restored/slot_04.png",
+          "new": "_restored/slot_04_eye_review_20261028.png",
+          "oldSha256": "9223d414857646c0e47946d91167834a059095db7f50f9e3ef8f58d9bd0b04bc",
+          "newSha256": "71b6b3a82724b41c5e3fdbae08f53d4fd0d7a639fbd4f63225e4c1a951e10458"
+        }
+      ],
+      "beforeConfigSha256": "5a95fccdd4d0b3b1a9ffca25d87cbf52e92ea7c1147f410e6ea577a6aa0ae677",
+      "afterConfigSha256": "e5a6bfff640cb6fdc26a6c1925c849db26801b30984d701ae9a75edc6197636d"
+    },
+    {
+      "id": "hlr_yexuan_2024_520_20261027",
+      "mocSha256": "1226f8d883d922b6a677aff37e3178f5ae47deb0e3050fc809b243549209a12b",
+      "bindings": [
+        {
+          "slot": 4,
+          "old": "_restored/slot_04.png",
+          "new": "_restored/slot_04_eye_review_20261028.png",
+          "oldSha256": "9223d414857646c0e47946d91167834a059095db7f50f9e3ef8f58d9bd0b04bc",
+          "newSha256": "71b6b3a82724b41c5e3fdbae08f53d4fd0d7a639fbd4f63225e4c1a951e10458"
+        }
+      ],
+      "beforeConfigSha256": "a2aaca4f127f82572ed6cf22557ef07bcd5218fc3c841360f5360e030d2dfefc",
+      "afterConfigSha256": "f4c472598084b31df59f4976fe7d7381414496b1eb237592d5b7a1dd520ca2ee"
+    },
+    {
+      "id": "hlr_yexuan_23birthday_20261027",
+      "mocSha256": "faf3c926de7813256c1d47bc9407e73db517d3d1899d64c238f17ddb2088dc52",
+      "bindings": [
+        {
+          "slot": 4,
+          "old": "_restored/slot_04.png",
+          "new": "_restored/slot_04_eye_review_20261028.png",
+          "oldSha256": "9223d414857646c0e47946d91167834a059095db7f50f9e3ef8f58d9bd0b04bc",
+          "newSha256": "71b6b3a82724b41c5e3fdbae08f53d4fd0d7a639fbd4f63225e4c1a951e10458"
+        }
+      ],
+      "beforeConfigSha256": "5543d04f882aec20f67561c70b51903ecae3fa1a375e0d486c71333eab3672a1",
+      "afterConfigSha256": "5ae51b3c5d27a07bd8e563fee5cc3a23fe919d3e67c45f43849dd93e36eff3f5"
+    },
+    {
+      "id": "hlr_yexuan_24chunjie_20261027",
+      "mocSha256": "e1d6313cc7a48065fa747a3841e6e00217bd48b69201a7c1f14a177d01124656",
+      "bindings": [
+        {
+          "slot": 4,
+          "old": "_restored/slot_04.png",
+          "new": "_restored/slot_04_eye_review_20261028.png",
+          "oldSha256": "9223d414857646c0e47946d91167834a059095db7f50f9e3ef8f58d9bd0b04bc",
+          "newSha256": "71b6b3a82724b41c5e3fdbae08f53d4fd0d7a639fbd4f63225e4c1a951e10458"
+        }
+      ],
+      "beforeConfigSha256": "b51562d89485dc686d0698ae16763c5c99275c5c3650352b1439be1664ffa36d",
+      "afterConfigSha256": "b5e31333082cdceb28d5aba4081a707167d1e79a2df5efa0815ccf731663e012"
+    },
+    {
+      "id": "hlr_yexuan_25changfu_20261027",
+      "mocSha256": "c7158db47b7ca44a67aaf67be5d3c9e4a47a0c03999507d122dcbb2d533fac7a",
+      "bindings": [
+        {
+          "slot": 4,
+          "old": "_restored/slot_04.png",
+          "new": "_restored/slot_04_eye_review_20261028.png",
+          "oldSha256": "9223d414857646c0e47946d91167834a059095db7f50f9e3ef8f58d9bd0b04bc",
+          "newSha256": "71b6b3a82724b41c5e3fdbae08f53d4fd0d7a639fbd4f63225e4c1a951e10458"
+        }
+      ],
+      "beforeConfigSha256": "e8a8f822c0672ad386a5b37a27391461f155c69f2afe4a9e516d732ddfcb8ef6",
+      "afterConfigSha256": "32781bb9aba33bb0f27ed56628507ef3279de1345c80bec0b87d23883be19ef8"
+    },
+    {
+      "id": "hlr_yexuan_25chunjie_20261027",
+      "mocSha256": "547e52091340166c4ccfec7b6216bd3790337b31a0450c36ca9697056e2a9d1d",
+      "bindings": [
+        {
+          "slot": 4,
+          "old": "_restored/slot_04.png",
+          "new": "_restored/slot_04_eye_review_20261028.png",
+          "oldSha256": "9223d414857646c0e47946d91167834a059095db7f50f9e3ef8f58d9bd0b04bc",
+          "newSha256": "71b6b3a82724b41c5e3fdbae08f53d4fd0d7a639fbd4f63225e4c1a951e10458"
+        }
+      ],
+      "beforeConfigSha256": "99d1a70bb6dd649ae2afd4254fedce26ba454849fc824bdba86398a8292da3cd",
+      "afterConfigSha256": "9fbc338fe519867c150a625800c90ccf2b0ff49b89a40d79317338f51e25a998"
+    },
+    {
+      "id": "hlr_yexuan_25shengri_20261027",
+      "mocSha256": "b115bd01b7bb6ec3df00117111afcdd07315af223028b634591f21fab9b7ee7c",
+      "bindings": [
+        {
+          "slot": 4,
+          "old": "_restored/slot_04.png",
+          "new": "_restored/slot_04_eye_review_20261028.png",
+          "oldSha256": "9223d414857646c0e47946d91167834a059095db7f50f9e3ef8f58d9bd0b04bc",
+          "newSha256": "71b6b3a82724b41c5e3fdbae08f53d4fd0d7a639fbd4f63225e4c1a951e10458"
+        }
+      ],
+      "beforeConfigSha256": "19f1a723325919eea9ee5a7233c78db33fa3a2709e7bca14462b14c372d044b6",
+      "afterConfigSha256": "0a2139e37b7817a61aa23a1b7411864f9d10fa0066c79cfb52125bd9abf24058"
+    },
+    {
+      "id": "hlr_yexuan_5thanv_20261027",
+      "mocSha256": "cfdb87730dbcde6a187c9187e9f13f598b3919b14ff7e31fa4a0c2bbd59eab35",
+      "bindings": [
+        {
+          "slot": 4,
+          "old": "_restored/slot_04.png",
+          "new": "_restored/slot_04_eye_review_20261028.png",
+          "oldSha256": "9223d414857646c0e47946d91167834a059095db7f50f9e3ef8f58d9bd0b04bc",
+          "newSha256": "71b6b3a82724b41c5e3fdbae08f53d4fd0d7a639fbd4f63225e4c1a951e10458"
+        }
+      ],
+      "beforeConfigSha256": "a31a3252ceffbfb436399fe95030fd3e8cacfec627d447604a2d1c2a70891608",
+      "afterConfigSha256": "27ee33a6c0940ec8b3134084a6f4f09bdace597b1e398a1c026154b2e8bb8b48"
+    },
+    {
+      "id": "hlr_yexuan_baiqing25_20261027",
+      "mocSha256": "f6c3be33f574a74e5d985ba7ca513376a515c002556df173cc5ba47c259da7cc",
+      "bindings": [
+        {
+          "slot": 4,
+          "old": "_restored/slot_04.png",
+          "new": "_restored/slot_04_eye_review_20261028.png",
+          "oldSha256": "9223d414857646c0e47946d91167834a059095db7f50f9e3ef8f58d9bd0b04bc",
+          "newSha256": "71b6b3a82724b41c5e3fdbae08f53d4fd0d7a639fbd4f63225e4c1a951e10458"
+        }
+      ],
+      "beforeConfigSha256": "16e48ab9d6230fac074fcdb6b5ff9882a80abac50081d16c79c7ff11fa048d6d",
+      "afterConfigSha256": "6fe7d01b6a33ed8585d966553815ed1b4696c08b94a824f4d8b5d1d02aa18f72"
+    },
+    {
+      "id": "hlr_yexuan_baiqing26_20261027",
+      "mocSha256": "951747be38024c21a4bf971cd210dd1f5cf705b63f5ae380b3fca2a64ec165a2",
+      "bindings": [
+        {
+          "slot": 4,
+          "old": "_restored/slot_04.png",
+          "new": "_restored/slot_04_eye_review_20261028.png",
+          "oldSha256": "9223d414857646c0e47946d91167834a059095db7f50f9e3ef8f58d9bd0b04bc",
+          "newSha256": "71b6b3a82724b41c5e3fdbae08f53d4fd0d7a639fbd4f63225e4c1a951e10458"
+        }
+      ],
+      "beforeConfigSha256": "94e19a63f42509f3a96c70766289a0a841ac48c3eea097e345af1ae3f9e62cd3",
+      "afterConfigSha256": "597823116f6dc1d4eeea6f3855e29dd6f4fd1c0183d30cad8b94d0f93150c116"
+    },
+    {
+      "id": "hlr_yexuan_cfljxd_20261027",
+      "mocSha256": "954b62370c9c673d4e5dc4580e66def8eb250f2e48f5696759883192deb61c1c",
+      "bindings": [
+        {
+          "slot": 4,
+          "old": "_restored/slot_04.png",
+          "new": "_restored/slot_04_eye_review_20261028.png",
+          "oldSha256": "9223d414857646c0e47946d91167834a059095db7f50f9e3ef8f58d9bd0b04bc",
+          "newSha256": "71b6b3a82724b41c5e3fdbae08f53d4fd0d7a639fbd4f63225e4c1a951e10458"
+        }
+      ],
+      "beforeConfigSha256": "e69b2ac10af91001ffcdd4517954e66237d60ce483240253b58197839116792f",
+      "afterConfigSha256": "6d45de4bc2bb46147d928b59ca9f73c8aa3e6938d128ab236cd70f69e5cdd10a"
+    },
+    {
+      "id": "hlr_yexuan_d5_20261027",
+      "mocSha256": "5238f177806e8777dd0be536e57a5833f6a1b23f0d807257dad556249e1a2697",
+      "bindings": [
+        {
+          "slot": 4,
+          "old": "_restored/slot_04.png",
+          "new": "_restored/slot_04_eye_review_20261028.png",
+          "oldSha256": "9223d414857646c0e47946d91167834a059095db7f50f9e3ef8f58d9bd0b04bc",
+          "newSha256": "71b6b3a82724b41c5e3fdbae08f53d4fd0d7a639fbd4f63225e4c1a951e10458"
+        }
+      ],
+      "beforeConfigSha256": "4beff1d50a85c7f653f62cd56812212feb54bec9372139b05ff7b1c5e66be3e2",
+      "afterConfigSha256": "ec7c775e30f09760406bef36a1b8259d0b486ed202d613e8b70ddc6fb6dbce2a"
+    },
+    {
+      "id": "hlr_yexuan_diguo_20261027",
+      "mocSha256": "7e180c8d219bdc87133a49949ea44b90e45cb67d030f199c7a141cba2099e064",
+      "bindings": [
+        {
+          "slot": 1,
+          "old": "_restored/slot_01.png",
+          "new": "_restored/slot_01_eye_review_20261028.png",
+          "oldSha256": "9223d414857646c0e47946d91167834a059095db7f50f9e3ef8f58d9bd0b04bc",
+          "newSha256": "71b6b3a82724b41c5e3fdbae08f53d4fd0d7a639fbd4f63225e4c1a951e10458"
+        }
+      ],
+      "beforeConfigSha256": "ac29ec072b7bfcf883a70621614bcd3fc0b3ad4fba0701f2886b2ca5e29e84ae",
+      "afterConfigSha256": "1120caeacebe7a670b577f6246ab32d5721c8faed8197bb5e0e0b350b5caa835"
+    },
+    {
+      "id": "hlr_yexuan_diguo_zero_20261027",
+      "mocSha256": "c1a1921b935fcc6cd7e2ba890825328fb5196e27800a7c9e575b882721e3152a",
+      "bindings": [
+        {
+          "slot": 2,
+          "old": "_restored/slot_02.png",
+          "new": "_restored/slot_02_eye_review_20261028.png",
+          "oldSha256": "9223d414857646c0e47946d91167834a059095db7f50f9e3ef8f58d9bd0b04bc",
+          "newSha256": "71b6b3a82724b41c5e3fdbae08f53d4fd0d7a639fbd4f63225e4c1a951e10458"
+        }
+      ],
+      "beforeConfigSha256": "6a0dfe6db4308bf636cda087c305d7ea2c0095e866d2f36275b67e8edf0dd23a",
+      "afterConfigSha256": "bdbfc1818fdb2dbc4a60c1fb89b6261cab532fabc82ac671d19223ada036bdb7"
+    },
+    {
+      "id": "hlr_yexuan_disanshijie_20261027",
+      "mocSha256": "fa06b805210bb74b8d904bbc21765f9d3819f288d23304ebcb1ed9be329a04da",
+      "bindings": [
+        {
+          "slot": 4,
+          "old": "_restored/slot_04.png",
+          "new": "_restored/slot_04_eye_review_20261028.png",
+          "oldSha256": "9223d414857646c0e47946d91167834a059095db7f50f9e3ef8f58d9bd0b04bc",
+          "newSha256": "71b6b3a82724b41c5e3fdbae08f53d4fd0d7a639fbd4f63225e4c1a951e10458"
+        }
+      ],
+      "beforeConfigSha256": "23f822f76c11acd9852a01925c9b5fea2ec532bb7a2ecd0741f9c22ae1e1eb69",
+      "afterConfigSha256": "f67df1cca23f37fec2458d047b2356921068380dc15324391a9486133c355304"
+    },
+    {
+      "id": "hlr_yexuan_disishijie2_20261027",
+      "mocSha256": "646c83089c2a88d801c2293bc8fdd0d10040d09db4af46d54139574f244b5697",
+      "bindings": [
+        {
+          "slot": 4,
+          "old": "_restored/slot_04.png",
+          "new": "_restored/slot_04_eye_review_20261028.png",
+          "oldSha256": "9223d414857646c0e47946d91167834a059095db7f50f9e3ef8f58d9bd0b04bc",
+          "newSha256": "71b6b3a82724b41c5e3fdbae08f53d4fd0d7a639fbd4f63225e4c1a951e10458"
+        }
+      ],
+      "beforeConfigSha256": "1a446c5a3c186468d78e73d1aad36a21441c4f3744c5905d47e0c98fa4713d78",
+      "afterConfigSha256": "3f1622617a6d438fff591ab4af14e2fe19440cf10eef76bf60ae21d93d95f012"
+    },
+    {
+      "id": "hlr_yexuan_fojiao_20261027",
+      "mocSha256": "18f4a962bb98e0da647486cb6be3728c734130238476b4c4a0ca53961be85ebc",
+      "bindings": [
+        {
+          "slot": 4,
+          "old": "_restored/slot_04.png",
+          "new": "_restored/slot_04_eye_review_20261028.png",
+          "oldSha256": "9223d414857646c0e47946d91167834a059095db7f50f9e3ef8f58d9bd0b04bc",
+          "newSha256": "71b6b3a82724b41c5e3fdbae08f53d4fd0d7a639fbd4f63225e4c1a951e10458"
+        }
+      ],
+      "beforeConfigSha256": "7153233a2fe5522fd7fae72118d3fef5f2313199d4edbcfd34e6decbd472c03c",
+      "afterConfigSha256": "2308ccb1b44e78d788823b6513b5b9032e34dc99ab847adf88d581bd3ca38b3f"
+    },
+    {
+      "id": "hlr_yexuan_GangFengyx_20261027",
+      "mocSha256": "5eb1ccde6890441d34f24deff734249edaa5302404920368d1ee685af8831ea2",
+      "bindings": [
+        {
+          "slot": 4,
+          "old": "_restored/slot_04.png",
+          "new": "_restored/slot_04_eye_review_20261028.png",
+          "oldSha256": "9223d414857646c0e47946d91167834a059095db7f50f9e3ef8f58d9bd0b04bc",
+          "newSha256": "71b6b3a82724b41c5e3fdbae08f53d4fd0d7a639fbd4f63225e4c1a951e10458"
+        }
+      ],
+      "beforeConfigSha256": "2edb62221ed8167e694080f48073d33302387bb93c596077622bd22a0d235446",
+      "afterConfigSha256": "d646a7080deb345502f1c0276ce0fd4c29f2ae6148670f92d71a51a915f64b18"
+    },
+    {
+      "id": "hlr_yexuan_gongzhujie2_20261027",
+      "mocSha256": "fc8ff9f2513da290e83f4a9a27d11648bccbf069af99e7fd8c6fe3c39a6ec7dd",
+      "bindings": [
+        {
+          "slot": 4,
+          "old": "_restored/slot_04.png",
+          "new": "_restored/slot_04_eye_review_20261028.png",
+          "oldSha256": "9223d414857646c0e47946d91167834a059095db7f50f9e3ef8f58d9bd0b04bc",
+          "newSha256": "71b6b3a82724b41c5e3fdbae08f53d4fd0d7a639fbd4f63225e4c1a951e10458"
+        }
+      ],
+      "beforeConfigSha256": "bbdba67839d54949c24db1212636350c694c7f0518a98449a584b36480a529ef",
+      "afterConfigSha256": "091748f625f6e35feeaebdf4671382f0890eee5988ba086dfb153ecdeabcc495"
+    },
+    {
+      "id": "hlr_yexuan_jiaqi_20261027",
+      "mocSha256": "d0c6a796a9ac4edc1516df9070847298bb840042ec9846e0c550ef3860b18520",
+      "bindings": [
+        {
+          "slot": 4,
+          "old": "_restored/slot_04.png",
+          "new": "_restored/slot_04_eye_review_20261028.png",
+          "oldSha256": "9223d414857646c0e47946d91167834a059095db7f50f9e3ef8f58d9bd0b04bc",
+          "newSha256": "71b6b3a82724b41c5e3fdbae08f53d4fd0d7a639fbd4f63225e4c1a951e10458"
+        }
+      ],
+      "beforeConfigSha256": "dcc5aa67cb356202100fceeecfe98acafbe4f30d941d29c0390c0505bb7251f4",
+      "afterConfigSha256": "c7549de3fafc44d6cd92e1445f3440aa72b8bb59b205eae0d9e1eef30d140bdf"
+    },
+    {
+      "id": "hlr_yexuan_jushufu_20261027",
+      "mocSha256": "12f49261d771c96f472a38dfce2f9587f5cbac82e4e3183a7dabffc19a84cc4e",
+      "bindings": [
+        {
+          "slot": 4,
+          "old": "_restored/slot_04.png",
+          "new": "_restored/slot_04_eye_review_20261028.png",
+          "oldSha256": "9223d414857646c0e47946d91167834a059095db7f50f9e3ef8f58d9bd0b04bc",
+          "newSha256": "71b6b3a82724b41c5e3fdbae08f53d4fd0d7a639fbd4f63225e4c1a951e10458"
+        }
+      ],
+      "beforeConfigSha256": "8baa7ace083f1c0986b1b808454891a74bd033040d8be097d4b782253c29da56",
+      "afterConfigSha256": "63ca8af282089dce3f1048b5004a40a9fd2089b04442d4e9206b6454efe44a15"
+    },
+    {
+      "id": "hlr_yexuan_magic_20261027",
+      "mocSha256": "45ff1d04b658e0462b0c93fac067c7610b99f859a09961ec3e31d502ac3c5626",
+      "bindings": [
+        {
+          "slot": 4,
+          "old": "_restored/slot_04.png",
+          "new": "_restored/slot_04_eye_review_20261028.png",
+          "oldSha256": "9223d414857646c0e47946d91167834a059095db7f50f9e3ef8f58d9bd0b04bc",
+          "newSha256": "71b6b3a82724b41c5e3fdbae08f53d4fd0d7a639fbd4f63225e4c1a951e10458"
+        }
+      ],
+      "beforeConfigSha256": "84880b23064fa5cf6374cb16ab8bd1584186768715cff7b18bda1b50a6b655be",
+      "afterConfigSha256": "f8c368f78fcf6047435a39c49bb5c7d68902b22dbb17f9b1bd687ee3c23dccfb"
+    },
+    {
+      "id": "hlr_yexuan_qianlu_20261027",
+      "mocSha256": "b8c43d36c85704fab93926b661d88aa964b2eced63c38d11e414ce2d0d2ede3a",
+      "bindings": [
+        {
+          "slot": 4,
+          "old": "_restored/slot_04.png",
+          "new": "_restored/slot_04_eye_review_20261028.png",
+          "oldSha256": "9223d414857646c0e47946d91167834a059095db7f50f9e3ef8f58d9bd0b04bc",
+          "newSha256": "71b6b3a82724b41c5e3fdbae08f53d4fd0d7a639fbd4f63225e4c1a951e10458"
+        }
+      ],
+      "beforeConfigSha256": "a196ad5e26c06e932b8a6b78189f9107bf0ab50831e4dc7231e505b6c0faefea",
+      "afterConfigSha256": "90536bf840f06e6b84c362a81fcc140491515bd01a91b13a7563e5bab5a7f667"
+    },
+    {
+      "id": "hlr_yexuan_qixi24_20261027",
+      "mocSha256": "a6a08c30d28d27fc02ac49f4c33613cb96667ea344fd1b87517eb89d3d50f1ef",
+      "bindings": [
+        {
+          "slot": 4,
+          "old": "_restored/slot_04.png",
+          "new": "_restored/slot_04_eye_review_20261028.png",
+          "oldSha256": "9223d414857646c0e47946d91167834a059095db7f50f9e3ef8f58d9bd0b04bc",
+          "newSha256": "71b6b3a82724b41c5e3fdbae08f53d4fd0d7a639fbd4f63225e4c1a951e10458"
+        }
+      ],
+      "beforeConfigSha256": "296c267678f8ed1a45ece1e4ff9fa723c82b8288825b33cc26d4c53d72ea89ff",
+      "afterConfigSha256": "a2fc1573d32dd54219005e665565ba64246a934dcf10b3f4aedeaa5addc8388b"
+    },
+    {
+      "id": "hlr_yexuan_resha_20261027",
+      "mocSha256": "034d31e338a8722e366a95a780247f0f21af49e5ecd77adb10f78ccb802ea1b6",
+      "bindings": [
+        {
+          "slot": 4,
+          "old": "_restored/slot_04.png",
+          "new": "_restored/slot_04_eye_review_20261028.png",
+          "oldSha256": "9223d414857646c0e47946d91167834a059095db7f50f9e3ef8f58d9bd0b04bc",
+          "newSha256": "71b6b3a82724b41c5e3fdbae08f53d4fd0d7a639fbd4f63225e4c1a951e10458"
+        }
+      ],
+      "beforeConfigSha256": "bf90fecb9e3a0ee066287454acfadd8d8f434ead67a6c84803e601baab424fed",
+      "afterConfigSha256": "65dc7d9569cd2f13a73edcf1071ac37bc62cba3c3f855ca4a3177e302a60c62f"
+    },
+    {
+      "id": "hlr_yexuan_shengri24_20261027",
+      "mocSha256": "262554e7f318fef7a4f52fc34d995aab6c13edd16e7dcefbb26a39c01d483757",
+      "bindings": [
+        {
+          "slot": 4,
+          "old": "_restored/slot_04.png",
+          "new": "_restored/slot_04_eye_review_20261028.png",
+          "oldSha256": "9223d414857646c0e47946d91167834a059095db7f50f9e3ef8f58d9bd0b04bc",
+          "newSha256": "71b6b3a82724b41c5e3fdbae08f53d4fd0d7a639fbd4f63225e4c1a951e10458"
+        }
+      ],
+      "beforeConfigSha256": "7c1c0766f4b02ffbb7cc86a168cd6d401858997f5f68114796bdb3d31911b595",
+      "afterConfigSha256": "958a2606e8652eac15fbeb770384dcb19386102005b093acac959e6abdada1e6"
+    },
+    {
+      "id": "hlr_yexuan_shuiyi_20261027",
+      "mocSha256": "e1c41f3c6c8a0325d8bc3ea4278a0ec3464013c101c1cb41a7e1ba4d426d91bb",
+      "bindings": [
+        {
+          "slot": 4,
+          "old": "_restored/slot_04.png",
+          "new": "_restored/slot_04_eye_review_20261028.png",
+          "oldSha256": "9223d414857646c0e47946d91167834a059095db7f50f9e3ef8f58d9bd0b04bc",
+          "newSha256": "71b6b3a82724b41c5e3fdbae08f53d4fd0d7a639fbd4f63225e4c1a951e10458"
+        }
+      ],
+      "beforeConfigSha256": "c0c39145fb72c914087c125b62b430a2cb9bd8f307a86514a300b6f0d15d56f1",
+      "afterConfigSha256": "e5027061c9d2ee5deba02f36a3e410105fa115ef4d1226ab62b6e2fbfe197aa7"
+    },
+    {
+      "id": "hlr_yexuan_sizhounian_20261027",
+      "mocSha256": "0cd18a35f464848e12cd24cb03805a637be2a6368c0875d5b2ea4e885acb21ec",
+      "bindings": [
+        {
+          "slot": 4,
+          "old": "_restored/slot_04.png",
+          "new": "_restored/slot_04_eye_review_20261028.png",
+          "oldSha256": "9223d414857646c0e47946d91167834a059095db7f50f9e3ef8f58d9bd0b04bc",
+          "newSha256": "71b6b3a82724b41c5e3fdbae08f53d4fd0d7a639fbd4f63225e4c1a951e10458"
+        }
+      ],
+      "beforeConfigSha256": "d12394e0f4addfd54045453667679b1604ea29093caba2409957819302109ce9",
+      "afterConfigSha256": "42ddb6b358539d9a4949138537a8e7546e1db2dca831b3f1bd0efad2cc5e4e4e"
+    },
+    {
+      "id": "hlr_yexuan_xiaoyuan_20261027",
+      "mocSha256": "3a8f9eac5abfe6886d596a76aafda5406e4ea96bd3e4db701d483473939863d3",
+      "bindings": [
+        {
+          "slot": 4,
+          "old": "_restored/slot_04.png",
+          "new": "_restored/slot_04_eye_review_20261028.png",
+          "oldSha256": "9223d414857646c0e47946d91167834a059095db7f50f9e3ef8f58d9bd0b04bc",
+          "newSha256": "71b6b3a82724b41c5e3fdbae08f53d4fd0d7a639fbd4f63225e4c1a951e10458"
+        }
+      ],
+      "beforeConfigSha256": "d62a7e7e62c99d085a2d898f10f8cbd35ea90d31bcbc73d8519beaf879fa618f",
+      "afterConfigSha256": "f511339a7b9e04dea59b8124aae97e8f77b65bc8409bd145d0afe848e344416e"
+    }
+  ]
+}

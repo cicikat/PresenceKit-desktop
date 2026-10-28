@@ -121,3 +121,20 @@ python scripts/package-hlr-reviewed.py --parent-snapshot '<全量原始审计>' 
 后续用 installed-models.json 识别本轮真正安装的人物，而非把所有配置/卡面/道具都计为皮肤。先原包增量比较，再按模型主体与附属层恢复，最后以最终运行配置、每个资产哈希和目检指纹共同决定可用性。安装前仍运行第 4 节的严格安装器，成品包本身不会自动切换用户角色。保留旧版本 ID。
 
 交付为运行用 model3/moc3，不是可编辑 cmo3。布眼罩、绑带、玩偶样式、部分本地换装、绘画内容或原版卡面合成未因主体通过而完成。眼镜与企鹅眼罩的分离预设依赖本客户端 drawableVisibility，不能保证其它查看器识别扩展档案。默认主体的来源、像素、网格和原生曲线保留；实际 Windows Tauri/TTS/GPU 与发行包仍单独 observe。
+
+## 8. 原生眼图必须做端点和表情目检（2026-10-28）
+
+用户确认 d5 眼睛出现重叠眼线/横条。全量95个前端目录审计发现29个原生眼槽使用不兼容的 yexuan_eyemask06；并非只有槽4，帝国/零之帝国分别在槽1/2。原始00图在这些MOC的原生睁眼、半闭、闭眼和原生表情对比中正确对齐。本次只修复前端副本的纹理引用并保留原文件；原始包、MOC、动作、表情、物理不改写。不同布局的冰峰05、内嵌眼图等不能统一替换为00。00/04存在相近布局，本次记录的是经过验证的兼容原始绑定，不宣称原游戏唯一材质配置。
+
+`propose-hlr-atlases.py` 的alpha覆盖率曾把“有像素”当作更高分依据，却无法判断采样到了哪一道眼皮。现在原生眼图不按高分自动接受，必须单独复核。精确已验证的模型、MOC哈希、槽位、原图SHA及前后配置SHA见 `docs/hlr-reviewed-eye-bindings.json`；新包遇到新MOC/UV/配置后不能只按模型名沿用。
+
+`scripts/review-hlr-eye-bindings.py` 在实际生产舞台里分别做 before/candidate/installed；candidate 仅拦截纹理请求对比原图，不修改前端文件。原生眼参数端点、每个原生表情近景、动作与重载都要确认；头盔等遮挡时只在取证fixture中临时隐藏已确认非眼部祖先的配饰，并额外保存眼睛可见的对比。该隐藏与取证帧率限制不写入生产舞台。Core在更新后会loadParameters还原保存值，参数断言须在Core.update提交边界采集，不能用帧后保存值误判实际画面。
+
+在浏览器和目检通过后，`scripts/repair-hlr-eye-atlases.py` 仅接受明确已复核ID；预检配置/MOC/旧纹理哈希及原始新纹理的身份，先完整备份，再新增独立命名PNG并原子更新配置/来源清单。它拒绝覆盖既有修复文件；旧PNG仍保留供回退。安装后用显式 `--models` 再跑 installed，验证真实新文件路径、145组左右眼端点、每条动作真实开始事件与重载；空模型列表必须报错。原始全量基线与原成品包不改写，也不能用本机修复副本替代下轮原包baseline。
+
+```powershell
+$eyeIds = (Get-Content docs/hlr-reviewed-eye-bindings.json -Raw | ConvertFrom-Json).models.id
+python scripts/review-hlr-eye-bindings.py --archive '<素材库原始归档>' --output '<新的安装后证据目录>' --phase installed --models @eyeIds
+```
+
+本轮完整原副本、候选/安装后证据、逐项哈希及修复说明位于素材库“其他/眼部修复-20261028”。前端模型资源不入Git，新环境需自行恢复本机原始素材。浏览器使用真实渲染器但模拟传输，真实Tauri/GPU和发行包仍单独observe，无跨端业务协议变化。

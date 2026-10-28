@@ -22,6 +22,16 @@ package = module('package_reviewed', 'package-hlr-reviewed.py')
 
 
 class AssemblySafety(unittest.TestCase):
+    def test_perfect_alpha_coverage_cannot_auto_bind_native_eye_or_shifted_eye_slot(self):
+        ranking = [dict(resource='yexuan_eyemask06', score=1.0),
+                   dict(resource='yexuan_eyemask00', score=.5)]
+        for meshes in ([dict(id='Lball'),dict(id='Rlash1')],
+                       [dict(id='Rcloseeye'),dict(id='cloth')]):
+            self.assertTrue(atlases.requires_native_eye_review(meshes))
+            self.assertFalse(atlases.accept_binding_proposal(meshes, ranking))
+        self.assertTrue(atlases.accept_binding_proposal([dict(id='xueren')], ranking))
+        self.assertFalse(atlases.requires_native_eye_review([dict(id='xiaoqieyanzhao')]))
+
     def test_shifted_doll_slot_is_not_a_fox_ear_and_native_slot11_is_not_a_doll(self):
         self.assertEqual(atlases.common_atlases([dict(id='dollleg'),dict(id='dollface')]),
             ['yexuan_doll01','yexuan_doll02'])
