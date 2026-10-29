@@ -163,9 +163,9 @@ open：后端 `three-repo-interface-catalog.md` 待其仓同步本条 current/ob
 
 ## 聊天产物文件卡（2026-09-16）
 
-current：桌面 ChatPanel 消费 live `artifacts[]` 文件卡；下载/预览走 Tauri Bearer，不新增 desktop action。历史接口尚未持久化该字段。
-observe：真实 Path C 写出 html 后的端到端预览仍待运行中后端联调。
-roadmap：手机产物卡 UI。
+current（2026-10-29）：桌面 ChatPanel 消费 live 与历史 `artifacts[]` 文件卡；刷新/翻页恢复首段卡片，纯文件回合可见。下载/预览走 Tauri Bearer，不新增 desktop action。
+observe：用户本轮确认刷新与下载恢复可用；先前下载闪退未复现、根因未确认，未改下载实现。真实 Path C 端到端预览、release 验收仍待完成。刷新延时只在施工期间出现一次；后端日期/今日历史实测约 412/564ms，无持续延迟证据。
+current：手机已有产物卡 UI；后台 pending 元数据补全仍为 observe。
 
 ## YOU 头像布局验收（2026-09-13，partial）
 

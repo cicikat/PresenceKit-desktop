@@ -47,6 +47,7 @@ WS 经 `ws_bridge.rs` 原生 Bearer 握手与 Tauri 事件，token 不进入 URL
 协议以 [protocol-v0](docs/protocol-v0.md) 为准，不因产品版本叫 v1 而推定已实现 v1 envelope。
 
 ChatPanel 当前协调发送、流式临时消息、canonical channel、分段补充和按日历史。
+历史文件元数据由后端持久化，`chatHistory.ts` 统一为启动与翻页恢复首段文件卡，支持纯文件回合。
 本地请求槽由 ChatRequests 按气泡 ID 独立持有，loading 从 pending/stream wait 派生；
 空流等待在本地请求全部结算后立即收起，无主空流另有 8 秒上限；
 HTTP fallback 定时器由 ChatReplyFallbacks 按同一本地 ID 持有。呈现仍经 ChatPanel adapter；

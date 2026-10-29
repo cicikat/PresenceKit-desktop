@@ -25,7 +25,7 @@ export interface StickerPayload {
   data_url: string;
 }
 
-/** Live channel_message / HTTP reply sidecar. History does not persist this. */
+/** Public metadata carried by live replies and persisted chat history. */
 export interface ChatArtifactPayload {
   id: string;
   filename: string;
@@ -193,6 +193,7 @@ export interface DiaryEntry {
 }
 
 export interface ChatLogEntry {
+  artifacts?: ChatArtifactPayload[];
   entry_kind?: 'narration';
   tool_activity?: import('./toolActivity').ToolActivity;
   time: string;

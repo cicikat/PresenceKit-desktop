@@ -332,7 +332,7 @@ assistant correlation ID 已对齐：`HTTP turn_id = HTTP msg_id = WS channel_me
 
 `channel_message` 可额外带 `sticker?: { kind: 'sticker'; emotion: string; data_url: string }`。这是后端表情包副作用的 live payload：`content` 可以为空，客户端以 `data_url` 渲染图片气泡，`emotion` 用作无障碍文本；短期历史暂不持久化该字段。
 
-`channel_message` 与 `POST /desktop/chat` 回包还可带有界 `artifacts[]`：`id`、`filename`、`mime`、`size`、`download_url`，可预览时加 `preview_url`。不含正文与绝对路径。ChatPanel 在第一条气泡渲染文件卡；下载走 Tauri `download_chat_artifact`（保存对话框 + Bearer GET `/chat/artifacts/{id}`），预览走 `preview_chat_artifact`（CSP 沙箱 iframe，`sandbox=""`）。历史接口尚未持久化该字段。手机 UI 仍为 roadmap。
+`channel_message` 与 `POST /desktop/chat` 回包还可带有界 `artifacts[]`：`id`、`filename`、`mime`、`size`、`download_url`，可预览时加 `preview_url`。不含正文与绝对路径。ChatPanel 在第一条气泡渲染文件卡；下载走 Tauri `download_chat_artifact`（保存对话框 + Bearer GET `/chat/artifacts/{id}`），预览走 `preview_chat_artifact`（CSP 沙箱 iframe，`sandbox=""`）。历史 `GET /chat-log/{date}` 已持久化并返回 artifacts 元数据；桌面启动与翻页在首个展示分段恢复文件卡，也支持纯文件回合。手机已有文件卡 UI，后台 pending 队列补全仍为 observe。
 
 `POST /desktop/wake` 有 assistant reply 时同样返回 `turn_id` / `msg_id`，并遵循相同 correlation ID 约束。
 

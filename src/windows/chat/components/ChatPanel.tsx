@@ -58,6 +58,7 @@ import { createLatestTimer } from '../chatTimer';
 import { bindHttpReplyIdentity, matchesHistoryReplay } from '../httpReplyIdentity';
 import { ChatReplyFallbacks, type ReplySource } from '../chatReplyFallbacks';
 import { ChatRequests, type ChatRequestToken } from '../chatRequests';
+import { historyAssistantParts } from '../chatHistory';
 
 function splitReply(text: string): string[] {
   return text.split(/\n+/).map(s => s.trim()).filter(s => s.length > 0);
@@ -147,7 +148,7 @@ interface ChatMsg {
   reasoningPending?: boolean;
   segments?: NarrativeSegment[];
   segmentedContent?: string;
-  // 仅 live channel_message / HTTP 回包携带；历史接口尚未持久化 sticker / artifacts。
+  // Artifacts also come from history; stickers remain live-only.
   sticker?: StickerPayload;
   artifacts?: ChatArtifactPayload[];
   // Snapshot at live-message arrival. History and previously rendered turns
@@ -284,12 +285,9 @@ function entriesToMsgs(dateStr: string, entries: ChatLogEntry[], rawFallback: bo
     if (entry.user) {
       msgs.push({ id: newId(), role: 'user', text: entry.user, time: ts, turnId: entry.turn_id });
     }
-    if (entry.assistant) {
-      const segments = splitReply(entry.assistant_display_text || entry.assistant);
-      segments.forEach((seg) => {
-        msgs.push({ id: newId(), role: entry.entry_kind === 'narration' ? 'system' : 'assistant', narration: entry.entry_kind === 'narration', text: seg, time: ts, turnId: entry.turn_id });
-      });
-    }
+    historyAssistantParts(entry).forEach(({ text, artifacts }) => {
+      msgs.push({ id: newId(), role: entry.entry_kind === 'narration' ? 'system' : 'assistant', narration: entry.entry_kind === 'narration', text, artifacts, time: ts, turnId: entry.turn_id });
+    });
   }
   return msgs;
 }
