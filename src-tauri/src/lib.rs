@@ -1463,7 +1463,7 @@ async fn download_chat_artifact(
         return Err("Invalid destination path".to_string());
     }
     let cfg = load_client_config(&app);
-    let client = http_client()?;
+    let client = reqwest::Client::builder().no_proxy().redirect(reqwest::redirect::Policy::none()).timeout(std::time::Duration::from_secs(60)).build().map_err(|_| "Cannot connect")?;
     let url = chat_artifact_url(&cfg, &artifact_id, false)?;
     let response = authorized_request(&cfg, client.get(url))
         .send()
@@ -1472,16 +1472,48 @@ async fn download_chat_artifact(
     if !response.status().is_success() {
         return Err(format!("HTTP {}", response.status().as_u16()));
     }
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|_| "Invalid artifact response".to_string())?;
+    let bytes = bounded_artifact_bytes(response).await?;
     if let Some(parent) = dest.parent() {
         if !parent.as_os_str().is_empty() {
             fs::create_dir_all(parent).map_err(|e| format!("无法创建保存目录: {e}"))?;
         }
     }
     fs::write(&dest, bytes).map_err(|e| format!("写入失败: {e}"))
+}
+
+const MAX_CHAT_IMAGE_BYTES: usize = 25 * 1024 * 1024;
+
+async fn bounded_artifact_bytes(mut response: reqwest::Response) -> Result<Vec<u8>, String> {
+    if !response.status().is_success() {
+        return Err(format!("HTTP {}", response.status().as_u16()));
+    }
+    if response.content_length().unwrap_or(0) > MAX_CHAT_IMAGE_BYTES as u64 {
+        return Err("HTTP 413".into());
+    }
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response.chunk().await.map_err(|_| "Artifact read failed")? {
+        if bytes.len() + chunk.len() > MAX_CHAT_IMAGE_BYTES { return Err("HTTP 413".into()); }
+        bytes.extend_from_slice(&chunk);
+    }
+    Ok(bytes)
+}
+
+#[tauri::command]
+async fn preview_chat_image(app: tauri::AppHandle, artifact_id: String) -> Result<String, String> {
+    if !is_chat_artifact_id(&artifact_id) { return Err("HTTP 422".into()); }
+    let cfg = load_client_config(&app);
+    let client = reqwest::Client::builder().no_proxy()
+        .redirect(reqwest::redirect::Policy::none())
+        .connect_timeout(std::time::Duration::from_secs(8))
+        .timeout(std::time::Duration::from_secs(60)).build().map_err(|_| "Cannot connect")?;
+    let response = authorized_request(&cfg, client.get(chat_artifact_url(&cfg, &artifact_id, true)?))
+        .send().await.map_err(|_| "Image preview failed")?;
+    let mime = response.headers().get(reqwest::header::CONTENT_TYPE).and_then(|v| v.to_str().ok())
+        .unwrap_or("").split(';').next().unwrap_or("").trim().to_string();
+    if !response.status().is_success() { return Err(format!("HTTP {}", response.status().as_u16())); }
+    if !matches!(mime.as_str(), "image/png" | "image/jpeg" | "image/webp") { return Err("HTTP 415".into()); }
+    let bytes = bounded_artifact_bytes(response).await?;
+    Ok(format!("data:{};base64,{}", mime, base64::engine::general_purpose::STANDARD.encode(bytes)))
 }
 
 #[tauri::command]
@@ -3879,6 +3911,7 @@ pub fn run() {
             load_turn_reasoning,
             download_chat_artifact,
             preview_chat_artifact,
+            preview_chat_image,
             load_garden_state,
             coplay_state,
             coplay_arm,

@@ -253,6 +253,8 @@ export const enUS: Record<MessageKey, string> = {
   "chat.attachments.replyPrefix": "Replying to the following message:",
   "chat.attachments.images": "Images",
   "chat.attachments.documents": "Documents",
+  "chat.artifacts.imageLoading": "Loading image…",
+  "chat.artifacts.imageRetry": "Image unavailable. Retry",
   "chat.artifacts.download": "Download",
   "chat.artifacts.preview": "Preview",
   "chat.artifacts.close": "Close",

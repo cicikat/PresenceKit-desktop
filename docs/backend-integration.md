@@ -1356,3 +1356,7 @@ main capability 仅新增标题栏需要的 start-dragging、minimize、toggle-m
 - 桌宠沿用 `pet://prefs` 的 `windowScale` / `live2dZoom` 字段；窗口尺寸 0.5–2 倍、Live2D 缩放上限 8，pet capability 新增 `core:window:allow-set-size`。不是后端 capability 或手机设置。
 
 无 REST/WS 或后端管理面变更，无跨端影响。
+
+## 294 生成图产物
+既有 artifacts[] 支持可选 kind=image 和 image/png、image/jpeg、image/webp。沿原即时回复/推送/历史链路保留元数据，旧文本卡片兼容；chat scope 与会话/角色授权不变。使用固定id的原产物端点带鉴权加载，不拼接带token的图片URL。显示缩略图、放大和失败重试，25MiB有界传输。
+桌面使用 preview_chat_image IPC 返回data URL，下载使用原保存对话框；手机复用ChatImage全屏缩放，saveChatImage(name,mime,bytes) 经AppSettingsStore/PlatformSettingsChannel/MainActivity通道调用系统ACTION_CREATE_DOCUMENT保存二进制图片，不新增存储权限或后台服务。模型密钥、默认连接、角色白名单与用户prompt约束由后端管理面统一配置，客户端不复制设置。真实图像服务/原生窗口/真机保存器验收为observe。

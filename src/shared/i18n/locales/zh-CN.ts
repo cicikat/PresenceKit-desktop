@@ -250,6 +250,8 @@ export const zhCN = {
   "chat.attachments.replyPrefix": "回复以下消息：",
   "chat.attachments.images": "图片",
   "chat.attachments.documents": "文档",
+  "chat.artifacts.imageLoading": "正在加载图片…",
+  "chat.artifacts.imageRetry": "图片加载失败，点击重试",
   "chat.artifacts.download": "下载",
   "chat.artifacts.preview": "预览",
   "chat.artifacts.close": "关闭",

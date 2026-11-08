@@ -3,6 +3,7 @@
  * Phase 2c+: 按日文件懒加载历史，滚顶继续往前拉
  * ============================================================ */
 
+import { GeneratedImage } from './GeneratedImage';
 import { useState, useEffect, useRef, useCallback, useMemo, useSyncExternalStore, memo, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { format, subDays, parseISO } from 'date-fns';
@@ -549,6 +550,7 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
                 style={{
                   display: 'flex',
                   alignItems: 'center',
+                  flexWrap: 'wrap',
                   gap: 10,
                   padding: '8px 10px',
                   background: 'var(--paper)',
@@ -556,12 +558,13 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
                   borderRadius: 'var(--radius-sm)',
                 }}
               >
+                {(item.kind === 'image' || /^image\/(png|jpeg|webp)$/.test(item.mime)) && <GeneratedImage artifact={item} />}
                 <Icon name={iconForFilename(item.filename)} size={16} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: assistantFontSize - 1, fontWeight: 500, overflowWrap: 'anywhere' }}>{item.filename}</div>
                   <div className="mono" style={{ fontSize: chatThemeFontSize(9.5), color: 'var(--ink-3)', letterSpacing: 0.6 }}>{item.size} B</div>
                 </div>
-                {item.previewable && (
+                {item.previewable && item.kind !== 'image' && !item.mime.startsWith('image/') && (
                   <button type="button" className="mono" onClick={() => onPreviewArtifact?.(item)} style={{ fontSize: chatThemeFontSize(10), padding: '3px 8px', borderRadius: 'var(--radius-xs)', cursor: 'pointer', background: 'transparent', border: '1px solid var(--paper-edge)', color: 'var(--ink-3)' }}>{t('chat.artifacts.preview')}</button>
                 )}
                 <button type="button" className="mono" onClick={() => onDownloadArtifact?.(item)} style={{ fontSize: chatThemeFontSize(10), padding: '3px 8px', borderRadius: 'var(--radius-xs)', cursor: 'pointer', background: 'transparent', border: '1px solid var(--paper-edge)', color: 'var(--ink-3)' }}>{t('chat.artifacts.download')}</button>

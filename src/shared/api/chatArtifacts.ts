@@ -18,6 +18,7 @@ export function normalizeChatArtifacts(raw: unknown): ChatArtifactPayload[] | un
     items.push({
       id,
       filename: filename.slice(0, MAX_FILENAME_CHARS),
+      ...(rec.kind === 'image' ? {kind: 'image' as const} : {}),
       mime: typeof rec.mime === 'string' && rec.mime.trim() ? rec.mime : 'application/octet-stream',
       size: Number.isFinite(size) && size >= 0 ? Math.floor(size) : 0,
       previewable: rec.previewable === true,
@@ -35,4 +36,8 @@ export function downloadChatArtifact(artifactId: string, destPath: string): Prom
 
 export function previewChatArtifact(artifactId: string): Promise<string> {
   return invokeGated<string>('preview_chat_artifact', { artifactId });
+}
+
+export function previewChatImage(artifactId: string): Promise<string> {
+  return invokeGated<string>('preview_chat_image', { artifactId });
 }

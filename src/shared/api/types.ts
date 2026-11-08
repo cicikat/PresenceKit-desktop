@@ -27,6 +27,7 @@ export interface StickerPayload {
 
 /** Public metadata carried by live replies and persisted chat history. */
 export interface ChatArtifactPayload {
+  kind?: 'image';
   id: string;
   filename: string;
   mime: string;
