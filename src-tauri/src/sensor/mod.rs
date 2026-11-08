@@ -13,3 +13,4 @@ pub mod publisher;
 pub mod runner;
 pub mod title_sanitizer;
 pub mod visual;
+mod coplay;

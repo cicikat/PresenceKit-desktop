@@ -90,6 +90,10 @@ pub struct VisualRuntime {
 }
 
 impl VisualRuntime {
+    pub(super) fn revision(&self) -> u64 {
+        self.consent_revision.load(Ordering::SeqCst)
+    }
+
     pub fn new(config: &VisualPerceptionConfig) -> Self {
         Self {
             enabled: AtomicBool::new(config.enabled),
@@ -149,6 +153,7 @@ impl VisualRuntime {
 }
 
 pub struct VisualRunnerConfig {
+    pub app: tauri::AppHandle,
     pub backend_base_url: String,
     pub admin_token: String,
     pub runtime: Arc<VisualRuntime>,
@@ -203,9 +208,13 @@ pub fn spawn_visual_runner(cfg: VisualRunnerConfig) -> Result<VisualRunnerHandle
     async_runtime::spawn(async move {
         let mut previous_hash: Option<u64> = None;
         let mut last_sample = std::time::Instant::now();
+        let mut coplay = super::coplay::Collector::new();
         while tick_rx.recv().await.is_some() {
             if stop_for_task.load(Ordering::SeqCst) { break; }
             poll_screen_request(&cfg, &client, &stop_for_task).await;
+            if let Some(collector) = coplay.as_mut() {
+                collector.tick(&cfg, &client, &stop_for_task).await;
+            }
             if last_sample.elapsed().as_secs() < cfg.runtime.sample_interval_seconds.load(Ordering::SeqCst) {
                 continue;
             }
@@ -382,7 +391,7 @@ fn unix_timestamp() -> f64 {
         .unwrap_or(0.0)
 }
 
-fn encode_jpeg(frame: RgbImage) -> Result<Vec<u8>, String> {
+pub(super) fn encode_jpeg(frame: RgbImage) -> Result<Vec<u8>, String> {
     let max_side = frame.width().max(frame.height());
     let resized = if max_side > MAX_IMAGE_SIDE {
         let scale = MAX_IMAGE_SIDE as f64 / max_side as f64;
@@ -429,7 +438,7 @@ fn hamming_distance(left: u64, right: u64) -> u32 {
 }
 
 #[cfg(target_os = "windows")]
-fn has_unlocked_desktop() -> bool {
+pub(super) fn has_unlocked_desktop() -> bool {
     use windows::Win32::System::StationsAndDesktops::{CloseDesktop, OpenInputDesktop, DESKTOP_SWITCHDESKTOP};
     unsafe {
         // Opening the active input desktop with switch permission fails while the
@@ -445,31 +454,51 @@ fn has_unlocked_desktop() -> bool {
 }
 
 #[cfg(not(target_os = "windows"))]
-fn has_unlocked_desktop() -> bool { false }
+pub(super) fn has_unlocked_desktop() -> bool { false }
 
 #[cfg(target_os = "windows")]
 fn capture_primary_screen() -> Result<RgbImage, String> {
+    capture_gdi(false)
+}
+
+#[cfg(target_os = "windows")]
+pub(super) fn capture_game_window() -> Result<RgbImage, String> {
+    capture_gdi(true)
+}
+
+#[cfg(not(target_os = "windows"))]
+pub(super) fn capture_game_window() -> Result<RgbImage, String> {
+    Err("unsupported".into())
+}
+
+#[cfg(target_os = "windows")]
+fn capture_gdi(foreground: bool) -> Result<RgbImage, String> {
     use std::ffi::c_void;
-    use windows::Win32::Foundation::{HANDLE, HWND};
+    use windows::Win32::Foundation::{HANDLE, HWND, RECT};
     use windows::Win32::Graphics::Gdi::{
         BitBlt, CreateCompatibleDC, CreateDIBSection, DeleteDC, DeleteObject, GetDC, ReleaseDC,
         SelectObject, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, RGBQUAD, SRCCOPY,
     };
-    use windows::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN};
+    use windows::Win32::UI::WindowsAndMessaging::{GetClientRect, GetForegroundWindow, GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN};
 
     unsafe {
-        let width = GetSystemMetrics(SM_CXSCREEN);
-        let height = GetSystemMetrics(SM_CYSCREEN);
-        if width <= 0 || height <= 0 {
+        let target = if foreground { GetForegroundWindow() } else { HWND::default() };
+        if foreground && target.0.is_null() { return Err("No foreground game window".into()); }
+        let (width, height) = if foreground {
+            let mut bounds = RECT::default();
+            GetClientRect(target, &mut bounds).map_err(|e| e.to_string())?;
+            (bounds.right - bounds.left, bounds.bottom - bounds.top)
+        } else { (GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN)) };
+        if width <= 0 || height <= 0 || width as u64 * height as u64 > 16_777_216 {
             return Err("主屏尺寸不可用".into());
         }
-        let screen_dc = GetDC(HWND::default());
+        let screen_dc = GetDC(target);
         if screen_dc.0.is_null() {
             return Err("无法获取屏幕 DC".into());
         }
         let memory_dc = CreateCompatibleDC(screen_dc);
         if memory_dc.0.is_null() {
-            let _ = ReleaseDC(HWND::default(), screen_dc);
+            let _ = ReleaseDC(target, screen_dc);
             return Err("无法创建内存 DC".into());
         }
         let bitmap_info = BITMAPINFO {
@@ -497,7 +526,7 @@ fn capture_primary_screen() -> Result<RgbImage, String> {
             Ok(bitmap) => bitmap,
             Err(error) => {
                 let _ = DeleteDC(memory_dc);
-                let _ = ReleaseDC(HWND::default(), screen_dc);
+                let _ = ReleaseDC(target, screen_dc);
                 return Err(format!("无法创建截图位图: {error}"));
             }
         };
@@ -512,7 +541,7 @@ fn capture_primary_screen() -> Result<RgbImage, String> {
         let _ = SelectObject(memory_dc, previous);
         let _ = DeleteObject(bitmap);
         let _ = DeleteDC(memory_dc);
-        let _ = ReleaseDC(HWND::default(), screen_dc);
+        let _ = ReleaseDC(target, screen_dc);
         if bgra.len() != byte_len {
             return Err("截图复制失败".into());
         }

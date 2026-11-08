@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import * as THREE from 'three';
 import type { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { parseMaterialsConfig, type MaterialsConfig } from '../character/materialsConfig';
@@ -23,7 +23,8 @@ export function roomAssetsLocation(): Promise<string> {
 }
 
 export async function roomModelUrl(kind: 'character' | 'scene', fileName: string): Promise<string> {
-  return invoke<string>('read_room_asset', { kind, fileName });
+  const path = await invoke<string>('read_room_asset', { kind, fileName });
+  return convertFileSrc(path);
 }
 
 export function loadRoomModel(
@@ -59,8 +60,17 @@ export async function listRoomPropFiles(category: string): Promise<RoomPropFile[
 
 /** CA-06 sidecar `<model>.materials.json`; null when the character has none or it fails validation. */
 export async function loadCharacterMaterials(fileName: string): Promise<MaterialsConfig | null> {
+  return loadMaterialsConfig(fileName, 'read_room_material_config');
+}
+
+/** Scene-sidecar variant of `loadCharacterMaterials` (scene directory lookup). */
+export async function loadSceneMaterials(fileName: string): Promise<MaterialsConfig | null> {
+  return loadMaterialsConfig(fileName, 'read_room_scene_material_config');
+}
+
+async function loadMaterialsConfig(fileName: string, command: string): Promise<MaterialsConfig | null> {
   try {
-    const text = await invoke<string | null>('read_room_material_config', { fileName });
+    const text = await invoke<string | null>(command, { fileName });
     if (!text) return null;
     const result = parseMaterialsConfig(JSON.parse(text));
     if (result.ok === true) return result.config;
@@ -75,6 +85,19 @@ export async function loadCharacterMaterials(fileName: string): Promise<Material
 /** Sidecar PNG maps named by the config (shade/transition), decoded once per name; missing ones are skipped. */
 export async function loadCharacterToonTextures(
   fileName: string, config: MaterialsConfig,
+): Promise<Record<string, THREE.Texture>> {
+  return loadToonTextures(fileName, config, 'read_room_material_map');
+}
+
+/** Scene-sidecar PNG maps; reads from the scene directory. */
+export async function loadSceneToonTextures(
+  fileName: string, config: MaterialsConfig,
+): Promise<Record<string, THREE.Texture>> {
+  return loadToonTextures(fileName, config, 'read_room_scene_material_map');
+}
+
+async function loadToonTextures(
+  fileName: string, config: MaterialsConfig, command: string,
 ): Promise<Record<string, THREE.Texture>> {
   const names = new Set<string>();
   for (const binding of config.bindings) {
@@ -91,7 +114,7 @@ export async function loadCharacterToonTextures(
   const loader = new THREE.TextureLoader();
   await Promise.all([...names].map(async (mapName) => {
     try {
-      const url = await invoke<string | null>('read_room_material_map', { fileName, mapName });
+      const url = await invoke<string | null>(command, { fileName, mapName });
       if (!url) return;
       const texture = await loader.loadAsync(url);
       texture.colorSpace = THREE.SRGBColorSpace;
@@ -134,9 +157,11 @@ export async function loadCharacterMotions(fileName: string): Promise<MotionsCon
   }
 }
 
-/** Data URL of `motions/<name>.glb`, or null when it does not exist. */
-export const loadMotionFileUrl = (motionName: string): Promise<string | null> =>
-  invoke<string | null>('read_room_motion_file', { motionName });
+/** Asset URL of `motions/<name>.glb`, or null when it does not exist. */
+export const loadMotionFileUrl = async (motionName: string): Promise<string | null> => {
+  const path = await invoke<string | null>('read_room_motion_file', { motionName });
+  return path ? convertFileSrc(path) : null;
+};
 
 /** One shared catalog for every Skin. Per-model sidecars remain optional legacy overrides. */
 export async function loadAvatarMotions(fileName: string): Promise<MotionsConfig> {

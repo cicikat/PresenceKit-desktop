@@ -170,6 +170,15 @@ export interface CoplayState {
   enabled?: boolean;
   /** 54-A 新增调试字段：watcher 最近一次探测结果，fail-open 不影响主流程 */
   last_probe?: CoplayLastProbe | null;
+  collection?: {
+    source: 'desktop' | 'backend_local';
+    fresh: boolean;
+    online: boolean;
+    age_seconds: number | null;
+    metadata_authorized: boolean;
+    frame_authorized: boolean;
+    blocked_reason: string | null;
+  };
 }
 
 export interface DiaryListItem {

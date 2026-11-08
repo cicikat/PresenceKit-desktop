@@ -17,7 +17,7 @@ import { MotionLibrary, setActiveMotionLibrary, type MotionStatus } from '../../
 import { buildCharacterDiagnostics, publishCharacterDiagnostics } from '../../shared/character/diagnostics';
 import type { BindingReport } from '../../shared/character/toonMaterial';
 import type { MappingReport } from './morphController';
-import { loadRoomModel, loadCharacterMaterials, loadCharacterToonTextures, loadCharacterExpressions, loadAvatarMotions, loadMotionFileUrl } from '../../shared/room/roomAssets';
+import { loadRoomModel, loadCharacterMaterials, loadCharacterToonTextures, loadSceneMaterials, loadSceneToonTextures, loadCharacterExpressions, loadAvatarMotions, loadMotionFileUrl } from '../../shared/room/roomAssets';
 import { applyToonBindings } from '../../shared/character/toonMaterial';
 import type { RoomSettings } from '../../shared/room/roomSettings';
 import {
@@ -104,6 +104,9 @@ const FRAME_CY: Record<Framing, number> = { face: 1.45, upperBody: 1.15, full: 0
 const TARGET_H = 1.6;
 const DEFAULT_FOV = 45;
 const CHAR_LAYER = 1;
+// Beyond this estimate the model needs a small-scene seamless path; above it we unload
+// the old scene first to avoid two large scenes peaking in memory at once.
+const VRAM_LARGE_SCENE_BYTES = 120 * 1024 * 1024;
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -207,19 +210,47 @@ function unlockControls(controls: OrbitControls): void {
 }
 
 function disposeModel(obj: THREE.Object3D): void {
+  const geos = new Set<THREE.BufferGeometry>();
+  const mats = new Set<THREE.Material>();
+  const texs = new Set<THREE.Texture>();
   obj.traverse((child) => {
     if ((child as THREE.Mesh).isMesh) {
       const mesh = child as THREE.Mesh;
-      mesh.geometry?.dispose();
-      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-      mats.forEach((m: THREE.Material) => {
-        Object.values(m).forEach((v) => {
-          if (v instanceof THREE.Texture) v.dispose();
-        });
-        m.dispose();
-      });
+      if (mesh.geometry) geos.add(mesh.geometry);
+      (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).forEach((m) => mats.add(m));
     }
   });
+  for (const m of mats) Object.values(m).forEach((v) => { if (v instanceof THREE.Texture) texs.add(v); });
+  for (const g of geos) g.dispose();
+  for (const t of texs) t.dispose();
+  for (const m of mats) m.dispose();
+}
+
+function estimateVramBytes(root: THREE.Object3D): number {
+  let bytes = 0;
+  const seenTex = new Set<THREE.Texture>();
+  const seenGeo = new Set<THREE.BufferGeometry>();
+  root.traverse((child) => {
+    if (!(child as THREE.Mesh).isMesh) return;
+    const mesh = child as THREE.Mesh;
+    const geo = mesh.geometry as THREE.BufferGeometry;
+    if (geo && !seenGeo.has(geo)) {
+      seenGeo.add(geo);
+      const pos = geo.getAttribute('position');
+      if (pos) bytes += pos.count * 3 * 4 * 1.33; // + mipmap/法线冗余
+      const idx = geo.getIndex();
+      bytes += (idx ? idx.count : (pos?.count ?? 0)) * 4;
+    }
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    for (const m of mats) for (const v of Object.values(m)) {
+      if (v instanceof THREE.Texture && !seenTex.has(v)) {
+        seenTex.add(v);
+        const img = v.image as { width?: number; height?: number } | undefined;
+        if (img?.width && img.height) bytes += img.width * img.height * 4 * 1.33;
+      }
+    }
+  });
+  return bytes;
 }
 
 function addRoomFallback(parent: THREE.Object3D): void {
@@ -458,11 +489,14 @@ export function useRoomScene(
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings]);
 
+  const loadTokenRef = useRef(0);
+
   // reload character when file changes (skip first render — main effect handles initial load)
   const charFileTracked = useRef(settings.characterFile);
   useEffect(() => {
     if (charFileTracked.current === settings.characterFile) return;
     charFileTracked.current = settings.characterFile;
+    const loadToken = ++loadTokenRef.current;
 
     const refs = refsRef.current;
     const charGroup = charGroupRef.current;
@@ -491,8 +525,11 @@ export function useRoomScene(
     const s = settingsRef.current;
     loadRoomModel(loader, 'character', s.characterFile,
       (gltf) => {
-        if (cancelled || disposedRef.current) return;
+        if (cancelled || disposedRef.current || loadToken !== loadTokenRef.current) { disposeModel(gltf.scene); return; }
         const model = gltf.scene;
+        if (estimateVramBytes(model) > VRAM_LARGE_SCENE_BYTES) {
+          console.warn('[room] 角色显存估算较大（>120MB），将先卸载旧资源以降低峰值');
+        }
         normalizeAndPosition(model, s);
         enableCharLayer(model);
         charGroup.add(model);
@@ -570,11 +607,21 @@ export function useRoomScene(
     const loader = new GLTFLoader();
     loadRoomModel(loader, 'scene', settingsRef.current.sceneFile,
       (gltf) => {
-        if (cancelled || disposedRef.current) return;
+        if (cancelled || disposedRef.current) { disposeModel(gltf.scene); return; }
+        if (estimateVramBytes(gltf.scene) > VRAM_LARGE_SCENE_BYTES) {
+          console.warn('[room] 场景显存估算较大（>120MB），已先卸载旧场景以降低峰值');
+        }
         roomGroup.add(gltf.scene);
         applyShadowsRef.current?.();
         glbSceneLightsRef.current = collectGlbLights(gltf.scene, settingsRef.current.lights.useSceneLights);
         registerSceneCameras(gltf.scene, refs);
+        const sceneFile = settingsRef.current.sceneFile;
+        void loadSceneMaterials(sceneFile).then(async (cfg) => {
+          if (!cfg || cancelled || disposedRef.current) return;
+          const textures = await loadSceneToonTextures(sceneFile, cfg);
+          if (cancelled || disposedRef.current) { Object.values(textures).forEach((t) => t.dispose()); return; }
+          applyToonBindings(gltf.scene, cfg, { textures });
+        });
       },
       undefined,
       () => {
@@ -634,7 +681,7 @@ export function useRoomScene(
     // ── renderer ──
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
     const { clientWidth: w, clientHeight: h } = mount;
     renderer.setSize(w, h);
     mount.appendChild(renderer.domElement);
@@ -852,14 +899,22 @@ export function useRoomScene(
       clock: new THREE.Clock(),
       sceneAmbient, keyLight, charFill,
       rafId: 0,
-      resizeObs: new ResizeObserver(() => {
-        const { clientWidth: nw, clientHeight: nh } = mount;
-        camera.aspect = nw / nh;
-        camera.updateProjectionMatrix();
-        renderer.setSize(nw, nh);
-        gradeRef.current?.setSize(nw, nh);
-        toonRef.current?.setSize(nw, nh);
-      }),
+      resizeObs: (() => {
+        let resizeTimer: ReturnType<typeof setTimeout> | null = null;
+        const ro = new ResizeObserver(() => {
+          if (resizeTimer) clearTimeout(resizeTimer);
+          resizeTimer = setTimeout(() => {
+            const { clientWidth: nw, clientHeight: nh } = mount;
+            if (nw === 0 || nh === 0) return;
+            camera.aspect = nw / nh;
+            camera.updateProjectionMatrix();
+            renderer.setSize(nw, nh);
+            gradeRef.current?.setSize(nw, nh);
+            toonRef.current?.setSize(nw, nh);
+          }, 120);
+        });
+        return ro;
+      })(),
       targetLightColor,
       targetLightIntensity,
       camBase: new THREE.Vector3(0, 1.15, 2.0),
@@ -962,13 +1017,20 @@ export function useRoomScene(
     // ── load room ──
     loadRoomModel(loader, 'scene', initSettings.sceneFile,
       (gltf) => {
-        if (disposedRef.current) return;
+        if (disposedRef.current) { disposeModel(gltf.scene); return; }
         roomGroup.add(gltf.scene);
         applyShadowsRef.current?.();
         glbSceneLightsRef.current = collectGlbLights(gltf.scene, settingsRef.current.lights.useSceneLights);
         registerSceneCameras(gltf.scene, refs);
         roomLoaded = true;
         maybeRemovePlaceholder();
+        const sceneFile = initSettings.sceneFile;
+        void loadSceneMaterials(sceneFile).then(async (cfg) => {
+          if (!cfg || disposedRef.current) return;
+          const textures = await loadSceneToonTextures(sceneFile, cfg);
+          if (disposedRef.current) { Object.values(textures).forEach((t) => t.dispose()); return; }
+          applyToonBindings(gltf.scene, cfg, { textures });
+        });
       },
       undefined,
       () => { addRoomFallback(roomGroup); roomLoaded = true; showPlaceholderNote(); maybeRemovePlaceholder(); },
@@ -1031,9 +1093,21 @@ export function useRoomScene(
     const lerpColor = new THREE.Color();
     const lerpSpeed = 0.03;
 
+    let frameVisible = true;
+    const onVisibilityChange = () => {
+      frameVisible = !document.hidden;
+      if (!frameVisible) {
+        cancelAnimationFrame(refs.rafId);
+        refs.rafId = 0;
+        refs.clock.getDelta(); // discard accumulated dt
+      } else if (refs.rafId === 0) {
+        tick();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
     function tick() {
       refs.rafId = requestAnimationFrame(tick);
-      if (document.hidden) return;
+      if (!frameVisible || document.hidden) return;
 
       const dt  = refs.clock.getDelta();
       const t   = refs.clock.elapsedTime;
@@ -1101,8 +1175,10 @@ export function useRoomScene(
 
     return () => {
       disposedRef.current = true;
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       screenRef.current?.dispose(); screenRef.current = null;
       cancelAnimationFrame(refs.rafId);
+      refs.rafId = 0;
       refs.resizeObs.disconnect();
 
       if (placementKeyHandlerRef.current) {

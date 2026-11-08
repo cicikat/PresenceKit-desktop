@@ -935,24 +935,45 @@ fn read_room_asset(app: tauri::AppHandle, kind: String, file_name: String) -> Re
         || !file_name.to_ascii_lowercase().ends_with(".glb") {
         return Err("无效的 GLB 文件名".to_string());
     }
-    let live = room_live_dir(&app, &kind)?.join(&file_name);
-    let path = if live.is_file() { live } else { room_assets_dir(&app, &kind)?.join(&file_name) };
-    let bytes = fs::read(&path).map_err(|e| format!("读取 {} 失败: {e}", path.display()))?;
-    Ok(format!("data:model/gltf-binary;base64,{}", base64::engine::general_purpose::STANDARD.encode(bytes)))
+    let live_dir = room_live_dir(&app, &kind)?;
+    let live = live_dir.join(&file_name);
+    let (path, base_dir) = if live.is_file() {
+        (live, live_dir)
+    } else {
+        let dir = room_assets_dir(&app, &kind)?;
+        (dir.join(&file_name), dir)
+    };
+    let real_dir = base_dir.canonicalize().map_err(|e| e.to_string())?;
+    let real = path.canonicalize().map_err(|e| format!("读取 {} 失败: {e}", path.display()))?;
+    if real.parent() != Some(real_dir.as_path()) {
+        return Err("GLB 必须位于模型目录内".to_string());
+    }
+    if fs::metadata(&real).map_err(|e| e.to_string())?.len() > 200 * 1024 * 1024 {
+        return Err("GLB 文件超过 200MB 上限".to_string());
+    }
+    Ok(real.display().to_string())
 }
 
-/// Sidecar JSON next to a character GLB (`<model>.<kind>.json`), same live-then-bundled order.
+/// Sidecar JSON next to a room GLB (`<model>.<kind>.json`), same live-then-bundled order.
 /// Returns None when absent. The file is data only; the client validates it before use.
 fn read_character_sidecar(app: &tauri::AppHandle, file_name: &str, kind: &str) -> Result<Option<String>, String> {
+    read_sidecar_for(app, "character", file_name, kind)
+}
+
+/// Generic sidecar lookup for `character` or `scene` room assets.
+fn read_sidecar_for(app: &tauri::AppHandle, asset_kind: &str, file_name: &str, kind: &str) -> Result<Option<String>, String> {
+    if asset_kind != "character" && asset_kind != "scene" {
+        return Err("无效的 room 资源类型".to_string());
+    }
     if Path::new(file_name).components().count() != 1
         || file_name.starts_with('.')
         || !file_name.to_ascii_lowercase().ends_with(".glb") {
         return Err("无效的 GLB 文件名".to_string());
     }
     let side_name = format!("{}.{kind}.json", &file_name[..file_name.len() - 4]);
-    let live = room_live_dir(app, "character")?.join(&side_name);
+    let live = room_live_dir(app, asset_kind)?.join(&side_name);
     let path = if live.is_file() { live } else {
-        match room_assets_dir(app, "character") {
+        match room_assets_dir(app, asset_kind) {
             Ok(dir) => dir.join(&side_name),
             Err(_) => return Ok(None),
         }
@@ -971,6 +992,12 @@ fn read_character_sidecar(app: &tauri::AppHandle, file_name: &str, kind: &str) -
 #[tauri::command]
 fn read_room_material_config(app: tauri::AppHandle, file_name: String) -> Result<Option<String>, String> {
     read_character_sidecar(&app, &file_name, "materials")
+}
+
+/// Scene sidecar: `<model>.materials.json` next to a scene GLB.
+#[tauri::command]
+fn read_room_scene_material_config(app: tauri::AppHandle, file_name: String) -> Result<Option<String>, String> {
+    read_sidecar_for(&app, "scene", &file_name, "materials")
 }
 
 
@@ -1023,6 +1050,16 @@ fn read_room_expression_config(app: tauri::AppHandle, file_name: String) -> Resu
 /// character directory (no symlink escape) and is capped at 12MB.
 #[tauri::command]
 fn read_room_material_map(app: tauri::AppHandle, file_name: String, map_name: String) -> Result<Option<String>, String> {
+    read_room_material_map_for(app, "character", file_name, map_name)
+}
+
+/// Scene variant of `read_room_material_map` (scene directory lookup).
+#[tauri::command]
+fn read_room_scene_material_map(app: tauri::AppHandle, file_name: String, map_name: String) -> Result<Option<String>, String> {
+    read_room_material_map_for(app, "scene", file_name, map_name)
+}
+
+fn read_room_material_map_for(app: tauri::AppHandle, asset_kind: &str, file_name: String, map_name: String) -> Result<Option<String>, String> {
     let plain = |name: &str, ext: &str| {
         Path::new(name).components().count() == 1
             && !name.starts_with('.')
@@ -1031,9 +1068,9 @@ fn read_room_material_map(app: tauri::AppHandle, file_name: String, map_name: St
     };
     if !plain(&file_name, ".glb") { return Err("无效的 GLB 文件名".to_string()); }
     if !plain(&map_name, ".png") { return Err("无效的材质贴图文件名".to_string()); }
-    let live_dir = room_live_dir(&app, "character")?;
+    let live_dir = room_live_dir(&app, asset_kind)?;
     let mut candidates = vec![live_dir];
-    if let Ok(dir) = room_assets_dir(&app, "character") { candidates.push(dir); }
+    if let Ok(dir) = room_assets_dir(&app, asset_kind) { candidates.push(dir); }
     for dir in candidates {
         let path = dir.join(&map_name);
         if !path.is_file() { continue; }
@@ -1071,8 +1108,7 @@ fn read_room_motion_file(app: tauri::AppHandle, motion_name: String) -> Result<O
         }
         let meta = fs::metadata(&real).map_err(|e| format!("读取动作文件失败: {e}"))?;
         if meta.len() > 20 * 1024 * 1024 { return Err("动作文件超过 20MB".to_string()); }
-        let bytes = fs::read(&real).map_err(|e| format!("读取动作文件失败: {e}"))?;
-        return Ok(Some(format!("data:model/gltf-binary;base64,{}", base64::engine::general_purpose::STANDARD.encode(bytes))));
+        return Ok(Some(real.display().to_string()));
     }
     Ok(None)
 }
@@ -3723,6 +3759,7 @@ pub fn run() {
             let visual_state = app.state::<VisualRunnerState>();
             visual_state.runtime.apply(&cfg.visual_perception_config);
             match spawn_visual_runner(VisualRunnerConfig {
+                app: app.handle().clone(),
                 backend_base_url: cfg.backend_base.clone(),
                 admin_token: cfg.admin_token.clone(),
                 runtime: Arc::clone(&visual_state.runtime),
@@ -3825,6 +3862,7 @@ pub fn run() {
             room_assets_location,
             read_room_asset,
             read_room_material_config,
+            read_room_scene_material_config,
             read_room_expression_config,
             read_room_screen_config,
             read_room_screen_map,
@@ -3832,6 +3870,7 @@ pub fn run() {
             read_room_motion_file,
             read_shared_motion_config,
             read_room_material_map,
+            read_room_scene_material_map,
             list_room_props,
             list_live2d_models,
             live2d_backgrounds::list_live2d_backgrounds,

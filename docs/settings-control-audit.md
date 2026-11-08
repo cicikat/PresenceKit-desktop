@@ -2,6 +2,8 @@
 
 # 设置与功能开关审计（P0–P2）
 
+292-B：云端陪玩采集复用本地sensor启用及按需截图许可，后端复用coplay、名单和看屏幕开关，无第二套截图许可。陪玩设置页显示GET `/coplay/state.collection` 的真实连接/过期及截图授权；权限、锁屏、地址/Token变化、stop和TTL在采集及发送前复核。管理面负责名单、有效来源和阻断观测；桌面退出无采集。真实Windows游戏与云端联合验收observe。
+
 Brief 253.6：STT 命名连接、用途、默认关闭的开关与 effective state 统一在后端语音页维护。
 桌面无新设置，继续使用原麦克风权限和录音入口；只对下一条未编辑的转写文本发送一次性语调凭据。
 真实录音与 STT 服务联调 observe，协议见 [backend-integration.md](backend-integration.md)。

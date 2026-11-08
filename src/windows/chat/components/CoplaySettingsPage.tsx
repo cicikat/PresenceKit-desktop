@@ -135,7 +135,15 @@ export function CoplaySettingsPage() {
           padding: '10px 14px', border: '1px dashed var(--paper-edge)', borderRadius: 'var(--radius-md)',
           color: 'var(--ink-2)', fontSize: 12.5,
         }}>
-          正在陪你玩：<strong>{state.game_name}</strong>
+          {state.collection?.source === 'desktop' && !state.collection.fresh ? '上次识别的游戏：' : '正在陪你玩：'}<strong>{state.game_name}</strong>
+        </div>
+      )}
+
+      {isOn && state?.collection?.source === 'desktop' && (
+        <div className="serif" style={{ color: 'var(--ink-3)', fontSize: 12, lineHeight: 1.7 }}>
+          {state.collection.fresh ? '电脑采集已连接。' : '电脑采集未连接，或报告已过期。'}
+          {!state.collection.frame_authorized && '当前不会上传游戏截图；截图需在本机按需截图设置中授权。'}
+          {'请保持客户端运行；采集离线不会被当作游戏退出。'}
         </div>
       )}
 
@@ -152,7 +160,7 @@ export function CoplaySettingsPage() {
         borderRadius: 'var(--radius-md)', color: 'var(--ink-3)', fontSize: 12, lineHeight: 1.7,
       }}>
         开启后处于「等待检测」状态；实际检测到游戏进程（Steam 或后端配置的白名单进程）才会真正进入「陪玩中」，
-        由后端 watcher 每 60 秒轮询一次判定，不是本开关直接控制。游戏退出后自动进入收尾并回到「等待检测」，
+        本地部署在本机检测，远程部署由电脑客户端采集并报告。明确检测到游戏退出后进入收尾并回到「等待检测」，
         持续开着也不会一直陪玩到底——关闭需要显式点这个开关。
       </div>
 

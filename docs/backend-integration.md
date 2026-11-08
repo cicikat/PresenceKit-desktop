@@ -22,6 +22,12 @@ Ribbon 左上角状态点由原生 WS 的 `hello_ack` 驱动，不是本机 HTTP
 没有新增 IPC/REST/WS 字段、权限、队列或落盘文件；手机 HTTP poll/relay 无跨端行为变化。
 回归及真实服务器验收状态见 `../cc-tasks/2026-10-18-remote-websocket-status.md`。
 
+## 292-B 远程陪玩设备采集
+
+Windows视觉runner每10秒调用POST `/coplay/device/poll|result`（activity+sensor.write+ws.desktop），复用已有退出/stop生命周期与本地sensor、按需截图许可。连接、后端地址或授权变化后不补发旧帧；20秒一次性租约绑定服务器配置版本、角色及陪玩轮次。仅上报匹配的单个游戏、前台布尔值、存档元数据变化和可选JPEG；进程清单、标题、文件路径和存档正文不上传。Steam库路径来自后端既有coplay配置，指向用户电脑；未配置库时不推测前台窗口归属。截图只抓已确认前台游戏窗口的客户区，前后复核前台、锁屏和授权。
+
+GET `/coplay/state.collection` 是可选状态字段；页面显示采集连接/过期及截图权限。离线不等于游戏退出；关闭客户端后无采集，也不能由云端拉起电脑进程。无新WS帧或IPC命令，手机不参与。真实游戏/锁屏/存档/云端联合验收observe，服务端完整合同见相邻后端docs/coplay-device-contract.md。
+
 ## Brief 253.6：语音感知
 
 原 transcribe_audio 仍上传录音到 chat scope 的 POST /transcribe。新增可选 audio_perception_id；
