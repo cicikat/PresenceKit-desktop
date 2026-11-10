@@ -4,6 +4,8 @@
 
 # PresenceKit-desktop 协议 v0.1
 
+DIST-02：`GET /video-call/state` 的顶层 `effective` 保留配置就绪语义。新增可选 `runtime_effective`、`endpoint_type` 和 `retry_after_seconds`；旧客户端继续按 `observe` 的 `unavailable`/退避时间重试。摄像头帧继续只上传主后端。
+
 Brief 253.6 兼容扩展：POST /transcribe 保留 text，可返回 tone/audio_perception_id。
 POST /desktop/chat 可附带 audio_perception_id，仅关联原样转写的语调；后端按 owner/char/channel/text
 校验，5 分钟、一次性，失效时仅丢语调。send_chat IPC 对应 audioPerceptionId 可选参数；无新 WS 帧。

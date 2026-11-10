@@ -45,12 +45,12 @@ STT 配置由管理面维护，语调仅是后端印象；不改 WS、通知、a
 
 ## 工单 264：视频电话摄像头与连续语音
 
-工单 265：摄像头开启且后端 `video_call` 路由有效时，窗口每秒调用一次 `poll_video_call_camera`；收到一次性请求才从当前媒体轨道抓取新 JPEG 并调用 `submit_video_call_camera_frame`，挂断/换角色调用 `close_video_call_camera`。此链用于角色 `observe_video_call_camera`，与原每 4 秒周期摄像头观察并行。周期观察可每隔至少 60 秒产生主动候选，即使画面不变。所有摄像头识别仍走后端 `image_presets.routes.video_call`，不接桌面屏幕截图或实验性视觉观察路由。真实摄像头、模型及主动消息验收未完成。
+工单 265：摄像头开启且后端 `video_call` 路由有效时，窗口每秒调用一次 `poll_video_call_camera`；收到一次性请求才从当前媒体轨道抓取新 JPEG 并调用 `submit_video_call_camera_frame`，挂断/换角色调用 `close_video_call_camera`。此链用于角色 `observe_video_call_camera`，与原每 4 秒周期摄像头观察并行。周期观察可每隔至少 60 秒产生主动候选，即使画面不变。周期观察使用后端 `image_presets.routes.video_call`，按需查看使用 `video_call_tool`。真实摄像头、模型及主动消息验收未完成。
 
 Tauri `get_video_call_state` 通过 chat scope 读取 `/video-call/state`；
 `observe_video_call_frame` 只上传当前 JPEG 到 `/video-call/observe`，响应的一次性
 `observation_id` 最多保留 40 秒，随下一次 `send_chat` 作为 `video_observation_id`
-提交。无有效本机视觉路由时仍可本地预览，后端不接收帧。通话挂断释放媒体轨道。
+提交。配置就绪的摄像头路由可为后端本机服务或管理员授权的私网服务。缺少有效路由时仅本地预览。通话挂断释放媒体轨道。
 后端可选开启「帧差分」（管理面功能开关 `video_call_frame_diff`，默认关）：`/video-call/observe` 请求与响应形状完全不变，
 客户端仍按固定周期上传；差分只在后端发生（首帧全量，之后只描述变化，写给聊天模型的描述是「底稿 + 最近几条变化」，
 `[major]` 变化会作为主动候选）。按需拍照（`poll`/`result`）始终是全量描述。让客户端先做图像差分、只在显著变化时上传
@@ -59,7 +59,7 @@ Tauri `get_video_call_state` 通过 chat scope 读取 `/video-call/state`；
 可随 `audio_perception_id` 传入对应的 `audio_perception_text`，由后端验证该段
 确实包含在本轮消息内。文字与语音失败互不阻断。真实设备、模型和 TTS 联调为 observe。
 
-复测修正：摄像头 `observe` 可返回 `unavailable`（本地服务不可达，短暂降频）
+复测修正：摄像头 `observe` 可返回 `unavailable`（模型节点或服务不可用，短暂降频）
 或 `timeout`，前端显示不同状态。持续录音按有声和停顿切段，静音不上传；后端
 明确返回空语音时 Tauri 转为 `NO_SPEECH`，房间不画红色错误。`send_chat`
 可返回 `audio_perception_applied`，房间据此提示声学线索是否进入本轮提示构建。
