@@ -225,16 +225,6 @@ function classifyHistoryError(err: unknown): { category: 'network' | 'unauthoriz
   return { category: 'network', statusCode, detail: msg };
 }
 
-// 发消息失败的人话化文案（cc-tasks/34 §2）：401 透传后端 hint，429 提示限流+退避重试，
-// 其余情况保留原始错误文本（已经区分"连接失败/后端异常"等场景，不再裸抛状态码）。
-function describeSendError(err: unknown): string {
-  const classified = classifyHttpError(err);
-  if (classified.kind === 'unauthorized' || classified.kind === 'rateLimited') {
-    return `（${classified.message}）`;
-  }
-  return `（连接失败：${classified.message}）`;
-}
-
 // 409（对方正在做梦、guard 拒绝聊天）时消费 GET /dream/state 的结构化字段，取代旧的一律
 // "正在做梦中，请先退出梦境再聊天"文案（cc-tasks/34 §3，接后端 Brief 94 §2 已落地字段）。
 // 旧后端没有这些字段、或二次请求也失败时，降级回原文案，不崩。
@@ -1828,8 +1818,8 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       if (!mountedRef.current || !chatRequests.settle(token)) return;
       setMessages(prev => prev.map(item => item.id === userId ? { ...item, failed: true } : item));
       console.error('[chat] send 失败:', err);
-      const is409 = /\b409\b/.test(err instanceof Error ? err.message : String(err));
-      const text = is409 ? await describeDreamBlockedChat() : describeSendError(err);
+      const failure = classifyHttpError(err);
+      const text = failure.status === 409 ? await describeDreamBlockedChat() : `（${failure.message}）`;
       setMessages(prev => [...prev, {
         id: newId(),
         role: 'system',

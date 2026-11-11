@@ -3,6 +3,15 @@ import type { ChatResponse, DesktopWakeResponse, GardenState, CoplayState, Diary
 
 import { publishBehavior } from '../character/behaviorEvents';
 import { getActiveCharacterInfo } from '../activeCharacter';
+import { t } from '../i18n';
+import type { MessageKey } from '../i18n/locales/zh-CN';
+
+const chatErrorKeys = new Map<string, MessageKey>([
+  ['CHAT_CONNECT_FAILED', 'chat.send.connectionFailed'],
+  ['CHAT_RESPONSE_TIMEOUT', 'chat.send.responseTimeout'],
+  ['CHAT_REQUEST_INTERRUPTED', 'chat.send.interrupted'],
+  ['CHAT_RESPONSE_UNREADABLE', 'chat.send.responseUnreadable'],
+]);
 
 let pendingVoice: { text: string; id: string; expires: number } | undefined;
 
@@ -30,6 +39,8 @@ export async function sendChat(message: string, replyTo?: ReplyToPayload, videoO
   } catch (error) {
     const at = Date.now();
     void announce.then(() => publishBehavior({ kind: 'request-end', id: behaviorId, charId: behaviorCharacter, at }));
+    const key = typeof error === 'string' ? chatErrorKeys.get(error) : undefined;
+    if (key) throw new Error(t(key));
     throw error;
   }
 }

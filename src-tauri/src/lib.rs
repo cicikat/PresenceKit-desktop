@@ -1395,13 +1395,21 @@ async fn send_chat(
         .json(&body)
         .send()
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|error| {
+            let code = if error.is_connect() {
+                "CHAT_CONNECT_FAILED"
+            } else if error.is_timeout() {
+                "CHAT_RESPONSE_TIMEOUT"
+            } else {
+                "CHAT_REQUEST_INTERRUPTED"
+            };
+            code.to_string()
+        })?;
 
-    if !resp.status().is_success() {
-        return Err(safe_http_error(resp).await);
-    }
-
-    resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())
+    let resp = require_success(resp).await?;
+    resp.json::<serde_json::Value>()
+        .await
+        .map_err(|_| "CHAT_RESPONSE_UNREADABLE".to_string())
 }
 
 #[tauri::command]

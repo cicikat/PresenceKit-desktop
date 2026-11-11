@@ -290,6 +290,12 @@ ChatPanel.send()
   → Rust reqwest POST http://127.0.0.1:8080/desktop/chat
 ```
 
+`send_chat` 的本地错误以字符串返回。连接建立失败、等待 HTTP 响应超时、
+请求中断和响应读取失败分别返回 `CHAT_CONNECT_FAILED`、`CHAT_RESPONSE_TIMEOUT`、
+`CHAT_REQUEST_INTERRUPTED` 和 `CHAT_RESPONSE_UNREADABLE`，由共享前端 API 翻译。
+HTTP 状态、401 门禁和 409 梦境提示沿用原路径。重试由用户触发，同一气泡提交原草稿。
+后端与手机无跨端影响。
+
 请求：
 
 ```json
