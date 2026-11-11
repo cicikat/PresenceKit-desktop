@@ -6,6 +6,7 @@ use serde_json::json;
 use tauri::{AppHandle, Manager};
 
 use super::{vision, Executor, Receipt, Scope, Status, Step};
+use crate::client_config::ClientConfig;
 
 #[derive(Deserialize)]
 struct Poll {
@@ -17,6 +18,7 @@ struct Poll {
     nonce: Option<String>,
     expires_in_ms: Option<u64>,
     vision: Option<vision::Connection>,
+    vision_timeout_ms: Option<u64>,
 }
 
 struct Pending {
@@ -27,35 +29,36 @@ struct Pending {
 }
 
 pub fn start(app: AppHandle, status: &Status, char_id: String) {
-    let (Some(session), Some(device), Some(scope)) =
-        (&status.session_id, &status.device_id, status.scope)
-    else {
+    let Some(session) = status.session_id.clone() else {
         return;
     };
-    let session = session.clone();
-    let device = device.clone();
-    let cloud_vision = status.cloud_vision;
+    let grant = status.clone();
     tauri::async_runtime::spawn(async move {
-        let executor = app.state::<Executor>();
-        let result = run(&app, &executor, &session, &device, scope, &char_id, cloud_vision).await;
+        let executor = app.state::<Executor>().inner().clone();
+        let config = crate::load_client_config(&app);
+        let result = run(&config, &executor, &grant, &char_id).await;
         if let Err(reason) = result {
             executor.stop_matching(&session, reason);
         }
     });
 }
 
-async fn run(
-    app: &AppHandle,
+pub(super) async fn run(
+    config: &ClientConfig,
     executor: &Executor,
-    session: &str,
-    device: &str,
-    scope: Scope,
+    grant: &Status,
     char_id: &str,
-    cloud_vision: Option<bool>,
 ) -> Result<(), &'static str> {
-    let config = crate::load_client_config(app);
-    let url = crate::backend_url(&config, "/computer-use/poll");
-    let result_url = crate::backend_url(&config, "/computer-use/result");
+    let (Some(session), Some(device), Some(scope)) = (
+        grant.session_id.as_deref(),
+        grant.device_id.as_deref(),
+        grant.scope,
+    ) else {
+        return Err("authorization_ended");
+    };
+    let cloud_vision = grant.cloud_vision;
+    let url = crate::backend_url(config, "/computer-use/poll");
+    let result_url = crate::backend_url(config, "/computer-use/result");
     let client = reqwest::Client::builder()
         .no_proxy()
         .redirect(reqwest::redirect::Policy::none())
@@ -83,7 +86,7 @@ async fn run(
         if let Some(granted) = cloud_vision {
             poll["cloud_vision"] = json!(granted);
         }
-        let request = crate::authorized_request(&config, client.post(&url)).json(&poll);
+        let request = crate::authorized_request(config, client.post(&url)).json(&poll);
         if closed {
             if epoch.is_some() {
                 let _ = request.send().await;
@@ -131,7 +134,7 @@ async fn run(
         {
             let job = pending.take().ok_or("backend_protocol_error")?;
             let receipt = job.worker.await.map_err(|_| "executor_unavailable")?;
-            let reply = crate::authorized_request(&config, client.post(&result_url))
+            let reply = crate::authorized_request(config, client.post(&result_url))
                 .json(&json!({
                     "device_id": device, "session_id": session, "task_id": job.task_id,
                     "server_epoch": epoch, "nonce": job.nonce, "seq": job.seq, "receipt": receipt,
@@ -146,10 +149,21 @@ async fn run(
 
         if let Some(step) = response.step {
             let nonce = response.nonce.ok_or("backend_protocol_error")?;
+            let is_cloud = response
+                .vision
+                .as_ref()
+                .is_some_and(vision::Connection::is_cloud);
+            let ttl_limit = if is_cloud { 35_000 } else { 22_000 };
             let ttl = response
                 .expires_in_ms
-                .filter(|value| (1..=22_000).contains(value))
+                .filter(|value| (1..=ttl_limit).contains(value))
                 .ok_or("backend_protocol_error")?;
+            let vision_ms = match (is_cloud, response.vision_timeout_ms) {
+                (true, Some(ms @ 1..=25_000)) => ms + 3_000,
+                (false, Some(ms @ 1..=18_000)) => ms,
+                (false, None) => 18_000,
+                _ => return Err("backend_protocol_error"),
+            };
             if pending.is_some()
                 || Some(&step.task_id) != response.task_id.as_ref()
                 || step.device_id != device
@@ -159,13 +173,21 @@ async fn run(
             }
             let task_id = step.task_id.clone();
             let seq = step.seq;
-            let app = app.clone();
+            let server_epoch = epoch.clone().ok_or("backend_protocol_error")?;
+            let request_nonce = nonce.clone();
+            let vision_config = config.clone();
+            let executor = executor.clone();
             let worker = tauri::async_runtime::spawn_blocking(move || {
-                app.state::<Executor>().step(
-                    step,
-                    response.vision.as_ref(),
-                    started + Duration::from_millis(ttl),
-                )
+                let locator = response.vision.as_ref().map(|connection| vision::Locator {
+                    connection,
+                    timeout: Duration::from_millis(vision_ms),
+                    proxy: (is_cloud && cloud_vision == Some(true)).then_some(vision::Proxy {
+                        config: &vision_config,
+                        epoch: &server_epoch,
+                        nonce: &request_nonce,
+                    }),
+                });
+                executor.step(step, locator.as_ref(), started + Duration::from_millis(ttl))
             });
             pending = Some(Pending {
                 seq,

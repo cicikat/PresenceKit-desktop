@@ -294,3 +294,5 @@ observe; enabled-service synthesis failure text fallback remains open.
 ## 301 Windows Computer Use
 
 后端总开关 `computer_use.enabled` 默认关闭，由管理面「看屏幕与操作电脑」热更新。桌面「偏好 → 系统设置 → Computer Use」是本机临时授权，需明确选窗口或整个桌面及持续时长。视觉用途独立在后端模型路由配置。手机无入口。
+
+302 CU-05 在后端路由为 `cloud_proxy` 时展示当前会话专用的截图授权。复选框默认关闭，每次开启都需重新勾选；留空时仍可做 UIA 操作。推理连接和预算由后端管理面选择，桌面只读，手机无消费者。

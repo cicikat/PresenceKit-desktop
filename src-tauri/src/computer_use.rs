@@ -4,7 +4,7 @@ mod transport;
 mod vision;
 
 use std::collections::HashSet;
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
@@ -12,6 +12,7 @@ use tauri::{Manager, WebviewWindow};
 
 const MAX_STEPS: u32 = 40;
 const FRAME_TTL: Duration = Duration::from_secs(24);
+const CLOUD_FRAME_TTL: Duration = Duration::from_secs(52);
 const TASK_TTL: Duration = Duration::from_secs(180);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
@@ -169,10 +170,10 @@ impl Receipt {
     }
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct Executor {
-    session: Mutex<Option<Session>>,
-    worker: Mutex<()>,
+    session: Arc<Mutex<Option<Session>>>,
+    worker: Arc<Mutex<()>>,
 }
 
 struct Session {
@@ -214,7 +215,7 @@ struct Frame {
     jpeg: Vec<u8>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct Status {
     supported: bool,
     #[serde(skip_serializing)]
@@ -376,7 +377,11 @@ impl Executor {
             session_id: Some(session.id.clone()),
             device_id: Some(session.device_id.clone()),
             scope: Some(session.scope),
-            cloud_vision: if session.stopped.is_none() { session.cloud_vision } else { None },
+            cloud_vision: if session.stopped.is_none() {
+                session.cloud_vision
+            } else {
+                None
+            },
             state: if session.stopped.is_some() {
                 "closed"
             } else if session.paused {
@@ -480,7 +485,7 @@ impl Executor {
     pub fn step(
         &self,
         step: Step,
-        vision: Option<&vision::Connection>,
+        vision: Option<&vision::Locator<'_>>,
         expires: Instant,
     ) -> Receipt {
         let mut input_attempted = false;
@@ -494,7 +499,7 @@ impl Executor {
     fn execute(
         &self,
         step: Step,
-        vision: Option<&vision::Connection>,
+        vision: Option<&vision::Locator<'_>>,
         expires: Instant,
         input_attempted: &mut bool,
     ) -> Result<Receipt, Receipt> {
@@ -505,7 +510,7 @@ impl Executor {
             .worker
             .try_lock()
             .map_err(|_| Receipt::error("failed", "busy"))?;
-        let (scope, previous, revision) = {
+        let (scope, previous, revision, cloud_vision) = {
             let mut guard = self.session().map_err(|e| Receipt::error("failed", e))?;
             let session = match_session(&mut guard, &step)?;
             session.check();
@@ -539,7 +544,12 @@ impl Executor {
             if session.paused {
                 return Err(Receipt::error("canceled", "paused"));
             }
-            (session.scope, previous, session.revision)
+            (
+                session.scope,
+                previous,
+                session.revision,
+                session.cloud_vision == Some(true),
+            )
         };
 
         let before = native::surface(scope).map_err(|e| Receipt::error("stale", e))?;
@@ -555,8 +565,9 @@ impl Executor {
                 })
                 .ok_or_else(|| Receipt::error("stale", "observation_changed"))?;
             let mut current_nodes = None;
-            let mut current_digest = None;
-            for target in action.targets() {
+            let mut located_in_cloud = false;
+            let mut vision_deadline = None;
+            for (target_index, target) in action.targets().enumerate() {
                 if let Target::Visual { description } = target {
                     let name = description.trim();
                     if name.is_empty() || name.len() > 256 {
@@ -569,15 +580,44 @@ impl Executor {
                     *target = match (candidates.next(), candidates.next()) {
                         (Some(node), None) => Target::Element { id: node.id },
                         _ => {
-                            let connection = vision
+                            let locator = vision
                                 .ok_or_else(|| Receipt::error("failed", "vision_not_configured"))?;
+                            if locator.is_cloud() {
+                                if !cloud_vision {
+                                    return Err(Receipt::error(
+                                        "failed",
+                                        "cloud_vision_not_authorized",
+                                    ));
+                                }
+                                recheck_image(scope, before, frame.digest)?;
+                                located_in_cloud = true;
+                            }
+                            let deadline = *vision_deadline.get_or_insert_with(|| {
+                                let now = Instant::now();
+                                (now + locator.timeout).min(
+                                    expires
+                                        .checked_sub(Duration::from_millis(500))
+                                        .unwrap_or(now),
+                                )
+                            });
                             self.recheck(&step, before, (expires, revision), |_| Ok(()))?;
-                            tauri::async_runtime::block_on(vision::locate(
-                                connection,
-                                &frame.jpeg,
-                                name,
-                            ))
-                            .map_err(|reason| Receipt::error("failed", reason))?
+                            let timeout = deadline.saturating_duration_since(Instant::now());
+                            if timeout.is_zero() {
+                                return Err(Receipt::error("failed", "vision_timeout"));
+                            }
+                            tauri::async_runtime::block_on(async {
+                                let call =
+                                    locator.locate(&step, target_index, &frame.jpeg, name, timeout);
+                                tokio::pin!(call);
+                                loop {
+                                    tokio::select! {
+                                        result = &mut call => break result.map_err(|reason| Receipt::error("failed", reason)),
+                                        _ = tokio::time::sleep(Duration::from_millis(100)) => {
+                                            self.recheck(&step, before, (expires, revision), |_| Ok(()))?;
+                                        }
+                                    }
+                                }
+                            })?
                         }
                     };
                 }
@@ -593,18 +633,7 @@ impl Executor {
                             return Err(Receipt::error("stale", "element_changed"));
                         }
                     }
-                    Target::Point { .. } => {
-                        if current_digest.is_none() {
-                            current_digest = Some(
-                                native::capture(scope, before)
-                                    .map_err(|e| Receipt::error("failed", e))?
-                                    .1,
-                            );
-                        }
-                        if current_digest != Some(frame.digest) {
-                            return Err(Receipt::error("stale", "image_changed"));
-                        }
-                    }
+                    Target::Point { .. } => {}
                     Target::Visual { .. } => {
                         return Err(Receipt::error("failed", "vision_unresolved"))
                     }
@@ -635,8 +664,20 @@ impl Executor {
                 }
                 std::thread::sleep(Duration::from_millis(100));
             } else {
+                if action
+                    .targets()
+                    .any(|target| matches!(target, Target::Point { .. }))
+                {
+                    self.recheck(&step, before, (expires, revision), |_| Ok(()))?;
+                    recheck_image(scope, before, frame.digest)?;
+                }
                 self.recheck(&step, before, (expires, revision), |_| {
-                    if frame.at.elapsed() > FRAME_TTL {
+                    let frame_ttl = if located_in_cloud {
+                        CLOUD_FRAME_TTL
+                    } else {
+                        FRAME_TTL
+                    };
+                    if frame.at.elapsed() > frame_ttl {
                         return Err(Receipt::error("stale", "observation_expired"));
                     }
                     native::perform(&action, frame, input_attempted)
@@ -716,6 +757,14 @@ impl Executor {
     }
 }
 
+fn recheck_image(scope: Scope, surface: Surface, digest: [u8; 32]) -> Result<(), Receipt> {
+    let (_, current) = native::capture(scope, surface).map_err(|e| Receipt::error("failed", e))?;
+    if current != digest {
+        return Err(Receipt::error("stale", "image_changed"));
+    }
+    Ok(())
+}
+
 fn match_session<'a>(
     session: &'a mut Option<Session>,
     step: &Step,
@@ -780,7 +829,9 @@ pub fn computer_use_open(
     if char_id.is_empty() || char_id.len() > 80 {
         return Err("invalid_character");
     }
-    let status = window.state::<Executor>().open(scope, duration_seconds, cloud_vision)?;
+    let status = window
+        .state::<Executor>()
+        .open(scope, duration_seconds, cloud_vision)?;
     transport::start(window.app_handle().clone(), &status, char_id);
     Ok(status)
 }
@@ -1027,5 +1078,131 @@ mod tests {
             .any(|node| node.name == "CU fixture clicked"));
         executor.stop();
         assert_eq!(executor.status().unwrap().state, "closed");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "requires the foreground browser fixture and an isolated real backend with cloud vision"]
+    fn cloud_browser_chat_smoke() {
+        use crate::client_config::ClientConfig;
+        use serde_json::{json, Value};
+
+        let config = ClientConfig {
+            backend_base: std::env::var("CU05_SMOKE_BACKEND").unwrap(),
+            admin_token: std::env::var("CU05_SMOKE_TOKEN").unwrap(),
+            ..Default::default()
+        };
+        let char_id = std::env::var("CU05_SMOKE_CHARACTER").unwrap();
+        let backend = reqwest::Url::parse(&config.backend_base).unwrap();
+        assert_eq!(backend.host_str(), Some("127.0.0.1"));
+        assert_ne!(backend.port(), Some(8080));
+        let window = native::windows()
+            .unwrap()
+            .into_iter()
+            .find(|choice| choice.title.contains("PresenceKit CU browser fixture"))
+            .unwrap()
+            .id;
+        let scope = Scope::Window { window };
+        assert!(native::surface(scope).is_ok(), "fixture must be foreground");
+        let executor = Executor::default();
+        let grant = executor.open(scope, 300, Some(true)).unwrap();
+        tauri::async_runtime::block_on(async {
+            let client = reqwest::Client::builder()
+                .no_proxy()
+                .redirect(reqwest::redirect::Policy::none())
+                .timeout(Duration::from_secs(100))
+                .build()
+                .unwrap();
+            let status = || async {
+                crate::authorized_request(
+                    &config,
+                    client.get(crate::backend_url(&config, "/computer-use/status")),
+                )
+                .send()
+                .await
+                .unwrap()
+                .error_for_status()
+                .unwrap()
+                .json::<Value>()
+                .await
+                .unwrap()
+            };
+            let chat = |message: String| {
+                crate::authorized_request(
+                    &config,
+                    client.post(crate::backend_url(&config, "/desktop/chat")),
+                )
+                .json(&json!({ "message": message }))
+            };
+            let exercise = async {
+                for _ in 0..40 {
+                    if status().await["device_online"] == true {
+                        break;
+                    }
+                    tokio::time::sleep(Duration::from_millis(250)).await;
+                }
+                let initial = status().await;
+                assert_eq!(initial["device_online"], true);
+                assert_eq!(initial["transport_mode"], "cloud_proxy");
+                assert_eq!(initial["vision_state"], "");
+                assert_eq!(executor.control(Control::Pause).unwrap().state, "paused");
+                tokio::time::sleep(Duration::from_millis(900)).await;
+                assert_eq!(status().await["vision_state"], "paused");
+                assert_eq!(executor.control(Control::Resume).unwrap().state, "ready");
+                tokio::time::sleep(Duration::from_millis(900)).await;
+
+                let mut previous_task = Value::Null;
+                for (goal, expect_cloud) in [
+                    ("请使用 computer_use_start 操作当前已授权的测试窗口。点击标准按钮 CU fixture button，点击后它会变成 CU fixture clicked。只操作这个测试按钮。", false),
+                    ("请使用 computer_use_start 操作当前已授权的测试窗口。点击右侧白色方框中的蓝色放大镜纯图标（该图标没有 UIA 名称，需 visual target）。点击后出现 CU visual fixture clicked。只操作这个图标。", true),
+                ] {
+                    let request = chat(goal.into());
+                    let chat_job = tauri::async_runtime::spawn(async move {
+                        request.send().await.unwrap().error_for_status().unwrap()
+                            .json::<Value>().await.unwrap()
+                    });
+                    let deadline = Instant::now() + Duration::from_secs(100);
+                    let result = loop {
+                        let state = status().await;
+                        if !state["task_id"].is_null() && state["task_id"] != previous_task
+                            && state["state"] != "running" && state["state"] != "paused" {
+                            break state;
+                        }
+                        assert!(Instant::now() < deadline, "chat did not complete a new desktop task: {state}");
+                        tokio::time::sleep(Duration::from_millis(300)).await;
+                    };
+                    let _ = chat_job.await.unwrap();
+                    eprintln!("cloud={expect_cloud}: {result}");
+                    assert_eq!(result["state"], "succeeded");
+                    if expect_cloud {
+                        assert_eq!(result["last_vision"]["status"], "found");
+                    } else {
+                        assert!(result["last_vision"].is_null());
+                    }
+                    previous_task = result["task_id"].clone();
+                }
+                let _ = chat("请用 computer_use_status 查询刚才桌面任务的真实结果并汇报。".into())
+                    .send()
+                    .await
+                    .unwrap()
+                    .error_for_status()
+                    .unwrap();
+                executor.stop();
+            };
+            let transport = transport::run(&config, &executor, &grant, &char_id);
+            tokio::pin!(transport);
+            tokio::select! {
+                result = &mut transport => {
+                    panic!("desktop transport ended during acceptance: {result:?}");
+                }
+                _ = exercise => {}
+            }
+            tokio::time::timeout(Duration::from_secs(3), &mut transport)
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(executor.status().unwrap().state, "closed");
+            assert_eq!(status().await["device_online"], false);
+        });
     }
 }

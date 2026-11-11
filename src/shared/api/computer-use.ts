@@ -21,8 +21,6 @@ export type ComputerUseBackendStatus = {
   model_route: string;
   vision_ready: boolean;
   transport_mode?: 'local_private' | 'cloud_proxy' | 'unavailable';
-  vision_state?: string;
-  last_error?: string;
 };
 
 export const getComputerUseWindows = () => invoke<WindowChoice[]>('computer_use_windows');

@@ -146,3 +146,6 @@ GET /activity/records（state.read）默认仅列来源元数据；指定 source
 ## 294 生成图产物
 既有 artifacts[] 支持可选 kind=image 和 image/png、image/jpeg、image/webp。沿原即时回复/推送/历史链路保留元数据，旧文本卡片兼容；chat scope 与会话/角色授权不变。使用固定id的原产物端点带鉴权加载，不拼接带token的图片URL。显示缩略图、放大和失败重试，25MiB有界传输。
 桌面使用 preview_chat_image IPC 返回data URL，下载使用原保存对话框；手机复用ChatImage全屏缩放，saveChatImage(name,mime,bytes) 经AppSettingsStore/PlatformSettingsChannel/MainActivity通道调用系统ACTION_CREATE_DOCUMENT保存二进制图片，不新增存储权限或后台服务。模型密钥、默认连接、角色白名单与用户prompt约束由后端管理面统一配置，客户端不复制设置。真实图像服务/原生窗口/真机保存器验收为observe。
+### Computer Use 的 HTTP 扩展（CU-05）
+
+Computer Use 的授权与截图定位走 REST。现有 WebSocket 消息结构继续适用于桌宠订阅。见 [后端接入](backend-integration.md#302-cu-05-云端视觉)。

@@ -1,3 +1,19 @@
 <!doctype html><meta charset="utf-8"><title>PresenceKit CU browser fixture</title>
 <style>body{margin:0;background:linear-gradient(#ffffff,#8ac3ff,#ea9e7d);height:300vh} button{position:fixed;top:100px;left:100px;padding:18px}</style>
 <button onclick="this.textContent='CU fixture clicked'">CU fixture button</button>
+<canvas id="visual-target" width="116" height="100" style="position:fixed;top:230px;left:56%;border:2px solid #536178;border-radius:14px;background:white;cursor:pointer"></canvas>
+<button id="visual-receipt" style="top:340px" hidden>CU visual fixture clicked</button>
+<script>
+const target = document.getElementById('visual-target');
+const icon = target.getContext('2d');
+icon.strokeStyle = '#125acd';
+icon.lineWidth = 8;
+icon.beginPath();
+icon.arc(51, 43, 20, 0, 2 * Math.PI);
+icon.moveTo(67, 58);
+icon.lineTo(84, 75);
+icon.stroke();
+target.addEventListener('click', () => {
+  document.getElementById('visual-receipt').hidden = false;
+});
+</script>

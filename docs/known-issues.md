@@ -791,3 +791,9 @@ DPR 画布、调色滤镜降采样、桌宠窗口 set-size 权限/LogicalSize、
 原生执行器可以用 `cargo test --manifest-path src-tauri/Cargo.toml --lib computer_use::tests::notepad_smoke -- --ignored --nocapture` 在解锁的 Windows 会话中测试。测试会启动临时记事本文档并操作前台，运行时需保持键鼠空闲。已在单屏 168 DPI 的真实记事本验证观察、全选、输入、保存、停止与拒绝重放。浏览器滚动与点击、多屏、锁屏和崩溃恢复仍待实测。
 
 301 补记：桌面组件浏览器回归已验证双窗口状态显示、单窗口/整个桌面授权、暂停/恢复与停止。原生 Edge 验收使用 `scripts/fixtures/computer-use.html`，可在解锁的 Windows 中启动 Vite 后打开该页，切到前台再运行 `cargo test --manifest-path src-tauri/Cargo.toml --lib computer_use::tests::browser_smoke -- --ignored --nocapture`。此轮原生 Edge 复测未运行到输入步骤。
+
+## 302 CU-05 云端视觉（observe）
+
+桌面浏览器夹具覆盖默认未勾选、授权、暂停、停止和重新开启。168 DPI 的真实记事本通过观察、输入、保存、停止和拒绝重放，现有私网模型使用 420×300 合成图在 14.95 秒内命中目标。
+
+真实 Edge 组合验收在前台窗口检查阶段中止，图标点击和故障恢复继续现场验证。将 `scripts/fixtures/computer-use.html` 置于前台，准备已启用云端视觉的隔离后端，通过环境变量 `CU05_SMOKE_BACKEND`、`CU05_SMOKE_TOKEN` 和 `CU05_SMOKE_CHARACTER` 向 `cloud_browser_chat_smoke` 提供连接。该测试经正常聊天发起 UIA 与纯图标任务，检查两条路线的回执。
