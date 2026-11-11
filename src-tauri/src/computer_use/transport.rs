@@ -62,7 +62,9 @@ pub(super) async fn run(
     let client = reqwest::Client::builder()
         .no_proxy()
         .redirect(reqwest::redirect::Policy::none())
-        .timeout(Duration::from_secs(2))
+        // Allow a short busy backend while leaving the four-second local peer
+        // lease in charge of whether the worker may still inject input.
+        .timeout(Duration::from_millis(3200))
         .build()
         .map_err(|_| "backend_unavailable")?;
     let mut epoch: Option<String> = None;
