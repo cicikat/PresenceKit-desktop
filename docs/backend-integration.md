@@ -1372,3 +1372,9 @@ main capability 仅新增标题栏需要的 start-dragging、minimize、toggle-m
 `Observation` 带窗口身份、物理尺寸、DPI、截图版本和时间、JPEG 尺寸与 UIA 控件。目标可用 `{kind:"element", id}` 或 `{kind:"visual", description}`。描述先匹配唯一 UIA 名称，缺失时通过单独配置的私网 Chat Completions 模型定位。模型只返回归一化坐标或不确定；坐标执行前重新校验原画面、前台和窗口边界。
 
 JPEG 最长边 1280、模型请求上限 2 MiB、18 秒、100 输出 token；原图和模型凭据只由原生调用路径消费。模型网络请求禁用代理、重定向和公网上游。观察元数据不含图片。
+
+## 301 CU-03 桌面授权轮询
+
+`computer_use_open` 增加活跃 `charId` 入参。桌面 Rust 用现有 Bearer 配置连接 `POST /computer-use/poll`、`POST /computer-use/result`。本机授权初次同步后绑定后端实例。步骤与设备、会话、任务、序号、nonce、帧、TTL 绑定，客户端刷新最长 4 秒租约。连接中断、角色变化、后台任务取消或租约过期会丢弃对应执行权，回执不自动重发。步骤发放等待外部授权窗口进入前台。
+
+服务器只接收 JPEG 尺寸、窗口状态和 UIA 观察摘要。独立视觉连接参数仅传给已匹配的 Rust 执行器。密码控件的名称和内容不进入 UIA 摘要；这不影响授权范围内的输入能力。

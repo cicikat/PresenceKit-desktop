@@ -1,5 +1,6 @@
 //! Local, process-scoped authorization and sequenced execution.
 mod native;
+mod transport;
 mod vision;
 
 use std::collections::HashSet;
@@ -57,6 +58,7 @@ pub struct Node {
     id: u32,
     name: String,
     control_type: i32,
+    value: Option<String>,
     bounds: Bounds,
     focused: bool,
 }
@@ -186,6 +188,12 @@ struct Session {
     emergency: u64,
     task: Option<Task>,
     seen_tasks: HashSet<String>,
+    peer: Option<Peer>,
+}
+
+struct Peer {
+    expires: Instant,
+    task_id: Option<String>,
 }
 
 struct Task {
@@ -213,6 +221,7 @@ pub struct Status {
     state: &'static str,
     reason: Option<&'static str>,
     remaining_ms: u64,
+    focus_ready: bool,
     task_id: Option<String>,
     steps: u32,
 }
@@ -224,6 +233,12 @@ impl Session {
         }
         self.stopped = if self.emergency != native::emergency() {
             Some("emergency_stop")
+        } else if self
+            .peer
+            .as_ref()
+            .is_some_and(|peer| peer.expires <= Instant::now())
+        {
+            Some("backend_offline")
         } else if self.expires <= Instant::now() {
             Some("expired")
         } else if !native::unlocked() {
@@ -298,6 +313,7 @@ impl Executor {
             emergency: native::emergency(),
             task: None,
             seen_tasks: HashSet::new(),
+            peer: None,
         });
         drop(session);
         self.status()
@@ -313,6 +329,7 @@ impl Executor {
                 state: "closed",
                 reason: None,
                 remaining_ms: 0,
+                focus_ready: false,
                 task_id: None,
                 steps: 0,
             });
@@ -340,6 +357,7 @@ impl Executor {
                     .saturating_duration_since(Instant::now())
                     .as_millis() as u64
             },
+            focus_ready: session.stopped.is_none() && native::surface(session.scope).is_ok(),
             task_id: session.task.as_ref().map(|t| t.id.clone()),
             steps: session.task.as_ref().map_or(0, |t| t.next - 1),
         })
@@ -371,7 +389,47 @@ impl Executor {
         let _ = self.control(Control::Stop);
     }
 
-    pub fn finish(&self, session_id: &str, task_id: &str) {
+    fn stop_matching(&self, session_id: &str, reason: &'static str) {
+        if let Ok(mut guard) = self.session() {
+            if let Some(session) = guard
+                .as_mut()
+                .filter(|session| session.id == session_id && session.stopped.is_none())
+            {
+                session.stopped = Some(reason);
+                session.task = None;
+                native::arm_monitor(0);
+            }
+        }
+    }
+
+    fn sync_peer(
+        &self,
+        session_id: &str,
+        task_id: Option<String>,
+        expires: Instant,
+    ) -> Result<(), &'static str> {
+        let mut guard = self.session()?;
+        let session = guard
+            .as_mut()
+            .filter(|session| session.id == session_id)
+            .ok_or("authorization_ended")?;
+        session.check();
+        if session.stopped.is_some() {
+            return Err("authorization_ended");
+        }
+        if session
+            .task
+            .as_ref()
+            .is_some_and(|task| Some(&task.id) != task_id.as_ref())
+        {
+            session.task = None;
+        }
+        session.peer = Some(Peer { expires, task_id });
+        Ok(())
+    }
+
+    #[cfg(test)]
+    fn finish(&self, session_id: &str, task_id: &str) {
         if let Ok(mut guard) = self.session() {
             if let Some(session) = guard.as_mut().filter(|s| s.id == session_id) {
                 if session.task.as_ref().is_some_and(|task| task.id == task_id) {
@@ -381,13 +439,30 @@ impl Executor {
         }
     }
 
-    pub fn step(&self, step: Step, vision: Option<&vision::Connection>) -> Receipt {
-        match self.execute(step, vision) {
-            Ok(receipt) | Err(receipt) => receipt,
+    pub fn step(
+        &self,
+        step: Step,
+        vision: Option<&vision::Connection>,
+        expires: Instant,
+    ) -> Receipt {
+        let mut input_attempted = false;
+        match self.execute(step, vision, expires, &mut input_attempted) {
+            Ok(receipt) => receipt,
+            Err(_) if input_attempted => Receipt::error("failed", "outcome_unknown"),
+            Err(receipt) => receipt,
         }
     }
 
-    fn execute(&self, step: Step, vision: Option<&vision::Connection>) -> Result<Receipt, Receipt> {
+    fn execute(
+        &self,
+        step: Step,
+        vision: Option<&vision::Connection>,
+        expires: Instant,
+        input_attempted: &mut bool,
+    ) -> Result<Receipt, Receipt> {
+        if Instant::now() >= expires {
+            return Err(Receipt::error("stale", "delivery_expired"));
+        }
         let _worker = self
             .worker
             .try_lock()
@@ -452,7 +527,7 @@ impl Executor {
                         _ => {
                             let connection = vision
                                 .ok_or_else(|| Receipt::error("failed", "vision_not_configured"))?;
-                            self.recheck(&step, before, |_| Ok(()))?;
+                            self.recheck(&step, before, expires, |_| Ok(()))?;
                             tauri::async_runtime::block_on(vision::locate(
                                 connection,
                                 &frame.jpeg,
@@ -497,7 +572,7 @@ impl Executor {
                 }
                 let deadline = Instant::now() + Duration::from_millis(*ms);
                 while Instant::now() < deadline {
-                    self.recheck(&step, before, |_| Ok(()))?;
+                    self.recheck(&step, before, expires, |_| Ok(()))?;
                     std::thread::sleep(Duration::from_millis(20));
                 }
             } else if let Action::TypeText { text } = &action {
@@ -507,20 +582,21 @@ impl Executor {
                 // Some Windows controls resolve VK_PACKET lazily. Space scalar
                 // batches so the control consumes one before the next arrives.
                 for scalar in text.chars() {
-                    self.recheck(&step, before, |_| {
+                    self.recheck(&step, before, expires, |_| {
                         let mut buffer = [0u16; 2];
-                        native::type_scalar(scalar.encode_utf16(&mut buffer))
+                        native::type_scalar(scalar.encode_utf16(&mut buffer), input_attempted)
                             .map_err(|reason| Receipt::error("failed", reason))
                     })?;
                     std::thread::sleep(Duration::from_millis(48));
                 }
                 std::thread::sleep(Duration::from_millis(100));
             } else {
-                self.recheck(&step, before, |_| {
+                self.recheck(&step, before, expires, |_| {
                     if frame.at.elapsed() > FRAME_TTL {
                         return Err(Receipt::error("stale", "observation_expired"));
                     }
-                    native::perform(&action, frame).map_err(|e| Receipt::error("failed", e))
+                    native::perform(&action, frame, input_attempted)
+                        .map_err(|e| Receipt::error("failed", e))
                 })?;
                 // Let the target drain the input queue before observing the result.
                 std::thread::sleep(Duration::from_millis(140));
@@ -547,7 +623,7 @@ impl Executor {
         let changed = previous
             .as_ref()
             .is_some_and(|f| f.surface != after || f.digest != digest);
-        self.recheck(&step, after, |task| {
+        self.recheck(&step, after, expires, |task| {
             task.frame = Some(Frame {
                 at: captured,
                 version: step.seq,
@@ -578,6 +654,7 @@ impl Executor {
         &self,
         step: &Step,
         expected: Surface,
+        expires: Instant,
         apply: impl FnOnce(&mut Task) -> Result<(), Receipt>,
     ) -> Result<(), Receipt> {
         let mut guard = self.session().map_err(|e| Receipt::error("failed", e))?;
@@ -587,6 +664,9 @@ impl Executor {
             return Err(Receipt::error("stale", "observation_changed"));
         }
         session.active()?;
+        if Instant::now() >= expires {
+            return Err(Receipt::error("stale", "delivery_expired"));
+        }
         apply(match_task(session, step)?)
     }
 }
@@ -597,7 +677,13 @@ fn match_session<'a>(
 ) -> Result<&'a mut Session, Receipt> {
     session
         .as_mut()
-        .filter(|s| s.id == step.session_id && s.device_id == step.device_id)
+        .filter(|s| {
+            s.id == step.session_id
+                && s.device_id == step.device_id
+                && s.peer
+                    .as_ref()
+                    .is_none_or(|peer| peer.task_id.as_deref() == Some(&step.task_id))
+        })
         .ok_or_else(|| Receipt::error("canceled", "no_matching_session"))
 }
 
@@ -642,9 +728,15 @@ pub fn computer_use_open(
     window: WebviewWindow,
     scope: Scope,
     duration_seconds: u64,
+    char_id: String,
 ) -> Result<Status, &'static str> {
     check_control_window(&window)?;
-    window.state::<Executor>().open(scope, duration_seconds)
+    if char_id.is_empty() || char_id.len() > 80 {
+        return Err("invalid_character");
+    }
+    let status = window.state::<Executor>().open(scope, duration_seconds)?;
+    transport::start(window.app_handle().clone(), &status, char_id);
+    Ok(status)
 }
 
 #[tauri::command]
@@ -736,6 +828,7 @@ mod tests {
                     action,
                 },
                 None,
+                Instant::now() + Duration::from_secs(20),
             )
         };
         let steps = [

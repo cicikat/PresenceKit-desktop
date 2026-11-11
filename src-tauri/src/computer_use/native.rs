@@ -35,10 +35,14 @@ mod unsupported {
     pub fn nodes(_: Surface) -> Vec<Node> {
         vec![]
     }
-    pub fn type_scalar(_: &[u16]) -> Result<(), &'static str> {
+    pub fn type_scalar(_: &[u16], _: &mut bool) -> Result<(), &'static str> {
         Err("unsupported_platform")
     }
-    pub(in super::super) fn perform(_: &Action, _: &Frame) -> Result<(), &'static str> {
+    pub(in super::super) fn perform(
+        _: &Action,
+        _: &Frame,
+        _: &mut bool,
+    ) -> Result<(), &'static str> {
         Err("unsupported_platform")
     }
 }

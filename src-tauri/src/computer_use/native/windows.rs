@@ -349,10 +349,10 @@ unsafe fn collect_nodes(surface: Surface) -> windows::core::Result<Vec<Node>> {
         {
             continue;
         }
-        let name = if element
+        let protected = element
             .CurrentIsPassword()
-            .map_or(true, |value| value.as_bool())
-        {
+            .map_or(true, |value| value.as_bool());
+        let name = if protected {
             String::new()
         } else {
             element
@@ -363,14 +363,35 @@ unsafe fn collect_nodes(surface: Surface) -> windows::core::Result<Vec<Node>> {
                 .take(120)
                 .collect()
         };
+        let control_type = element.CurrentControlType().unwrap_or_default();
+        let focused = element
+            .CurrentHasKeyboardFocus()
+            .is_ok_and(|value| value.as_bool());
+        let value = if focused
+            && !protected
+            && (control_type == UIA_EditControlTypeId || control_type == UIA_DocumentControlTypeId)
+        {
+            let text = element
+                .GetCurrentPatternAs::<IUIAutomationTextPattern>(UIA_TextPatternId)
+                .and_then(|pattern| pattern.DocumentRange())
+                .and_then(|range| range.GetText(160))
+                .or_else(|_| {
+                    element
+                        .GetCurrentPatternAs::<IUIAutomationValuePattern>(UIA_ValuePatternId)
+                        .and_then(|pattern| pattern.CurrentValue())
+                });
+            text.ok()
+                .map(|text| text.to_string().chars().take(160).collect())
+        } else {
+            None
+        };
         nodes.push(Node {
             id,
             name,
-            control_type: element.CurrentControlType().unwrap_or_default().0,
+            control_type: control_type.0,
             bounds: bounds(rect),
-            focused: element
-                .CurrentHasKeyboardFocus()
-                .is_ok_and(|value| value.as_bool()),
+            focused,
+            value,
         });
     }
     Ok(nodes)
@@ -417,9 +438,13 @@ fn validate_point(point: POINT, frame: &Frame) -> Result<(), &'static str> {
         {
             return Err("point_outside_scope");
         }
-        if !frame.desktop_scope
-            && GetAncestor(WindowFromPoint(point), GA_ROOT) != hwnd(surface.window)
-        {
+        let root = GetAncestor(WindowFromPoint(point), GA_ROOT);
+        let mut pid = 0;
+        GetWindowThreadProcessId(root, Some(&mut pid));
+        if pid == std::process::id() {
+            return Err("client_control_surface");
+        }
+        if !frame.desktop_scope && root != hwnd(surface.window) {
             return Err("point_occluded");
         }
     }
@@ -512,7 +537,11 @@ fn key_flags(vk: u16) -> KEYBD_EVENT_FLAGS {
     }
 }
 
-pub(in super::super) fn perform(action: &Action, frame: &Frame) -> Result<(), &'static str> {
+pub(in super::super) fn perform(
+    action: &Action,
+    frame: &Frame,
+    input_attempted: &mut bool,
+) -> Result<(), &'static str> {
     let _dpi = Dpi::physical()?;
     let mut batch = Vec::new();
     let movement = |target| point(target, frame).map(|p| move_to(p, frame.surface.desktop));
@@ -581,10 +610,10 @@ pub(in super::super) fn perform(action: &Action, frame: &Frame) -> Result<(), &'
         }
         _ => return Err("invalid_action"),
     }
-    send_batch(&batch)
+    send_batch(&batch, input_attempted)
 }
 
-pub fn type_scalar(units: &[u16]) -> Result<(), &'static str> {
+pub fn type_scalar(units: &[u16], input_attempted: &mut bool) -> Result<(), &'static str> {
     let mut batch = Vec::with_capacity(4);
     for &unit in units {
         batch.extend([
@@ -592,10 +621,10 @@ pub fn type_scalar(units: &[u16]) -> Result<(), &'static str> {
             keyboard(0, unit, KEYEVENTF_UNICODE | KEYEVENTF_KEYUP),
         ]);
     }
-    send_batch(&batch)
+    send_batch(&batch, input_attempted)
 }
 
-fn send_batch(batch: &[INPUT]) -> Result<(), &'static str> {
+fn send_batch(batch: &[INPUT], input_attempted: &mut bool) -> Result<(), &'static str> {
     if unsafe {
         [
             VK_SHIFT, VK_CONTROL, VK_MENU, VK_LWIN, VK_RWIN, VK_LBUTTON, VK_RBUTTON, VK_MBUTTON,
@@ -607,6 +636,7 @@ fn send_batch(batch: &[INPUT]) -> Result<(), &'static str> {
     }
     let size = std::mem::size_of::<INPUT>() as i32;
     let sent = unsafe { SendInput(batch, size) } as usize;
+    *input_attempted |= sent > 0;
     if sent == batch.len() {
         return Ok(());
     }
