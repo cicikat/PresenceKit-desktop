@@ -12,6 +12,7 @@ import { renderInlineStyled } from '../chat/inlineStyle';
 import { getActiveCharacterInfo, subscribeActiveCharacter } from '../../shared/activeCharacter';
 import { PetTextPresentation } from '../../shared/character/useCharacterBehavior';
 import { usePetBubbleLayout } from './usePetBubbleLayout';
+import { PetComputerUse } from './components/PetComputerUse';
 import { PetStage } from './components/PetStage';
 import { usePetMouse } from './usePetMouse';
 import { usePetRoam } from './usePetRoam';
@@ -199,6 +200,8 @@ export function PetWindow() {
             <PetStage snapshot={snapshot} reaction={reaction} volume={voice.isRecording ? voice.volume : 0} />
           </PetTextPresentation.Provider>
         </div>
+
+        <PetComputerUse />
 
         {(voice.isRecording || pinned) && (
           <section style={{

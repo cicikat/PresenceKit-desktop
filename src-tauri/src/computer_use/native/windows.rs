@@ -19,6 +19,7 @@ use super::super::*;
 
 static MONITOR_UNTIL: AtomicU64 = AtomicU64::new(0);
 static ACTIVITY: AtomicU64 = AtomicU64::new(0);
+static PAUSE: AtomicU64 = AtomicU64::new(0);
 static EMERGENCY: AtomicU64 = AtomicU64::new(0);
 static MONITOR: OnceLock<Result<(), &'static str>> = OnceLock::new();
 
@@ -33,6 +34,10 @@ fn monitoring() -> bool {
 
 pub fn activity() -> u64 {
     ACTIVITY.load(Ordering::SeqCst)
+}
+
+pub fn pause_toggle() -> u64 {
+    PAUSE.load(Ordering::SeqCst)
 }
 
 pub fn emergency() -> u64 {
@@ -80,22 +85,26 @@ unsafe extern "system" fn mouse_hook(code: i32, wp: WPARAM, lp: LPARAM) -> LRESU
 }
 
 unsafe extern "system" fn keyboard_hook(code: i32, wp: WPARAM, lp: LPARAM) -> LRESULT {
-    if code >= 0
-        && monitoring()
-        && !(*(lp.0 as *const KBDLLHOOKSTRUCT))
-            .flags
-            .contains(LLKHF_INJECTED)
-    {
-        ACTIVITY.fetch_add(1, Ordering::SeqCst);
-    }
-    if code >= 0 && monitoring() && wp.0 == WM_KEYDOWN as usize {
+    if code >= 0 && monitoring() && matches!(wp.0 as u32, WM_KEYDOWN | WM_SYSKEYDOWN) {
         let key = &*(lp.0 as *const KBDLLHOOKSTRUCT);
-        if !key.flags.contains(LLKHF_INJECTED)
-            && key.vkCode == u32::from(VK_F12.0)
-            && GetAsyncKeyState(i32::from(VK_CONTROL.0)) < 0
-            && GetAsyncKeyState(i32::from(VK_SHIFT.0)) < 0
-        {
-            EMERGENCY.fetch_add(1, Ordering::SeqCst);
+        if !key.flags.contains(LLKHF_INJECTED) {
+            let vk = VIRTUAL_KEY(key.vkCode as u16);
+            let chord = GetAsyncKeyState(i32::from(VK_CONTROL.0)) < 0
+                && GetAsyncKeyState(i32::from(VK_SHIFT.0)) < 0;
+            match vk {
+                VK_F12 if chord => {
+                    EMERGENCY.fetch_add(1, Ordering::SeqCst);
+                }
+                VK_F11 if chord => {
+                    if GetAsyncKeyState(i32::from(VK_F11.0)) >= 0 {
+                        PAUSE.fetch_add(1, Ordering::SeqCst);
+                    }
+                }
+                VK_LCONTROL | VK_RCONTROL | VK_CONTROL | VK_LSHIFT | VK_RSHIFT | VK_SHIFT => {}
+                _ => {
+                    ACTIVITY.fetch_add(1, Ordering::SeqCst);
+                }
+            }
         }
     }
     CallNextHookEx(HHOOK::default(), code, wp, lp)

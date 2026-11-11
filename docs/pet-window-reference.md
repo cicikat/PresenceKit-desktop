@@ -273,3 +273,7 @@ PetTextPresentation 仅在 PetStage 子树提供当前段的文本租约；Chara
 验证：17 项纯逻辑回归、tsc/生产构建；scripts/pet-speech-browser.mjs 用实际 PetWindow/GLB 覆盖左右不重叠、屏幕锚点、三段 speaking、末段 idle 与收起。截图与报告在 .tmp/pet-bubble-{left,right}.png / .tmp/pet-speech-report.json。原生位置/DPI 为模拟，不代表真实 Windows 多显示器、拖动漫游、用户 TTS/Live2D/GPU 或发行验收；这些仍 observe。极窄工作区无法容纳舞台与侧翼时，需减小桌宠缩放。
 
 2026-10-27 呈现微调：侧边气泡底色透明度 48%，减弱阴影，短句按 max-content 收缩，最多 21em（含内边距，约每行 18 个中文字）后自然换行；左侧按靠近模型的右边缘锚定。逐段轻量淡入，不改消息或播音生命周期。浏览器短句 110px、长句 252px/多行验证与构建通过；真实 Windows 透明合成仍 observe。无跨端影响。
+
+## Windows Computer Use（301）
+
+授权期间桌宠显示剩余时长、任务步骤和停止按钮。授权、暂停和恢复可从主窗口系统设置管理；前台应用内也可按 Ctrl+Shift+F11 暂停或恢复。

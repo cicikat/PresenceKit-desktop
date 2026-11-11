@@ -23,6 +23,9 @@ mod unsupported {
     pub fn activity() -> u64 {
         0
     }
+    pub fn pause_toggle() -> u64 {
+        0
+    }
     pub fn emergency() -> u64 {
         0
     }

@@ -290,3 +290,7 @@ observe; enabled-service synthesis failure text fallback remains open.
 ## Live2D 播音口型（2026-10-25）
 
 修复本机输出分析生命周期、Pet 播音输入与无分析降级；沿用后台 desktop TTS/场景自动播放/performance_mapping 和客户端 lipsyncStrength/mouthParam。没有新增设置、持久化、后端接口或手机能力；本窗口 voice-volume 为短期展示事件，跨窗继续使用既有角色范围播音事件。真实设备/Tauri/TTS observe，验证与三面核对见 [live2d-playback.md](live2d-playback.md)。
+
+## 301 Windows Computer Use
+
+后端总开关 `computer_use.enabled` 默认关闭，由管理面「看屏幕与操作电脑」热更新。桌面「偏好 → 系统设置 → Computer Use」是本机临时授权，需明确选窗口或整个桌面及持续时长。视觉用途独立在后端模型路由配置。手机无入口。

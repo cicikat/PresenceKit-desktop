@@ -4,6 +4,7 @@ import { StateEngine } from '../../shared/state/store';
 import { ToolStatusOverlayController, type ToolStatusOverlayState } from '../../shared/state/toolStatusOverlay';
 import { wsClient } from '../../shared/api/ws';
 import { getDiarySyncStatus, syncDiary } from '../../shared/api/diary-sync';
+import { controlComputerUse } from '../../shared/api/computer-use';
 import { getActiveCharacterInfo, subscribeActiveCharacter, updateActiveCharacterFromAssets } from '../../shared/activeCharacter';
 import { getCharacterAvatar, getPromptAssets } from '../../shared/api/backend';
 import { openAdminPanel } from '../../shared/api/adminBridge';
@@ -127,6 +128,7 @@ export function ChatWindow({ onToyOpen, onRoomOpen, isCovered = false }: { onToy
     const unsubscribe = subscribeActiveCharacter(info => {
       if (info.id !== characterId) {
         characterId = info.id;
+        void controlComputerUse('stop').catch(() => {});
         setCharSwitchKey(key => key + 1);
       }
       void loadCharacterAvatar(info.id || null);

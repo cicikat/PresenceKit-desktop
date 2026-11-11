@@ -782,3 +782,5 @@ DPR 画布、调色滤镜降采样、桌宠窗口 set-size 权限/LogicalSize、
 ## 301 Windows Computer Use（observe）
 
 原生执行器可以用 `cargo test --manifest-path src-tauri/Cargo.toml --lib computer_use::tests::notepad_smoke -- --ignored --nocapture` 在解锁的 Windows 会话中测试。测试会启动临时记事本文档并操作前台，运行时需保持键鼠空闲。已在单屏 168 DPI 的真实记事本验证观察、全选、输入、保存、停止与拒绝重放。浏览器滚动与点击、多屏、锁屏和崩溃恢复仍待实测。
+
+301 补记：桌面组件浏览器回归已验证双窗口状态显示、单窗口/整个桌面授权、暂停/恢复与停止。原生 Edge 验收使用 `scripts/fixtures/computer-use.html`，可在解锁的 Windows 中启动 Vite 后打开该页，切到前台再运行 `cargo test --manifest-path src-tauri/Cargo.toml --lib computer_use::tests::browser_smoke -- --ignored --nocapture`。此轮原生 Edge 复测未运行到输入步骤。

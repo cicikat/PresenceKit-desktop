@@ -1378,3 +1378,7 @@ JPEG 最长边 1280、模型请求上限 2 MiB、18 秒、100 输出 token；原
 `computer_use_open` 增加活跃 `charId` 入参。桌面 Rust 用现有 Bearer 配置连接 `POST /computer-use/poll`、`POST /computer-use/result`。本机授权初次同步后绑定后端实例。步骤与设备、会话、任务、序号、nonce、帧、TTL 绑定，客户端刷新最长 4 秒租约。连接中断、角色变化、后台任务取消或租约过期会丢弃对应执行权，回执不自动重发。步骤发放等待外部授权窗口进入前台。
 
 服务器只接收 JPEG 尺寸、窗口状态和 UIA 观察摘要。独立视觉连接参数仅传给已匹配的 Rust 执行器。密码控件的名称和内容不进入 UIA 摘要；这不影响授权范围内的输入能力。
+
+## 301 CU-04 授权与桌宠控制
+
+`computer_use_backend_status` 是主窗口的只读状态入口。Windows 主窗口可授权或修改执行控制；桌宠 IPC 仅可读取本机状态与停止。主窗口检测到角色切换即撤销本机授权。Ctrl+Shift+F11 在授权窗口内暂停或恢复，Ctrl+Shift+F12 停止。

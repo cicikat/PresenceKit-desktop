@@ -19,6 +19,7 @@ import { CoplaySettingsPage } from '../CoplaySettingsPage';
 import { ConnectionSettingsPage } from '../ConnectionSettingsPage';
 import { DiarySyncSettingsPage } from '../DiarySyncSettingsPage';
 import { DesktopTtsSettingsPage } from '../DesktopTtsSettingsPage';
+import { ComputerUseSettingsPage } from '../ComputerUseSettingsPage';
 import { VisualPerceptionSettingsPage } from '../VisualPerceptionSettingsPage';
 import { useI18n, type Language } from '../../../../shared/i18n';
 import { getUIPref, setUIPref } from '../../../../shared/uiPreferences';
@@ -168,6 +169,8 @@ export function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, 
                 <div style={{ height: 1, background: 'var(--paper-edge)' }} />
                 <DiarySyncSettingsPage />
                 <VisualPerceptionSettingsPage />
+                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
+                <ComputerUseSettingsPage />
               </>
             ) : tab === 'interface' ? (
               <>

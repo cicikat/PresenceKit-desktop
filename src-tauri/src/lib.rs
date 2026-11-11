@@ -3848,6 +3848,7 @@ pub fn run() {
             computer_use::computer_use_open,
             computer_use::computer_use_status,
             computer_use::computer_use_control,
+            computer_use::computer_use_backend_status,
             inspect_character_package,
             install_character_package,
             actions::action_minimize_window,

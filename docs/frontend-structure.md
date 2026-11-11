@@ -1065,3 +1065,7 @@ PetWindow 在现有透明原生窗口内按需增加侧翼，模型舞台仍为�
 PetTextPresentation 仅在 PetStage 子树提供当前段的文本租约；CharacterBehaviorState 的原消息仍处理请求/情绪/实际音频，但桌宠文本 speaking 不再由整条消息的接收时间决定。逐段显示/到期驱动口型；音频暂停/结束释放当前段，下一段获得新租约；切换角色清空队列，同角色头像刷新不清空。Room 未提供此 context，沿用原策略。无设置、存储、REST/WS/IPC 或权限变更，无跨端影响。
 
 验证：17 项纯逻辑回归、tsc/生产构建；scripts/pet-speech-browser.mjs 用实际 PetWindow/GLB 覆盖左右不重叠、屏幕锚点、三段 speaking、末段 idle 与收起。截图与报告在 .tmp/pet-bubble-{left,right}.png / .tmp/pet-speech-report.json。原生位置/DPI 为模拟，不代表真实 Windows 多显示器、拖动漫游、用户 TTS/Live2D/GPU 或发行验收；这些仍 observe。极窄工作区无法容纳舞台与侧翼时，需减小桌宠缩放。
+
+## 301 Computer Use
+
+系统设置页通过 `src/shared/api/computer-use.ts` 调用 Tauri，展示授权范围、剩余时长和步骤。桌宠在授权期间显示本机执行状态与停止按钮，关闭后隐藏。两个窗口都读取同一个 Rust 执行器。
