@@ -22,14 +22,24 @@ export type ComputerUseBackendStatus = {
   vision_ready: boolean;
   transport_mode?: 'local_private' | 'cloud_proxy' | 'unavailable';
 };
+export type AgentSessionStatus = {
+  session_id?: string;
+  status: 'created' | 'planning' | 'acting' | 'observing' | 'waiting_user' | 'paused' |
+    'completed' | 'failed' | 'canceled' | 'expired' | 'outcome_unknown' | 'unavailable';
+  last_error_code?: string | null;
+  current_action?: string | null;
+  updated_at?: number;
+};
 
 export const getComputerUseWindows = () => invoke<WindowChoice[]>('computer_use_windows');
 export const getComputerUseStatus = () => invoke<ComputerUseStatus>('computer_use_status');
 export const getComputerUseBackendStatus = () =>
   invoke<ComputerUseBackendStatus>('computer_use_backend_status');
-export const openComputerUse = (scope: ComputerUseScope, durationSeconds: number, charId: string, cloudVision?: boolean) =>
+export const getAgentSessionStatus = () => invoke<AgentSessionStatus>('computer_use_agent_status');
+export const openComputerUse = (scope: ComputerUseScope | null, durationSeconds: number, charId: string,
+  cloudVision?: boolean, overlayLabel?: string) =>
   invoke<ComputerUseStatus>('computer_use_open', {
-    scope, durationSeconds, charId, ...(cloudVision === undefined ? {} : { cloudVision }),
+    scope, durationSeconds, charId, overlayLabel, ...(cloudVision === undefined ? {} : { cloudVision }),
   });
 export const controlComputerUse = (control: ComputerUseControl) =>
   invoke<ComputerUseStatus>('computer_use_control', { control });

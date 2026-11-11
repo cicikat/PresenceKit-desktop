@@ -13,6 +13,7 @@ const reasons = {
   expired: 'computerUse.reason.expired',
   backend_offline: 'computerUse.reason.backend_offline',
   emergency_stop: 'computerUse.reason.emergency_stop',
+  escape_cancel: 'computerUse.reason.escape_cancel',
   user_stopped: 'computerUse.reason.user_stopped',
   authorization_ended: 'computerUse.reason.authorization_ended',
   backend_denied: 'computerUse.reason.backend_denied',
@@ -30,7 +31,8 @@ export function ComputerUseSettingsPage() {
   const [choices, setChoices] = useState<WindowChoice[]>([]);
   const [windowIndex, setWindowIndex] = useState('');
   const [scope, setScope] = useState<'window' | 'desktop'>('window');
-  const [minutes, setMinutes] = useState(3);
+  const [advanced, setAdvanced] = useState(false);
+  const [minutes, setMinutes] = useState(10);
   const [allowCloud, setAllowCloud] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
@@ -49,8 +51,8 @@ export function ComputerUseSettingsPage() {
   }, []);
 
   useEffect(() => {
-    if (status?.supported && backend?.enabled) void refreshWindows();
-  }, [status?.supported, backend?.enabled, refreshWindows]);
+    if (advanced && status?.supported && backend?.enabled) void refreshWindows();
+  }, [advanced, status?.supported, backend?.enabled, refreshWindows]);
 
   useEffect(() => {
     if (!cloudAvailable) setAllowCloud(false);
@@ -68,14 +70,15 @@ export function ComputerUseSettingsPage() {
   }, []);
 
   async function grant() {
-    if (scope === 'window' && !picked) return;
-    const charId = getActiveCharacterInfo().id;
+    const { id: charId, name } = getActiveCharacterInfo();
     if (!charId) { setError(true); return; }
     setBusy(true);
     try {
-      setStatus(await openComputerUse(scope === 'desktop' ? { kind: 'desktop' }
-        : { kind: 'window', window: picked!.id }, minutes * 60, charId,
-      backend?.transport_mode === undefined ? undefined : cloudAvailable && allowCloud));
+      const selectedScope = !advanced ? null : scope === 'desktop' ? { kind: 'desktop' as const }
+        : picked ? { kind: 'window' as const, window: picked.id } : null;
+      setStatus(await openComputerUse(selectedScope, (advanced ? minutes : 10) * 60, charId,
+        backend?.transport_mode === undefined ? undefined : cloudAvailable && allowCloud,
+        t('computerUse.overlay').replace('{name}', name || t('computerUse.agent'))));
       setScope('window');
       setAllowCloud(false);
       setError(false);
@@ -103,7 +106,9 @@ export function ComputerUseSettingsPage() {
       </div>
       {status?.supported === false ? <span>{t('computerUse.windowsOnly')}</span> : !active ? (
         backend?.enabled && status?.supported ? <>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          <details open={advanced} onToggle={event => setAdvanced(event.currentTarget.open)}>
+            <summary>{t('computerUse.advanced')}</summary>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, margin: '8px 0' }}>
             <select aria-label={t('computerUse.scope')} value={scope} style={fieldStyle}
               onChange={event => setScope(event.target.value === 'desktop' ? 'desktop' : 'window')}>
               <option value="window">{t('computerUse.window')}</option>
@@ -111,25 +116,26 @@ export function ComputerUseSettingsPage() {
             </select>
             <select aria-label={t('computerUse.duration')} value={minutes} style={fieldStyle}
               onChange={event => setMinutes(Number(event.target.value))}>
-              {[1, 3, 5, 15].map(value => <option key={value} value={value}>{value} {t('computerUse.minutes')}</option>)}
+              {[1, 3, 5, 10, 15].map(value => <option key={value} value={value}>{value} {t('computerUse.minutes')}</option>)}
             </select>
           </div>
           {scope === 'window' ? <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             <select aria-label={t('computerUse.selectWindow')} value={windowIndex} style={{ ...fieldStyle, maxWidth: '100%' }}
               onChange={event => setWindowIndex(event.target.value)}>
-              <option value="">{t('computerUse.selectWindow')}</option>
+              <option value="">{t('computerUse.foreground')}</option>
               {choices.map((choice, index) => <option key={choice.id.handle} value={index}>{choice.title}</option>)}
             </select>
             <button type="button" style={fieldStyle} onClick={() => void refreshWindows()}>{t('computerUse.refresh')}</button>
           </div> : <span style={{ color: 'var(--ink-3)' }}>{t('computerUse.desktopHint')}</span>}
+          </details>
           {cloudAvailable && <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
             <input type="checkbox" checked={allowCloud} disabled={busy}
               onChange={event => setAllowCloud(event.target.checked)} />
             <span>{t('computerUse.cloudConsent')}</span>
           </label>}
           <div>
-            <button type="button" style={fieldStyle} disabled={busy || (scope === 'window' && !picked)}
-              onClick={() => void grant()}>{t(scope === 'window' ? 'computerUse.allowWindow' : 'computerUse.allowDesktop')}</button>
+            <button type="button" style={fieldStyle} disabled={busy}
+              onClick={() => void grant()}>{t(advanced && scope === 'desktop' ? 'computerUse.allowDesktop' : 'computerUse.allow')}</button>
           </div>
         </> : <span>{t(backend?.enabled === false ? 'computerUse.disabled' : 'computerUse.unavailable')}</span>
       ) : <>

@@ -20,12 +20,15 @@ await page.addInitScript(() => {
   window.calls = [];
   let status = { supported: true, state: 'closed', scope: null, reason: null, remaining_ms: 0, task_id: null, steps: 0 };
   let backend = { enabled: true, device_online: true, model_route: '', vision_ready: false };
+  let session = { status: 'unavailable' };
   window.setFixtureBackend = value => { backend = { ...backend, ...value }; };
   window.setFixtureStatus = value => { status = { ...status, ...value }; };
+  window.setFixtureSession = value => { session = value; };
   window.__TAURI_INTERNALS__ = { invoke: async (command, args) => {
     window.calls.push({ command, args });
     if (command === 'computer_use_status') return status;
     if (command === 'computer_use_backend_status') return backend;
+    if (command === 'computer_use_agent_status') return session;
     if (command === 'computer_use_windows') return [{ id: { handle: 20, pid: 30, thread: 40, created: [1, 2] }, title: 'Test Notepad' }];
     if (command === 'computer_use_open') {
       status = { ...status, state: 'ready', scope: args.scope, cloud_vision: args.cloudVision ?? null,
@@ -57,29 +60,43 @@ try {
     createRoot(document.getElementById('root')).render(React.createElement(ComputerUseSettingsPage));
     createRoot(document.getElementById('pet')).render(React.createElement(PetComputerUse));
   });
-  const grant = page.getByRole('button', { name: 'Allow selected window' });
+  const grant = page.getByRole('button', { name: 'Allow computer use' });
   await grant.waitFor();
-  assert.equal(await grant.isDisabled(), true);
-  await page.getByRole('combobox', { name: 'Select a window' }).selectOption({ label: 'Test Notepad' });
+  assert.equal(await grant.isDisabled(), false);
+  assert.equal(await page.getByRole('combobox', { name: 'Select a window' }).isVisible(), false);
   await grant.click();
   await page.getByRole('button', { name: 'Pause' }).click();
   await page.getByRole('button', { name: 'Resume' }).click();
-  await page.evaluate(() => window.setFixtureStatus({ state: 'running', task_id: 'abc12345', steps: 3 }));
-  await page.locator('#pet').getByText(/Operating desktop.*Step 3/).waitFor();
+  await page.evaluate(() => {
+    window.setFixtureStatus({ state: 'running', task_id: 'abc12345', steps: 3 });
+    window.setFixtureSession({ status: 'acting', updated_at: Date.now() / 1000 });
+  });
+  await page.locator('#pet').getByText('Operating', { exact: true }).waitFor();
   await page.locator('#pet').getByRole('button', { name: 'Stop' }).click();
   await page.locator('#pet').getByRole('button', { name: 'Stop' }).waitFor({ state: 'hidden' });
+  await page.evaluate(() => window.setFixtureSession({ status: 'outcome_unknown', updated_at: Date.now() / 1000 }));
+  await page.locator('#pet').getByText('Result needs verification').waitFor();
+  await page.getByText('Advanced access options').click();
+  await page.getByRole('combobox', { name: 'Select a window' }).selectOption({ label: 'Test Notepad' });
+  await page.getByRole('combobox', { name: 'Access duration' }).selectOption('5');
+  await grant.click();
+  const stop = page.locator('#root').getByRole('button', { name: 'Stop' });
+  await stop.click();
   await page.getByRole('combobox', { name: 'Access scope' }).selectOption('desktop');
   await page.getByRole('button', { name: 'Allow entire desktop' }).click();
   const grants = await page.evaluate(() => window.calls.filter(item => item.command === 'computer_use_open'));
-  assert.equal(grants.length, 2);
+  assert.equal(grants.length, 3);
   assert.deepEqual(grants[0].args, {
-    scope: { kind: 'window', window: { handle: 20, pid: 30, thread: 40, created: [1, 2] } },
-    durationSeconds: 180, charId: 'fixture',
+    scope: null, durationSeconds: 600, charId: 'fixture',
+    overlayLabel: 'Fixture is operating · Esc to cancel',
   });
-  assert.deepEqual(grants[1].args.scope, { kind: 'desktop' });
+  assert.deepEqual(grants[1].args.scope,
+    { kind: 'window', window: { handle: 20, pid: 30, thread: 40, created: [1, 2] } });
+  assert.equal(grants[1].args.durationSeconds, 300);
+  assert.deepEqual(grants[2].args.scope, { kind: 'desktop' });
 
-  const stop = page.locator('#root').getByRole('button', { name: 'Stop' });
   await stop.click();
+  await page.getByText('Advanced access options').click();
   await page.evaluate(() => window.setFixtureBackend({ transport_mode: 'cloud_proxy', vision_ready: true }));
   const consent = page.getByRole('checkbox', { name: /Allow this session to send necessary screenshots/ });
   await consent.waitFor({ timeout: 10000 });
@@ -97,7 +114,7 @@ try {
   await stop.click();
   assert.equal(await consent.isChecked(), false);
   assert.deepEqual(errors, []);
-  console.log('Computer Use browser passed: legacy grants, cloud opt-in and reset, pause/resume and pet stop.');
+  console.log('Computer Use browser passed: foreground and advanced grants, cloud consent, pause/resume and Agent status.');
 } finally {
   await browser.close();
 }

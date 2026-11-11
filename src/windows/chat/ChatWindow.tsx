@@ -5,6 +5,7 @@ import { ToolStatusOverlayController, type ToolStatusOverlayState } from '../../
 import { wsClient } from '../../shared/api/ws';
 import { getDiarySyncStatus, syncDiary } from '../../shared/api/diary-sync';
 import { controlComputerUse } from '../../shared/api/computer-use';
+import { AgentSessionIndicator } from '../../shared/computer-use/AgentSessionIndicator';
 import { getActiveCharacterInfo, subscribeActiveCharacter, updateActiveCharacterFromAssets } from '../../shared/activeCharacter';
 import { getCharacterAvatar, getPromptAssets } from '../../shared/api/backend';
 import { openAdminPanel } from '../../shared/api/adminBridge';
@@ -250,6 +251,7 @@ export function ChatWindow({ onToyOpen, onRoomOpen, isCovered = false }: { onToy
             <VideoBg src={appearanceController.appearance.backgroundVideoPath} blur={appearanceController.appearance.backgroundBlur} paused={visualPaused} />
           )}
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, minWidth: 0 }}>
+              {!isCovered && !activityOpen && navigation.groupView === null && !navigation.dreamWindowOpen && <AgentSessionIndicator />}
               <ChatPanel hidden={activityOpen || navigation.groupView !== null} key={charSwitchKey} engine={engine} chatRectRef={chatRectRef} headerVisible={appearanceController.chatHeaderVisible} chatFontSize={appearanceController.appearance.chatFontSize} chatOpacity={appearanceController.appearance.chatOpacity} showEmotionAccent={appearanceController.appearance.showEmotionAccent} showEmotionLabel={appearanceController.appearance.showEmotionLabel} dreamActive={navigation.dreamWindowOpen} characterAvatarDataUrl={characterAvatarDataUrl} mainLayout={appearanceController.activeLayout.manifest.mainLayout} onOpenRoom={onRoomOpen} onOpenPrefs={() => navigation.setPrefsOpen(true)} />
             {activityOpen ? (
               <Suspense fallback={null}><ActivityWindow onClose={() => setActivityOpen(false)} /></Suspense>

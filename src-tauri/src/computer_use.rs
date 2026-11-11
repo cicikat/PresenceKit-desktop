@@ -1,5 +1,7 @@
 //! Local, process-scoped authorization and sequenced execution.
 mod native;
+#[cfg(windows)]
+mod overlay;
 mod transport;
 mod vision;
 
@@ -186,6 +188,7 @@ struct Session {
     stopped: Option<&'static str>,
     activity: u64,
     emergency: u64,
+    escape: u64,
     pause_toggle: u64,
     revision: u64,
     task: Option<Task>,
@@ -237,7 +240,9 @@ impl Session {
         if self.stopped.is_some() {
             return;
         }
-        self.stopped = if self.emergency != native::emergency() {
+        self.stopped = if self.escape != native::escape() {
+            Some("escape_cancel")
+        } else if self.emergency != native::emergency() {
             Some("emergency_stop")
         } else if self
             .peer
@@ -281,6 +286,9 @@ impl Session {
 
     fn set_paused(&mut self, paused: bool) {
         self.paused = paused;
+        if paused {
+            native::arm_escape(None, Duration::ZERO);
+        }
         self.revision = self.revision.wrapping_add(1);
         if let Some(task) = &mut self.task {
             task.frame = None;
@@ -344,6 +352,7 @@ impl Executor {
             stopped: None,
             activity: native::activity(),
             emergency: native::emergency(),
+            escape: native::escape(),
             pause_toggle: native::pause_toggle(),
             revision: 0,
             task: None,
@@ -468,7 +477,35 @@ impl Executor {
             session.task = None;
         }
         session.peer = Some(Peer { expires, task_id });
+        if session
+            .peer
+            .as_ref()
+            .is_some_and(|peer| peer.task_id.is_none())
+        {
+            native::arm_escape(None, Duration::ZERO);
+        }
         Ok(())
+    }
+
+    #[cfg(windows)]
+    fn cue_active(&self, session_id: &str) -> Option<bool> {
+        let mut guard = self.session().ok()?;
+        let session = guard.as_mut().filter(|session| session.id == session_id)?;
+        session.check();
+        if session.stopped.is_some() {
+            return None;
+        }
+        let remaining = session
+            .peer
+            .as_ref()
+            .filter(|peer| peer.task_id.is_some())
+            .map_or(Duration::ZERO, |peer| {
+                peer.expires.saturating_duration_since(Instant::now())
+            });
+        let ready =
+            !session.paused && !remaining.is_zero() && native::surface(session.scope).is_ok();
+        native::arm_escape(ready.then_some(session.scope), remaining);
+        Some(ready)
     }
 
     #[cfg(test)]
@@ -820,19 +857,37 @@ pub fn computer_use_windows(window: WebviewWindow) -> Result<Vec<WindowChoice>, 
 #[tauri::command]
 pub fn computer_use_open(
     window: WebviewWindow,
-    scope: Scope,
+    scope: Option<Scope>,
     duration_seconds: u64,
     char_id: String,
     cloud_vision: Option<bool>,
+    overlay_label: Option<String>,
 ) -> Result<Status, &'static str> {
     check_control_window(&window)?;
     if char_id.is_empty() || char_id.len() > 80 {
         return Err("invalid_character");
     }
+    let scope = match scope {
+        Some(scope) => scope,
+        None => Scope::Window {
+            window: native::foreground_window()?,
+        },
+    };
     let status = window
         .state::<Executor>()
         .open(scope, duration_seconds, cloud_vision)?;
     transport::start(window.app_handle().clone(), &status, char_id);
+    #[cfg(windows)]
+    if let Some(session_id) = status.session_id.clone() {
+        let label = overlay_label
+            .unwrap_or_default()
+            .chars()
+            .take(160)
+            .collect();
+        overlay::start(window.app_handle().clone(), session_id, label);
+    }
+    #[cfg(not(windows))]
+    let _ = overlay_label;
     Ok(status)
 }
 
@@ -860,8 +915,25 @@ pub async fn computer_use_backend_status(
     window: WebviewWindow,
 ) -> Result<serde_json::Value, &'static str> {
     check_control_window(&window)?;
+    backend_status(window, "/computer-use/status").await
+}
+
+#[tauri::command]
+pub async fn computer_use_agent_status(
+    window: WebviewWindow,
+) -> Result<serde_json::Value, &'static str> {
+    if window.label() != "pet" {
+        check_control_window(&window)?;
+    }
+    backend_status(window, "/computer-use/agent-session").await
+}
+
+async fn backend_status(
+    window: WebviewWindow,
+    path: &str,
+) -> Result<serde_json::Value, &'static str> {
     let cfg = crate::load_client_config(window.app_handle());
-    let url = crate::backend_url(&cfg, "/computer-use/status");
+    let url = crate::backend_url(&cfg, path);
     let client = reqwest::Client::builder()
         .no_proxy()
         .redirect(reqwest::redirect::Policy::none())

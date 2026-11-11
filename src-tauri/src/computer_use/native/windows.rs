@@ -1,5 +1,5 @@
 use std::sync::{
-    atomic::{AtomicU64, Ordering},
+    atomic::{AtomicBool, AtomicU64, Ordering},
     OnceLock,
 };
 use std::time::{Duration, Instant};
@@ -21,11 +21,33 @@ static MONITOR_UNTIL: AtomicU64 = AtomicU64::new(0);
 static ACTIVITY: AtomicU64 = AtomicU64::new(0);
 static PAUSE: AtomicU64 = AtomicU64::new(0);
 static EMERGENCY: AtomicU64 = AtomicU64::new(0);
+static ESCAPE: AtomicU64 = AtomicU64::new(0);
+static ESCAPE_UNTIL: AtomicU64 = AtomicU64::new(0);
+static ESCAPE_WINDOW: AtomicU64 = AtomicU64::new(0);
+static ESCAPE_HELD: AtomicBool = AtomicBool::new(false);
 static MONITOR: OnceLock<Result<(), &'static str>> = OnceLock::new();
 
 pub fn arm_monitor(seconds: u64) {
     let now = unsafe { GetTickCount64() };
     MONITOR_UNTIL.store(now + seconds * 1000, Ordering::Relaxed);
+    arm_escape(None, Duration::ZERO);
+}
+
+pub fn arm_escape(scope: Option<Scope>, remaining: Duration) {
+    let window = match scope {
+        Some(Scope::Window { window }) => window.handle,
+        Some(Scope::Desktop) => u64::MAX,
+        None => 0,
+    };
+    ESCAPE_WINDOW.store(window, Ordering::SeqCst);
+    ESCAPE_UNTIL.store(
+        unsafe { GetTickCount64() } + remaining.as_millis() as u64,
+        Ordering::SeqCst,
+    );
+}
+
+pub fn escape() -> u64 {
+    ESCAPE.load(Ordering::SeqCst)
 }
 
 fn monitoring() -> bool {
@@ -85,10 +107,43 @@ unsafe extern "system" fn mouse_hook(code: i32, wp: WPARAM, lp: LPARAM) -> LRESU
 }
 
 unsafe extern "system" fn keyboard_hook(code: i32, wp: WPARAM, lp: LPARAM) -> LRESULT {
-    if code >= 0 && monitoring() && matches!(wp.0 as u32, WM_KEYDOWN | WM_SYSKEYDOWN) {
+    if code >= 0 {
         let key = &*(lp.0 as *const KBDLLHOOKSTRUCT);
         if !key.flags.contains(LLKHF_INJECTED) {
             let vk = VIRTUAL_KEY(key.vkCode as u16);
+            let event = wp.0 as u32;
+            if vk == VK_ESCAPE {
+                if matches!(event, WM_KEYUP | WM_SYSKEYUP)
+                    && ESCAPE_HELD.swap(false, Ordering::SeqCst)
+                {
+                    return LRESULT(1);
+                }
+                if matches!(event, WM_KEYDOWN | WM_SYSKEYDOWN) {
+                    if ESCAPE_HELD.load(Ordering::SeqCst) {
+                        return LRESULT(1);
+                    }
+                    let scope = ESCAPE_WINDOW.load(Ordering::SeqCst);
+                    if scope != 0
+                        && monitoring()
+                        && GetTickCount64() < ESCAPE_UNTIL.load(Ordering::SeqCst)
+                    {
+                        let foreground = GetForegroundWindow();
+                        let mut pid = 0;
+                        GetWindowThreadProcessId(foreground, Some(&mut pid));
+                        if (scope == u64::MAX && pid != 0 && pid != std::process::id())
+                            || scope == foreground.0 as usize as u64
+                        {
+                            ESCAPE_HELD.store(true, Ordering::SeqCst);
+                            ESCAPE_UNTIL.store(0, Ordering::SeqCst);
+                            ESCAPE.fetch_add(1, Ordering::SeqCst);
+                            return LRESULT(1);
+                        }
+                    }
+                }
+            }
+            if !monitoring() || !matches!(event, WM_KEYDOWN | WM_SYSKEYDOWN) {
+                return CallNextHookEx(HHOOK::default(), code, wp, lp);
+            }
             let chord = GetAsyncKeyState(i32::from(VK_CONTROL.0)) < 0
                 && GetAsyncKeyState(i32::from(VK_SHIFT.0)) < 0;
             match vk {
@@ -200,6 +255,29 @@ pub fn windows() -> Result<Vec<WindowChoice>, &'static str> {
         return Err("window_list_failed");
     }
     Ok(choices)
+}
+
+pub fn foreground_window() -> Result<WindowId, &'static str> {
+    if !unlocked() {
+        return Err("desktop_locked");
+    }
+    unsafe {
+        let handle = GetForegroundWindow();
+        if let Some(window) = identify(handle) {
+            return Ok(window);
+        }
+        let mut pid = 0;
+        GetWindowThreadProcessId(handle, Some(&mut pid));
+        if pid != std::process::id() {
+            return Err("foreground_unavailable");
+        }
+    }
+    // The authorization button itself owns the foreground. EnumWindows
+    // returns the other app windows in their current Z order.
+    windows()?
+        .first()
+        .map(|choice| choice.id)
+        .ok_or("foreground_unavailable")
 }
 
 struct Dpi(DPI_AWARENESS_CONTEXT);

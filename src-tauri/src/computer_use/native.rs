@@ -20,6 +20,13 @@ mod unsupported {
         Err("unsupported_platform")
     }
     pub fn arm_monitor(_: u64) {}
+    pub fn arm_escape(_: Option<Scope>, _: Duration) {}
+    pub fn escape() -> u64 {
+        0
+    }
+    pub fn foreground_window() -> Result<WindowId, &'static str> {
+        Err("unsupported_platform")
+    }
     pub fn activity() -> u64 {
         0
     }
