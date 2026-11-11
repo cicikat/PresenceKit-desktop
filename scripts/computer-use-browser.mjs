@@ -19,14 +19,17 @@ await page.addInitScript(() => {
   localStorage.setItem('presencekit.ui.character.active', JSON.stringify({ id: 'fixture' }));
   window.calls = [];
   let status = { supported: true, state: 'closed', scope: null, reason: null, remaining_ms: 0, task_id: null, steps: 0 };
+  let backend = { enabled: true, device_online: true, model_route: '', vision_ready: false };
+  window.setFixtureBackend = value => { backend = { ...backend, ...value }; };
   window.setFixtureStatus = value => { status = { ...status, ...value }; };
   window.__TAURI_INTERNALS__ = { invoke: async (command, args) => {
     window.calls.push({ command, args });
     if (command === 'computer_use_status') return status;
-    if (command === 'computer_use_backend_status') return { enabled: true, device_online: true, model_route: '', vision_ready: false };
+    if (command === 'computer_use_backend_status') return backend;
     if (command === 'computer_use_windows') return [{ id: { handle: 20, pid: 30, thread: 40, created: [1, 2] }, title: 'Test Notepad' }];
     if (command === 'computer_use_open') {
-      status = { ...status, state: 'ready', scope: args.scope, remaining_ms: args.durationSeconds * 1000, reason: null };
+      status = { ...status, state: 'ready', scope: args.scope, cloud_vision: args.cloudVision ?? null,
+        remaining_ms: args.durationSeconds * 1000, reason: null };
       return status;
     }
     if (command === 'computer_use_control') {
@@ -74,8 +77,27 @@ try {
     durationSeconds: 180, charId: 'fixture',
   });
   assert.deepEqual(grants[1].args.scope, { kind: 'desktop' });
+
+  const stop = page.locator('#root').getByRole('button', { name: 'Stop' });
+  await stop.click();
+  await page.evaluate(() => window.setFixtureBackend({ transport_mode: 'cloud_proxy', vision_ready: true }));
+  const consent = page.getByRole('checkbox', { name: /Allow this session to send necessary screenshots/ });
+  await consent.waitFor({ timeout: 10000 });
+  assert.equal(await consent.isChecked(), false);
+  await grant.click();
+  await page.getByText('Cloud screenshots unavailable for this session.').waitFor();
+  assert.equal(await page.evaluate(() => window.calls.filter(item => item.command === 'computer_use_open').at(-1).args.cloudVision), false);
+  await stop.click();
+  await consent.check();
+  await grant.click();
+  await page.getByText('Cloud screenshots allowed for this session.').waitFor();
+  assert.equal(await page.evaluate(() => window.calls.filter(item => item.command === 'computer_use_open').at(-1).args.cloudVision), true);
+  await page.getByRole('button', { name: 'Pause' }).click();
+  await page.getByText('Cloud screenshots paused.').waitFor();
+  await stop.click();
+  assert.equal(await consent.isChecked(), false);
   assert.deepEqual(errors, []);
-  console.log('Computer Use browser passed: scoped grant, pause/resume, pet status and stop.');
+  console.log('Computer Use browser passed: legacy grants, cloud opt-in and reset, pause/resume and pet stop.');
 } finally {
   await browser.close();
 }

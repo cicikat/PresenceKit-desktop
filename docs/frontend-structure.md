@@ -1069,3 +1069,5 @@ PetTextPresentation 仅在 PetStage 子树提供当前段的文本租约；Chara
 ## 301 Computer Use
 
 系统设置页通过 `src/shared/api/computer-use.ts` 调用 Tauri，展示授权范围、剩余时长和步骤。桌宠在授权期间显示本机执行状态与停止按钮，关闭后隐藏。两个窗口都读取同一个 Rust 执行器。
+
+后端路由为 `cloud_proxy` 时，系统设置在开启会话前展示默认未勾选的云端截图授权。勾选结果传给本机执行器并绑定此次会话，停止后重新开启需重新选择。

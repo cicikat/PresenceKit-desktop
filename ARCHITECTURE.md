@@ -167,4 +167,6 @@ PetTextPresentation 仅在 PetStage 子树提供当前段的文本租约；Chara
 
 ## Windows Computer Use（301）
 
+CU-05 的云端截图授权由主窗口设置页在开会话时传入 Rust，随当前设备、角色和范围同步到后端。界面只读取授权状态。
+
 `src-tauri/src/computer_use.rs` 持有短时本机授权，负责 UIA、截图、输入和停止。后端任务通过专用 HTTPS/HTTP scoped 轮询与回执关联，Tauri 状态供主窗口和桌宠消费。图片只保存在执行器内存，视觉定位时原生客户端直连已授权的本机或私网模型。

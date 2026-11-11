@@ -31,9 +31,11 @@ export function ComputerUseSettingsPage() {
   const [windowIndex, setWindowIndex] = useState('');
   const [scope, setScope] = useState<'window' | 'desktop'>('window');
   const [minutes, setMinutes] = useState(3);
+  const [allowCloud, setAllowCloud] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
   const active = status != null && status.state !== 'closed';
+  const cloudAvailable = backend?.transport_mode === 'cloud_proxy';
   const picked = windowIndex === '' ? undefined : choices[Number(windowIndex)];
 
   const refreshWindows = useCallback(async () => {
@@ -49,6 +51,10 @@ export function ComputerUseSettingsPage() {
   useEffect(() => {
     if (status?.supported && backend?.enabled) void refreshWindows();
   }, [status?.supported, backend?.enabled, refreshWindows]);
+
+  useEffect(() => {
+    if (!cloudAvailable) setAllowCloud(false);
+  }, [cloudAvailable]);
 
   useEffect(() => {
     let mounted = true;
@@ -68,8 +74,10 @@ export function ComputerUseSettingsPage() {
     setBusy(true);
     try {
       setStatus(await openComputerUse(scope === 'desktop' ? { kind: 'desktop' }
-        : { kind: 'window', window: picked!.id }, minutes * 60, charId));
+        : { kind: 'window', window: picked!.id }, minutes * 60, charId,
+      backend?.transport_mode === undefined ? undefined : cloudAvailable && allowCloud));
       setScope('window');
+      setAllowCloud(false);
       setError(false);
     } catch {
       setError(true);
@@ -114,6 +122,11 @@ export function ComputerUseSettingsPage() {
             </select>
             <button type="button" style={fieldStyle} onClick={() => void refreshWindows()}>{t('computerUse.refresh')}</button>
           </div> : <span style={{ color: 'var(--ink-3)' }}>{t('computerUse.desktopHint')}</span>}
+          {cloudAvailable && <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+            <input type="checkbox" checked={allowCloud} disabled={busy}
+              onChange={event => setAllowCloud(event.target.checked)} />
+            <span>{t('computerUse.cloudConsent')}</span>
+          </label>}
           <div>
             <button type="button" style={fieldStyle} disabled={busy || (scope === 'window' && !picked)}
               onClick={() => void grant()}>{t(scope === 'window' ? 'computerUse.allowWindow' : 'computerUse.allowDesktop')}</button>
@@ -126,6 +139,8 @@ export function ComputerUseSettingsPage() {
           <span className="mono">{computerUseCountdown(status.remaining_ms)}</span>
           {status.task_id && <span>{t('computerUse.step')} {status.steps}</span>}
         </div>
+        {cloudAvailable && <small>{t(!status.cloud_vision ? 'computerUse.cloudDenied'
+          : status.state === 'paused' ? 'computerUse.cloudPaused' : 'computerUse.cloudAllowed')}</small>}
         {status.state === 'ready' && <span style={{ color: 'var(--ink-3)' }}>{t('computerUse.focusHint')}</span>}
         <div style={{ display: 'flex', gap: 8 }}>
           <button type="button" style={fieldStyle} onClick={() => void apply(status.state === 'paused' ? 'resume' : 'pause')}>

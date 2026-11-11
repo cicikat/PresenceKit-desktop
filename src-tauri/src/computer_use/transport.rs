@@ -34,9 +34,10 @@ pub fn start(app: AppHandle, status: &Status, char_id: String) {
     };
     let session = session.clone();
     let device = device.clone();
+    let cloud_vision = status.cloud_vision;
     tauri::async_runtime::spawn(async move {
         let executor = app.state::<Executor>();
-        let result = run(&app, &executor, &session, &device, scope, &char_id).await;
+        let result = run(&app, &executor, &session, &device, scope, &char_id, cloud_vision).await;
         if let Err(reason) = result {
             executor.stop_matching(&session, reason);
         }
@@ -50,6 +51,7 @@ async fn run(
     device: &str,
     scope: Scope,
     char_id: &str,
+    cloud_vision: Option<bool>,
 ) -> Result<(), &'static str> {
     let config = crate::load_client_config(app);
     let url = crate::backend_url(&config, "/computer-use/poll");
@@ -71,13 +73,17 @@ async fn run(
         let local = executor.status()?;
         let closed = local.session_id.as_deref() != Some(session) || local.state == "closed";
         let started = Instant::now();
-        let request = crate::authorized_request(&config, client.post(&url)).json(&json!({
+        let mut poll = json!({
             "device_id": device, "session_id": session, "scope": scope_name, "char_id": char_id,
             "state": if closed { "closed" } else { local.state },
             "remaining_ms": if closed { 0 } else { local.remaining_ms },
             "focus_ready": local.focus_ready && !closed,
             "server_epoch": epoch,
-        }));
+        });
+        if let Some(granted) = cloud_vision {
+            poll["cloud_vision"] = json!(granted);
+        }
+        let request = crate::authorized_request(&config, client.post(&url)).json(&poll);
         if closed {
             if epoch.is_some() {
                 let _ = request.send().await;

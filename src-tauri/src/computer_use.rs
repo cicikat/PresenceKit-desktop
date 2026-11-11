@@ -179,6 +179,7 @@ struct Session {
     id: String,
     device_id: String,
     scope: Scope,
+    cloud_vision: Option<bool>,
     expires: Instant,
     paused: bool,
     stopped: Option<&'static str>,
@@ -221,6 +222,7 @@ pub struct Status {
     #[serde(skip_serializing)]
     device_id: Option<String>,
     scope: Option<Scope>,
+    cloud_vision: Option<bool>,
     state: &'static str,
     reason: Option<&'static str>,
     remaining_ms: u64,
@@ -301,7 +303,12 @@ impl Executor {
         self.session.lock().map_err(|_| "executor_unavailable")
     }
 
-    fn open(&self, scope: Scope, duration_seconds: u64) -> Result<Status, &'static str> {
+    fn open(
+        &self,
+        scope: Scope,
+        duration_seconds: u64,
+        cloud_vision: Option<bool>,
+    ) -> Result<Status, &'static str> {
         if !(30..=900).contains(&duration_seconds) {
             return Err("invalid_duration");
         }
@@ -330,6 +337,7 @@ impl Executor {
             id: random_id()?,
             device_id,
             scope,
+            cloud_vision,
             expires: Instant::now() + Duration::from_secs(duration_seconds),
             paused: false,
             stopped: None,
@@ -353,6 +361,7 @@ impl Executor {
                 session_id: None,
                 device_id: None,
                 scope: None,
+                cloud_vision: None,
                 state: "closed",
                 reason: None,
                 remaining_ms: 0,
@@ -367,6 +376,7 @@ impl Executor {
             session_id: Some(session.id.clone()),
             device_id: Some(session.device_id.clone()),
             scope: Some(session.scope),
+            cloud_vision: if session.stopped.is_none() { session.cloud_vision } else { None },
             state: if session.stopped.is_some() {
                 "closed"
             } else if session.paused {
@@ -764,12 +774,13 @@ pub fn computer_use_open(
     scope: Scope,
     duration_seconds: u64,
     char_id: String,
+    cloud_vision: Option<bool>,
 ) -> Result<Status, &'static str> {
     check_control_window(&window)?;
     if char_id.is_empty() || char_id.len() > 80 {
         return Err("invalid_character");
     }
-    let status = window.state::<Executor>().open(scope, duration_seconds)?;
+    let status = window.state::<Executor>().open(scope, duration_seconds, cloud_vision)?;
     transport::start(window.app_handle().clone(), &status, char_id);
     Ok(status)
 }
@@ -876,7 +887,7 @@ mod tests {
             std::thread::sleep(Duration::from_millis(100));
         };
         let executor = Executor::default();
-        let session = executor.open(Scope::Window { window }, 60).unwrap();
+        let session = executor.open(Scope::Window { window }, 60, None).unwrap();
         let session_id = session.session_id.unwrap();
         let device_id = session.device_id.unwrap();
         let run = |seq, frame, action| {
@@ -951,7 +962,7 @@ mod tests {
         let scope = Scope::Window { window: choice.id };
         assert!(native::surface(scope).is_ok(), "fixture must be foreground");
         let executor = Executor::default();
-        let session = executor.open(scope, 60).unwrap();
+        let session = executor.open(scope, 60, None).unwrap();
         let run = |seq, frame, action| {
             let started = Instant::now();
             let receipt = executor.step(
