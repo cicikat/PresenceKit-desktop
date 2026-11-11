@@ -11,6 +11,7 @@
 // 共 58 个不同路径）均为字面量硬编码。
 // publisher.rs 另有 /sensor/realtime。后端路由变更时需手动同步这两个文件。
 mod actions;
+mod computer_use;
 mod admin_bridge;
 mod client_config;
 mod diary_sync;
@@ -3769,6 +3770,7 @@ pub fn run() {
         .manage(VoiceHotkeyState { running: AtomicBool::new(false) })
         .manage(VisualRunnerState::default())
         .manage(actions::PresenceNagState::default())
+        .manage(computer_use::Executor::default())
         .manage(admin_bridge::AdminBridgeState::default())
         .manage(window_lifecycle::WindowLifecycleState::default())
         .manage(design_satellite::DesignSatelliteState::default())
@@ -3782,6 +3784,7 @@ pub fn run() {
                 main_window.on_window_event(move |event| {
                     design_satellite::sync_from_main_event(&app_handle, event);
                     if matches!(event, tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed) {
+                        app_handle.state::<computer_use::Executor>().stop();
                         design_satellite::destroy_for_main_close(&app_handle);
                     }
                 });
@@ -3841,6 +3844,10 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            computer_use::computer_use_windows,
+            computer_use::computer_use_open,
+            computer_use::computer_use_status,
+            computer_use::computer_use_control,
             inspect_character_package,
             install_character_package,
             actions::action_minimize_window,

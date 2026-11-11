@@ -391,7 +391,7 @@ fn unix_timestamp() -> f64 {
         .unwrap_or(0.0)
 }
 
-pub(super) fn encode_jpeg(frame: RgbImage) -> Result<Vec<u8>, String> {
+pub(crate) fn encode_jpeg(frame: RgbImage) -> Result<Vec<u8>, String> {
     let max_side = frame.width().max(frame.height());
     let resized = if max_side > MAX_IMAGE_SIDE {
         let scale = MAX_IMAGE_SIDE as f64 / max_side as f64;
@@ -473,12 +473,7 @@ pub(super) fn capture_game_window() -> Result<RgbImage, String> {
 
 #[cfg(target_os = "windows")]
 fn capture_gdi(foreground: bool) -> Result<RgbImage, String> {
-    use std::ffi::c_void;
-    use windows::Win32::Foundation::{HANDLE, HWND, RECT};
-    use windows::Win32::Graphics::Gdi::{
-        BitBlt, CreateCompatibleDC, CreateDIBSection, DeleteDC, DeleteObject, GetDC, ReleaseDC,
-        SelectObject, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, RGBQUAD, SRCCOPY,
-    };
+    use windows::Win32::Foundation::{HWND, RECT};
     use windows::Win32::UI::WindowsAndMessaging::{GetClientRect, GetForegroundWindow, GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN};
 
     unsafe {
@@ -489,10 +484,35 @@ fn capture_gdi(foreground: bool) -> Result<RgbImage, String> {
             GetClientRect(target, &mut bounds).map_err(|e| e.to_string())?;
             (bounds.right - bounds.left, bounds.bottom - bounds.top)
         } else { (GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN)) };
-        if width <= 0 || height <= 0 || width as u64 * height as u64 > 16_777_216 {
+        if width > 0 && height > 0 && width as u64 * height as u64 > 16_777_216 {
             return Err("主屏尺寸不可用".into());
         }
-        let screen_dc = GetDC(target);
+        capture_region(target, 0, 0, width, height, false)
+    }
+}
+
+#[cfg(target_os = "windows")]
+pub(crate) fn capture_region(
+    target: windows::Win32::Foundation::HWND,
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+    full_window: bool,
+) -> Result<RgbImage, String> {
+    use std::ffi::c_void;
+    use windows::Win32::Foundation::HANDLE;
+    use windows::Win32::Graphics::Gdi::{
+        BitBlt, CreateCompatibleDC, CreateDIBSection, DeleteDC, DeleteObject, GetDC, GetWindowDC,
+        ReleaseDC, SelectObject, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, RGBQUAD,
+        SRCCOPY,
+    };
+
+    unsafe {
+        if width <= 0 || height <= 0 || width as u64 * height as u64 > 33_554_432 {
+            return Err("主屏尺寸不可用".into());
+        }
+        let screen_dc = if full_window { GetWindowDC(target) } else { GetDC(target) };
         if screen_dc.0.is_null() {
             return Err("无法获取屏幕 DC".into());
         }
@@ -531,7 +551,7 @@ fn capture_gdi(foreground: bool) -> Result<RgbImage, String> {
             }
         };
         let previous = SelectObject(memory_dc, bitmap);
-        let copied = BitBlt(memory_dc, 0, 0, width, height, screen_dc, 0, 0, SRCCOPY).is_ok();
+        let copied = BitBlt(memory_dc, 0, 0, width, height, screen_dc, x, y, SRCCOPY).is_ok();
         let byte_len = width as usize * height as usize * 4;
         let bgra = if copied && !bits.is_null() {
             std::slice::from_raw_parts(bits as *const u8, byte_len).to_vec()

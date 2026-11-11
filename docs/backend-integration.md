@@ -1360,3 +1360,9 @@ main capability 仅新增标题栏需要的 start-dragging、minimize、toggle-m
 ## 294 生成图产物
 既有 artifacts[] 支持可选 kind=image 和 image/png、image/jpeg、image/webp。沿原即时回复/推送/历史链路保留元数据，旧文本卡片兼容；chat scope 与会话/角色授权不变。使用固定id的原产物端点带鉴权加载，不拼接带token的图片URL。显示缩略图、放大和失败重试，25MiB有界传输。
 桌面使用 preview_chat_image IPC 返回data URL，下载使用原保存对话框；手机复用ChatImage全屏缩放，saveChatImage(name,mime,bytes) 经AppSettingsStore/PlatformSettingsChannel/MainActivity通道调用系统ACTION_CREATE_DOCUMENT保存二进制图片，不新增存储权限或后台服务。模型密钥、默认连接、角色白名单与用户prompt约束由后端管理面统一配置，客户端不复制设置。真实图像服务/原生窗口/真机保存器验收为observe。
+
+## 301 CU-01 Windows 本机执行器
+
+主窗口 Tauri IPC 提供 `computer_use_windows`、`computer_use_open`、`computer_use_status` 和 `computer_use_control`。授权初始关闭，保存于当前客户端进程，持续 30–900 秒。选择窗口时使用枚举返回的身份标识，选择整个桌面时使用显式 `{kind: "desktop"}`。状态包含范围、剩余时间、任务与步骤数。暂停会清除当前帧，恢复需要重新观察。Ctrl+Shift+F12 结束会话，任务期间本机键鼠操作暂停执行。
+
+原生执行器只接受绑定设备、会话、任务、递增序号及最新帧的步骤。输入后重新观察，`changed` 表示画面或前台窗口发生变化，业务目标仍需调用方验证。坐标使用画面内 [0, 1) 的比例，UIA ID 随帧分配并在执行前重读。JPEG 只在内存中保留，状态 IPC 不含图片和控件文本。CU-01 的步骤入口仅供 Rust 调用，跨仓传输由 CU-03 接入。

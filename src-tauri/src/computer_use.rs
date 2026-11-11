@@ -1,0 +1,740 @@
+//! Local, process-scoped authorization and sequenced execution.
+mod native;
+
+use std::collections::HashSet;
+use std::sync::{Mutex, MutexGuard};
+use std::time::{Duration, Instant};
+
+use serde::{Deserialize, Serialize};
+use tauri::{Manager, WebviewWindow};
+
+const MAX_STEPS: u32 = 40;
+const FRAME_TTL: Duration = Duration::from_secs(12);
+const TASK_TTL: Duration = Duration::from_secs(180);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WindowId {
+    handle: u64,
+    pid: u32,
+    thread: u32,
+    created: [u32; 2],
+}
+
+#[derive(Debug, Serialize)]
+pub struct WindowChoice {
+    id: WindowId,
+    title: String,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum Scope {
+    Window { window: WindowId },
+    Desktop,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub struct Bounds {
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub struct Surface {
+    window: WindowId,
+    bounds: Bounds,
+    desktop: Bounds,
+    dpi: u32,
+    focused: u64,
+}
+
+#[derive(Clone, PartialEq, Eq, Serialize)]
+pub struct Node {
+    id: u32,
+    name: String,
+    control_type: i32,
+    bounds: Bounds,
+    focused: bool,
+}
+
+#[derive(Serialize)]
+pub struct Observation {
+    version: u32,
+    captured_at_ms: u64,
+    surface: Surface,
+    nodes: Vec<Node>,
+    #[serde(skip)]
+    jpeg: Vec<u8>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum Target {
+    Element { id: u32 },
+    Point { x: f64, y: f64 },
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Button {
+    #[default]
+    Left,
+    Right,
+    Middle,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum Action {
+    Observe {},
+    Click {
+        target: Target,
+        #[serde(default)]
+        button: Button,
+    },
+    DoubleClick {
+        target: Target,
+    },
+    Move {
+        target: Target,
+    },
+    Scroll {
+        target: Target,
+        ticks: i32,
+    },
+    TypeText {
+        text: String,
+    },
+    PressKey {
+        key: String,
+    },
+    Hotkey {
+        keys: Vec<String>,
+    },
+    Drag {
+        from: Target,
+        to: Target,
+    },
+    Wait {
+        ms: u64,
+    },
+}
+
+impl Action {
+    fn targets(&self) -> impl Iterator<Item = &Target> {
+        let targets = match self {
+            Self::Click { target, .. }
+            | Self::DoubleClick { target }
+            | Self::Move { target }
+            | Self::Scroll { target, .. } => [Some(target), None],
+            Self::Drag { from, to } => [Some(from), Some(to)],
+            _ => [None, None],
+        };
+        targets.into_iter().flatten()
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Step {
+    pub device_id: String,
+    pub session_id: String,
+    pub task_id: String,
+    pub seq: u32,
+    pub frame: Option<u32>,
+    pub action: Action,
+}
+
+#[derive(Serialize)]
+pub struct Receipt {
+    status: &'static str,
+    reason: Option<&'static str>,
+    observation: Option<Observation>,
+}
+
+impl Receipt {
+    fn error(status: &'static str, reason: &'static str) -> Self {
+        Self {
+            status,
+            reason: Some(reason),
+            observation: None,
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct Executor {
+    session: Mutex<Option<Session>>,
+    worker: Mutex<()>,
+}
+
+struct Session {
+    id: String,
+    device_id: String,
+    scope: Scope,
+    expires: Instant,
+    paused: bool,
+    stopped: Option<&'static str>,
+    activity: u64,
+    emergency: u64,
+    task: Option<Task>,
+    seen_tasks: HashSet<String>,
+}
+
+struct Task {
+    id: String,
+    next: u32,
+    deadline: Instant,
+    frame: Option<Frame>,
+}
+
+struct Frame {
+    at: Instant,
+    version: u32,
+    surface: Surface,
+    nodes: Vec<Node>,
+    digest: [u8; 32],
+    desktop_scope: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct Status {
+    session_id: Option<String>,
+    device_id: Option<String>,
+    scope: Option<Scope>,
+    state: &'static str,
+    reason: Option<&'static str>,
+    remaining_ms: u64,
+    task_id: Option<String>,
+    steps: u32,
+}
+
+impl Session {
+    fn check(&mut self) {
+        if self.stopped.is_some() {
+            return;
+        }
+        self.stopped = if self.emergency != native::emergency() {
+            Some("emergency_stop")
+        } else if self.expires <= Instant::now() {
+            Some("expired")
+        } else if !native::unlocked() {
+            Some("desktop_locked")
+        } else if self.task.is_some() && native::surface(self.scope).is_err() {
+            Some("scope_changed")
+        } else if self
+            .task
+            .as_ref()
+            .is_some_and(|t| t.deadline <= Instant::now())
+        {
+            Some("task_expired")
+        } else {
+            None
+        };
+        if self.stopped.is_some() {
+            if let Some(task) = &mut self.task {
+                task.frame = None;
+            }
+        } else if self.task.is_some() && self.activity != native::activity() {
+            self.paused = true;
+            if let Some(task) = &mut self.task {
+                task.frame = None;
+            }
+        }
+    }
+
+    fn active(&mut self) -> Result<(), Receipt> {
+        self.check();
+        if let Some(reason) = self.stopped {
+            return Err(Receipt::error("canceled", reason));
+        }
+        if self.paused {
+            return Err(Receipt::error("canceled", "paused"));
+        }
+        Ok(())
+    }
+}
+
+impl Executor {
+    fn session(&self) -> Result<MutexGuard<'_, Option<Session>>, &'static str> {
+        self.session.lock().map_err(|_| "executor_unavailable")
+    }
+
+    fn open(&self, scope: Scope, duration_seconds: u64) -> Result<Status, &'static str> {
+        if !(30..=900).contains(&duration_seconds) {
+            return Err("invalid_duration");
+        }
+        if let Scope::Window { window } = scope {
+            if !native::valid_window(window) {
+                return Err("window_unavailable");
+            }
+        }
+        native::start_monitor()?;
+        if !native::unlocked() {
+            return Err("desktop_locked");
+        }
+        let mut session = self.session()?;
+        let device_id = session
+            .as_ref()
+            .map(|s| s.device_id.clone())
+            .map_or_else(random_id, Ok)?;
+        native::arm_monitor(duration_seconds);
+        *session = Some(Session {
+            id: random_id()?,
+            device_id,
+            scope,
+            expires: Instant::now() + Duration::from_secs(duration_seconds),
+            paused: false,
+            stopped: None,
+            activity: native::activity(),
+            emergency: native::emergency(),
+            task: None,
+            seen_tasks: HashSet::new(),
+        });
+        drop(session);
+        self.status()
+    }
+
+    pub fn status(&self) -> Result<Status, &'static str> {
+        let mut guard = self.session()?;
+        let Some(session) = guard.as_mut() else {
+            return Ok(Status {
+                session_id: None,
+                device_id: None,
+                scope: None,
+                state: "closed",
+                reason: None,
+                remaining_ms: 0,
+                task_id: None,
+                steps: 0,
+            });
+        };
+        session.check();
+        Ok(Status {
+            session_id: Some(session.id.clone()),
+            device_id: Some(session.device_id.clone()),
+            scope: Some(session.scope),
+            state: if session.stopped.is_some() {
+                "closed"
+            } else if session.paused {
+                "paused"
+            } else if session.task.is_some() {
+                "running"
+            } else {
+                "ready"
+            },
+            reason: session.stopped.or(session.paused.then_some("paused")),
+            remaining_ms: if session.stopped.is_some() {
+                0
+            } else {
+                session
+                    .expires
+                    .saturating_duration_since(Instant::now())
+                    .as_millis() as u64
+            },
+            task_id: session.task.as_ref().map(|t| t.id.clone()),
+            steps: session.task.as_ref().map_or(0, |t| t.next - 1),
+        })
+    }
+
+    fn control(&self, control: Control) -> Result<Status, &'static str> {
+        if let Some(session) = self.session()?.as_mut() {
+            session.check();
+            match control {
+                Control::Stop => {
+                    session.stopped = Some("user_stopped");
+                    native::arm_monitor(0);
+                }
+                Control::Pause => session.paused = true,
+                Control::Resume if session.stopped.is_none() => {
+                    session.activity = native::activity();
+                    session.paused = false;
+                }
+                Control::Resume => {}
+            }
+            if let Some(task) = session.task.as_mut() {
+                task.frame = None;
+            }
+        }
+        self.status()
+    }
+
+    pub fn stop(&self) {
+        let _ = self.control(Control::Stop);
+    }
+
+    pub fn finish(&self, session_id: &str, task_id: &str) {
+        if let Ok(mut guard) = self.session() {
+            if let Some(session) = guard.as_mut().filter(|s| s.id == session_id) {
+                if session.task.as_ref().is_some_and(|task| task.id == task_id) {
+                    session.task = None;
+                }
+            }
+        }
+    }
+
+    pub fn step(&self, step: Step) -> Receipt {
+        match self.execute(step) {
+            Ok(receipt) | Err(receipt) => receipt,
+        }
+    }
+
+    fn execute(&self, step: Step) -> Result<Receipt, Receipt> {
+        let _worker = self
+            .worker
+            .try_lock()
+            .map_err(|_| Receipt::error("failed", "busy"))?;
+        let (scope, previous) = {
+            let mut guard = self.session().map_err(|e| Receipt::error("failed", e))?;
+            let session = match_session(&mut guard, &step)?;
+            session.active()?;
+            if step.seq == 1
+                && session.task.is_none()
+                && matches!(step.action, Action::Observe {})
+                && (1..=80).contains(&step.task_id.len())
+                && session.seen_tasks.len() < 128
+                && !session.seen_tasks.contains(&step.task_id)
+            {
+                // The owner may focus the approved window before the first step.
+                native::surface(session.scope).map_err(|e| Receipt::error("stale", e))?;
+                session.activity = native::activity();
+                session.seen_tasks.insert(step.task_id.clone());
+                session.task = Some(Task {
+                    id: step.task_id.clone(),
+                    next: 1,
+                    deadline: Instant::now() + TASK_TTL,
+                    frame: None,
+                });
+            }
+            let task = match_task(session, &step)?;
+            if task.next != step.seq || step.seq > MAX_STEPS {
+                return Err(Receipt::error("stale", "invalid_sequence"));
+            }
+            task.next += 1;
+            let previous = task.frame.take();
+            (session.scope, previous)
+        };
+
+        let before = native::surface(scope).map_err(|e| Receipt::error("stale", e))?;
+        let observing = matches!(step.action, Action::Observe {});
+        if !observing {
+            let frame = previous
+                .as_ref()
+                .filter(|f| {
+                    Some(f.version) == step.frame
+                        && f.at.elapsed() <= FRAME_TTL
+                        && f.surface == before
+                })
+                .ok_or_else(|| Receipt::error("stale", "observation_changed"))?;
+            let mut current_nodes = None;
+            let mut current_digest = None;
+            for target in step.action.targets() {
+                match target {
+                    Target::Element { id } => {
+                        let original = frame.nodes.iter().find(|node| node.id == *id);
+                        if original.is_none()
+                            || !current_nodes
+                                .get_or_insert_with(|| native::nodes(before))
+                                .iter()
+                                .any(|node| Some(node) == original)
+                        {
+                            return Err(Receipt::error("stale", "element_changed"));
+                        }
+                    }
+                    Target::Point { .. } => {
+                        if current_digest.is_none() {
+                            current_digest = Some(
+                                native::capture(scope, before)
+                                    .map_err(|e| Receipt::error("failed", e))?
+                                    .1,
+                            );
+                        }
+                        if current_digest != Some(frame.digest) {
+                            return Err(Receipt::error("stale", "image_changed"));
+                        }
+                    }
+                }
+            }
+            if let Action::Wait { ms } = &step.action {
+                if *ms > 2_000 {
+                    return Err(Receipt::error("failed", "invalid_wait"));
+                }
+                let deadline = Instant::now() + Duration::from_millis(*ms);
+                while Instant::now() < deadline {
+                    self.recheck(&step, before, |_| Ok(()))?;
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+            } else if let Action::TypeText { text } = &step.action {
+                if text.is_empty() || text.len() > 256 {
+                    return Err(Receipt::error("failed", "invalid_text"));
+                }
+                // Some Windows controls resolve VK_PACKET lazily. Space scalar
+                // batches so the control consumes one before the next arrives.
+                for scalar in text.chars() {
+                    self.recheck(&step, before, |_| {
+                        let mut buffer = [0u16; 2];
+                        native::type_scalar(scalar.encode_utf16(&mut buffer))
+                            .map_err(|reason| Receipt::error("failed", reason))
+                    })?;
+                    std::thread::sleep(Duration::from_millis(48));
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            } else {
+                self.recheck(&step, before, |_| {
+                    if frame.at.elapsed() > FRAME_TTL {
+                        return Err(Receipt::error("stale", "observation_expired"));
+                    }
+                    native::perform(&step.action, frame).map_err(|e| Receipt::error("failed", e))
+                })?;
+                // Let the target drain the input queue before observing the result.
+                std::thread::sleep(Duration::from_millis(140));
+            }
+        }
+
+        let after = native::surface(scope).map_err(|reason| {
+            let _ = self.status();
+            Receipt::error("canceled", reason)
+        })?;
+        let (jpeg, digest) =
+            native::capture(scope, after).map_err(|e| Receipt::error("failed", e))?;
+        let nodes = native::nodes(after);
+        let changed = previous
+            .as_ref()
+            .is_some_and(|f| f.surface != after || f.digest != digest);
+        self.recheck(&step, after, |task| {
+            task.frame = Some(Frame {
+                at: Instant::now(),
+                version: step.seq,
+                surface: after,
+                digest,
+                desktop_scope: matches!(scope, Scope::Desktop),
+                nodes: nodes.clone(),
+            });
+            Ok(())
+        })?;
+        Ok(Receipt {
+            status: if changed { "changed" } else { "ok" },
+            reason: None,
+            observation: Some(Observation {
+                version: step.seq,
+                captured_at_ms: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as u64,
+                surface: after,
+                nodes,
+                jpeg,
+            }),
+        })
+    }
+
+    fn recheck(
+        &self,
+        step: &Step,
+        expected: Surface,
+        apply: impl FnOnce(&mut Task) -> Result<(), Receipt>,
+    ) -> Result<(), Receipt> {
+        let mut guard = self.session().map_err(|e| Receipt::error("failed", e))?;
+        let session = match_session(&mut guard, step)?;
+        session.active()?;
+        if native::surface(session.scope) != Ok(expected) {
+            return Err(Receipt::error("stale", "observation_changed"));
+        }
+        session.active()?;
+        apply(match_task(session, step)?)
+    }
+}
+
+fn match_session<'a>(
+    session: &'a mut Option<Session>,
+    step: &Step,
+) -> Result<&'a mut Session, Receipt> {
+    session
+        .as_mut()
+        .filter(|s| s.id == step.session_id && s.device_id == step.device_id)
+        .ok_or_else(|| Receipt::error("canceled", "no_matching_session"))
+}
+
+fn match_task<'a>(session: &'a mut Session, step: &Step) -> Result<&'a mut Task, Receipt> {
+    session
+        .task
+        .as_mut()
+        .filter(|task| task.id == step.task_id)
+        .ok_or_else(|| Receipt::error("stale", "no_matching_task"))
+}
+
+fn random_id() -> Result<String, &'static str> {
+    let mut bytes = [0u8; 16];
+    getrandom::fill(&mut bytes).map_err(|_| "random_unavailable")?;
+    Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect())
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Control {
+    Pause,
+    Resume,
+    Stop,
+}
+
+fn check_control_window(window: &WebviewWindow) -> Result<(), &'static str> {
+    if window.label() == "main" {
+        Ok(())
+    } else {
+        Err("invalid_control_window")
+    }
+}
+
+#[tauri::command]
+pub fn computer_use_windows(window: WebviewWindow) -> Result<Vec<WindowChoice>, &'static str> {
+    check_control_window(&window)?;
+    native::windows()
+}
+
+#[tauri::command]
+pub fn computer_use_open(
+    window: WebviewWindow,
+    scope: Scope,
+    duration_seconds: u64,
+) -> Result<Status, &'static str> {
+    check_control_window(&window)?;
+    window.state::<Executor>().open(scope, duration_seconds)
+}
+
+#[tauri::command]
+pub fn computer_use_status(window: WebviewWindow) -> Result<Status, &'static str> {
+    check_control_window(&window)?;
+    window.state::<Executor>().status()
+}
+
+#[tauri::command]
+pub fn computer_use_control(
+    window: WebviewWindow,
+    control: Control,
+) -> Result<Status, &'static str> {
+    check_control_window(&window)?;
+    window.state::<Executor>().control(control)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn strict_action_schema() {
+        assert!(serde_json::from_str::<Action>(
+            r#"{"kind":"click","target":{"kind":"point","x":0.3,"y":0.5}}"#
+        )
+        .is_ok());
+        assert!(serde_json::from_str::<Action>(
+            r#"{"kind":"click","target":{"kind":"point","x":0.3,"y":0.5,"version":1}}"#
+        )
+        .is_err());
+        assert!(serde_json::from_str::<Action>(r#"{"kind":"observe","desktop":true}"#).is_err());
+        assert!(serde_json::from_str::<Action>(r#"{"kind":"run","command":"test"}"#).is_err());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "requires an unlocked interactive desktop and changes focus to a temporary Notepad document"]
+    fn notepad_smoke() {
+        let existing = std::env::var("PRESENCEKIT_CU_NOTEPAD_FIXTURE").ok();
+        let name = existing
+            .clone()
+            .unwrap_or_else(|| format!("presencekit-cu-{}.txt", random_id().unwrap()));
+        assert!(
+            name.starts_with("presencekit-cu-")
+                && name.ends_with(".txt")
+                && !name.contains(['/', '\\'])
+        );
+        let path = std::env::temp_dir().join(&name);
+        if existing.is_none() {
+            std::fs::write(&path, "initial").unwrap();
+            std::process::Command::new("notepad.exe")
+                .arg(&path)
+                .spawn()
+                .unwrap();
+        }
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let mut reason = "fixture_window_unavailable";
+        let window = loop {
+            if let Ok(choices) = native::windows() {
+                if let Some(choice) = choices
+                    .into_iter()
+                    .find(|choice| choice.title.contains(&name))
+                {
+                    match native::surface(Scope::Window { window: choice.id }) {
+                        Ok(_) => break choice.id,
+                        Err(error) => reason = error,
+                    }
+                }
+            }
+            assert!(
+                Instant::now() < deadline,
+                "temporary Notepad unavailable: {reason}"
+            );
+            std::thread::sleep(Duration::from_millis(100));
+        };
+        let executor = Executor::default();
+        let session = executor.open(Scope::Window { window }, 60).unwrap();
+        let session_id = session.session_id.unwrap();
+        let device_id = session.device_id.unwrap();
+        let run = |seq, frame, action| {
+            executor.step(Step {
+                device_id: device_id.clone(),
+                session_id: session_id.clone(),
+                task_id: "smoke".into(),
+                seq,
+                frame,
+                action,
+            })
+        };
+        let steps = [
+            Action::Observe {},
+            Action::Hotkey {
+                keys: vec!["Ctrl".into(), "A".into()],
+            },
+            Action::TypeText {
+                text: "PresenceKit computer use".into(),
+            },
+            Action::Hotkey {
+                keys: vec!["Ctrl".into(), "S".into()],
+            },
+        ];
+        let mut frame = None;
+        for (index, action) in steps.into_iter().enumerate() {
+            let started = Instant::now();
+            let receipt = run(index as u32 + 1, frame, action);
+            assert!(
+                matches!(receipt.status, "ok" | "changed"),
+                "{} {:?}",
+                receipt.status,
+                receipt.reason
+            );
+            let observation = receipt.observation.unwrap();
+            assert!(!observation.jpeg.is_empty());
+            eprintln!(
+                "step {}: {}, {} ms, {} UIA nodes, {} DPI",
+                index + 1,
+                receipt.status,
+                started.elapsed().as_millis(),
+                observation.nodes.len(),
+                observation.surface.dpi
+            );
+            frame = Some(observation.version);
+        }
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap().trim(),
+            "PresenceKit computer use"
+        );
+        assert_eq!(run(4, frame, Action::Observe {}).status, "stale");
+        executor.finish(&session_id, "smoke");
+        assert_eq!(run(1, None, Action::Observe {}).status, "stale");
+        executor.stop();
+        assert_eq!(run(5, frame, Action::Observe {}).status, "canceled");
+        std::fs::remove_file(path).unwrap();
+    }
+}

@@ -778,3 +778,7 @@ DPR 画布、调色滤镜降采样、桌宠窗口 set-size 权限/LogicalSize、
 
 ## 294 生成图验收（observe，2026-11-09）
 已接通生成图片显示、放大、失败重试和保存，兼容已有文本产物。真实图像服务与实际原生窗口/Android真机文件选择器尚未验收；相关回归、构建与隔离UI结果不能替代设备验收。后端配置入口为模型连接与分工中的图像生成。
+
+## 301 Windows Computer Use（observe）
+
+原生执行器可以用 `cargo test --manifest-path src-tauri/Cargo.toml --lib computer_use::tests::notepad_smoke -- --ignored --nocapture` 在解锁的 Windows 会话中测试。测试会启动临时记事本文档并操作前台，运行时需保持键鼠空闲。已在单屏 168 DPI 的真实记事本验证观察、全选、输入、保存、停止与拒绝重放。浏览器滚动与点击、多屏、锁屏和崩溃恢复仍待实测。
