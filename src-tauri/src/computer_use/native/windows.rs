@@ -403,6 +403,7 @@ fn point(target: &Target, frame: &Frame) -> Result<POINT, &'static str> {
             y: area.y + (y * f64::from(area.height)).floor() as i32,
         },
         Target::Point { .. } => return Err("invalid_point"),
+        Target::Visual { .. } => return Err("vision_unresolved"),
     };
     validate_point(point, frame)?;
     Ok(point)

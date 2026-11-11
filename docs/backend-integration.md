@@ -1366,3 +1366,9 @@ main capability 仅新增标题栏需要的 start-dragging、minimize、toggle-m
 主窗口 Tauri IPC 提供 `computer_use_windows`、`computer_use_open`、`computer_use_status` 和 `computer_use_control`。授权初始关闭，保存于当前客户端进程，持续 30–900 秒。选择窗口时使用枚举返回的身份标识，选择整个桌面时使用显式 `{kind: "desktop"}`。状态包含范围、剩余时间、任务与步骤数。暂停会清除当前帧，恢复需要重新观察。Ctrl+Shift+F12 结束会话，任务期间本机键鼠操作暂停执行。
 
 原生执行器只接受绑定设备、会话、任务、递增序号及最新帧的步骤。输入后重新观察，`changed` 表示画面或前台窗口发生变化，业务目标仍需调用方验证。坐标使用画面内 [0, 1) 的比例，UIA ID 随帧分配并在执行前重读。JPEG 只在内存中保留，状态 IPC 不含图片和控件文本。CU-01 的步骤入口仅供 Rust 调用，跨仓传输由 CU-03 接入。
+
+## 301 CU-02 UIA 与私网视觉定位
+
+`Observation` 带窗口身份、物理尺寸、DPI、截图版本和时间、JPEG 尺寸与 UIA 控件。目标可用 `{kind:"element", id}` 或 `{kind:"visual", description}`。描述先匹配唯一 UIA 名称，缺失时通过单独配置的私网 Chat Completions 模型定位。模型只返回归一化坐标或不确定；坐标执行前重新校验原画面、前台和窗口边界。
+
+JPEG 最长边 1280、模型请求上限 2 MiB、18 秒、100 输出 token；原图和模型凭据只由原生调用路径消费。模型网络请求禁用代理、重定向和公网上游。观察元数据不含图片。

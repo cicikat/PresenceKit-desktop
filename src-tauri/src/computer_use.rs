@@ -1,5 +1,6 @@
 //! Local, process-scoped authorization and sequenced execution.
 mod native;
+mod vision;
 
 use std::collections::HashSet;
 use std::sync::{Mutex, MutexGuard};
@@ -9,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{Manager, WebviewWindow};
 
 const MAX_STEPS: u32 = 40;
-const FRAME_TTL: Duration = Duration::from_secs(12);
+const FRAME_TTL: Duration = Duration::from_secs(24);
 const TASK_TTL: Duration = Duration::from_secs(180);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
@@ -63,18 +64,21 @@ pub struct Node {
 #[derive(Serialize)]
 pub struct Observation {
     version: u32,
+    jpeg_width: u32,
+    jpeg_height: u32,
     captured_at_ms: u64,
     surface: Surface,
     nodes: Vec<Node>,
     #[serde(skip)]
-    jpeg: Vec<u8>,
+    jpeg: std::sync::Arc<[u8]>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Target {
     Element { id: u32 },
     Point { x: f64, y: f64 },
+    Visual { description: String },
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize)]
@@ -86,7 +90,7 @@ pub enum Button {
     Middle,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Action {
     Observe {},
@@ -124,7 +128,7 @@ pub enum Action {
 }
 
 impl Action {
-    fn targets(&self) -> impl Iterator<Item = &Target> {
+    fn targets(&mut self) -> impl Iterator<Item = &mut Target> {
         let targets = match self {
             Self::Click { target, .. }
             | Self::DoubleClick { target }
@@ -198,6 +202,7 @@ struct Frame {
     nodes: Vec<Node>,
     digest: [u8; 32],
     desktop_scope: bool,
+    jpeg: std::sync::Arc<[u8]>,
 }
 
 #[derive(Debug, Serialize)]
@@ -376,13 +381,13 @@ impl Executor {
         }
     }
 
-    pub fn step(&self, step: Step) -> Receipt {
-        match self.execute(step) {
+    pub fn step(&self, step: Step, vision: Option<&vision::Connection>) -> Receipt {
+        match self.execute(step, vision) {
             Ok(receipt) | Err(receipt) => receipt,
         }
     }
 
-    fn execute(&self, step: Step) -> Result<Receipt, Receipt> {
+    fn execute(&self, step: Step, vision: Option<&vision::Connection>) -> Result<Receipt, Receipt> {
         let _worker = self
             .worker
             .try_lock()
@@ -419,7 +424,8 @@ impl Executor {
         };
 
         let before = native::surface(scope).map_err(|e| Receipt::error("stale", e))?;
-        let observing = matches!(step.action, Action::Observe {});
+        let mut action = step.action.clone();
+        let observing = matches!(action, Action::Observe {});
         if !observing {
             let frame = previous
                 .as_ref()
@@ -431,7 +437,31 @@ impl Executor {
                 .ok_or_else(|| Receipt::error("stale", "observation_changed"))?;
             let mut current_nodes = None;
             let mut current_digest = None;
-            for target in step.action.targets() {
+            for target in action.targets() {
+                if let Target::Visual { description } = target {
+                    let name = description.trim();
+                    if name.is_empty() || name.len() > 256 {
+                        return Err(Receipt::error("failed", "invalid_description"));
+                    }
+                    let mut candidates = frame
+                        .nodes
+                        .iter()
+                        .filter(|node| node.name.eq_ignore_ascii_case(name));
+                    *target = match (candidates.next(), candidates.next()) {
+                        (Some(node), None) => Target::Element { id: node.id },
+                        _ => {
+                            let connection = vision
+                                .ok_or_else(|| Receipt::error("failed", "vision_not_configured"))?;
+                            self.recheck(&step, before, |_| Ok(()))?;
+                            tauri::async_runtime::block_on(vision::locate(
+                                connection,
+                                &frame.jpeg,
+                                name,
+                            ))
+                            .map_err(|reason| Receipt::error("failed", reason))?
+                        }
+                    };
+                }
                 match target {
                     Target::Element { id } => {
                         let original = frame.nodes.iter().find(|node| node.id == *id);
@@ -456,9 +486,12 @@ impl Executor {
                             return Err(Receipt::error("stale", "image_changed"));
                         }
                     }
+                    Target::Visual { .. } => {
+                        return Err(Receipt::error("failed", "vision_unresolved"))
+                    }
                 }
             }
-            if let Action::Wait { ms } = &step.action {
+            if let Action::Wait { ms } = &action {
                 if *ms > 2_000 {
                     return Err(Receipt::error("failed", "invalid_wait"));
                 }
@@ -467,7 +500,7 @@ impl Executor {
                     self.recheck(&step, before, |_| Ok(()))?;
                     std::thread::sleep(Duration::from_millis(20));
                 }
-            } else if let Action::TypeText { text } = &step.action {
+            } else if let Action::TypeText { text } = &action {
                 if text.is_empty() || text.len() > 256 {
                     return Err(Receipt::error("failed", "invalid_text"));
                 }
@@ -487,7 +520,7 @@ impl Executor {
                     if frame.at.elapsed() > FRAME_TTL {
                         return Err(Receipt::error("stale", "observation_expired"));
                     }
-                    native::perform(&step.action, frame).map_err(|e| Receipt::error("failed", e))
+                    native::perform(&action, frame).map_err(|e| Receipt::error("failed", e))
                 })?;
                 // Let the target drain the input queue before observing the result.
                 std::thread::sleep(Duration::from_millis(140));
@@ -500,18 +533,29 @@ impl Executor {
         })?;
         let (jpeg, digest) =
             native::capture(scope, after).map_err(|e| Receipt::error("failed", e))?;
+        let captured = Instant::now();
+        let captured_at_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+        let (jpeg_width, jpeg_height) =
+            image::ImageReader::with_format(std::io::Cursor::new(&jpeg), image::ImageFormat::Jpeg)
+                .into_dimensions()
+                .map_err(|_| Receipt::error("failed", "invalid_frame"))?;
+        let jpeg: std::sync::Arc<[u8]> = jpeg.into();
         let nodes = native::nodes(after);
         let changed = previous
             .as_ref()
             .is_some_and(|f| f.surface != after || f.digest != digest);
         self.recheck(&step, after, |task| {
             task.frame = Some(Frame {
-                at: Instant::now(),
+                at: captured,
                 version: step.seq,
                 surface: after,
                 digest,
                 desktop_scope: matches!(scope, Scope::Desktop),
                 nodes: nodes.clone(),
+                jpeg: jpeg.clone(),
             });
             Ok(())
         })?;
@@ -520,10 +564,9 @@ impl Executor {
             reason: None,
             observation: Some(Observation {
                 version: step.seq,
-                captured_at_ms: std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_millis() as u64,
+                jpeg_width,
+                jpeg_height,
+                captured_at_ms,
                 surface: after,
                 nodes,
                 jpeg,
@@ -683,14 +726,17 @@ mod tests {
         let session_id = session.session_id.unwrap();
         let device_id = session.device_id.unwrap();
         let run = |seq, frame, action| {
-            executor.step(Step {
-                device_id: device_id.clone(),
-                session_id: session_id.clone(),
-                task_id: "smoke".into(),
-                seq,
-                frame,
-                action,
-            })
+            executor.step(
+                Step {
+                    device_id: device_id.clone(),
+                    session_id: session_id.clone(),
+                    task_id: "smoke".into(),
+                    seq,
+                    frame,
+                    action,
+                },
+                None,
+            )
         };
         let steps = [
             Action::Observe {},
