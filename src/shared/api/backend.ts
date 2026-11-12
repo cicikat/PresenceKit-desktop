@@ -15,7 +15,7 @@ const chatErrorKeys = new Map<string, MessageKey>([
 
 let pendingVoice: { text: string; id: string; expires: number } | undefined;
 
-export async function sendChat(message: string, replyTo?: ReplyToPayload, videoObservationId?: string, audioSource?: { text: string; id: string } | { text: string; id: string }[]): Promise<ChatResponse> {
+export async function sendChat(message: string, replyTo?: ReplyToPayload, videoObservationId?: string, audioSource?: { text: string; id: string } | { text: string; id: string }[], requestId?: string): Promise<ChatResponse> {
   const voice = pendingVoice;
   pendingVoice = undefined;
   const audioSources = Array.isArray(audioSource) ? audioSource : audioSource ? [audioSource] : [];
@@ -31,6 +31,7 @@ export async function sendChat(message: string, replyTo?: ReplyToPayload, videoO
       // 多段回执（工单 A3）：后端逐个校验并取最差置信度；旧后端忽略此字段，仍按上面的单个回执处理。
       ...(audioSources.length > 1 ? { voiceReceiptIds: audioSources.map(s => s.id), voiceReceiptTexts: audioSources.map(s => s.text) } : {}),
       ...(videoObservationId ? { videoObservationId } : {}),
+      ...(requestId ? { requestId } : {}),
     });
     const at = Date.now();
     void announce.then(() => publishBehavior({ kind: 'request-end', id: behaviorId, charId: behaviorCharacter, at,
@@ -43,6 +44,18 @@ export async function sendChat(message: string, replyTo?: ReplyToPayload, videoO
     if (key) throw new Error(t(key));
     throw error;
   }
+}
+
+export interface DesktopChatReceipt {
+  request_id: string;
+  status: 'unknown' | 'running' | 'completed' | 'failed' | 'interrupted_unknown' | 'not_executed';
+  result?: ChatResponse;
+  msg_id?: string;
+  turn_id?: string;
+}
+
+export function getChatRequest(requestId: string): Promise<DesktopChatReceipt> {
+  return invokeGated('get_chat_request', { requestId });
 }
 
 export async function getVideoCallState(): Promise<{ effective: boolean; blocking_reason: string }> {
@@ -378,13 +391,16 @@ export async function previewChatAttachment(filePath: string): Promise<string> {
 export async function uploadDocument(
   filePath: string | UploadAttachment[],
   message: string,
+  requestId?: string,
 ): Promise<UploadIngestResponse> {
   try {
     return await invokeGated<UploadIngestResponse>('upload_document', {
       ...(Array.isArray(filePath) ? { attachments: filePath } : { filePath }),
       message,
+      ...(requestId ? { requestId } : {}),
     });
   } catch (err) {
+    if (err === 'CHAT_NOT_EXECUTED') throw err;
     // err 是 Rust 返回的 String,可能形如 "HTTP 413: ..."
     const msg = String(err);
     const m = msg.match(/^HTTP (\d+):/);

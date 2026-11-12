@@ -59,11 +59,11 @@ export interface ToolStatusPayload {
 export type ServerMessage =
   | import('./toolActivity').ToolActivity
   | { type: 'hello_ack'; server_version: string }
-  | { type: 'channel_message'; content: string; msg_id: string; source?: string; domain?: GroupDomain; char_id?: string; round_id?: string; sticker?: StickerPayload; artifacts?: ChatArtifactPayload[] }
+  | { type: 'channel_message'; content: string; msg_id: string; request_id?: string; source?: string; domain?: GroupDomain; char_id?: string; round_id?: string; sticker?: StickerPayload; artifacts?: ChatArtifactPayload[] }
   | { type: 'message_segments'; content: string; segments: NarrativeSegment[]; msg_id: string; source?: string; domain?: GroupDomain; char_id?: string; round_id?: string }
   | { type: 'action'; action: DesktopActionPayload; msg_id: string }
   | { type: 'ping' }
-  | { type: 'message_stream_start'; msg_id: string; source?: string; domain?: GroupDomain; char_id?: string; round_id?: string }
+  | { type: 'message_stream_start'; msg_id: string; request_id?: string; source?: string; domain?: GroupDomain; char_id?: string; round_id?: string }
   | { type: 'message_stream_delta'; msg_id: string; delta: string; domain?: GroupDomain; char_id?: string; round_id?: string }
   | { type: 'message_stream_end'; msg_id: string; domain?: GroupDomain; char_id?: string; round_id?: string }
   | { type: 'group_round_start'; round_id: string; group_id: string; domain?: GroupDomain }
@@ -110,6 +110,7 @@ export type DesktopActionPayload = {
 };
 
 export interface ChatResponse {
+  request_id?: string;
   reply: string;
   emotion: string;
   audio_perception_applied?: boolean;
@@ -248,6 +249,7 @@ export interface ActivityState {
 }
 
 export interface UploadIngestResponse {
+  request_id?: string;
   reply: string;
   emotion: string;
   turn_id: string;

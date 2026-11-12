@@ -293,8 +293,9 @@ ChatPanel.send()
 `send_chat` 的本地错误以字符串返回。连接建立失败、等待 HTTP 响应超时、
 请求中断和响应读取失败分别返回 `CHAT_CONNECT_FAILED`、`CHAT_RESPONSE_TIMEOUT`、
 `CHAT_REQUEST_INTERRUPTED` 和 `CHAT_RESPONSE_UNREADABLE`，由共享前端 API 翻译。
-HTTP 状态、401 门禁和 409 梦境提示沿用原路径。重试由用户触发，同一气泡提交原草稿。
-后端与手机无跨端影响。
+主聊天与附件入口通过 `X-Presence-Chat-Request` 发送稳定请求 ID。后端 HTTP、工具活动、stream start 和 canonical WS 用同一 ID 关联，增量仍用 msg_id。客户端发出前在本机按后端地址记录未结算 ID，重启或重连后用 `GET /desktop/chat/requests/{request_id}` 对账。
+
+HTTP 中断和旧后端查询失败显示结果待确认，查询动作只读。收到 canonical 回复后结算请求，工具卡片独立保留自己的结果。已确认执行失败的回合不自动重发。只有服务器确认前置拒绝时，才允许用新 ID 发出原草稿。旧客户端的无请求头调用及手机合同保持兼容。真实桌面窗口断网与真实 Gmail 写操作仍需设备验收。
 
 请求：
 

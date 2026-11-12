@@ -23,12 +23,12 @@ const acceptAvatarDirective = createAvatarDirectiveGate();
 type EventMap = {
   tool_activity: ToolActivity;
   state: ConnectionState;
-  channel_message: { content: string; msg_id: string; source?: string; domain?: 'reality' | 'dream'; char_id?: string; round_id?: string; sticker?: StickerPayload; artifacts?: ChatArtifactPayload[] };
+  channel_message: { content: string; msg_id: string; request_id?: string; source?: string; domain?: 'reality' | 'dream'; char_id?: string; round_id?: string; sticker?: StickerPayload; artifacts?: ChatArtifactPayload[] };
   message_segments: { content: string; segments: NarrativeSegment[]; msg_id: string; source?: string; domain?: 'reality' | 'dream'; char_id?: string; round_id?: string };
   action: DesktopActionPayload;
   dream_invite: Record<string, never>;
   toy_invite: Record<string, never>;
-  message_stream_start: { msg_id: string; source?: string; domain?: 'reality' | 'dream'; char_id?: string; round_id?: string };
+  message_stream_start: { msg_id: string; request_id?: string; source?: string; domain?: 'reality' | 'dream'; char_id?: string; round_id?: string };
   message_stream_delta: { msg_id: string; delta: string; domain?: 'reality' | 'dream'; char_id?: string; round_id?: string };
   message_stream_end: { msg_id: string; domain?: 'reality' | 'dream'; char_id?: string; round_id?: string };
   group_round_start: { round_id: string; group_id: string; domain?: 'reality' | 'dream' };
@@ -177,7 +177,7 @@ class WSClient {
         this._setState('connected');
         break;
       case 'channel_message':
-        this.emit('channel_message', { content: msg.content, msg_id: msg.msg_id, source: msg.source, domain: msg.domain, char_id: msg.char_id, round_id: msg.round_id, sticker: msg.sticker, artifacts: msg.artifacts });
+        this.emit('channel_message', { content: msg.content, msg_id: msg.msg_id, request_id: msg.request_id, source: msg.source, domain: msg.domain, char_id: msg.char_id, round_id: msg.round_id, sticker: msg.sticker, artifacts: msg.artifacts });
         this._send({ type: 'ack', msg_id: msg.msg_id, ok: true });
         break;
       case 'message_segments':
@@ -206,7 +206,7 @@ class WSClient {
         this._send({ type: 'pong' });
         break;
       case 'message_stream_start':
-        this.emit('message_stream_start', { msg_id: msg.msg_id, source: msg.source, domain: msg.domain, char_id: msg.char_id, round_id: msg.round_id });
+        this.emit('message_stream_start', { msg_id: msg.msg_id, request_id: msg.request_id, source: msg.source, domain: msg.domain, char_id: msg.char_id, round_id: msg.round_id });
         break;
       case 'message_stream_delta':
         this.emit('message_stream_delta', { msg_id: msg.msg_id, delta: msg.delta, domain: msg.domain, char_id: msg.char_id, round_id: msg.round_id });
