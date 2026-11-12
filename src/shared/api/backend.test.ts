@@ -1,8 +1,40 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { uploadDocument, sendChat, transcribeAudio, deleteCharacterAvatar, getPromptAssets, invalidatePromptAssetsCache, patchPromptAssets, uploadCharacterAvatar, pollVideoCallCamera, submitVideoCallCameraFrame, closeVideoCallCamera } from './backend';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getChatRequest, uploadDocument, sendChat, transcribeAudio, deleteCharacterAvatar, getPromptAssets, invalidatePromptAssetsCache, patchPromptAssets, uploadCharacterAvatar, pollVideoCallCamera, submitVideoCallCameraFrame, closeVideoCallCamera } from './backend';
 
 const { invokeGated } = vi.hoisted(() => ({ invokeGated: vi.fn() }));
 vi.mock('./authGate', () => ({ invokeGated }));
+afterEach(() => vi.unstubAllGlobals());
+
+describe('receipt reads stay read-only and scoped', () => {
+  it('coalesces concurrent reads and releases the slot after a failed query', async () => {
+    vi.stubGlobal('navigator', {});
+    invokeGated.mockReset();
+    let reject!: (error: Error) => void;
+    invokeGated.mockImplementationOnce(() => new Promise((_resolve, fail) => { reject = fail; }));
+    const first = getChatRequest('request', 'backend/character');
+    const second = getChatRequest('request', 'backend/character');
+    expect(second).toBe(first);
+    reject(new Error('offline'));
+    await expect(first).rejects.toThrow('offline');
+    invokeGated.mockResolvedValueOnce({ request_id: 'request', status: 'unknown' });
+    await getChatRequest('request', 'backend/character');
+    expect(invokeGated.mock.calls).toEqual([
+      ['get_chat_request', { requestId: 'request' }], ['get_chat_request', { requestId: 'request' }],
+    ]);
+  });
+
+  it('skips a read owned by another WebView and allows the next check', async () => {
+    invokeGated.mockReset();
+    const request = vi.fn().mockImplementationOnce(async (_key, _options, callback) => callback(null))
+      .mockImplementationOnce(async (_key, _options, callback) => callback({ name: 'lock' }));
+    vi.stubGlobal('navigator', { locks: { request } });
+    expect(await getChatRequest('request', 'backend/character')).toBeUndefined();
+    expect(invokeGated).not.toHaveBeenCalled();
+    invokeGated.mockResolvedValueOnce({ request_id: 'request', status: 'completed' });
+    expect(await getChatRequest('request', 'backend/character')).toMatchObject({ status: 'completed' });
+    expect(invokeGated).toHaveBeenCalledExactlyOnceWith('get_chat_request', { requestId: 'request' });
+  });
+});
 
 const assets = (avatarUrl: string | null) => ({
   characters: [{ id: 'a', label: 'A', avatar_url: avatarUrl }],

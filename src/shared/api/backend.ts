@@ -54,8 +54,20 @@ export interface DesktopChatReceipt {
   turn_id?: string;
 }
 
-export function getChatRequest(requestId: string): Promise<DesktopChatReceipt> {
-  return invokeGated('get_chat_request', { requestId });
+const chatReceiptReads = new Map<string, Promise<DesktopChatReceipt | undefined>>();
+
+export function getChatRequest(requestId: string, scope: string): Promise<DesktopChatReceipt | undefined> {
+  const key = `presencekit.chat.receipt:${scope}:${requestId}`;
+  const existing = chatReceiptReads.get(key);
+  if (existing) return existing;
+  const read = () => invokeGated<DesktopChatReceipt>('get_chat_request', { requestId });
+  // A second WebView should not issue a concurrent GET for the same request.
+  const query = globalThis.navigator?.locks
+    ? navigator.locks.request(key, { ifAvailable: true }, lock => lock ? read() : undefined)
+    : read();
+  const tracked = query.finally(() => chatReceiptReads.delete(key));
+  chatReceiptReads.set(key, tracked);
+  return tracked;
 }
 
 export async function getVideoCallState(): Promise<{ effective: boolean; blocking_reason: string }> {
