@@ -1,2 +1,3 @@
-const label = new URLSearchParams(window.location.search).get('label');
-document.getElementById('status').textContent = label || '';
+const params = new URLSearchParams(window.location.search);
+document.documentElement.dataset.cue ??= params.get('cue') || 'legacy';
+document.getElementById('status').textContent = params.get('label') || '';

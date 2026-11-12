@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
-use super::Executor;
+use super::{Cue, Executor};
 
 pub fn start(app: AppHandle, session_id: String, label: String) {
     tauri::async_runtime::spawn(async move {
@@ -12,9 +12,14 @@ pub fn start(app: AppHandle, session_id: String, label: String) {
         let query = url::form_urlencoded::Serializer::new(String::new())
             .append_pair("label", &label)
             .finish();
-        let mut shown = false;
-        while let Some(active) = executor.cue_active(&session_id) {
-            if active {
+        let mut previous = None;
+        while let Some(cue) = executor.cue(&session_id) {
+            if let Some(cue) = cue {
+                let mode = match cue {
+                    Cue::Active => "active",
+                    Cue::Weak => "weak",
+                    Cue::Legacy => "legacy",
+                };
                 if let Ok(monitors) = app.available_monitors() {
                     while windows.len() > monitors.len() {
                         if let Some(window) = windows.pop() {
@@ -22,12 +27,13 @@ pub fn start(app: AppHandle, session_id: String, label: String) {
                         }
                     }
                     for (index, monitor) in monitors.iter().enumerate() {
-                        if index == windows.len() {
+                        let new_window = index == windows.len();
+                        if new_window {
                             let result = WebviewWindowBuilder::new(
                                 &app,
                                 format!("computer-use-overlay-{session_id}-{index}"),
                                 WebviewUrl::App(
-                                    format!("computer-use-overlay.html?{query}").into(),
+                                    format!("computer-use-overlay.html?{query}&cue={mode}").into(),
                                 ),
                             )
                             .transparent(true)
@@ -55,19 +61,20 @@ pub fn start(app: AppHandle, session_id: String, label: String) {
                         if window.inner_size().ok().as_ref() != Some(monitor.size()) {
                             let _ = window.set_size(*monitor.size());
                         }
-                        if executor.cue_active(&session_id) == Some(true)
-                            && !window.is_visible().unwrap_or(false)
-                        {
+                        if !new_window && previous != Some(cue) {
+                            let _ = window.eval(format!("document.documentElement.dataset.cue = '{mode}'"));
+                        }
+                        if executor.cue(&session_id).flatten().is_some() && !window.is_visible().unwrap_or(false) {
                             let _ = window.show();
                         }
                     }
                 }
-            } else if shown {
-                for window in &windows {
-                    let _ = window.hide();
+            } else {
+                for window in windows.drain(..) {
+                    let _ = window.destroy();
                 }
             }
-            shown = active;
+            previous = cue;
             tokio::time::sleep(Duration::from_millis(150)).await;
         }
         for window in windows {

@@ -18,7 +18,7 @@
           linear-gradient(to left, var(--mist)) right / 48px 100% no-repeat;
       }
       #status:not(:empty) {
-        display: inline-block;
+        display: none;
         margin-top: 8px;
         max-width: calc(100% - 48px);
         border-radius: 16px;
@@ -26,6 +26,12 @@
         background: rgba(15, 42, 72, .9);
         color: #f1f8ff;
         font: 600 13px system-ui;
+      }
+      html[data-cue="legacy"] #status:not(:empty) { display: inline-block; }
+      html[data-cue="weak"] .edge { opacity: .33; }
+      html:not([data-cue="legacy"]) .edge {
+        --mist: rgba(88, 168, 251, .29), rgba(120, 192, 255, .08) 38%, transparent;
+        background-size: 100% 24px, 100% 24px, 24px 100%, 24px 100%;
       }
     </style>
     <script defer src="/computer-use-overlay.js"></script>

@@ -199,6 +199,16 @@ struct Session {
 struct Peer {
     expires: Instant,
     task_id: Option<String>,
+    agent_cue: Option<Cue>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+enum Cue {
+    Active,
+    Weak,
+    #[serde(skip)]
+    Legacy,
 }
 
 struct Task {
@@ -458,6 +468,7 @@ impl Executor {
         &self,
         session_id: &str,
         task_id: Option<String>,
+        agent_cue: Option<Cue>,
         expires: Instant,
     ) -> Result<(), &'static str> {
         let mut guard = self.session()?;
@@ -476,11 +487,11 @@ impl Executor {
         {
             session.task = None;
         }
-        session.peer = Some(Peer { expires, task_id });
+        session.peer = Some(Peer { expires, task_id, agent_cue });
         if session
             .peer
             .as_ref()
-            .is_some_and(|peer| peer.task_id.is_none())
+            .is_some_and(|peer| peer.task_id.is_none() && peer.agent_cue.is_none())
         {
             native::arm_escape(None, Duration::ZERO);
         }
@@ -488,24 +499,22 @@ impl Executor {
     }
 
     #[cfg(windows)]
-    fn cue_active(&self, session_id: &str) -> Option<bool> {
+    fn cue(&self, session_id: &str) -> Option<Option<Cue>> {
         let mut guard = self.session().ok()?;
         let session = guard.as_mut().filter(|session| session.id == session_id)?;
         session.check();
         if session.stopped.is_some() {
             return None;
         }
-        let remaining = session
-            .peer
-            .as_ref()
-            .filter(|peer| peer.task_id.is_some())
-            .map_or(Duration::ZERO, |peer| {
-                peer.expires.saturating_duration_since(Instant::now())
-            });
-        let ready =
-            !session.paused && !remaining.is_zero() && native::surface(session.scope).is_ok();
-        native::arm_escape(ready.then_some(session.scope), remaining);
-        Some(ready)
+        let Some(peer) = session.peer.as_ref() else { return Some(None) };
+        let remaining = peer.expires.saturating_duration_since(Instant::now());
+        if let Some(cue) = peer.agent_cue {
+            native::arm_escape(Some(Scope::Desktop), remaining);
+            return Some(Some(if session.paused { Cue::Weak } else { cue }));
+        }
+        let legacy = !session.paused && peer.task_id.is_some() && native::surface(session.scope).is_ok();
+        native::arm_escape(legacy.then_some(session.scope), remaining);
+        Some(legacy.then_some(Cue::Legacy))
     }
 
     #[cfg(test)]

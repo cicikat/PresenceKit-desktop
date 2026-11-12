@@ -5,7 +5,7 @@ use serde::Deserialize;
 use serde_json::json;
 use tauri::{AppHandle, Manager};
 
-use super::{vision, Executor, Receipt, Scope, Status, Step};
+use super::{vision, Cue, Executor, Receipt, Scope, Status, Step};
 use crate::client_config::ClientConfig;
 
 #[derive(Deserialize)]
@@ -14,6 +14,7 @@ struct Poll {
     server_epoch: String,
     reason: Option<String>,
     task_id: Option<String>,
+    agent_cue: Option<Cue>,
     step: Option<Step>,
     nonce: Option<String>,
     expires_in_ms: Option<u64>,
@@ -69,6 +70,7 @@ pub(super) async fn run(
         .map_err(|_| "backend_unavailable")?;
     let mut epoch: Option<String> = None;
     let mut pending: Option<Pending> = None;
+    let mut agent_active = false;
     let scope_name = match scope {
         Scope::Window { .. } => "window",
         Scope::Desktop => "desktop",
@@ -87,6 +89,11 @@ pub(super) async fn run(
         });
         if let Some(granted) = cloud_vision {
             poll["cloud_vision"] = json!(granted);
+        }
+        if closed && agent_active && local.session_id.as_deref() == Some(session)
+            && matches!(local.reason, Some("escape_cancel" | "emergency_stop" | "user_stopped"))
+        {
+            poll["stop_agent"] = json!(true);
         }
         let request = crate::authorized_request(config, client.post(&url)).json(&poll);
         if closed {
@@ -117,11 +124,16 @@ pub(super) async fn run(
             return Err("backend_restarted");
         }
         epoch = Some(response.server_epoch);
-        executor.sync_peer(
+        agent_active = response.agent_cue.is_some();
+        if executor.sync_peer(
             session,
             response.task_id.clone(),
+            response.agent_cue,
             started + Duration::from_secs(4),
-        )?;
+        ).is_err() {
+            // A local Esc or Stop during this poll still needs the close request.
+            continue;
+        }
 
         if pending
             .as_ref()
