@@ -1366,6 +1366,7 @@ async fn send_chat(
     voice_receipt_ids: Option<Vec<String>>,
     voice_receipt_texts: Option<Vec<String>>,
     video_observation_id: Option<String>,
+    request_id: Option<String>,
 ) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
     let client = chat_http_client()?;
@@ -1391,7 +1392,8 @@ async fn send_chat(
         body["reply_to"] = serde_json::json!({ "text": reply_to.text, "ts": reply_to.ts, "message_id": reply_to.message_id });
     }
 
-    let resp = authorized_request(&cfg, client.post(backend_url(&cfg, "/desktop/chat")))
+    let request = authorized_request(&cfg, client.post(backend_url(&cfg, "/desktop/chat")));
+    let resp = with_chat_request_id(request, request_id)?
         .json(&body)
         .send()
         .await
@@ -1406,10 +1408,45 @@ async fn send_chat(
             code.to_string()
         })?;
 
-    let resp = require_success(resp).await?;
+    let resp = require_chat_success(resp).await?;
     resp.json::<serde_json::Value>()
         .await
         .map_err(|_| "CHAT_RESPONSE_UNREADABLE".to_string())
+}
+
+fn valid_chat_request_id(id: &str) -> bool {
+    let mut parts = id.split('-');
+    parts.next() == Some("dc")
+        && parts.next().is_some_and(|ts| ts.len() == 13 && ts.bytes().all(|b| b.is_ascii_digit()))
+        && parts.next().is_some_and(|key| key.len() == 32 && key.bytes().all(|b| b.is_ascii_hexdigit()))
+        && parts.next().is_none()
+}
+
+fn with_chat_request_id(request: reqwest::RequestBuilder, id: Option<String>) -> Result<reqwest::RequestBuilder, String> {
+    match id {
+        Some(id) if valid_chat_request_id(&id) => Ok(request.header("X-Presence-Chat-Request", id)),
+        Some(_) => Err("CHAT_NOT_EXECUTED".into()),
+        None => Ok(request),
+    }
+}
+
+async fn require_chat_success(response: reqwest::Response) -> Result<reqwest::Response, String> {
+    if response.headers().get("X-Presence-Chat-Rejected").is_some_and(|value| value == "1") {
+        return Err("CHAT_NOT_EXECUTED".into());
+    }
+    require_success(response).await
+}
+
+#[tauri::command]
+async fn get_chat_request(app: tauri::AppHandle, request_id: String) -> Result<serde_json::Value, String> {
+    if !valid_chat_request_id(&request_id) {
+        return Err("HTTP 422".into());
+    }
+    let cfg = load_client_config(&app);
+    let path = format!("/desktop/chat/requests/{request_id}");
+    let response = authorized_request(&cfg, http_client()?.get(backend_url(&cfg, &path)))
+        .send().await.map_err(|_| "CHAT_REQUEST_INTERRUPTED".to_string())?;
+    require_success(response).await?.json().await.map_err(|_| "CHAT_RESPONSE_UNREADABLE".into())
 }
 
 #[tauri::command]
@@ -1899,10 +1936,11 @@ async fn upload_document(
     file_path: Option<String>,
     message: String,
     attachments: Option<Vec<ChatAttachment>>,
+    request_id: Option<String>,
 ) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
     let files = attachments.unwrap_or_else(|| vec![ChatAttachment { file_path, filename: None, data_b64: None }]);
-    if files.is_empty() || files.len() > 10 { return Err("HTTP 422: invalid attachment count".into()); }
+    if files.is_empty() || files.len() > 10 { return Err("CHAT_NOT_EXECUTED".into()); }
     let mut form = reqwest::multipart::Form::new().text("message", message).text("channel", "desktop");
     for item in files {
         let (filename, bytes) = read_chat_attachment(item)?;
@@ -1912,7 +1950,8 @@ async fn upload_document(
     // Upload ingest includes recognition and a complete chat turn.
     let client = chat_http_client()?;
 
-    let resp = authorized_request(&cfg, client.post(backend_url(&cfg, "/upload/ingest")))
+    let request = authorized_request(&cfg, client.post(backend_url(&cfg, "/upload/ingest")));
+    let resp = with_chat_request_id(request, request_id)?
         .multipart(form)
         .send()
         .await
@@ -1920,6 +1959,9 @@ async fn upload_document(
 
     let status = resp.status();
     if !status.is_success() {
+        if resp.headers().get("X-Presence-Chat-Rejected").is_some_and(|value| value == "1") {
+            return Err("CHAT_NOT_EXECUTED".into());
+        }
         // 分类错误码,前端按 status 数字处理文案
         return Err(safe_http_error(resp).await);
     }
@@ -3945,6 +3987,7 @@ pub fn run() {
             set_period_date,
             clear_period_date,
             upload_document,
+            get_chat_request,
             preview_chat_attachment,
             transcribe_audio,
             get_video_call_state,

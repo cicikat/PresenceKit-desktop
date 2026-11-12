@@ -13,7 +13,7 @@ import { MOOD_TABLE } from '../../../shared/state/store';
 import { avatarStore } from '../../../shared/avatars/store';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
-import { sendChat, uploadDocument, previewChatAttachment, desktopWake } from '../../../shared/api/backend';
+import { sendChat, uploadDocument, previewChatAttachment, desktopWake, getChatRequest } from '../../../shared/api/backend';
 import { shouldSkipDesktopWake, markDesktopWakeFired } from '../../../shared/desktopWakeGate';
 import { useVoiceInput } from '../../../shared/voice/useVoiceInput';
 import { getDesktopTtsEnabled, getTtsAutoPlay, type TtsAutoPlaySettings } from '../../../shared/api/runtimeSettings';
@@ -59,6 +59,7 @@ import { createLatestTimer } from '../chatTimer';
 import { bindHttpReplyIdentity, matchesHistoryReplay } from '../httpReplyIdentity';
 import { ChatReplyFallbacks, type ReplySource } from '../chatReplyFallbacks';
 import { ChatRequests, type ChatRequestToken } from '../chatRequests';
+import { deliveryFromReceipt, newChatRequestId, nextChatDelivery, pendingChatIds, rememberChatRequest, safeChatPrefix, type ChatDelivery } from '../chatReconciliation';
 import { historyAssistantParts } from '../chatHistory';
 
 function splitReply(text: string): string[] {
@@ -133,7 +134,7 @@ interface ChatMsg {
   id: string;
   role: 'user' | 'assistant' | 'system' | 'divider' | 'raw_fallback' | 'no_more';
   attachmentPreview?: string;
-  failed?: boolean;
+  delivery?: ChatDelivery;
   retryDraft?: { text: string; attachments: DraftAttachment[]; quote?: { text: string; time: number; messageId?: string } };
   text: string;
   time: number;
@@ -170,6 +171,7 @@ interface FallbackRecord {
 }
 
 interface RealityChannelMessage extends RealityMessageScope {
+  request_id?: string;
   content: string;
   msg_id: string;
   source?: string;
@@ -277,6 +279,7 @@ function entriesToMsgs(dateStr: string, entries: ChatLogEntry[], rawFallback: bo
       msgs.push({ id: newId(), role: 'user', text: entry.user, time: ts, turnId: entry.turn_id });
     }
     historyAssistantParts(entry).forEach(({ text, artifacts }) => {
+      if (safeChatPrefix(text) !== text) return;
       msgs.push({ id: newId(), role: entry.entry_kind === 'narration' ? 'system' : 'assistant', narration: entry.entry_kind === 'narration', text, artifacts, time: ts, turnId: entry.turn_id });
     });
   }
@@ -608,18 +611,33 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
   useEffect(() => avatarStore.subscribe(setAvatars), []);
 
   const [messages, setMessages] = useState<ChatMsg[]>([]);
+  const requestQueries = useRef(new Set<string>());
+  const replacedRequests = useRef(new Map<string, string>());
+  const streamByRequest = useRef(new Map<string, string>());
+  const updateDelivery = useCallback((id: string, delivery: ChatDelivery) => {
+    setMessages(previous => previous.map(item => item.id === id && item.delivery
+      ? { ...item, delivery: nextChatDelivery(item.delivery, delivery),
+          retryDraft: delivery === 'completed' || delivery === 'failed' ? undefined : item.retryDraft }
+      : item));
+    if (delivery === 'completed' || delivery === 'failed' || delivery === 'not_executed') {
+      void getClientConfig().then(({ backendBase }) => rememberChatRequest(localStorage, backendBase, id, false));
+    }
+  }, []);
   useEffect(() => wsClient.on('tool_activity', activity => {
     if (activity.char_id !== getActiveCharacterInfo().id) return;
+    if (activity.origin === 'chat' && activity.request_id && activity.status === 'running') {
+      updateDelivery(activity.request_id, 'processing');
+    }
     setMessages(previous => {
       const id = `tool:${activity.chain_id}`;
       const chain = previous.find(item => item.id === id);
       if (chain) return previous.map(item => item.id === id ? { ...item, toolActivities: mergeToolActivity(item.toolActivities ?? [], activity) } : item);
       return [...previous, { id, role: 'system', text: '', time: activity.ts * 1000, toolActivities: [activity] }];
     });
-  }), []);
+  }), [updateDelivery]);
   useEffect(() => {
     const expire = () => setMessages(previous => previous.map(message => message.toolActivities
-      ? { ...message, toolActivities: message.toolActivities.map(item => item.status === 'running' && Date.now() - item.ts * 1000 > 600_000 ? { ...item, status: 'unknown' as const } : item) }
+      ? { ...message, toolActivities: message.toolActivities.map(item => item.status === 'running' && Date.now() - item.ts * 1000 > 600_000 ? { ...item, status: 'unknown' as const, locallyExpired: true as const } : item) }
       : message));
     const timer = window.setInterval(expire, 30_000);
     return () => window.clearInterval(timer);
@@ -884,7 +902,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
   // HTTP send/upload/wake share one fallback adapter. Each local request keeps
   // its own slot; the owner cancels/replaces timers before render runs.
   const queueHttpReply = useCallback((
-    response: { reply: string; msg_id?: string; turn_id?: string; artifacts?: ChatArtifactPayload[] },
+    response: { reply: string; msg_id?: string; turn_id?: string; request_id?: string; artifacts?: ChatArtifactPayload[] },
     source: ReplySource,
     token?: ChatRequestToken,
   ) => {
@@ -938,8 +956,60 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       clearWaiting();
       scheduleAssistantSegmentsRef.current?.(reply, undefined, fallbackIds, undefined, canonicalTurnId, artifacts);
       console.log('[chat] appendSource: fallback | loadingSource:', sourceKind, '| msg_id:', msgId ?? '(none)');
-    }, token?.id);
+    }, token?.id ?? response.request_id);
   }, [bindHttpReply, chatRequests, replyFallbacks]);
+
+  const reconcileChat = useCallback(async (id: string) => {
+    if (requestQueries.current.has(id)) return;
+    requestQueries.current.add(id);
+    try {
+      const receipt = await getChatRequest(id);
+      if (!mountedRef.current) return;
+      const delivery = deliveryFromReceipt(id, receipt);
+      updateDelivery(id, delivery);
+      if (delivery === 'completed') {
+        chatRequests.release(id);
+        streamByRequest.current.delete(id);
+        if (receipt.result && safeChatPrefix(receipt.result.reply) === receipt.result.reply) {
+          queueHttpReply(receipt.result, 'send');
+        }
+      } else if (delivery === 'failed') {
+        const msgId = streamByRequest.current.get(id);
+        if (msgId) {
+          streamByRequest.current.delete(id);
+          chatRequests.streamEnd(msgId);
+          const bubbleIds = streamingLocalIdRef.current.get(msgId) ?? [];
+          streamingLocalIdRef.current.delete(msgId);
+          streamingTextRef.current.delete(msgId);
+          setMessages(previous => previous.filter(item => !bubbleIds.includes(item.id)));
+        }
+      }
+    } catch {
+      // An old server or a failed read leaves the original execution unresolved.
+      if (mountedRef.current) updateDelivery(id, 'unknown');
+    } finally {
+      requestQueries.current.delete(id);
+    }
+  }, [chatRequests, queueHttpReply, updateDelivery]);
+
+  useEffect(() => {
+    let active = true;
+    const recover = async () => {
+      const { backendBase } = await getClientConfig();
+      if (!active) return;
+      const ids = pendingChatIds(localStorage, backendBase);
+      setMessages(previous => [...previous, ...ids
+        .filter(id => !previous.some(item => item.id === id))
+        .map(id => ({ id, role: 'user' as const, text: t('chat.send.recovered'),
+          time: Number(id.split('-')[1]), delivery: 'unknown' as const }))]);
+      for (const id of ids) if (!chatRequests.has(id)) void reconcileChat(id);
+    };
+    void recover();
+    const unsubscribe = wsClient.on('state', connection => {
+      if (connection === 'connected') void recover();
+    });
+    return () => { active = false; unsubscribe(); };
+  }, [chatRequests, reconcileChat, t]);
 
   // Dream 打开期间屏蔽 channel_message
   const dreamActiveRef = useRef(dreamActive);
@@ -979,7 +1049,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       const dates = availableDatesRef.current;
 
       if (dates.length === 0) {
-        setMessages([]);
+        setMessages(previous => previous.filter(item => item.delivery));
         setHistoryStatus({ kind: 'empty' });
         noMoreHistoryRef.current = true;
         setNoMoreHistory(true);
@@ -1033,10 +1103,10 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       const historyAssistantCount = msgs.filter(m => m.role === 'assistant').length;
       console.log('[chat] appendSource: history-replay | phase: init | assistantBubbles:', historyAssistantCount, '| totalMsgs:', msgs.length);
       setMessages(previous => {
-        const pendingTools = previous.filter(item => item.toolActivities);
+        const pendingTools = previous.filter(item => item.toolActivities || item.delivery);
         for (const pending of pendingTools) {
           const saved = msgs.find(item => item.id === pending.id);
-          if (saved) for (const activity of pending.toolActivities!) saved.toolActivities = mergeToolActivity(saved.toolActivities ?? [], activity);
+          if (saved) for (const activity of pending.toolActivities ?? []) saved.toolActivities = mergeToolActivity(saved.toolActivities ?? [], activity);
           else msgs.push(pending);
         }
         return msgs;
@@ -1506,6 +1576,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
     const processRealityChannelMessage = (message: RealityChannelMessage) => {
       if (!isSingleRealityMessage(message, getActiveCharacterInfo().id)) return;
       const { content, msg_id, source, sticker } = message;
+      if (typeof content === 'string' && safeChatPrefix(content) !== content) return;
       const artifacts = normalizeChatArtifacts(message.artifacts);
       // Defense: only consume reality messages (source field added P0; old server = no source = reality).
       if (source && source !== 'reality') return;
@@ -1520,6 +1591,11 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
         else if (settled.payload.token) chatRequests.settle(settled.payload.token);
       }
       chatRequests.canonical(msg_id);
+      if (message.request_id) {
+        updateDelivery(message.request_id, 'completed');
+        chatRequests.release(message.request_id);
+        streamByRequest.current.delete(message.request_id);
+      }
 
       // Check if a fallback was already rendered (timer fired before WS arrived).
       // In that case, wire the fallback bubble IDs to this msg_id and return early —
@@ -1600,6 +1676,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
     const unsubSegs = wsClient.on('message_segments', (message) => {
       if (!isSingleRealityMessage(message, getActiveCharacterInfo().id)) return;
       const { content, segments, msg_id, source } = message;
+      if (safeChatPrefix(content) !== content || segments.some(segment => safeChatPrefix(segment.text) !== segment.text)) return;
       // Defense: only consume reality segments.
       if (source && source !== 'reality') return;
       const parkedMessage = parkedRealityMessagesRef.current.get(msg_id);
@@ -1661,6 +1738,10 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       if (!isSingleRealityStream(message, getActiveCharacterInfo().id)) return;
       const { msg_id } = message;
       if (dreamActiveRef.current) return;
+      if (message.request_id) {
+        updateDelivery(message.request_id, 'processing');
+        setBoundedMapEntry(streamByRequest.current, message.request_id, msg_id, MAX_WS_MSG_ID_MAPPINGS);
+      }
       if (streamingLocalIdRef.current.has(msg_id) || wsMsgIdToLocalIdsRef.current.has(msg_id)) return;
       // Keep the waiting indicator until the first visible paragraph arrives.
       chatRequests.streamStart(msg_id);
@@ -1691,7 +1772,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       // (instead of one bubble that splits all at once on stream-end).
       const acc = (streamingTextRef.current.get(msg_id) ?? '') + delta;
       streamingTextRef.current.set(msg_id, acc);
-      const parts = splitReply(acc);
+      const parts = splitReply(safeChatPrefix(acc, true));
       if (parts.length > 0) chatRequests.streamVisible(msg_id);
       const effParts = parts.length === 0 ? [''] : parts;
       while (ids.length < effParts.length) ids.push(newId());
@@ -1754,7 +1835,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
         processRealityChannelMessageRef.current = null;
       }
     };
-  }, [engine, init, parkPendingSegments, parkRealityMessage, scheduleAssistantSegments]);
+  }, [engine, init, parkPendingSegments, parkRealityMessage, scheduleAssistantSegments, updateDelivery]);
 
   useEffect(() => {
     if (dreamActive) return;
@@ -1792,50 +1873,63 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
 
   useEffect(() => () => inputTimer.current.cancel(), [engine]);
 
+  const rememberPending = async (requestId: string) => {
+    const { backendBase } = await getClientConfig();
+    rememberChatRequest(localStorage, backendBase, requestId, true);
+  };
+
   const send = async (retry?: ChatMsg) => {
     const t = retry?.retryDraft?.text ?? input.trim();
     if (preparingRef.current) return;
     if (retry?.retryDraft?.attachments.length || (!retry && attachments.length)) { await doUpload(retry); return; }
     if (!t) return;
+    if (retry && (retry.delivery !== 'not_executed' || replacedRequests.current.has(retry.id))) return;
     const quote = retry?.retryDraft?.quote ?? (retry ? undefined : replyTarget);
-    const userId = retry?.id ?? newId();
+    const userId = newChatRequestId();
     const token = chatRequests.begin(userId);
     if (!token) return;
+    if (retry) setBoundedMapEntry(replacedRequests.current, retry.id, userId, MAX_WS_MSG_ID_MAPPINGS);
     if (chatRequests.size > 1) replyFallbacks.disableLegacySendMatching();
     const replyTo = quote
       ? { text: truncateForReplyTo(quote.text), ts: quote.time / 1000, message_id: quote.messageId }
       : undefined;
     if (!retry) { setInput(''); setReplyTarget(null); }
-    setMessages(m => retry ? m.map(item => item.id === userId ? { ...item, failed: false } : item) : [...m, { id: userId, role: 'user', text: t, time: Date.now(), replyTo: quote ?? undefined, retryDraft: { text: t, attachments: [], quote: quote ?? undefined } }]);
+    setMessages(m => retry
+      ? m.map(item => item.id === retry.id ? { ...item, id: userId, delivery: 'sending' } : item)
+      : [...m, { id: userId, role: 'user', text: t, time: Date.now(), delivery: 'sending',
+          replyTo: quote ?? undefined, retryDraft: { text: t, attachments: [], quote: quote ?? undefined } }]);
     chatSessionMetrics.recordTurn();
     engine.setLocalFocus('想事情');
     try {
-      const response = await sendChat(t, replyTo);
+      await rememberPending(userId);
+      const response = await sendChat(t, replyTo, undefined, undefined, userId);
       if (!mountedRef.current || !chatRequests.isCurrent(token)) return;
-      setMessages(prev => prev.map(item => item.id === userId ? { ...item, retryDraft: undefined } : item));
+      if (safeChatPrefix(response.reply) !== response.reply || (response.request_id && response.request_id !== userId)) {
+        throw new Error('Invalid chat response');
+      }
+      updateDelivery(userId, 'completed');
       queueHttpReply(response, 'send', token);
     } catch (err) {
       if (!mountedRef.current || !chatRequests.settle(token)) return;
-      setMessages(prev => prev.map(item => item.id === userId ? { ...item, failed: true } : item));
-      console.error('[chat] send 失败:', err);
-      const failure = classifyHttpError(err);
-      const text = failure.status === 409 ? await describeDreamBlockedChat() : `（${failure.message}）`;
-      setMessages(prev => [...prev, {
-        id: newId(),
-        role: 'system',
-        text,
-        time: Date.now(),
-      }]);
-      console.log('[chat] loadingClearedBy: error | loadingSource: send');
+      if (err === 'CHAT_NOT_EXECUTED') {
+        updateDelivery(userId, 'not_executed');
+        const text = await describeDreamBlockedChat();
+        setMessages(prev => [...prev, { id: newId(), role: 'system', text, time: Date.now() }]);
+      } else {
+        updateDelivery(userId, 'unknown');
+        void reconcileChat(userId);
+      }
     }
   };
 
   const doUpload = async (retry?: ChatMsg) => {
+    if (retry && (retry.delivery !== 'not_executed' || replacedRequests.current.has(retry.id))) return;
     const submitted = retry?.retryDraft?.attachments ?? attachments;
     const quote = retry?.retryDraft?.quote ?? (retry ? undefined : replyTarget);
-    const userId = retry?.id ?? newId();
+    const userId = newChatRequestId();
     const token = chatRequests.begin(userId);
     if (!token) return;
+    if (retry) setBoundedMapEntry(replacedRequests.current, retry.id, userId, MAX_WS_MSG_ID_MAPPINGS);
     if (chatRequests.size > 1) replyFallbacks.disableLegacySendMatching();
     // Image filenames are opaque hashes; show a neutral label instead.
     const filename = submitted.every(item => attachmentKind(item.filename) === 'image')
@@ -1845,8 +1939,9 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
     const placeholderText = userMessage
       ? `📎 ${filename}\n${userMessage}`
       : `📎 ${filename}`;
-    setMessages(prev => retry ? prev.map(item => item.id === userId ? { ...item, failed: false } : item) : [...prev, {
+    setMessages(prev => retry ? prev.map(item => item.id === retry.id ? { ...item, id: userId, delivery: 'sending' } : item) : [...prev, {
       retryDraft: { text: userMessage, attachments: submitted, quote: quote ?? undefined },
+      delivery: 'sending',
       id: userId, role: 'user', text: placeholderText, time: Date.now(), replyTo: quote ?? undefined, attachmentPreview: submitted.length === 1 ? submitted[0].preview : undefined,
     }]);
     if (!retry) {
@@ -1860,13 +1955,21 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
     engine.setLocalFocus('想事情');
     try {
       const message = quote ? t('chat.attachments.replyPrefix') + '\n' + truncateForReplyTo(quote.text) + '\n\n' + userMessage : userMessage;
-      const resp = await uploadDocument(submitted.map(({ filePath, filename, dataB64 }) => ({ filePath, filename, dataB64 })), message);
+      await rememberPending(userId);
+      const resp = await uploadDocument(submitted.map(({ filePath, filename, dataB64 }) => ({ filePath, filename, dataB64 })), message, userId);
       if (!mountedRef.current || !chatRequests.isCurrent(token)) return;
-      setMessages(prev => prev.map(item => item.id === userId ? { ...item, retryDraft: undefined } : item));
+      if (safeChatPrefix(resp.reply) !== resp.reply || (resp.request_id && resp.request_id !== userId)) {
+        throw new Error('Invalid chat response');
+      }
+      updateDelivery(userId, 'completed');
       queueHttpReply(resp, 'upload', token);
     } catch (err: unknown) {
       if (!mountedRef.current || !chatRequests.settle(token)) return;
-      setMessages(prev => prev.map(item => item.id === userId ? { ...item, failed: true } : item));
+      if (err === 'CHAT_NOT_EXECUTED') updateDelivery(userId, 'not_executed');
+      else {
+        updateDelivery(userId, 'unknown');
+        void reconcileChat(userId);
+      }
     }
   };
 
@@ -2085,9 +2188,10 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
               onDownloadArtifact={onDownloadArtifact}
               onPreviewArtifact={onPreviewArtifact}
             />}
-            {m.failed && m.retryDraft && <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'center', color: 'var(--ink-3)' }}>
-              <span>{t('chat.send.failed')}</span>
-              <button disabled={preparing || chatRequests.has(m.id)} onClick={() => void send(m)} style={{ font: 'inherit', color: 'var(--ink)', background: 'var(--paper-2)', border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-sm)', padding: '5px 10px', cursor: 'pointer' }}>{t('chat.send.retry')}</button>
+            {m.delivery && <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'center', color: 'var(--ink-3)' }}>
+              <span role="status">{t(`chat.delivery.${m.delivery}`)}</span>
+              {(m.delivery === 'unknown' || m.delivery === 'processing') && <button type="button" onClick={() => void reconcileChat(m.id)}>{t('chat.send.checkResult')}</button>}
+              {m.delivery === 'not_executed' && m.retryDraft && <button type="button" disabled={preparing || chatRequests.has(m.id)} onClick={() => void send(m)}>{t('chat.send.retry')}</button>}
             </div>}
           </div>
         ))}

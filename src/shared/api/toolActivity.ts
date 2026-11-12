@@ -2,12 +2,14 @@ export interface ToolActivity {
   type: 'tool_activity';
   event_id: string;
   chain_id: string;
+  request_id?: string;
   char_id: string;
   source: 'reality';
   origin: 'chat' | 'autonomy';
   tool_name: string;
   status: 'running' | 'success' | 'error' | 'unknown' | 'pending_confirmation';
   ts: number;
+  locallyExpired?: true;
 }
 
 export function isToolActivity(value: unknown): value is ToolActivity {
@@ -22,6 +24,6 @@ export function isToolActivity(value: unknown): value is ToolActivity {
 
 export function mergeToolActivity(previous: ToolActivity[], incoming: ToolActivity): ToolActivity[] {
   const found = previous.find(item => item.event_id === incoming.event_id);
-  if (found && found.status !== 'running' && incoming.status === 'running') return previous;
+  if (found && found.status !== 'running' && (!found.locallyExpired || incoming.status === 'running')) return previous;
   return found ? previous.map(item => item.event_id === incoming.event_id ? incoming : item) : [...previous, incoming];
 }
