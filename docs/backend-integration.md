@@ -297,7 +297,7 @@ ChatPanel.send()
 
 HTTP 中断和旧后端查询失败显示执行状态待确认，查询动作只读。307 将 completed 与正文可用性分离：缺 result 时保留 canonical ID，显示「请求已执行，但回复暂时无法恢复」，可查询原回执或按显式 turn_id 恢复历史；不得据此重新发送。完整 canonical 回复到达后结算请求，工具卡片独立保留自己的结果。failed、interrupted_unknown、unknown 均无发送重试；仅服务器明确 not_executed 时，才允许用户用新 ID 发出原草稿。
 
-running/连接中断的未知请求由 ChatReceiptPolling 有界退避跟踪：1 秒起、最多 15 秒间隔并带 jitter，观察最多 90 秒且请求年龄不超过 12 分钟；独立截止计时覆盖挂起 GET。终态或完整 WS 回复停止自动查询，迟到 HTTP 不降级已呈现状态。卸载、角色及连接配置切换使旧查询失效；API 合并同 scope/request_id 在途 GET，并在支持 Web Locks 时协调多个 WebView。完整规则及降级边界见 [聊天恢复契约](chat-correlation.md#2026-11-12：307-执行状态与正文恢复)。
+running/连接中断的未知请求由 ChatReceiptPolling 有界退避跟踪：1 秒起、最多 15 秒间隔并带 jitter，观察最多 90 秒且请求年龄不超过 12 分钟；独立截止计时覆盖挂起 GET。终态或完整 WS 回复停止自动查询，迟到 HTTP 不降级已呈现状态。卸载、角色及连接配置切换使旧查询失效；API 合并同 scope/request_id 在途 GET，并在支持 Web Locks 时协调多个 WebView。完整规则及降级边界见 [聊天恢复契约](chat-correlation.md)。
 
 旧客户端的无请求头调用及手机合同保持兼容，无新增设置、scope、IPC 或持久服务端状态。先部署后端 WS 所有权修复，再更新桌面端；旧桌面仍使用原恢复提示及手动查询。真实 Windows/Tauri 断网、快速重启及 OrangeVPS 联调仍 open；Gmail 生产验收不在 307 范围。
 
