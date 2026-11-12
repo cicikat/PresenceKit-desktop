@@ -1401,10 +1401,12 @@ Rust 优先匹配 UIA。私网定位沿用旧连接格式，默认总请求 18 �
 
 聊天与桌宠经 `computer_use_agent_status` 读取后端 `GET /computer-use/agent-session`。旧后端没有该状态端点时沿用本机任务状态。操作摘要来自阶段与动作类型，设备和模型原始内容不进入此 IPC。停止通过本机 `computer_use_control` 关闭授权并走现有关闭轮询。
 
-`computer_use_open` 的可选 `scope` 缺省时绑定当前外部前台应用；PresenceKit 自身在前台时选择窗口 Z 序最前的可见外部应用。默认入口使用 600 秒上限，高级选项仍接受既有范围与时间。租约有效且前台与授权相符时，桌面每块显示器各显示一个不可聚焦、点击穿透、请求排除捕获的 Tauri 窗口。真实 Esc 在此状态下撤销本机授权；注入按键继续按原执行器约定处理，保留 Ctrl+Shift+F12。
+`computer_use_open` 的可选 `scope` 缺省时绑定当前外部前台应用；PresenceKit 自身在前台时选择窗口 Z 序最前的可见外部应用。默认入口使用 600 秒上限，高级选项仍接受既有范围与时间。状态提示为每块显示器创建不可聚焦、点击穿透、请求排除捕获的 Tauri 窗口。父会话在外部窗口前台时接收物理 Esc。Ctrl+Shift+F12 继续用于紧急停止。
 
 AGENT-05 在真实隔离运行测得后端短暂阻塞超过原先 2 秒请求上限。传输请求上限调整为 3.2 秒，设备执行仍受原有本机 4 秒租约约束。
 
 AGENT-06B 在会话状态中增加 `question`、`can_resume`、`resume_until`。聊天与桌宠展示具体等待原因及可恢复状态。`computer_use_agent_control` 复用当前桌面凭据调用同一父会话的暂停、继续或取消。预算暂停时「继续本任务」续授执行预算，等待用户时通过聊天答复。
 
 AGENT-06C 使用现有设备轮询中的 `agent_cue` 驱动各显示器的边缘提示。`active` 覆盖规划和操作间隙，`weak` 用于等待或暂停。Esc、紧急停止和桌宠停止立即撤销本地执行权，再以绑定设备的 `stop_agent` 关闭轮询取消同一父会话。
+
+AGENT-06D 仅在 `visual_verify_supported` 协商后下发 `verify_visual`。此步骤只读取已匹配的后置帧，使用原 `X-Computer-Use-Lease` 和 JPEG 云端入口。Rust 核对授权、帧摘要与前台，在收到 `verified` 后重新检查画面并发送普通观察回执。截图未授权、模型异常或状态不确定时不执行替代输入。

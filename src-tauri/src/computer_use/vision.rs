@@ -93,18 +93,9 @@ impl Locator<'_> {
                 locate_private(connection, jpeg, description, timeout).await
             }
             Connection::Routed(Mode::CloudProxy {}) => {
-                let proxy = self.proxy.as_ref().ok_or("cloud_vision_not_authorized")?;
-                let lease = Lease {
-                    device_id: &step.device_id,
-                    session_id: &step.session_id,
-                    task_id: &step.task_id,
-                    server_epoch: proxy.epoch,
-                    nonce: proxy.nonce,
-                    seq: step.seq,
-                    frame_version: step.frame.ok_or("vision_stale_step")?,
-                    target_index,
-                };
-                locate_cloud(proxy.config, &lease, jpeg, timeout).await
+                let bytes = self.cloud_request(step, target_index, jpeg, timeout).await?;
+                let text = std::str::from_utf8(&bytes).map_err(|_| "vision_invalid_response")?;
+                parse_location(text)
             }
             Connection::Routed(Mode::Unavailable { reason }) => Err(match reason {
                 Denial::CloudVisionNotAuthorized => "cloud_vision_not_authorized",
@@ -114,12 +105,50 @@ impl Locator<'_> {
             Connection::Unsupported(_) => Err("vision_mode_unsupported"),
         }
     }
+
+    pub async fn verify(&self, step: &Step, jpeg: &[u8], timeout: Duration) -> Result<(), &'static str> {
+        if !self.is_cloud() {
+            return Err("vision_not_configured");
+        }
+        let bytes = self.cloud_request(step, 0, jpeg, timeout).await?;
+        match serde_json::from_slice(&bytes).map_err(|_| "vision_invalid_response")? {
+            Verification::Verified {} => Ok(()),
+            Verification::Uncertain {} => Err("vision_uncertain"),
+        }
+    }
+
+    async fn cloud_request(
+        &self, step: &Step, target_index: usize, jpeg: &[u8], timeout: Duration,
+    ) -> Result<Vec<u8>, &'static str> {
+        if jpeg.is_empty() || jpeg.len() > MAX_JPEG {
+            return Err("vision_image_unavailable");
+        }
+        let proxy = self.proxy.as_ref().ok_or("cloud_vision_not_authorized")?;
+        let lease = Lease {
+            device_id: &step.device_id,
+            session_id: &step.session_id,
+            task_id: &step.task_id,
+            server_epoch: proxy.epoch,
+            nonce: proxy.nonce,
+            seq: step.seq,
+            frame_version: step.frame.ok_or("vision_stale_step")?,
+            target_index,
+        };
+        request_cloud(proxy.config, &lease, jpeg, timeout).await
+    }
 }
 
 #[derive(Deserialize)]
 #[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
 enum Location {
     Found { x: f64, y: f64 },
+    Uncertain {},
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
+enum Verification {
+    Verified {},
     Uncertain {},
 }
 
@@ -201,12 +230,12 @@ async fn locate_private(
     parse_location(text)
 }
 
-async fn locate_cloud(
+async fn request_cloud(
     config: &ClientConfig,
     lease: &Lease<'_>,
     jpeg: &[u8],
     timeout: Duration,
-) -> Result<Target, &'static str> {
+) -> Result<Vec<u8>, &'static str> {
     let client = http_client(timeout)?;
     let url = crate::backend_url(config, "/computer-use/vision/locate");
     let header = serde_json::to_string(lease).map_err(|_| "vision_stale_step")?;
@@ -222,8 +251,7 @@ async fn locate_cloud(
     if !status.is_success() {
         return Err(cloud_error(status, &bytes));
     }
-    let text = std::str::from_utf8(&bytes).map_err(|_| "vision_invalid_response")?;
-    parse_location(text)
+    Ok(bytes)
 }
 
 fn cloud_error(status: reqwest::StatusCode, bytes: &[u8]) -> &'static str {
@@ -236,6 +264,7 @@ fn cloud_error(status: reqwest::StatusCode, bytes: &[u8]) -> &'static str {
         (404, _) => "vision_mode_unsupported",
         (409, _) => "vision_stale_step",
         (413 | 415 | 422, _) => "vision_image_unavailable",
+        (429, Some("session_model_budget")) => "session_model_budget",
         (504, _) => "vision_timeout",
         (502, Some("vision_node_offline")) => "vision_node_offline",
         (502, Some("vision_invalid_response")) => "vision_invalid_response",

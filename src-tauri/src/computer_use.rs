@@ -97,6 +97,7 @@ pub enum Button {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Action {
     Observe {},
+    VerifyVisual {},
     Click {
         target: Target,
         #[serde(default)]
@@ -513,7 +514,7 @@ impl Executor {
             return Some(Some(if session.paused { Cue::Weak } else { cue }));
         }
         let legacy = !session.paused && peer.task_id.is_some() && native::surface(session.scope).is_ok();
-        native::arm_escape(legacy.then_some(session.scope), remaining);
+        native::arm_escape(None, Duration::ZERO);
         Some(legacy.then_some(Cue::Legacy))
     }
 
@@ -651,19 +652,8 @@ impl Executor {
                             if timeout.is_zero() {
                                 return Err(Receipt::error("failed", "vision_timeout"));
                             }
-                            tauri::async_runtime::block_on(async {
-                                let call =
-                                    locator.locate(&step, target_index, &frame.jpeg, name, timeout);
-                                tokio::pin!(call);
-                                loop {
-                                    tokio::select! {
-                                        result = &mut call => break result.map_err(|reason| Receipt::error("failed", reason)),
-                                        _ = tokio::time::sleep(Duration::from_millis(100)) => {
-                                            self.recheck(&step, before, (expires, revision), |_| Ok(()))?;
-                                        }
-                                    }
-                                }
-                            })?
+                            self.await_vision(&step, before, (expires, revision),
+                                locator.locate(&step, target_index, &frame.jpeg, name, timeout))?
                         }
                     };
                 }
@@ -685,7 +675,20 @@ impl Executor {
                     }
                 }
             }
-            if let Action::Wait { ms } = &action {
+            if matches!(action, Action::VerifyVisual {}) {
+                if !cloud_vision {
+                    return Err(Receipt::error("failed", "cloud_vision_not_authorized"));
+                }
+                let locator = vision.ok_or_else(|| Receipt::error("failed", "vision_not_configured"))?;
+                recheck_image(scope, before, frame.digest)?;
+                let timeout = locator.timeout.min(expires.saturating_duration_since(Instant::now())
+                    .saturating_sub(Duration::from_millis(500)));
+                if timeout.is_zero() {
+                    return Err(Receipt::error("failed", "vision_timeout"));
+                }
+                self.await_vision(&step, before, (expires, revision), locator.verify(&step, &frame.jpeg, timeout))?;
+                recheck_image(scope, before, frame.digest)?;
+            } else if let Action::Wait { ms } = &action {
                 if *ms > 2_000 {
                     return Err(Receipt::error("failed", "invalid_wait"));
                 }
@@ -776,6 +779,24 @@ impl Executor {
                 surface: after,
                 nodes,
             }),
+        })
+    }
+
+    fn await_vision<T>(
+        &self, step: &Step, surface: Surface, binding: (Instant, u64),
+        call: impl std::future::Future<Output = Result<T, &'static str>>,
+    ) -> Result<T, Receipt> {
+        self.recheck(step, surface, binding, |_| Ok(()))?;
+        tauri::async_runtime::block_on(async {
+            tokio::pin!(call);
+            loop {
+                tokio::select! {
+                    result = &mut call => break result.map_err(|reason| Receipt::error("failed", reason)),
+                    _ = tokio::time::sleep(Duration::from_millis(100)) => {
+                        self.recheck(step, surface, binding, |_| Ok(()))?;
+                    }
+                }
+            }
         })
     }
 

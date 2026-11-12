@@ -103,7 +103,7 @@ try {
   assert.equal(grants.length, 3);
   assert.deepEqual(grants[0].args, {
     scope: null, durationSeconds: 600, charId: 'fixture',
-    overlayLabel: 'Fixture is operating · Esc to cancel',
+    overlayLabel: 'Fixture is operating · Ctrl+Shift+F12 to stop',
   });
   assert.deepEqual(grants[1].args.scope,
     { kind: 'window', window: { handle: 20, pid: 30, thread: 40, created: [1, 2] } });

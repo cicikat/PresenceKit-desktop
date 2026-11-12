@@ -20,6 +20,7 @@ struct Poll {
     expires_in_ms: Option<u64>,
     vision: Option<vision::Connection>,
     vision_timeout_ms: Option<u64>,
+    visual_verify_supported: Option<bool>,
 }
 
 struct Pending {
@@ -71,6 +72,7 @@ pub(super) async fn run(
     let mut epoch: Option<String> = None;
     let mut pending: Option<Pending> = None;
     let mut agent_active = false;
+    let mut visual_verify = false;
     let scope_name = match scope {
         Scope::Window { .. } => "window",
         Scope::Desktop => "desktop",
@@ -90,7 +92,10 @@ pub(super) async fn run(
         if let Some(granted) = cloud_vision {
             poll["cloud_vision"] = json!(granted);
         }
-        if closed && agent_active && local.session_id.as_deref() == Some(session)
+        if visual_verify {
+            poll["visual_verify"] = json!(true);
+        }
+        if closed && (agent_active || visual_verify) && local.session_id.as_deref() == Some(session)
             && matches!(local.reason, Some("escape_cancel" | "emergency_stop" | "user_stopped"))
         {
             poll["stop_agent"] = json!(true);
@@ -125,6 +130,7 @@ pub(super) async fn run(
         }
         epoch = Some(response.server_epoch);
         agent_active = response.agent_cue.is_some();
+        visual_verify = response.visual_verify_supported == Some(true);
         if executor.sync_peer(
             session,
             response.task_id.clone(),
