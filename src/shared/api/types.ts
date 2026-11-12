@@ -204,6 +204,7 @@ export interface DiaryEntry {
 }
 
 export interface ChatLogEntry {
+  request_id?: string;
   artifacts?: ChatArtifactPayload[];
   entry_kind?: 'narration';
   tool_activity?: import('./toolActivity').ToolActivity;

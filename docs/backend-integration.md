@@ -295,7 +295,7 @@ ChatPanel.send()
 `CHAT_REQUEST_INTERRUPTED` 和 `CHAT_RESPONSE_UNREADABLE`，由共享前端 API 翻译。
 主聊天与附件入口通过 `X-Presence-Chat-Request` 发送稳定请求 ID。后端 HTTP、工具活动、stream start 和 canonical WS 用同一 ID 关联，增量仍用 msg_id。客户端发出前在本机按后端地址与角色记录未结算 ID，重启或重连后用 `GET /desktop/chat/requests/{request_id}` 对账；兼容读取旧版仅按后端地址保存的 ID。
 
-HTTP 中断和旧后端查询失败显示执行状态待确认，查询动作只读。307 将 completed 与正文可用性分离：缺 result 时保留 canonical ID，显示「请求已执行，但回复暂时无法恢复」，可查询原回执或按显式 turn_id 恢复历史；不得据此重新发送。完整 canonical 回复到达后结算请求，工具卡片独立保留自己的结果。failed、interrupted_unknown、unknown 均无发送重试；仅服务器明确 not_executed 时，才允许用户用新 ID 发出原草稿。
+HTTP 中断后在后台只读查询，查询失败保留内部未知状态。completed 与正文可用性分离：缺 result 时保留 canonical ID 并自动补读近期历史，按显式 turn_id 去重。完整 canonical 回复到达后结算请求。failed、interrupted_unknown、unknown 均无发送重试；仅服务器明确 not_executed 且本地还有草稿时，才允许用户用新 ID 发出原草稿。
 
 running/连接中断的未知请求由 ChatReceiptPolling 有界退避跟踪：1 秒起、最多 15 秒间隔并带 jitter，观察最多 90 秒且请求年龄不超过 12 分钟；独立截止计时覆盖挂起 GET。终态或完整 WS 回复停止自动查询，迟到 HTTP 不降级已呈现状态。卸载、角色及连接配置切换使旧查询失效；API 合并同 scope/request_id 在途 GET，并在支持 Web Locks 时协调多个 WebView。完整规则及降级边界见 [聊天恢复契约](chat-correlation.md)。
 

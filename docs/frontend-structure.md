@@ -397,7 +397,7 @@ src/windows/toy/
 - assistant-only trigger entry 的 `user` 为空字符串，仍正常渲染 assistant 气泡。
 - 滚到顶时懒加载更早一天，保持滚动位置不跳。
 - 用户发送时调用 `sendChat()`。
-- `chatReconciliation.ts` 区分执行状态与正文可用性；completed 缺正文保留定位 ID 并提示不可恢复，仅 not_executed 允许新请求重试。
+- `chatReconciliation.ts` 在后台区分执行状态与正文可用性。聊天刷新显示真实历史；completed 缺正文时补读近期历史并保留已加载的早期对话。只有明确未执行且有本地草稿时提供重试。
 - `chatReceiptPolling.ts` 管理 90 秒有界查询、指数退避、独立截止计时及迟到结果失效；`shared/api/backend.ts` 合并在途回执读取，支持时通过 Web Locks 跨 WebView 协调。ChatWindow 在角色/连接配置变化时重挂载 ChatPanel，清除旧查询。详见 [对账契约](chat-correlation.md)。
 - 订阅 WS `channel_message` / `message_segments`，优先按 assistant `msg_id` 与 HTTP 回复对账；content hash 只作为旧后端或异常路径 fallback。
 - live `channel_message` / HTTP 回包与 `/chat-log/{date}` 历史可带 `artifacts[]`；ChatPanel 经 `chatHistory.ts` 在首条气泡恢复文件卡，兼容纯文件回合；启动和翻页复用该投影。下载/预览经 Tauri Bearer，不新增 WS 帧。
