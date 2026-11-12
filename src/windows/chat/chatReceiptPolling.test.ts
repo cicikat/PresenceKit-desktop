@@ -33,7 +33,7 @@ describe('bounded read-only receipt tracking', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('expires a permanently running or offline request and permits one manual read', async () => {
+  it('expires a permanently running or offline request', async () => {
     const id = requestId();
     const readTimes: number[] = [];
     const read = vi.fn(async () => { readTimes.push(Date.now()); return false; });
@@ -49,9 +49,6 @@ describe('bounded read-only receipt tracking', () => {
     poll.observe(id);
     await vi.advanceTimersByTimeAsync(60_000);
     expect(read).toHaveBeenCalledTimes(count);
-    poll.check(id);
-    await vi.runAllTimersAsync();
-    expect(read).toHaveBeenCalledTimes(count + 1);
     expect(vi.getTimerCount()).toBe(0);
   });
 
@@ -114,7 +111,7 @@ describe('bounded read-only receipt tracking', () => {
       return false;
     });
     const poll = new ChatReceiptPolling(query, vi.fn());
-    poll.observe(id); poll.check(id); poll.observe(id);
+    poll.observe(id); poll.observe(id);
     expect(query).toHaveBeenCalledTimes(1);
     poll.clear();
     resolve(false);
@@ -136,9 +133,6 @@ describe('bounded read-only receipt tracking', () => {
     reloaded.observe(id);
     expect(query).toHaveBeenCalledTimes(2);
     expect(expire).toHaveBeenCalledExactlyOnceWith(id);
-    reloaded.check(id);
-    await vi.runAllTimersAsync();
-    expect(query).toHaveBeenCalledTimes(3);
     expect(vi.getTimerCount()).toBe(0);
   });
 });

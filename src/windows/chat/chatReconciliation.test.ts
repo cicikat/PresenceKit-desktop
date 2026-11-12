@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { advanceChatRecovery, chatRecoveryView, deliveryFromReceipt, nextChatDelivery, pendingChatIds, recoveredReply, rememberChatRequest, requestForCanonicalReply, safeChatPrefix } from './chatReconciliation';
+import { advanceChatRecovery, deliveryFromReceipt, nextChatDelivery, pendingChatIds, recoveredReply, rememberChatRequest, requestForCanonicalReply, safeChatPrefix } from './chatReconciliation';
 import { bindHttpReplyIdentity } from './httpReplyIdentity';
 
 const id = 'dc-1794450000000-1234567890abcdef1234567890abcdef';
@@ -20,13 +20,12 @@ describe('desktop chat reconciliation', () => {
     expect(deliveryFromReceipt(id, { request_id: id, status: 'failed' })).toBe('failed');
   });
 
-  it('keeps completed without a body locatable and only offers a read-only check', () => {
+  it('keeps completed without a body locatable for history lookup', () => {
     const reply = recoveredReply(id, { request_id: id, status: 'completed', msg_id: 'wire', turn_id: 'turn' });
     const state = advanceChatRecovery({ delivery: 'unknown' }, 'completed', 'unavailable', reply.identity);
     expect(reply.result).toBeUndefined();
     expect(state.replyIdentity).toEqual({ msg_id: 'wire', turn_id: 'turn' });
-    expect(chatRecoveryView(state)).toEqual({ statusKey: 'chat.reply.unavailable', checkResult: true, retry: false });
-    expect(chatRecoveryView({ delivery: 'completed' }).retry).toBe(false);
+    expect(state).toMatchObject({ delivery: 'completed', replyAvailability: 'unavailable' });
   });
 
   it('converges a bodyless completion with canonical history without another bubble', () => {
@@ -39,7 +38,7 @@ describe('desktop chat reconciliation', () => {
     expect(rendered.get('wire')).toEqual(['history-bubble']);
     const state = advanceChatRecovery({ delivery: 'completed', replyAvailability: 'unavailable', replyIdentity: identity },
       'completed', 'rendered', { msg_id: 'wire' });
-    expect(chatRecoveryView(state)).toEqual({ statusKey: 'chat.delivery.completed', checkResult: false, retry: false });
+    expect(state).toMatchObject({ delivery: 'completed', replyAvailability: 'rendered' });
     expect(state.replyIdentity).toEqual(identity);
     expect(advanceChatRecovery(state, 'processing')).toBe(state);
     expect(advanceChatRecovery(state, 'completed', 'unavailable').replyAvailability).toBe('rendered');
@@ -66,15 +65,10 @@ describe('desktop chat reconciliation', () => {
     expect(requestForCanonicalReply('other-wire', id, identities)).toBeUndefined();
   });
 
-  it.each(['failed', 'interrupted_unknown', 'unknown'] as const)('never offers send retry for %s', status => {
+  it.each(['failed', 'interrupted_unknown', 'unknown'] as const)('never treats %s as a reply', status => {
     const delivery = deliveryFromReceipt(id, { request_id: id, status });
-    expect(chatRecoveryView({ delivery }).retry).toBe(false);
     expect(recoveredReply(id, { request_id: id, status, result: { reply: 'untrusted', emotion: 'neutral' } }).result).toBeUndefined();
     expect(nextChatDelivery(delivery, 'unknown')).toBe(delivery);
-  });
-
-  it('offers a new request only after the server explicitly confirms not_executed', () => {
-    expect(chatRecoveryView({ delivery: deliveryFromReceipt(id, { request_id: id, status: 'not_executed' }) }).retry).toBe(true);
   });
 
   it('recovers only pending identities for the same backend from shared storage', () => {

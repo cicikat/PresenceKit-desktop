@@ -59,7 +59,7 @@ import { createLatestTimer } from '../chatTimer';
 import { bindHttpReplyIdentity, matchesHistoryReplay } from '../httpReplyIdentity';
 import { ChatReplyFallbacks, type ReplySource } from '../chatReplyFallbacks';
 import { ChatRequests, type ChatRequestToken } from '../chatRequests';
-import { advanceChatRecovery, chatRecoveryView, deliveryFromReceipt, isTerminalDelivery, newChatRequestId, pendingChatIds, recoveredReply, rememberChatRequest, requestForCanonicalReply, safeChatPrefix, type ChatDelivery, type ReplyAvailability, type ReplyIdentity } from '../chatReconciliation';
+import { advanceChatRecovery, deliveryFromReceipt, isTerminalDelivery, newChatRequestId, pendingChatIds, recoveredReply, rememberChatRequest, requestForCanonicalReply, safeChatPrefix, type ChatDelivery, type ReplyAvailability, type ReplyIdentity } from '../chatReconciliation';
 import { ChatReceiptPolling } from '../chatReceiptPolling';
 import { historyAssistantParts } from '../chatHistory';
 
@@ -134,6 +134,8 @@ interface ChatMsg {
   narration?: boolean;
   id: string;
   role: 'user' | 'assistant' | 'system' | 'divider' | 'raw_fallback' | 'no_more';
+  requestId?: string;
+  historyDate?: string;
   attachmentPreview?: string;
   delivery?: ChatDelivery;
   replyAvailability?: ReplyAvailability;
@@ -259,7 +261,7 @@ async function describeDreamBlockedChat(): Promise<string> {
 function entriesToMsgs(dateStr: string, entries: ChatLogEntry[], rawFallback: boolean): ChatMsg[] {
   if (rawFallback) {
     return [{
-      id: newId(), role: 'raw_fallback', text: `(${formatDateCN(dateStr)}：早期格式，无法显示)`, time: 0,
+      id: newId(), role: 'raw_fallback', text: `(${formatDateCN(dateStr)}：早期格式，无法显示)`, time: 0, historyDate: dateStr,
     }];
   }
   const msgs: ChatMsg[] = [];
@@ -276,21 +278,21 @@ function entriesToMsgs(dateStr: string, entries: ChatLogEntry[], rawFallback: bo
       const activity = entry.tool_activity;
       const chain = msgs.find(message => message.toolActivities?.[0]?.chain_id === activity.chain_id);
       if (chain) chain.toolActivities = mergeToolActivity(chain.toolActivities!, activity);
-      else msgs.push({ id: `tool:${activity.chain_id}`, role: 'system', text: '', time: ts, toolActivities: [activity] });
+      else msgs.push({ id: `tool:${activity.chain_id}`, role: 'system', text: '', time: ts, historyDate: dateStr, toolActivities: [activity] });
     }
     if (entry.user) {
-      msgs.push({ id: newId(), role: 'user', text: entry.user, time: ts, turnId: entry.turn_id });
+      msgs.push({ id: newId(), role: 'user', text: entry.user, time: ts, turnId: entry.turn_id, requestId: entry.request_id, historyDate: dateStr });
     }
     historyAssistantParts(entry).forEach(({ text, artifacts }) => {
       if (safeChatPrefix(text) !== text) return;
-      msgs.push({ id: newId(), role: entry.entry_kind === 'narration' ? 'system' : 'assistant', narration: entry.entry_kind === 'narration', text, artifacts, time: ts, turnId: entry.turn_id });
+      msgs.push({ id: newId(), role: entry.entry_kind === 'narration' ? 'system' : 'assistant', narration: entry.entry_kind === 'narration', text, artifacts, time: ts, turnId: entry.turn_id, historyDate: dateStr });
     });
   }
   return msgs;
 }
 
 function dividerMsg(dateStr: string): ChatMsg {
-  return { id: newId(), role: 'divider', text: `── ${formatDateCN(dateStr)} ──`, time: 0 };
+  return { id: newId(), role: 'divider', historyDate: dateStr, text: `── ${formatDateCN(dateStr)} ──`, time: 0 };
 }
 
 // ── UI 组件 ─────────────────────────────────────────────────────────────────
@@ -801,6 +803,8 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
   useEffect(() => { historyStatusRef.current = historyStatus; }, [historyStatus]);
   const mountedRef = useRef(false);
   const initInFlightRef = useRef(false);
+  const historyRefreshPending = useRef(false);
+  const refreshHistory = useRef<() => void>(() => {});
   // scheduleAssistantSegments is declared later in this component; init() is declared
   // earlier so it can be reused by both the mount effect and the WS reconnect effect.
   // Route through a ref (kept in sync on every render, below) instead of a direct closure
@@ -936,7 +940,10 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       updateDelivery(requestId, 'completed', 'recoverable', response);
     }
     if (!String(response.reply ?? '').trim() && !artifacts?.length) {
-      if (requestId) updateDelivery(requestId, 'completed', fromHistory ? 'rendered' : 'unavailable', response);
+      if (requestId) {
+        updateDelivery(requestId, 'completed', fromHistory ? 'rendered' : 'unavailable', response);
+        if (!fromHistory) refreshHistory.current();
+      }
       if (msgId) chatRequests.streamEnd(msgId);
       if (source === 'wake') setWakeLoading(false);
       else if (token) chatRequests.settle(token);
@@ -1011,6 +1018,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
         const rendered = fromHistory || Boolean(msgId && hasRegisteredMessage(wsMsgIdToLocalIdsRef.current, msgId));
         updateDelivery(id, 'completed', rendered ? 'rendered' : recoveringBody ? 'recoverable' : 'unavailable', identity);
         if (result && recoveringBody && !rendered) queueHttpReply(result, 'send');
+        else if (!rendered) refreshHistory.current();
       } else {
         updateDelivery(id, delivery);
       }
@@ -1047,10 +1055,6 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       receiptScope.current ??= { backend: backendBase, journal, charId };
       const ids = [...new Set([...pendingChatIds(localStorage, backendBase), ...pendingChatIds(localStorage, journal)])]
         .filter(id => !canonicalRequests.current.has(id));
-      setMessages(previous => [...previous, ...ids
-        .filter(id => !previous.some(item => item.id === id))
-        .map(id => ({ id, role: 'user' as const, text: t('chat.send.recovered'),
-          time: Number(id.split('-')[1]), delivery: 'unknown' as const }))]);
       for (const id of ids) if (!chatRequests.has(id)) polling.observe(id);
     };
     const cancel = () => {
@@ -1064,7 +1068,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       if (connection === 'connected') void recover();
     });
     return () => { cancel(); unsubConfig(); unsubscribe(); };
-  }, [chatRequests, reconcileChat, t, updateDelivery]);
+  }, [chatRequests, reconcileChat, updateDelivery]);
 
   const reconcileHistory = useCallback(() => {
     // Binding refreshes the bounded map's insertion order; iterate a snapshot.
@@ -1105,7 +1109,10 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
 
   // 可重入：首次挂载调用一次；historyStatus 落入 error 后，WS connected / 轮询兜底会再次调用。
   const init = useCallback(async (refreshOnly = false) => {
-    if (initInFlightRef.current) return;
+    if (initInFlightRef.current || isLoadingMoreRef.current) {
+      if (refreshOnly) historyRefreshPending.current = true;
+      return;
+    }
     initInFlightRef.current = true;
     const mounted = () => mountedRef.current;
     try {
@@ -1117,7 +1124,8 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       const dates = availableDatesRef.current;
 
       if (dates.length === 0) {
-        setMessages(previous => previous.filter(item => item.delivery || (item.role === 'assistant' && !item.isStreaming)));
+        setMessages(previous => previous.filter(item => item.delivery || (item.role === 'assistant' && !item.historyDate)));
+        loadedDatesRef.current = [];
         setHistoryStatus({ kind: 'empty' });
         noMoreHistoryRef.current = true;
         setNoMoreHistory(true);
@@ -1125,7 +1133,8 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       }
 
       let msgs: ChatMsg[] = [];
-      let firstDate: string | null = null;
+      let firstDate: string;
+      const previouslyLoaded = loadedDatesRef.current;
 
       if (dates.includes(today)) {
         // 拉今日
@@ -1158,28 +1167,38 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
         firstDate = recentDate;
       }
 
-      // 检查是否还有更早的
-      if (firstDate) {
-        const firstIdx = availableDatesRef.current.indexOf(firstDate);
-        if (firstIdx >= availableDatesRef.current.length - 1) {
-          noMoreHistoryRef.current = true;
-          setNoMoreHistory(true);
-          msgs = [{ id: newId(), role: 'no_more', text: '', time: 0 }, ...msgs];
-        }
-      }
+      // A background refresh replaces the recent days while keeping earlier pages already on screen.
+      const retainedDates = new Set(refreshOnly ? previouslyLoaded.filter(date => date < firstDate && dates.includes(date)) : []);
+      loadedDatesRef.current = [...retainedDates, ...loadedDatesRef.current];
+      const noMore = loadedDatesRef.current[0] === dates[dates.length - 1];
+      noMoreHistoryRef.current = noMore;
+      setNoMoreHistory(noMore);
+      const topMarker: ChatMsg = { id: newId(), role: 'no_more', text: '', time: 0 };
+      const recentDivider = dividerMsg(firstDate);
 
       const historyAssistantCount = msgs.filter(m => m.role === 'assistant').length;
       console.log('[chat] appendSource: history-replay | phase: init | assistantBubbles:', historyAssistantCount, '| totalMsgs:', msgs.length);
+      const knownRequestTurns = new Map(recoveryIdentities.current);
       setMessages(previous => {
         const historyTurns = new Set(msgs.filter(item => item.role === 'assistant').map(item => item.turnId).filter(Boolean));
-        const merged = [...msgs];
-        const pendingTools = previous.filter(item => item.toolActivities || item.delivery);
-        const liveReplies = previous.filter(item => item.role === 'assistant' && !item.isStreaming
-          && (item.wsMsgId || item.turnId) && !historyTurns.has(item.turnId));
-        for (const pending of pendingTools) {
-          const saved = msgs.find(item => item.id === pending.id);
-          if (saved) for (const activity of pending.toolActivities ?? []) saved.toolActivities = mergeToolActivity(saved.toolActivities ?? [], activity);
-          else merged.push(pending);
+        const earlier = previous.filter(item => item.historyDate && retainedDates.has(item.historyDate));
+        const merged = earlier.length ? [...earlier, recentDivider, ...msgs] : [...msgs];
+        if (noMore) merged.unshift(previous.find(item => item.role === 'no_more') ?? topMarker);
+        const savedUserRequests = new Set(merged.filter(item => item.role === 'user').map(item => item.requestId).filter(Boolean));
+        const savedUserTurns = new Set(merged.filter(item => item.role === 'user').map(item => item.turnId).filter(Boolean));
+        const localMessages = previous.filter(item => item.delivery || item.toolActivities);
+        const liveReplies = previous.filter(item => item.role === 'assistant' && !item.historyDate
+          && !historyTurns.has(item.turnId));
+        for (const pending of localMessages) {
+          if (pending.role === 'user' && (savedUserRequests.has(pending.id)
+            || savedUserTurns.has(knownRequestTurns.get(pending.id)?.turn_id ?? pending.replyIdentity?.turn_id))) continue;
+          const savedIndex = merged.findIndex(item => item.id === pending.id);
+          if (savedIndex < 0) merged.push(pending);
+          else if (merged[savedIndex] !== pending && pending.toolActivities) {
+            const saved = merged[savedIndex];
+            const activities = pending.toolActivities.reduce(mergeToolActivity, saved.toolActivities ?? []);
+            merged[savedIndex] = { ...saved, toolActivities: activities };
+          }
         }
         return [...merged, ...liveReplies];
       });
@@ -1243,8 +1262,13 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       if (mounted()) setHistoryStatus({ kind: 'error', ...classifyHistoryError(err) });
     } finally {
       initInFlightRef.current = false;
+      if (mounted() && historyRefreshPending.current) {
+        historyRefreshPending.current = false;
+        refreshHistory.current();
+      }
     }
   }, [reconcileHistory]);
+  refreshHistory.current = () => { void init(true); };
 
   useEffect(() => {
     mountedRef.current = true;
@@ -1290,7 +1314,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
   // ── 滚顶懒加载 ───────────────────────────────────────────────────────────
 
   const loadMore = useCallback(async () => {
-    if (isLoadingMoreRef.current || noMoreHistoryRef.current) return;
+    if (initInFlightRef.current || isLoadingMoreRef.current || noMoreHistoryRef.current) return;
 
     const dates = availableDatesRef.current;
     const loaded = loadedDatesRef.current;
@@ -1385,6 +1409,10 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
     } finally {
       isLoadingMoreRef.current = false;
       setIsLoadingMore(false);
+      if (mountedRef.current && historyRefreshPending.current) {
+        historyRefreshPending.current = false;
+        refreshHistory.current();
+      }
     }
   }, []);
 
@@ -2290,15 +2318,8 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
               onDownloadArtifact={onDownloadArtifact}
               onPreviewArtifact={onPreviewArtifact}
             />}
-            {m.delivery && <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'center', color: 'var(--ink-3)' }}>
-              <span role="status" title={m.replyAvailability === 'unavailable'
-                ? [m.id, m.replyIdentity?.turn_id, m.replyIdentity?.msg_id].filter(Boolean).join(' · ')
-                : undefined}>{t(chatRecoveryView(m).statusKey)}</span>
-              {chatRecoveryView(m).checkResult && <button type="button" onClick={() => {
-                  receiptPolling.current?.check(m.id);
-                  if (m.replyAvailability === 'unavailable') void init(true);
-                }}>{t('chat.send.checkResult')}</button>}
-              {chatRecoveryView(m).retry && m.retryDraft && <button type="button" disabled={preparing || chatRequests.has(m.id)} onClick={() => void send(m)}>{t('chat.send.retry')}</button>}
+            {m.delivery === 'not_executed' && m.retryDraft && <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'center', color: 'var(--ink-3)' }}>
+              <button type="button" disabled={preparing || chatRequests.has(m.id)} onClick={() => void send(m)}>{t('chat.send.retry')}</button>
             </div>}
           </div>
         ))}

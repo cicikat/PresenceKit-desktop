@@ -25,17 +25,6 @@ export function advanceChatRecovery(
     } : previous.replyIdentity };
 }
 
-export function chatRecoveryView(state: ChatRecoveryState) {
-  const { delivery, replyAvailability } = state;
-  return {
-    statusKey: delivery === 'completed' && replyAvailability !== 'rendered'
-      ? `chat.reply.${replyAvailability ?? 'unavailable'}` as const : `chat.delivery.${delivery ?? 'unknown'}` as const,
-    checkResult: delivery === 'unknown' || delivery === 'processing' || delivery === 'interrupted_unknown'
-      || (delivery === 'completed' && replyAvailability !== 'rendered' && replyAvailability !== 'recoverable'),
-    retry: delivery === 'not_executed',
-  };
-}
-
 const requestPattern = /^dc-(\d{13})-[0-9a-f]{32}$/;
 const journalPrefix = 'presencekit.desktop.chat.pending:';
 type RequestStorage = Pick<Storage, 'getItem' | 'setItem'>;

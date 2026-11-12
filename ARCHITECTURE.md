@@ -52,8 +52,9 @@ ChatPanel 当前协调发送、流式临时消息、canonical channel、分段�
 空流等待在本地请求全部结算后立即收起，无主空流另有 8 秒上限；
 HTTP fallback 定时器由 ChatReplyFallbacks 按同一本地 ID 持有。呈现仍经 ChatPanel adapter；
 完整 reconciler 尚未完成。无 request_id 的早期 WS 不猜归属。
-307 的 ChatRecoveryState 分离执行状态与正文可用性；completed 缺正文保留关联 ID，只有 not_executed
-允许显式重试。ChatReceiptPolling 集中管理有界退避和独立截止计时；API 合并在途 GET，并在支持时
+ChatRecoveryState 分离执行状态与正文可用性。刷新直接呈现历史，恢复查询在后台进行；
+completed 缺正文时按关联 ID 补读历史，只有 not_executed 且有本地草稿时提供再次发送入口。
+ChatReceiptPolling 集中管理有界退避和独立截止计时；API 合并在途 GET，并在支持时
 使用 Web Locks 协调多个 WebView。角色/连接配置变化重挂载 ChatPanel，使旧观察失效；恢复契约见
 [chat-correlation](docs/chat-correlation.md)。
 `msg_id` 是传输关联，`turn_id` 是可信回合身份，本地气泡 ID 是呈现身份；一回合允许多个分段气泡。

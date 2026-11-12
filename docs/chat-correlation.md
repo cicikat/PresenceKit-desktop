@@ -52,8 +52,8 @@ Legacy turn-only HTTP 仍保留原 responseMsgId 兼容，不把该传输别名�
 （回执 running）、completed、failed、interrupted_unknown、not_executed 或 unknown；正文状态为
 rendered、recoverable 或 unavailable。completed 不等于正文已显示，rendered 不被晚到 HTTP 或查询降级。
 
-- completed 缺 result、正文为空或结果校验失败：显示「请求已执行，但回复暂时无法恢复」，保留
-  request_id 和可用的 msg_id/turn_id；不显示重试。查看结果仅查询原回执并刷新只读历史。
+- completed 缺 result、正文为空或结果校验失败时，保留 request_id 和可用的 msg_id/turn_id，
+  自动补读近期历史。刷新直接呈现真实聊天，只有请求 ID 的旧记录继续在后台处理。
 - 有效 result 继续经过 safeChatPrefix、request_id 和 canonical ID 一致性校验，复用 HTTP fallback。
   WS 或历史已呈现同一稳定身份时只补绑定，不追加重复气泡。历史恢复按显式 turn_id，不能用同文推断执行成功。
 - failed、interrupted_unknown、unknown、回执缺失或查询失败都不自动重发；只有明确 not_executed
@@ -63,16 +63,14 @@ rendered、recoverable 或 unavailable。completed 不等于正文已显示，re
 
 `chatReceiptPolling.ts` 集中持有查询生命周期：立即只读查询后按 1、2、4、8 秒退避，带 ±15% jitter，
 最多每 15 秒一次；单次自动观察最多 90 秒，且请求年龄不超过 12 分钟（原 POST 最长等待 10 分钟）。
-独立截止计时器也覆盖挂起的 GET；到期显示「执行状态待确认」，停止自动查询并忽略迟到结果。
+独立截止计时器也覆盖挂起的 GET；到期停止自动查询并忽略迟到结果。
 completed/failed/not_executed/interrupted_unknown 或完整 canonical 回复到达后停止自动查询。
-手动查看最多执行一次查询，并受 90 秒截止约束；同一观察内不并发查询。
+同一观察内不并发查询。聊天区省略恢复状态、编号和手动查询按钮。
 
 API 层按 scope/request_id 合并在途 GET；支持 Web Locks 时，其他 WebView 已持锁则跳过本次读取，
 后续仍可查询。不支持 Web Locks 的旧 WebView 仅保证单 WebView 内合并，跨窗口协调仍是降级边界。
 卸载及上下文切换清除 timer 并使在途结果失效，不承诺取消已发出的底层 HTTP。
 
-回归证据（2026-11-12）：全量 Vitest 115 文件 / 638 项通过；TypeScript、生产构建与 Rust cargo check
-通过。`node scripts/chat-recovery-browser.mjs` 使用真实 ChatPanel、模拟 Tauri/WS 外部边界，覆盖
-无正文完成、历史/WS 单气泡、回执正文恢复、协议拒绝、终态不重试、晚到 HTTP、只读查看及后端切换。
-撤销历史关联 Map 的快照迭代会在查看结果时卡住；恢复快照后浏览器回归通过。挂起 GET 的独立截止测试
-在修复前失败、修复后通过。真实 Windows/Tauri 断网、快速重启与 OrangeVPS 联调仍为 open；Gmail 不在本工单验收范围。
+`node scripts/chat-recovery-browser.mjs` 使用真实 ChatPanel 与模拟 Tauri/WS 边界，覆盖刷新恢复真实历史、
+回执正文与补读历史、历史/WS 去重、重发入口限制、晚到 HTTP 及后端切换。真实 Windows/Tauri 断网、
+快速重启与 OrangeVPS 联调仍为 open。
