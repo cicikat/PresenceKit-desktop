@@ -16,6 +16,7 @@ import { ParticleBackground } from './components/ParticleBackground';
 import { Ribbon } from './components/Ribbon';
 import { SidebarPanel } from './components/Sidebar';
 import { ChatPanel } from './components/ChatPanel';
+import { onClientConfigChange } from '../../shared/api/config';
 import { GroupChatPanel } from './components/GroupChatPanel';
 import { GroupListPanel } from './components/GroupListPanel';
 import { PaneHost } from './components/Panes';
@@ -69,6 +70,7 @@ export function ChatWindow({ onToyOpen, onRoomOpen, isCovered = false }: { onToy
   const [proactiveGapHours, setProactiveGapHours] = useState(0.75);
   const [characterAvatarDataUrl, setCharacterAvatarDataUrl] = useState<string | null>(null);
   const [charSwitchKey, setCharSwitchKey] = useState(0);
+  useEffect(() => onClientConfigChange(() => setCharSwitchKey(key => key + 1)), []);
   const avatarRequestRef = useRef(0);
 
   useEffect(() => {

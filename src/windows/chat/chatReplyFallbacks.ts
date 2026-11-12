@@ -40,8 +40,9 @@ export class ChatReplyFallbacks<T> {
     this.pending.set(slot, entry);
   }
 
-  canonical(msgId: string, normalizedHash: string): Array<{ source: ReplySource; payload: T }> {
-    const exact = [...this.pending].filter(([, entry]) => entry.identity.msgId === msgId);
+  canonical(msgId: string, normalizedHash: string, requestId?: string): Array<{ source: ReplySource; payload: T }> {
+    const exact = [...this.pending].filter(([slot, entry]) => entry.identity.msgId === msgId
+      && (!requestId || !slot.startsWith('dc-') || slot === requestId));
     const legacy = [...this.pending].filter(([, entry]) => !entry.identity.msgId
       && entry.identity.allowLegacyHash !== false && matchesCorrelation(entry.identity, msgId, normalizedHash));
     const candidates = exact.length ? exact : legacy.length === 1 ? legacy : [];

@@ -25,6 +25,12 @@ export interface ClientConfig {
 }
 
 let configPromise: Promise<ClientConfig> | null = null;
+const configListeners = new Set<() => void>();
+
+export function onClientConfigChange(listener: () => void): () => void {
+  configListeners.add(listener);
+  return () => { configListeners.delete(listener); };
+}
 
 export function getClientConfig(): Promise<ClientConfig> {
   if (!configPromise) {
@@ -38,4 +44,5 @@ export function getClientConfig(): Promise<ClientConfig> {
 // 连接设置页保存新配置后调用，使下次 getClientConfig() 重新从 Rust 侧读取。
 export function invalidateClientConfig() {
   configPromise = null;
+  configListeners.forEach(listener => listener());
 }

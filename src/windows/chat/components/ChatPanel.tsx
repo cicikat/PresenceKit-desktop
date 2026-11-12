@@ -28,7 +28,7 @@ import { downloadChatArtifact, normalizeChatArtifacts, previewChatArtifact } fro
 import { TurnReasoningCache, attachCanonicalTurn } from '../../../shared/api/turnReasoningState';
 import { VoiceMessageBar } from './VoiceMessageBar';
 import { loadChatLogDates, loadChatLogDay } from '../../../shared/api/backend';
-import { getClientConfig } from '../../../shared/api/config';
+import { getClientConfig, onClientConfigChange } from '../../../shared/api/config';
 import { classifyHttpError } from '../../../shared/api/httpError';
 import { dreamGetState } from '../../../shared/api/dream';
 import { wsClient } from '../../../shared/api/ws';
@@ -59,7 +59,8 @@ import { createLatestTimer } from '../chatTimer';
 import { bindHttpReplyIdentity, matchesHistoryReplay } from '../httpReplyIdentity';
 import { ChatReplyFallbacks, type ReplySource } from '../chatReplyFallbacks';
 import { ChatRequests, type ChatRequestToken } from '../chatRequests';
-import { deliveryFromReceipt, newChatRequestId, nextChatDelivery, pendingChatIds, rememberChatRequest, safeChatPrefix, type ChatDelivery } from '../chatReconciliation';
+import { advanceChatRecovery, chatRecoveryView, deliveryFromReceipt, isTerminalDelivery, newChatRequestId, pendingChatIds, recoveredReply, rememberChatRequest, requestForCanonicalReply, safeChatPrefix, type ChatDelivery, type ReplyAvailability, type ReplyIdentity } from '../chatReconciliation';
+import { ChatReceiptPolling } from '../chatReceiptPolling';
 import { historyAssistantParts } from '../chatHistory';
 
 function splitReply(text: string): string[] {
@@ -135,6 +136,8 @@ interface ChatMsg {
   role: 'user' | 'assistant' | 'system' | 'divider' | 'raw_fallback' | 'no_more';
   attachmentPreview?: string;
   delivery?: ChatDelivery;
+  replyAvailability?: ReplyAvailability;
+  replyIdentity?: ReplyIdentity;
   retryDraft?: { text: string; attachments: DraftAttachment[]; quote?: { text: string; time: number; messageId?: string } };
   text: string;
   time: number;
@@ -611,16 +614,25 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
   useEffect(() => avatarStore.subscribe(setAvatars), []);
 
   const [messages, setMessages] = useState<ChatMsg[]>([]);
-  const requestQueries = useRef(new Set<string>());
+  const receiptScope = useRef<{ backend: string; journal: string; charId: string } | undefined>(undefined);
+  const receiptPolling = useRef<ChatReceiptPolling | undefined>(undefined);
+  const canonicalRequests = useRef(new Map<string, string>());
+  const recoveryIdentities = useRef(new Map<string, ReplyIdentity>());
   const replacedRequests = useRef(new Map<string, string>());
   const streamByRequest = useRef(new Map<string, string>());
-  const updateDelivery = useCallback((id: string, delivery: ChatDelivery) => {
-    setMessages(previous => previous.map(item => item.id === id && item.delivery
-      ? { ...item, delivery: nextChatDelivery(item.delivery, delivery),
-          retryDraft: delivery === 'completed' || delivery === 'failed' ? undefined : item.retryDraft }
-      : item));
-    if (delivery === 'completed' || delivery === 'failed' || delivery === 'not_executed') {
-      void getClientConfig().then(({ backendBase }) => rememberChatRequest(localStorage, backendBase, id, false));
+  const updateDelivery = useCallback((id: string, delivery: ChatDelivery, availability?: ReplyAvailability, identity?: ReplyIdentity) => {
+    setMessages(previous => previous.map(item => {
+      if (item.id !== id || !item.delivery) return item;
+      const next = advanceChatRecovery(item, delivery, availability, identity);
+      return { ...item, ...next,
+        retryDraft: next.delivery && isTerminalDelivery(next.delivery) && next.delivery !== 'not_executed' ? undefined : item.retryDraft };
+    }));
+    if (isTerminalDelivery(delivery)) receiptPolling.current?.finish(id);
+    if (availability === 'rendered') recoveryIdentities.current.delete(id);
+    const scope = receiptScope.current;
+    if (scope && (availability === 'rendered' || delivery === 'failed' || delivery === 'not_executed')) {
+      rememberChatRequest(localStorage, scope.journal, id, false);
+      rememberChatRequest(localStorage, scope.backend, id, false); // legacy journal
     }
   }, []);
   useEffect(() => wsClient.on('tool_activity', activity => {
@@ -906,22 +918,34 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
     source: ReplySource,
     token?: ChatRequestToken,
   ) => {
-    const { msgId, canonicalTurnId } = bindHttpReply(response);
     if (token) {
       if (!chatRequests.isCurrent(token)) return;
+    }
+    const { msgId, canonicalTurnId, fromHistory } = bindHttpReply(response);
+    const requestId = token?.id ?? response.request_id;
+    const markRendered = () => {
+      if (requestId) updateDelivery(requestId, 'completed', 'rendered', response);
+    };
+    if (token) {
       chatRequests.bind(token, msgId);
       if (chatRequests.size > 1) replyFallbacks.disableLegacySendMatching();
     }
     const artifacts = normalizeChatArtifacts(response.artifacts);
+    if (requestId) {
+      setBoundedMapEntry(recoveryIdentities.current, requestId, { msg_id: response.msg_id, turn_id: response.turn_id }, MAX_WS_MSG_ID_MAPPINGS);
+      updateDelivery(requestId, 'completed', 'recoverable', response);
+    }
     if (!String(response.reply ?? '').trim() && !artifacts?.length) {
+      if (requestId) updateDelivery(requestId, 'completed', fromHistory ? 'rendered' : 'unavailable', response);
       if (msgId) chatRequests.streamEnd(msgId);
       if (source === 'wake') setWakeLoading(false);
       else if (token) chatRequests.settle(token);
       return;
     }
     const normalizedHash = normalizeForDedup(response.reply);
-    const allowLegacyHash = token ? chatRequests.allowsLegacyHash(token) : true;
-    if (msgId && hasRegisteredMessage(wsMsgIdToLocalIdsRef.current, msgId)) {
+    const allowLegacyHash = !requestId && (token ? chatRequests.allowsLegacyHash(token) : true);
+    if (fromHistory || (msgId && hasRegisteredMessage(wsMsgIdToLocalIdsRef.current, msgId))) {
+      markRendered();
       if (source === 'wake') setWakeLoading(false);
       else if (token) chatRequests.settle(token);
       return;
@@ -936,12 +960,13 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
         else if (token) chatRequests.settle(token);
       };
       const wsRenderedAt = recentWSContentHashesRef.current.get(normalizedHash);
-      const alreadyRendered = msgId
+      const alreadyRendered = (canonicalTurnId && historyLocalIdsByTurnRef.current.has(canonicalTurnId)) || (msgId
         ? hasRegisteredMessage(wsMsgIdToLocalIdsRef.current, msgId)
-        : wsRenderedAt !== undefined && Date.now() - wsRenderedAt < 30_000;
-      if (alreadyRendered) { clearWaiting(); return; }
+        : allowLegacyHash && wsRenderedAt !== undefined && Date.now() - wsRenderedAt < 30_000);
+      if (alreadyRendered) { markRendered(); clearWaiting(); return; }
       if (msgId && streamingLocalIdRef.current.has(msgId)) {
         replaceStreamRef.current?.(msgId, reply, normalizedHash, artifacts);
+        markRendered();
         clearWaiting();
         return;
       }
@@ -955,28 +980,45 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       if (msgId) setBoundedMapEntry(wsMsgIdToLocalIdsRef.current, msgId, fallbackIds, MAX_WS_MSG_ID_MAPPINGS);
       clearWaiting();
       scheduleAssistantSegmentsRef.current?.(reply, undefined, fallbackIds, undefined, canonicalTurnId, artifacts);
+      markRendered();
       console.log('[chat] appendSource: fallback | loadingSource:', sourceKind, '| msg_id:', msgId ?? '(none)');
     }, token?.id ?? response.request_id);
-  }, [bindHttpReply, chatRequests, replyFallbacks]);
+  }, [bindHttpReply, chatRequests, replyFallbacks, updateDelivery]);
 
-  const reconcileChat = useCallback(async (id: string) => {
-    if (requestQueries.current.has(id)) return;
-    requestQueries.current.add(id);
+  const reconcileChat = useCallback(async (id: string, current: () => boolean) => {
+    const scope = receiptScope.current;
+    const isCurrent = () => current() && mountedRef.current && receiptScope.current === scope
+      && getActiveCharacterInfo().id === scope?.charId;
+    if (!scope || !isCurrent() || canonicalRequests.current.has(id)) return true;
     try {
-      const receipt = await getChatRequest(id);
-      if (!mountedRef.current) return;
+      const receipt = await getChatRequest(id, scope.journal);
+      if (!isCurrent()) return true;
+      if (!receipt) return false; // another WebView is reading this receipt
       const delivery = deliveryFromReceipt(id, receipt);
-      updateDelivery(id, delivery);
+      let recoveringBody = false;
       if (delivery === 'completed') {
-        chatRequests.release(id);
-        streamByRequest.current.delete(id);
-        if (receipt.result && safeChatPrefix(receipt.result.reply) === receipt.result.reply) {
-          queueHttpReply(receipt.result, 'send');
+        const { identity, result } = recoveredReply(id, receipt);
+        const claimedByOther = identity.msg_id && [...canonicalRequests.current].some(
+          ([request, msgId]) => request !== id && msgId === identity.msg_id);
+        if (claimedByOther) {
+          updateDelivery(id, 'completed', 'unavailable');
+          chatRequests.release(id);
+          return true;
         }
-      } else if (delivery === 'failed') {
+        recoveringBody = Boolean(result && (result.reply.trim() || normalizeChatArtifacts(result.artifacts)?.length));
+        const { msgId, fromHistory } = bindHttpReply(identity);
+        setBoundedMapEntry(recoveryIdentities.current, id, identity, MAX_WS_MSG_ID_MAPPINGS);
+        const rendered = fromHistory || Boolean(msgId && hasRegisteredMessage(wsMsgIdToLocalIdsRef.current, msgId));
+        updateDelivery(id, 'completed', rendered ? 'rendered' : recoveringBody ? 'recoverable' : 'unavailable', identity);
+        if (result && recoveringBody && !rendered) queueHttpReply(result, 'send');
+      } else {
+        updateDelivery(id, delivery);
+      }
+      if (isTerminalDelivery(delivery)) {
+        chatRequests.release(id);
         const msgId = streamByRequest.current.get(id);
-        if (msgId) {
-          streamByRequest.current.delete(id);
+        streamByRequest.current.delete(id);
+        if (msgId && !recoveringBody) {
           chatRequests.streamEnd(msgId);
           const bubbleIds = streamingLocalIdRef.current.get(msgId) ?? [];
           streamingLocalIdRef.current.delete(msgId);
@@ -984,32 +1026,58 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
           setMessages(previous => previous.filter(item => !bubbleIds.includes(item.id)));
         }
       }
+      return isTerminalDelivery(delivery);
     } catch {
-      // An old server or a failed read leaves the original execution unresolved.
-      if (mountedRef.current) updateDelivery(id, 'unknown');
-    } finally {
-      requestQueries.current.delete(id);
+      // The original POST remains unresolved after a failed read.
+      if (isCurrent()) updateDelivery(id, 'unknown');
+      return false;
     }
-  }, [chatRequests, queueHttpReply, updateDelivery]);
+  }, [bindHttpReply, chatRequests, queueHttpReply, updateDelivery]);
 
   useEffect(() => {
     let active = true;
+    const polling = new ChatReceiptPolling(reconcileChat, id => updateDelivery(id, 'unknown'));
+    receiptPolling.current = polling;
     const recover = async () => {
       const { backendBase } = await getClientConfig();
       if (!active) return;
-      const ids = pendingChatIds(localStorage, backendBase);
+      const charId = getActiveCharacterInfo().id;
+      if (receiptScope.current && receiptScope.current.charId !== charId) return;
+      const journal = JSON.stringify([backendBase, charId]);
+      receiptScope.current ??= { backend: backendBase, journal, charId };
+      const ids = [...new Set([...pendingChatIds(localStorage, backendBase), ...pendingChatIds(localStorage, journal)])]
+        .filter(id => !canonicalRequests.current.has(id));
       setMessages(previous => [...previous, ...ids
         .filter(id => !previous.some(item => item.id === id))
         .map(id => ({ id, role: 'user' as const, text: t('chat.send.recovered'),
           time: Number(id.split('-')[1]), delivery: 'unknown' as const }))]);
-      for (const id of ids) if (!chatRequests.has(id)) void reconcileChat(id);
+      for (const id of ids) if (!chatRequests.has(id)) polling.observe(id);
+    };
+    const cancel = () => {
+      active = false;
+      receiptScope.current = undefined;
+      polling.clear();
     };
     void recover();
+    const unsubConfig = onClientConfigChange(cancel);
     const unsubscribe = wsClient.on('state', connection => {
       if (connection === 'connected') void recover();
     });
-    return () => { active = false; unsubscribe(); };
-  }, [chatRequests, reconcileChat, t]);
+    return () => { cancel(); unsubConfig(); unsubscribe(); };
+  }, [chatRequests, reconcileChat, t, updateDelivery]);
+
+  const reconcileHistory = useCallback(() => {
+    // Binding refreshes the bounded map's insertion order; iterate a snapshot.
+    for (const [msgId, turnId] of [...canonicalTurnsRef.current]) {
+      if (historyLocalIdsByTurnRef.current.has(turnId)) bindHttpReply({ msg_id: msgId, turn_id: turnId });
+    }
+    for (const [id, identity] of recoveryIdentities.current) {
+      if (identity.turn_id && historyLocalIdsByTurnRef.current.has(identity.turn_id)) {
+        bindHttpReply(identity);
+        updateDelivery(id, 'completed', 'rendered', identity);
+      }
+    }
+  }, [bindHttpReply, updateDelivery]);
 
   // Dream 打开期间屏蔽 channel_message
   const dreamActiveRef = useRef(dreamActive);
@@ -1036,7 +1104,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
   // ── 启动加载 ─────────────────────────────────────────────────────────────
 
   // 可重入：首次挂载调用一次；historyStatus 落入 error 后，WS connected / 轮询兜底会再次调用。
-  const init = useCallback(async () => {
+  const init = useCallback(async (refreshOnly = false) => {
     if (initInFlightRef.current) return;
     initInFlightRef.current = true;
     const mounted = () => mountedRef.current;
@@ -1049,7 +1117,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       const dates = availableDatesRef.current;
 
       if (dates.length === 0) {
-        setMessages(previous => previous.filter(item => item.delivery));
+        setMessages(previous => previous.filter(item => item.delivery || (item.role === 'assistant' && !item.isStreaming)));
         setHistoryStatus({ kind: 'empty' });
         noMoreHistoryRef.current = true;
         setNoMoreHistory(true);
@@ -1103,13 +1171,17 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       const historyAssistantCount = msgs.filter(m => m.role === 'assistant').length;
       console.log('[chat] appendSource: history-replay | phase: init | assistantBubbles:', historyAssistantCount, '| totalMsgs:', msgs.length);
       setMessages(previous => {
+        const historyTurns = new Set(msgs.filter(item => item.role === 'assistant').map(item => item.turnId).filter(Boolean));
+        const merged = [...msgs];
         const pendingTools = previous.filter(item => item.toolActivities || item.delivery);
+        const liveReplies = previous.filter(item => item.role === 'assistant' && !item.isStreaming
+          && (item.wsMsgId || item.turnId) && !historyTurns.has(item.turnId));
         for (const pending of pendingTools) {
           const saved = msgs.find(item => item.id === pending.id);
           if (saved) for (const activity of pending.toolActivities ?? []) saved.toolActivities = mergeToolActivity(saved.toolActivities ?? [], activity);
-          else msgs.push(pending);
+          else merged.push(pending);
         }
-        return msgs;
+        return [...merged, ...liveReplies];
       });
 
       // Register canonical turn IDs and hashes for WS cross-path dedup.
@@ -1132,11 +1204,12 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       historyIdsByTurn.forEach((ids, turnId) => {
         setBoundedMapEntry(historyLocalIdsByTurnRef.current, turnId, ids, MAX_WS_MSG_ID_MAPPINGS);
       });
+      reconcileHistory();
 
       setHistoryStatus({ kind: 'ok' });
 
       // Phase 2B: 拉取重开问候，每次 window/page session 仅触发一次
-      if (!_desktopWakeFired) {
+      if (!refreshOnly && !_desktopWakeFired) {
         _desktopWakeFired = true;
 
         // 10min 去抖：跨刷新/重开窗口存活，排除「重登 / F5」误触发的重开问候。
@@ -1171,7 +1244,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
     } finally {
       initInFlightRef.current = false;
     }
-  }, []);
+  }, [reconcileHistory]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -1287,6 +1360,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       historyIdsByTurn.forEach((ids, turnId) => {
         setBoundedMapEntry(historyLocalIdsByTurnRef.current, turnId, ids, MAX_WS_MSG_ID_MAPPINGS);
       });
+      reconcileHistory();
 
       // 补偿滚动位置
       requestAnimationFrame(() => {
@@ -1568,8 +1642,16 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
     // 先开前端后开后端：历史加载在 WS 就绪前失败后，一旦后端真的活了（WS connected）
     // 就重拉一次历史，而不是永远停在 error 空白页。
     const unsubWsState = wsClient.on('state', (connState) => {
-      if (connState === 'connected' && historyStatusRef.current.kind === 'error') {
-        void init();
+      if (connState === 'disconnected') {
+        const scope = receiptScope.current;
+        if (scope) {
+          for (const id of pendingChatIds(localStorage, scope.journal)) {
+            if (chatRequests.has(id)) receiptPolling.current?.observe(id);
+          }
+        }
+      }
+      if (connState === 'connected' && (historyStatusRef.current.kind === 'error' || recoveryIdentities.current.size > 0)) {
+        void init(historyStatusRef.current.kind !== 'error');
       }
     });
 
@@ -1578,6 +1660,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       const { content, msg_id, source, sticker } = message;
       if (typeof content === 'string' && safeChatPrefix(content) !== content) return;
       const artifacts = normalizeChatArtifacts(message.artifacts);
+      if (!content.trim() && !sticker && !artifacts?.length) return;
       // Defense: only consume reality messages (source field added P0; old server = no source = reality).
       if (source && source !== 'reality') return;
       pruneStalePendingSegments(pendingSegmentsByMsgIdRef.current);
@@ -1585,16 +1668,20 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       let duplicateDropped = false;
       const normalizedHash = normalizeForDedup(content || sticker?.data_url || artifacts?.[0]?.id || '');
 
-      for (const settled of replyFallbacks.canonical(msg_id, normalizedHash)) {
+      for (const settled of replyFallbacks.canonical(msg_id, normalizedHash, message.request_id)) {
         duplicateDropped = true;
         if (settled.source === 'wake') setWakeLoading(false);
         else if (settled.payload.token) chatRequests.settle(settled.payload.token);
       }
       chatRequests.canonical(msg_id);
-      if (message.request_id) {
-        updateDelivery(message.request_id, 'completed');
-        chatRequests.release(message.request_id);
-        streamByRequest.current.delete(message.request_id);
+      const requestId = requestForCanonicalReply(msg_id, message.request_id, recoveryIdentities.current);
+      if (requestId) {
+        setBoundedMapEntry(canonicalRequests.current, requestId, msg_id, MAX_WS_MSG_ID_MAPPINGS);
+        updateDelivery(requestId, 'completed', 'rendered', {
+          msg_id, turn_id: canonicalTurnsRef.current.get(msg_id),
+        });
+        chatRequests.release(requestId);
+        streamByRequest.current.delete(requestId);
       }
 
       // Check if a fallback was already rendered (timer fired before WS arrived).
@@ -1636,7 +1723,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       const _wsNow = Date.now();
       recentHistoryHashesRef.current.forEach((ts, h) => { if (_wsNow - ts > 30_000) recentHistoryHashesRef.current.delete(h); });
       if (matchesHistoryReplay(canonicalTurnsRef.current.get(msg_id), historyLocalIdsByTurnRef.current,
-        recentHistoryHashesRef.current.has(normalizedHash))) {
+        !message.request_id && !requestId && recentHistoryHashesRef.current.has(normalizedHash))) {
         pendingSegmentsByMsgIdRef.current.delete(msg_id);
         console.log('[chat] appendSource: history-ws-dedup | msg_id:', msg_id, '| normalizedHash:', normalizedHash, '| textPreview:', content.slice(0, 40));
         return;
@@ -1874,8 +1961,11 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
   useEffect(() => () => inputTimer.current.cancel(), [engine]);
 
   const rememberPending = async (requestId: string) => {
-    const { backendBase } = await getClientConfig();
-    rememberChatRequest(localStorage, backendBase, requestId, true);
+    await getClientConfig();
+    const scope = receiptScope.current;
+    if (!scope || scope.charId !== getActiveCharacterInfo().id || !mountedRef.current) return false;
+    rememberChatRequest(localStorage, scope.journal, requestId, true);
+    return true;
   };
 
   const send = async (retry?: ChatMsg) => {
@@ -1901,13 +1991,19 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
     chatSessionMetrics.recordTurn();
     engine.setLocalFocus('想事情');
     try {
-      await rememberPending(userId);
+      if (!await rememberPending(userId) || !chatRequests.isCurrent(token)) return;
       const response = await sendChat(t, replyTo, undefined, undefined, userId);
-      if (!mountedRef.current || !chatRequests.isCurrent(token)) return;
+      if (!mountedRef.current || !receiptScope.current) return;
       if (safeChatPrefix(response.reply) !== response.reply || (response.request_id && response.request_id !== userId)) {
         throw new Error('Invalid chat response');
       }
-      updateDelivery(userId, 'completed');
+      if (!chatRequests.isCurrent(token)) {
+        if (response.msg_id && canonicalRequests.current.get(userId) === response.msg_id) bindHttpReply(response);
+        else if (recoveryIdentities.current.has(userId) && !canonicalRequests.current.has(userId)) {
+          queueHttpReply({ ...response, request_id: userId }, 'send');
+        }
+        return;
+      }
       queueHttpReply(response, 'send', token);
     } catch (err) {
       if (!mountedRef.current || !chatRequests.settle(token)) return;
@@ -1917,7 +2013,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
         setMessages(prev => [...prev, { id: newId(), role: 'system', text, time: Date.now() }]);
       } else {
         updateDelivery(userId, 'unknown');
-        void reconcileChat(userId);
+        receiptPolling.current?.observe(userId);
       }
     }
   };
@@ -1955,20 +2051,26 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
     engine.setLocalFocus('想事情');
     try {
       const message = quote ? t('chat.attachments.replyPrefix') + '\n' + truncateForReplyTo(quote.text) + '\n\n' + userMessage : userMessage;
-      await rememberPending(userId);
+      if (!await rememberPending(userId) || !chatRequests.isCurrent(token)) return;
       const resp = await uploadDocument(submitted.map(({ filePath, filename, dataB64 }) => ({ filePath, filename, dataB64 })), message, userId);
-      if (!mountedRef.current || !chatRequests.isCurrent(token)) return;
+      if (!mountedRef.current || !receiptScope.current) return;
       if (safeChatPrefix(resp.reply) !== resp.reply || (resp.request_id && resp.request_id !== userId)) {
         throw new Error('Invalid chat response');
       }
-      updateDelivery(userId, 'completed');
+      if (!chatRequests.isCurrent(token)) {
+        if (resp.msg_id && canonicalRequests.current.get(userId) === resp.msg_id) bindHttpReply(resp);
+        else if (recoveryIdentities.current.has(userId) && !canonicalRequests.current.has(userId)) {
+          queueHttpReply({ ...resp, request_id: userId }, 'upload');
+        }
+        return;
+      }
       queueHttpReply(resp, 'upload', token);
     } catch (err: unknown) {
       if (!mountedRef.current || !chatRequests.settle(token)) return;
       if (err === 'CHAT_NOT_EXECUTED') updateDelivery(userId, 'not_executed');
       else {
         updateDelivery(userId, 'unknown');
-        void reconcileChat(userId);
+        receiptPolling.current?.observe(userId);
       }
     }
   };
@@ -2189,9 +2291,14 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
               onPreviewArtifact={onPreviewArtifact}
             />}
             {m.delivery && <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'center', color: 'var(--ink-3)' }}>
-              <span role="status">{t(`chat.delivery.${m.delivery}`)}</span>
-              {(m.delivery === 'unknown' || m.delivery === 'processing') && <button type="button" onClick={() => void reconcileChat(m.id)}>{t('chat.send.checkResult')}</button>}
-              {m.delivery === 'not_executed' && m.retryDraft && <button type="button" disabled={preparing || chatRequests.has(m.id)} onClick={() => void send(m)}>{t('chat.send.retry')}</button>}
+              <span role="status" title={m.replyAvailability === 'unavailable'
+                ? [m.id, m.replyIdentity?.turn_id, m.replyIdentity?.msg_id].filter(Boolean).join(' · ')
+                : undefined}>{t(chatRecoveryView(m).statusKey)}</span>
+              {chatRecoveryView(m).checkResult && <button type="button" onClick={() => {
+                  receiptPolling.current?.check(m.id);
+                  if (m.replyAvailability === 'unavailable') void init(true);
+                }}>{t('chat.send.checkResult')}</button>}
+              {chatRecoveryView(m).retry && m.retryDraft && <button type="button" disabled={preparing || chatRequests.has(m.id)} onClick={() => void send(m)}>{t('chat.send.retry')}</button>}
             </div>}
           </div>
         ))}

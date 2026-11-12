@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { deliveryFromReceipt, nextChatDelivery, pendingChatIds, rememberChatRequest, safeChatPrefix } from './chatReconciliation';
+import { advanceChatRecovery, chatRecoveryView, deliveryFromReceipt, nextChatDelivery, pendingChatIds, recoveredReply, rememberChatRequest, requestForCanonicalReply, safeChatPrefix } from './chatReconciliation';
+import { bindHttpReplyIdentity } from './httpReplyIdentity';
 
 const id = 'dc-1794450000000-1234567890abcdef1234567890abcdef';
 const other = 'dc-1794450000001-1234567890abcdef1234567890abcdef';
@@ -14,9 +15,66 @@ describe('desktop chat reconciliation', () => {
 
   it('keeps unverified or uncorrelated responses unknown, including after restart', () => {
     expect(deliveryFromReceipt(id, { request_id: other, status: 'completed' })).toBe('unknown');
-    expect(deliveryFromReceipt(id, { request_id: id, status: 'interrupted_unknown' })).toBe('unknown');
+    expect(deliveryFromReceipt(id, { request_id: id, status: 'interrupted_unknown' })).toBe('interrupted_unknown');
     expect(deliveryFromReceipt(id, { request_id: id, status: 'unknown' })).toBe('unknown');
     expect(deliveryFromReceipt(id, { request_id: id, status: 'failed' })).toBe('failed');
+  });
+
+  it('keeps completed without a body locatable and only offers a read-only check', () => {
+    const reply = recoveredReply(id, { request_id: id, status: 'completed', msg_id: 'wire', turn_id: 'turn' });
+    const state = advanceChatRecovery({ delivery: 'unknown' }, 'completed', 'unavailable', reply.identity);
+    expect(reply.result).toBeUndefined();
+    expect(state.replyIdentity).toEqual({ msg_id: 'wire', turn_id: 'turn' });
+    expect(chatRecoveryView(state)).toEqual({ statusKey: 'chat.reply.unavailable', checkResult: true, retry: false });
+    expect(chatRecoveryView({ delivery: 'completed' }).retry).toBe(false);
+  });
+
+  it('converges a bodyless completion with canonical history without another bubble', () => {
+    const identity = { msg_id: 'wire', turn_id: 'turn' };
+    const rendered = new Map([['wire', ['live-bubble']]]);
+    const history = new Map([['turn', ['history-bubble']]]);
+    const binding = bindHttpReplyIdentity(identity, new Map(), rendered, new Map(), 200, history);
+    expect(binding.fromHistory).toBe(true);
+    expect(binding.supersededLocalIds).toEqual(['live-bubble']);
+    expect(rendered.get('wire')).toEqual(['history-bubble']);
+    const state = advanceChatRecovery({ delivery: 'completed', replyAvailability: 'unavailable', replyIdentity: identity },
+      'completed', 'rendered', { msg_id: 'wire' });
+    expect(chatRecoveryView(state)).toEqual({ statusKey: 'chat.delivery.completed', checkResult: false, retry: false });
+    expect(state.replyIdentity).toEqual(identity);
+    expect(advanceChatRecovery(state, 'processing')).toBe(state);
+    expect(advanceChatRecovery(state, 'completed', 'unavailable').replyAvailability).toBe('rendered');
+  });
+
+  it('binds a recoverable result to the receipt and rejects conflicting IDs or control text', () => {
+    const result = { reply: 'Visible reply', emotion: 'neutral', msg_id: 'wire', turn_id: 'turn' };
+    expect(recoveredReply(id, { request_id: id, status: 'completed', result }).result)
+      .toEqual({ ...result, request_id: id });
+    for (const invalid of [
+      { ...result, request_id: other }, { ...result, msg_id: 'other-wire' },
+      { ...result, turn_id: 'other-turn' }, { ...result, reply: 'Visible __TOOL_CALL__:[]' },
+    ]) {
+      expect(recoveredReply(id, { request_id: id, status: 'completed', msg_id: 'wire', turn_id: 'turn', result: invalid }).result).toBeUndefined();
+    }
+    expect(recoveredReply(id, { request_id: other, status: 'completed', result }).result).toBeUndefined();
+  });
+
+  it('does not associate a different request through a reused canonical message ID', () => {
+    const identities = new Map([[id, { msg_id: 'wire', turn_id: 'turn' }]]);
+    expect(requestForCanonicalReply('wire', undefined, identities)).toBe(id);
+    expect(requestForCanonicalReply('wire', id, identities)).toBe(id);
+    expect(requestForCanonicalReply('wire', other, identities)).toBeUndefined();
+    expect(requestForCanonicalReply('other-wire', id, identities)).toBeUndefined();
+  });
+
+  it.each(['failed', 'interrupted_unknown', 'unknown'] as const)('never offers send retry for %s', status => {
+    const delivery = deliveryFromReceipt(id, { request_id: id, status });
+    expect(chatRecoveryView({ delivery }).retry).toBe(false);
+    expect(recoveredReply(id, { request_id: id, status, result: { reply: 'untrusted', emotion: 'neutral' } }).result).toBeUndefined();
+    expect(nextChatDelivery(delivery, 'unknown')).toBe(delivery);
+  });
+
+  it('offers a new request only after the server explicitly confirms not_executed', () => {
+    expect(chatRecoveryView({ delivery: deliveryFromReceipt(id, { request_id: id, status: 'not_executed' }) }).retry).toBe(true);
   });
 
   it('recovers only pending identities for the same backend from shared storage', () => {

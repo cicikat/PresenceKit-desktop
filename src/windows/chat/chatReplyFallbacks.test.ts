@@ -6,6 +6,17 @@ afterEach(() => vi.useRealTimers());
 const sources = (settled: Array<{ source: string }>) => settled.map(entry => entry.source);
 
 describe('shared HTTP fallback lifecycle', () => {
+  it('does not let another request cancel a receipt fallback even with the same message ID', () => {
+    vi.useFakeTimers();
+    const state = new ChatReplyFallbacks<string>();
+    const render = vi.fn();
+    const id = 'dc-1794450000000-1234567890abcdef1234567890abcdef';
+    state.defer('send', { msgId: 'wire', normalizedHash: 'same', allowLegacyHash: false }, 'recovered', 3000, render, id);
+    expect(state.canonical('wire', 'same', 'dc-other-request')).toEqual([]);
+    vi.runAllTimers();
+    expect(render).toHaveBeenCalledExactlyOnceWith('recovered', 'send');
+  });
+
   it.each(['send', 'upload', 'wake'] as const)('HTTP-first: canonical cancels %s exactly once', source => {
     vi.useFakeTimers();
     const state = new ChatReplyFallbacks<string>();
