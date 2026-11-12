@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react';
-import { getAgentSessionStatus, type AgentSessionStatus } from '../api/computer-use';
+import { controlAgentSession, getAgentSessionStatus, type AgentSessionStatus } from '../api/computer-use';
 import { useI18n } from '../i18n';
 import { useComputerUse } from './useComputerUse';
 
-const running = new Set(['created', 'planning', 'acting', 'observing', 'waiting_user', 'paused']);
+const working = new Set(['created', 'planning', 'acting', 'observing']);
+const running = new Set([...working, 'waiting_user', 'paused', 'paused_by_owner', 'paused_budget', 'paused_device']);
 
 export function AgentSessionIndicator({ compact = false }: { compact?: boolean }) {
   const { t } = useI18n();
   const { status: local, control } = useComputerUse();
   const [session, setSession] = useState<AgentSessionStatus | null>(null);
+  const [pending, setPending] = useState(false);
+  const [controlFailed, setControlFailed] = useState(false);
   useEffect(() => {
     let mounted = true;
     let timer: number;
@@ -42,6 +45,20 @@ export function AgentSessionIndicator({ compact = false }: { compact?: boolean }
   const reason = session?.last_error_code === 'session_failure_budget' ? t('computerUse.agent.failureBudget')
     : session?.last_error_code === 'session_execution_budget' || session?.last_error_code === 'session_time_budget'
       ? t('computerUse.agent.executionBudget') : '';
+  const changeSession = async (action: 'pause' | 'resume') => {
+    if (!session?.session_id) return;
+    setPending(true);
+    setControlFailed(false);
+    try {
+      const value = await controlAgentSession(session.session_id, action);
+      setSession(value);
+      setControlFailed(action === 'resume' ? value.can_resume === true : value.status !== 'paused_by_owner');
+    } catch {
+      setControlFailed(true);
+    } finally {
+      setPending(false);
+    }
+  };
   return (
     <section aria-label={t('computerUse.agent')} data-agent-session style={{
       display: 'flex', alignItems: 'center', gap: 8, padding: '5px 9px', fontSize: compact ? 11 : 12,
@@ -50,7 +67,18 @@ export function AgentSessionIndicator({ compact = false }: { compact?: boolean }
         : { zIndex: 1, color: 'var(--ink)', background: 'var(--paper-2)' }),
     }}>
       <strong>{t('computerUse.agent')}</strong>
-      <span role="status">{summary}{reason ? ` · ${reason}` : ''}</span>
+      <span role="status">{summary}{reason ? ` · ${reason}` : ''}
+        {phase === 'waiting_user' && session?.question ? ` · ${session.question}` : ''}
+        {controlFailed ? ` · ${t('computerUse.agent.controlFailed')}` : ''}
+      </span>
+      {session?.can_resume && (
+        <button type="button" disabled={pending || !active || local?.state === 'paused'}
+          onClick={() => void changeSession('resume')}>{t('computerUse.agent.continue')}</button>
+      )}
+      {!compact && active && session?.session_id && phase && working.has(phase) && (
+        <button type="button" disabled={pending}
+          onClick={() => void changeSession('pause')}>{t('computerUse.pause')}</button>
+      )}
       {active && (localTask || liveSession) && (
         <button type="button" onClick={() => void control('stop').catch(() => {})} style={{
           border: '1px solid currentColor', borderRadius: 5, padding: '2px 6px', color: 'inherit',

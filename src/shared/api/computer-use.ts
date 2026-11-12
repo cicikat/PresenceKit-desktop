@@ -25,10 +25,13 @@ export type ComputerUseBackendStatus = {
 export type AgentSessionStatus = {
   session_id?: string;
   status: 'created' | 'planning' | 'acting' | 'observing' | 'waiting_user' | 'paused' |
+    'paused_by_owner' | 'paused_budget' | 'paused_device' |
     'completed' | 'failed' | 'canceled' | 'expired' | 'outcome_unknown' | 'unavailable';
   last_error_code?: string | null;
   current_action?: string | null;
   updated_at?: number;
+  question?: string | null;
+  can_resume?: boolean;
 };
 
 export const getComputerUseWindows = () => invoke<WindowChoice[]>('computer_use_windows');
@@ -36,6 +39,8 @@ export const getComputerUseStatus = () => invoke<ComputerUseStatus>('computer_us
 export const getComputerUseBackendStatus = () =>
   invoke<ComputerUseBackendStatus>('computer_use_backend_status');
 export const getAgentSessionStatus = () => invoke<AgentSessionStatus>('computer_use_agent_status');
+export const controlAgentSession = (sessionId: string, action: 'pause' | 'resume' | 'cancel') =>
+  invoke<AgentSessionStatus>('computer_use_agent_control', { sessionId, action });
 export const openComputerUse = (scope: ComputerUseScope | null, durationSeconds: number, charId: string,
   cloudVision?: boolean, overlayLabel?: string) =>
   invoke<ComputerUseStatus>('computer_use_open', {

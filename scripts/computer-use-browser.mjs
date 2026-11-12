@@ -29,6 +29,10 @@ await page.addInitScript(() => {
     if (command === 'computer_use_status') return status;
     if (command === 'computer_use_backend_status') return backend;
     if (command === 'computer_use_agent_status') return session;
+    if (command === 'computer_use_agent_control' && args.action === 'resume') {
+      session = { ...session, status: 'planning', can_resume: false };
+      return session;
+    }
     if (command === 'computer_use_windows') return [{ id: { handle: 20, pid: 30, thread: 40, created: [1, 2] }, title: 'Test Notepad' }];
     if (command === 'computer_use_open') {
       status = { ...status, state: 'ready', scope: args.scope, cloud_vision: args.cloudVision ?? null,
@@ -72,6 +76,17 @@ try {
     window.setFixtureSession({ status: 'acting', updated_at: Date.now() / 1000 });
   });
   await page.locator('#pet').getByText('Operating', { exact: true }).waitFor();
+  await page.evaluate(() => window.setFixtureSession({
+    session_id: 'fixture-agent', status: 'waiting_user', question: 'Which document should I use?',
+  }));
+  await page.locator('#pet').getByText('Which document should I use?', { exact: false }).waitFor();
+  await page.evaluate(() => window.setFixtureSession({ session_id: 'fixture-agent', status: 'paused_budget', can_resume: true }));
+  const resumeTask = page.locator('#pet').getByRole('button', { name: 'Continue this task' });
+  await resumeTask.waitFor();
+  await resumeTask.evaluate(button => button.click());
+  await page.locator('#pet').getByText('Planning', { exact: true }).waitFor();
+  assert.ok(await page.evaluate(() => window.calls.some(call => call.command === 'computer_use_agent_control'
+    && call.args.action === 'resume' && call.args.sessionId === 'fixture-agent')));
   await page.locator('#pet').getByRole('button', { name: 'Stop' }).click();
   await page.locator('#pet').getByRole('button', { name: 'Stop' }).waitFor({ state: 'hidden' });
   await page.evaluate(() => window.setFixtureSession({ status: 'outcome_unknown', updated_at: Date.now() / 1000 }));

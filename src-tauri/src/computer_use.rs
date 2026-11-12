@@ -928,6 +928,38 @@ pub async fn computer_use_agent_status(
     backend_status(window, "/computer-use/agent-session").await
 }
 
+#[tauri::command]
+pub async fn computer_use_agent_control(
+    window: WebviewWindow,
+    session_id: String,
+    action: String,
+) -> Result<serde_json::Value, &'static str> {
+    if window.label() != "pet" {
+        check_control_window(&window)?;
+    }
+    if !matches!(action.as_str(), "resume" | "pause" | "cancel") {
+        return Err("invalid_control");
+    }
+    let cfg = crate::load_client_config(window.app_handle());
+    let url = crate::backend_url(&cfg, "/computer-use/agent-session/control");
+    let client = reqwest::Client::builder()
+        .no_proxy()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(Duration::from_secs(3))
+        .build()
+        .map_err(|_| "backend_unavailable")?;
+    let response = crate::authorized_request(&cfg, client.post(url))
+        .json(&serde_json::json!({"session_id": session_id, "action": action,
+            "request_id": random_id()?}))
+        .send()
+        .await
+        .map_err(|_| "backend_unavailable")?;
+    if !response.status().is_success() {
+        return Err("backend_denied");
+    }
+    response.json().await.map_err(|_| "backend_protocol_error")
+}
+
 async fn backend_status(
     window: WebviewWindow,
     path: &str,
