@@ -7,6 +7,14 @@ current：侧边漫画气泡不覆盖立绘，按工作区左右位置选边；�
 
 # docs/known-issues.md — 已知问题与技术债
 
+## 307 聊天恢复（2026-11-12，current / 原生联调 open）
+
+执行完成与正文恢复已分离；未知结果只读查询，只有 not_executed 允许新请求重试。638 项 Vitest、
+TypeScript、生产构建、cargo check 和真实 ChatPanel 的隔离浏览器场景通过。浏览器替换 Tauri/WS 外部边界，
+未覆盖真实 Windows/Tauri 断网重连、快速重启、HTTP 返回中断及 OrangeVPS 部署联调，这些仍 open。
+不支持 Web Locks 的旧 WebView 仅在单 WebView 内合并在途查询。Gmail 不在 307 范围。
+规则、红绿证据与复现入口见 [聊天恢复契约](chat-correlation.md)。
+
 ## 叶瑄眼图绑定修复（2026-10-28，current / 原生窗口observe）
 
 用户补充确认 hlr_yexuan_d5_20261027 后，原图对比复现06眼图与原生UV不匹配导致的重叠眼线/横条。已审计全部95个叶瑄目录，29个同类绑定逐项改为经过验证的兼容原始00图，含帝国槽1、零之帝国槽2；其余66个不同布局不批量换图。保留MOC、原生动作/表情/物理与原始归档，新增纹理文件名并更新配置引用/来源清单；29个完整原副本已备份。311张原生表情近景目检、145组左右眼端点、825次实际动作开始事件、29次重载、5368处引用和4938个资产哈希通过；28项Python测试通过。alpha覆盖率不再自动接受眼部绑定，见 docs/hlr-reviewed-eye-bindings.json、hlr-recovery-workflow.md 第8节及 cc-tasks/2026-10-28-yexuan-eyes.md。取证在Core.update提交边界记录参数，帧后库恢复的保存值不代表实际绘制值。真实Tauri/GPU窗口仍observe；不是宣称所有皮肤/游戏合成均已完整恢复。其他角色和官方示例的11个目录继续保持移出，无跨端业务影响。
