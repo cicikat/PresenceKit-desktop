@@ -59,6 +59,13 @@
 .call-room__voice-error { color: #ffd2ca; background: #512a30b3; }
 .call-room__voice-status { color: #c9dceb; background: #243341a6; }
 
+.call-room__ambient-sound {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
 .call-room__camera-preview {
   position: absolute;
   top: 14px;

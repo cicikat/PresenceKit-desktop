@@ -815,3 +815,6 @@ DPR 画布、调色滤镜降采样、桌宠窗口 set-size 权限/LogicalSize、
 原生 Tauri 调试版通过隔离本机后端获得租约，在同一物理显示器的两个测试进程读取到 96 / 168 DPI，生成真实原生覆盖窗。168 DPI 复测确认四边渐变、中央透明，真实点击到达下方窗口。停止后销毁覆盖窗。浏览器夹具验证默认授权、高级选窗/时长、整个桌面、云端截图同意和 Agent 状态。物理 Esc、多显示器热插拔、真实模型驱动的 Windows 端到端和打包版仍待验收。
 
 AGENT-05 已用真实文本模型和原生桌面完成一次隔离记事本操作与保存，复读磁盘文件通过。聊天回复 16.69 秒，结束 30.82 秒。Edge 启动受执行环境限制，原生 Computer Use 无法可靠确定当前 URL，云端图标点击仍为 `observe`。物理 Esc、多屏、打包版、真实跨聊天改令仍待验证。
+
+
+313 (observe): camera exposure, reflections, microphone availability, Windows lock and power consumption await physical checks. Ambient brightness currently requires an open call camera.

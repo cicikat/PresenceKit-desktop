@@ -23,6 +23,8 @@ import { VnBubble } from './VnBubble';
 import { getActiveCharacterInfo, getActiveCharacterName, subscribeActiveCharacter } from '../../shared/activeCharacter';
 import { isSingleRealityMessage } from '../../shared/api/realityMessageScope';
 import { useVideoCallCamera } from './useVideoCallCamera';
+import { useAmbientLight } from './useAmbientLight';
+import { useAmbientSound } from './useAmbientSound';
 import { getTtsAutoPlay, getDesktopTtsEnabled } from '../../shared/api/runtimeSettings';
 import { listen } from '@tauri-apps/api/event';
 import { shouldUseCallAudio } from './callPresentationMode';
@@ -103,6 +105,8 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
 
   const voice = useContinuousCallVoice(onTranscript);
   const camera = useVideoCallCamera();
+  const ambient = useAmbientLight(camera.videoRef, camera.on);
+  const ambientSound = useAmbientSound();
   const cameraCharRef = useRef(getActiveCharacterInfo().id);
   useEffect(() => subscribeActiveCharacter(() => {
     const nextId = getActiveCharacterInfo().id;
@@ -244,9 +248,10 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
     if (voice.recording) {
       voice.stop();
     } else {
+      ambientSound.stop();
       await voice.start();
     }
-  }, [voice]);
+  }, [voice, ambientSound.stop]);
 
   // ── styles ────────────────────────────────────────────────────────────────
 
@@ -321,6 +326,12 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
         <div className="call-room__camera-preview" style={{ display: camera.on ? 'block' : 'none' }}>
           <video ref={camera.videoRef} autoPlay playsInline muted aria-label={t('room.call.camera.preview')} />
           <span>{camera.status}</span>
+          {camera.on && <label>
+            <input type="checkbox" checked={ambient.enabled}
+              onChange={event => ambient.setEnabled(event.currentTarget.checked)} />
+            {t('room.call.ambientLight.share')}
+          </label>}
+          {ambient.enabled && !ambient.available && <span>{t('room.call.ambientLight.waiting')}</span>}
         </div>
         <div className="call-room__presence" role="status">
           <span className="call-room__wave" aria-hidden="true"><i /><i /><i /><i /><i /></span>
@@ -361,6 +372,11 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
         )}
         {/* Status overlays float over the stage; in-flow they resized it (canvas flash/fold). */}
         {(voice.error || speechDraft) && <div role={voice.error ? 'alert' : 'status'} className={voice.error ? 'call-room__voice-error' : 'call-room__voice-status'}>{voice.error || `${t('room.call.voice.heard')}: ${speechDraft}`}</div>}
+        <label className="call-room__ambient-sound">
+          <input type="checkbox" disabled={voice.recording} checked={ambientSound.enabled}
+            onChange={event => ambientSound.setEnabled(event.currentTarget.checked)} />
+          {t('room.call.ambientSound.share')}
+        </label>
         {audioStatus && <div role="status" className="call-room__voice-status">{audioStatus}</div>}
       </div>
 
