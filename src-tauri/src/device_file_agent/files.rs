@@ -10,6 +10,10 @@ use std::path::{Component, Path, PathBuf};
 
 use super::{new_id, Grant};
 
+#[path = "discovery.rs"]
+mod discovery;
+pub use discovery::discover;
+
 pub const FILE_LIMIT: usize = 256 * 1024;
 const PAGE_LIMIT: usize = 8192;
 const EXTENSIONS: &[&str] = &[
@@ -300,7 +304,7 @@ fn target(grant: &Grant, relative: &str) -> Result<Target> {
     if relative.len() > 512 || grant.file.as_deref().is_some_and(|name| name != relative) {
         return Err("path_denied");
     }
-    let normalized = if grant.unrestricted { relative.replace('\\', "/") } else { relative.to_owned() };
+    let normalized = relative.replace('\\', "/");
     let path = Path::new(&normalized);
     if grant.unrestricted && path.is_absolute() {
         if normalized.split('/').any(|part| matches!(part, "." | "..")) {
@@ -413,6 +417,7 @@ pub fn inspect(grant: &Grant, path: &str, start: usize) -> Result<Value> {
     }
     Ok(
         json!({"path":path, "content":page, "start":start, "next":next,
+              "end":next.saturating_sub(1), "has_more":text.split_inclusive('\n').count() >= next,
               "sha256":hash(&data.bytes), "size":data.bytes.len()}),
     )
 }

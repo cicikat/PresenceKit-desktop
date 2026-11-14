@@ -822,3 +822,6 @@ AGENT-05 已用真实文本模型和原生桌面完成一次隔离记事本操�
 
 
 313 (observe): camera exposure, reflections, microphone availability, Windows lock and power consumption await physical checks. Ambient brightness currently requires an open call camera.
+## 313 原子设备文件能力（open / observe）
+
+原子目录/名称/正文/读页走现有文件 HTTP 协议；必须先更新后端，新桌面向旧后端广告 operations 会被严格 schema 拒绝。扫描与本机授权设置共用执行锁，合作式中途取消尚未实现；扫描限一秒，后端取消/撤权后不接受只读回执。Windows Rust 临时目录验证不等同真实 Tauri→HTTP→模型联调，后者及 macOS 仍 pending physical verification。跟踪：后端工单 313 交付报告及文件合同。

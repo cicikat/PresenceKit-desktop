@@ -102,7 +102,7 @@ struct Action {
 impl Action {
     fn valid(&self) -> bool {
         self.path.len() <= 512
-            && self.query.len() <= 1024
+            && self.query.len() <= 4096
             && self.before.len() <= 8192
             && self.after.len() <= 8192
             && (1..=262144).contains(&self.start)
@@ -313,6 +313,8 @@ impl Runtime {
             *last = reference.seq;
             self.action = Some((action.op.clone(), action.path.clone()));
             match action.op.as_str() {
+                "list_dir" | "stat" | "find_name" | "search_text" | "read_page" =>
+                    files::discover(&grant, &action.op, &action.path, &action.query),
                 "find" => files::find(&grant, &action.query),
                 "read" => files::inspect(&grant, &action.path, action.start),
                 "verify" => files::verify(
@@ -323,7 +325,7 @@ impl Runtime {
                 "patch" | "create" | "undo" => {
                     self.record_mutation(reference.clone(), &grant, &action, false)
                 }
-                _ => Err("invalid_action"),
+                _ => Err("unsupported_operation"),
             }
         })();
         self.action = None;
@@ -709,7 +711,8 @@ pub fn start(app: AppHandle) {
                 Ok((
                     r.settings.state,
                     json!({"protocol":PROTOCOL,"device_id":r.settings.device_id,
-                    "device_epoch":r.epoch,"state":r.settings.state,"grants":grants}),
+                    "device_epoch":r.epoch,"state":r.settings.state,"grants":grants,
+                    "operations":["list_dir","stat","find_name","search_text","read_page"]}),
                     r.pending(),
                 ))
             });

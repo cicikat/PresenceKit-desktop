@@ -156,3 +156,4 @@ Computer Use 的授权与截图定位走 REST。现有 WebSocket 消息结构继
 
 
 313 ambient uses REST /sensor/ambient with a scoped Reality session; the desktop WebSocket wire protocol does not carry these readings.
+313 B: `device-file-agent.v1` HTTP polls may advertise `operations` for independent read commands `list_dir/stat/find_name/search_text/read_page`. Old clients omit this field; the updated backend returns `unsupported_operation` instead of sending an unsupported command. Atomic action options are JSON in `query`; discovery returns bounded entries/cursor/truncation, read returns hash/line range/has_more. This does not change desktop WebSocket messages. Backend-first rollout is required.
