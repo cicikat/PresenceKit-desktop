@@ -1,5 +1,11 @@
 本地文件 Agent 使用独立的 `device-file-agent.v1` HTTP 租约协议。`/ws/desktop` 不承载文件操作或回执。
 
+314：Windows安装打包worker时，HTTP poll的operations增加browser；响应browser_tasks列出仍授权的任务。
+`action.op=browser`通过query传递有界JSON，operation_intent固定inspect，保留task/session和原grant/revision/
+epoch/nonce/ACK校验。截图40,000字节分块并绑定seq/hash，未知ACK不重放；撤权、断连、epoch改变或任务
+移除释放原生会话。源码编辑仍走独立文件任务和保存/hash回读，回执关联browser_task_id/browser_session_id。
+无新增WS帧或IPC。支持边界、构建和未验事项见 [314后端接入](backend-integration.md#314-隔离浏览器预览current--observe)。
+
 > 2026-10-25：avatar_directive 可选新增 char_id/version/source_turn_id/source_at/expires_at；兼容、ACK、TTL 与顺序处理见 [情绪接入合同](affective-engine-integration.md)。
 
 工单 288 C2：health_state（生理期、睡眠、传感器与 HDS）按 uid+char_id 保存。设备输入缺省归属接收时的当前角色；prompt、工具和主动心率链使用本轮角色。旧同角色 profile 可导入；旧 global 健康账本只经 migrate_character_user_facts.py --artifact health_state 显式归属，默认 dry-run，不覆盖目标且保留原件。GET/PUT/DELETE /period 可传 char_id，省略时使用当前角色。共享连接、鉴权与运行日志不属于角色记忆。

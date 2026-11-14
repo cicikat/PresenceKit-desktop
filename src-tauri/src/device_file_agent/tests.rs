@@ -1,5 +1,114 @@
 use super::*;
 
+#[cfg(all(windows, feature = "browser-workbench-acceptance"))]
+#[test]
+fn packaged_browser_uses_grant_bound_runtime_and_closes_on_drop() {
+    // Explicit acceptance feature requires the packaged artifact and real Chromium.
+    // This exercises native command validation, file grant reads and the process job.
+    let (_tmp, grant) = fixture();
+    fs::write(grant.root.join("fixture.html"),
+        "<!doctype html><title>Native fixture</title><button onclick=\"this.textContent='Changed'\">Toggle</button><canvas width='30' height='30'></canvas>").unwrap();
+    let executable = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../browser-sidecar/runtime/workbench/workbench.exe");
+    assert!(browser::available(&executable), "build-browser-sidecar.ps1 must run first");
+    let mut runtime = Runtime {
+        base: grant.root.join("journal"),
+        settings: Settings {device_id: new_id().unwrap(), state: Mode::Enabled,
+                            grants: vec![grant.clone()], unrestricted: None},
+        epoch: new_id().unwrap(), binding: grant.binding.clone(), records: vec![],
+        online: true, seen: BTreeMap::new(), action: None, browser: None,
+        browser_executable: executable,
+    };
+    let server_epoch = new_id().unwrap();
+    let task = new_id().unwrap();
+    let mut seq = 0;
+    let mut invoke = |runtime: &mut Runtime, params: serde_json::Value| {
+        seq += 1;
+        let wire = json!({
+            "ref": {"server_epoch":server_epoch,"device_id":runtime.settings.device_id,
+                "device_epoch":runtime.epoch,"task_id":task,"workspace_id":grant.id,
+                "revision":grant.revision,"nonce":new_id().unwrap(),"lease":"a".repeat(64),"seq":seq},
+            "action":{"op":"browser","path":"fixture.html","query":params.to_string(),"start":1,
+                "expected_sha256":null,"before":"","after":"","version_id":null},
+            "ttl_ms":30000,"operation_intent":"inspect"
+        });
+        let receipt = runtime.execute(&server_epoch, serde_json::from_value(wire).unwrap(), Instant::now());
+        assert_eq!(receipt.code, "ok", "{params}");
+        receipt.body
+    };
+    assert_eq!(invoke(&mut runtime, json!({"op":"start","resources":[]}))["loaded"], true);
+    let snapshot = invoke(&mut runtime, json!({"op":"snapshot"}));
+    assert_eq!(snapshot["dimensions"]["canvasCount"], 1);
+    let reference = snapshot["elements"][0]["ref"].clone();
+    invoke(&mut runtime, json!({"op":"click","ref":reference,"snapshot_seq":snapshot["snapshot_seq"]}));
+    assert!(invoke(&mut runtime, json!({"op":"snapshot"}))["text"].as_str().unwrap().contains("Changed"));
+    let image = invoke(&mut runtime, json!({"op":"screenshot","mode":"viewport"}));
+    assert!(image["bytes"].as_u64().unwrap() > 0);
+    // Source changes use the file agent's save and readback path, never preview JS.
+    let original = files::inspect(&grant, "fixture.html", 1).unwrap();
+    let patch = files::prepare(&grant, "synthetic-edit", "fixture.html", "patch",
+        original["sha256"].as_str().unwrap(), "Toggle", "Saved revision", None).unwrap();
+    patch.commit(&grant).unwrap();
+    assert_eq!(files::verify(&grant, "fixture.html", &patch.version.after_hash).unwrap()["verified"], true);
+    assert!(files::inspect(&grant, "fixture.html", 1).unwrap()["content"].as_str().unwrap().contains("Saved revision"));
+    invoke(&mut runtime, json!({"op":"reload"}));
+    assert!(invoke(&mut runtime, json!({"op":"snapshot"}))["text"].as_str().unwrap().contains("Saved revision"));
+    let revised = invoke(&mut runtime, json!({"op":"screenshot","mode":"viewport"}));
+    assert_ne!(revised["screenshot_sha256"], image["screenshot_sha256"]);
+    invoke(&mut runtime, json!({"op":"close"}));
+    assert!(runtime.browser.is_none());
+    assert!(!runtime.base.exists(), "inspect preview cannot write a source journal");
+    assert!(fs::read_to_string(grant.root.join("fixture.html")).unwrap().contains("Saved revision"));
+    // Dropping a live native session must terminate its worker, not just clear metadata.
+    invoke(&mut runtime, json!({"op":"start","resources":[]}));
+    let pid = runtime.browser.as_ref().unwrap().process_id();
+    // Capture actual descendants before revocation; checking only the Python parent
+    // would miss an orphaned Playwright driver or Chromium renderer.
+    use windows::Win32::System::Diagnostics::ToolHelp::{CreateToolhelp32Snapshot,
+        Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS};
+    use windows::Win32::System::Threading::{OpenProcess, GetExitCodeProcess, PROCESS_QUERY_LIMITED_INFORMATION};
+    use windows::Win32::Foundation::CloseHandle;
+    let mut tree = vec![pid];
+    unsafe {
+        let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0).unwrap();
+        let mut row = PROCESSENTRY32W::default();
+        row.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+        let mut parents = vec![];
+        if Process32FirstW(snapshot, &mut row).is_ok() {
+            loop {
+                parents.push((row.th32ProcessID, row.th32ParentProcessID));
+                if Process32NextW(snapshot, &mut row).is_err() { break; }
+            }
+        }
+        let _ = CloseHandle(snapshot);
+        loop {
+            let children: Vec<_> = parents.iter().filter(|(child, parent)|
+                tree.contains(parent) && !tree.contains(child)).map(|(child, _)| *child).collect();
+            if children.is_empty() { break; }
+            tree.extend(children);
+        }
+    }
+    assert!(tree.len() >= 3, "real driver and Chromium descendants required");
+    let mut revoked = runtime.settings.clone();
+    revoked.grants.clear();
+    runtime.persist_settings(revoked).unwrap();
+    assert!(runtime.browser.is_none());
+    let deadline = Instant::now() + Duration::from_secs(3);
+    loop {
+        let alive: Vec<_> = tree.iter().copied().filter(|pid| unsafe {
+            if let Ok(handle) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, *pid) {
+                let mut code = 259;
+                let result = GetExitCodeProcess(handle, &mut code);
+                let _ = CloseHandle(handle);
+                result.is_err() || code == 259
+            } else { false }
+        }).collect();
+        if alive.is_empty() { break; }
+        assert!(Instant::now() < deadline, "revoked browser processes still running: {alive:?}");
+        std::thread::sleep(Duration::from_millis(25));
+    }
+}
+
 #[test]
 fn read_task_commands_cannot_mutate_a_writable_grant() {
     // The authenticated command must carry task intent independently of grant
@@ -16,6 +125,7 @@ fn read_task_commands_cannot_mutate_a_writable_grant() {
                 },
                 epoch: new_id().unwrap(), binding: grant.binding.clone(),
                 records: vec![], online: true, seen: BTreeMap::new(), action: None,
+                browser: None, browser_executable: PathBuf::new(),
             };
             let server_epoch = new_id().unwrap();
             let mut wire = json!({

@@ -1,4 +1,5 @@
 mod files;
+mod browser;
 #[cfg(test)]
 mod tests;
 
@@ -169,6 +170,8 @@ struct Runtime {
     online: bool,
     seen: BTreeMap<String, (u32, OperationIntent)>,
     action: Option<(String, String)>,
+    browser: Option<browser::Browser>,
+    browser_executable: PathBuf,
 }
 
 #[derive(Default)]
@@ -229,12 +232,22 @@ impl Runtime {
             online: false,
             seen: BTreeMap::new(),
             action: None,
+            browser: None,
+            browser_executable: {
+                let installed = app.path().resource_dir().map_err(|_| "io_failed")?
+                    .join("browser-workbench/workbench/workbench.exe");
+                if cfg!(debug_assertions) && !installed.is_file() {
+                    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                        .join("../browser-sidecar/runtime/workbench/workbench.exe")
+                } else { installed }
+            },
         })
     }
 
     fn persist_settings(&mut self, settings: Settings) -> Result<(), FileError> {
         durable_json(&self.base.join("grants.json"), &settings)?;
         self.settings = settings;
+        self.browser = None;
         Ok(())
     }
 
@@ -338,6 +351,8 @@ impl Runtime {
             }
             self.action = Some((action.op.clone(), action.path.clone()));
             match action.op.as_str() {
+                "browser" => browser::execute(&mut self.browser, &self.browser_executable,
+                                               &grant, &reference, &action),
                 "list_dir" | "stat" | "find_name" | "search_text" | "read_page" =>
                     files::discover(&grant, &action.op, &action.path, &action.query),
                 "find" => files::find(&grant, &action.query),
@@ -667,6 +682,8 @@ struct Poll {
     server_epoch: String,
     online: bool,
     command: Option<Command>,
+    #[serde(default)]
+    browser_tasks: Vec<String>,
 }
 
 fn secure(config: &crate::client_config::ClientConfig) -> bool {
@@ -724,6 +741,7 @@ pub fn start(app: AppHandle) {
             let (config, binding) = connection(&app);
             let state = access(&app, |r| {
                 if r.binding != binding {
+                    r.browser = None;
                     r.binding = binding.clone();
                     r.epoch = new_id()?;
                     r.online = false;
@@ -733,11 +751,17 @@ pub fn start(app: AppHandle) {
                     .filter(|g| g.binding == binding)
                     .map(|g| json!({"workspace_id":g.id,"revision":g.revision,"alias":g.alias,"write":g.write}))
                     .collect();
+                if r.browser.as_ref().is_some_and(|b| {
+                    r.settings.state != Mode::Enabled || r.grant(&b.reference).is_none()
+                        || !b.current(&b.reference)
+                }) { r.browser = None; }
+                let mut operations = vec!["list_dir", "stat", "find_name", "search_text", "read_page"];
+                if browser::available(&r.browser_executable) { operations.push("browser"); }
                 Ok((
                     r.settings.state,
                     json!({"protocol":PROTOCOL,"device_id":r.settings.device_id,
                     "device_epoch":r.epoch,"state":r.settings.state,"grants":grants,
-                    "operations":["list_dir","stat","find_name","search_text","read_page"]}),
+                    "operations":operations}),
                     r.pending(),
                 ))
             });
@@ -755,6 +779,11 @@ pub fn start(app: AppHandle) {
                         .is_ok_and(|a| a.online && a.protocol == PROTOCOL);
                     let _ = access(&app, |r| {
                         r.online = online && r.settings.state == Mode::Enabled;
+                        if !r.online { r.browser = None; }
+                        if r.browser.as_ref().is_some_and(|b| response.as_ref().is_ok_and(|reply|
+                            reply.server_epoch != b.reference.server_epoch || !reply.browser_tasks.contains(&b.reference.task_id))) {
+                            r.browser = None;
+                        }
                         Ok(())
                     });
                     if let Some(receipt) = pending {
@@ -767,6 +796,7 @@ pub fn start(app: AppHandle) {
                         server_epoch,
                         online: true,
                         command: Some(command),
+                        ..
                     }) = response
                     {
                         if protocol == PROTOCOL && connection(&app).1 == binding {

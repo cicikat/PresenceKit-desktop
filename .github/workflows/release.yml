@@ -37,6 +37,20 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - uses: actions/setup-python@v6
+        if: matrix.platform == 'windows'
+        with:
+          python-version: '3.12'
+
+      - name: Build and verify Windows browser worker
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          ./scripts/build-browser-sidecar.ps1
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python scripts/check-browser-sidecar.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
       - name: Build and publish
         id: tauri
         uses: tauri-apps/tauri-action@v0

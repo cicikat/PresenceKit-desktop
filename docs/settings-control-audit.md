@@ -4,6 +4,8 @@
 
 # 设置与功能开关审计（P0–P2）
 
+314浏览器预览复用后端device_file_agent总闸、screen视觉路由和桌面具体文件工作区授权，无第二套设置。Windows安装随包worker后才上报browser能力；无限制grant不用于预览，暂停/撤权释放会话。管理面截图复核由state.read保护且600秒失效。手机无执行设置。真实完整Tauri链仍observe；详见 [后端接入](backend-integration.md#314-隔离浏览器预览current--observe)。
+
 292-B：云端陪玩采集复用本地sensor启用及按需截图许可，后端复用coplay、名单和看屏幕开关，无第二套截图许可。陪玩设置页显示GET `/coplay/state.collection` 的真实连接/过期及截图授权；权限、锁屏、地址/Token变化、stop和TTL在采集及发送前复核。管理面负责名单、有效来源和阻断观测；桌面退出无采集。真实Windows游戏与云端联合验收observe。
 
 Brief 253.6：STT 命名连接、用途、默认关闭的开关与 effective state 统一在后端语音页维护。

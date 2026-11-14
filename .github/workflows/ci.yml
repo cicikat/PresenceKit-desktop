@@ -66,3 +66,30 @@ jobs:
       - name: Device file tests
         working-directory: src-tauri
         run: cargo test --locked --lib device_file_agent
+
+      - uses: actions/setup-node@v5
+        if: runner.os == 'Windows'
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-python@v6
+        if: runner.os == 'Windows'
+        with:
+          python-version: '3.12'
+
+      - name: Build packaged browser worker
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          npm.cmd ci
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          ./scripts/build-browser-sidecar.ps1
+
+      - name: Real Chromium preview acceptance
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          python scripts/check-browser-sidecar.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib --features browser-workbench-acceptance device_file_agent
