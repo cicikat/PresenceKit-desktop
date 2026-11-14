@@ -2010,6 +2010,27 @@ async fn transcribe_audio(app: tauri::AppHandle, audio_b64: String) -> Result<se
 }
 
 #[tauri::command]
+async fn open_ambient_session(app: tauri::AppHandle, char_id: String) -> Result<String, String> {
+    let cfg = load_client_config(&app);
+    let response = authorized_request(&cfg, http_client()?.post(backend_url(&cfg, "/v1/sessions")))
+        .json(&serde_json::json!({"char_id": char_id, "domain": "reality"}))
+        .send().await.map_err(|error| error.to_string())?;
+    let body: serde_json::Value = require_success(response).await?.json().await.map_err(|error| error.to_string())?;
+    body["session_id"].as_str().map(str::to_owned).ok_or_else(|| "Missing session".to_string())
+}
+
+#[tauri::command]
+async fn publish_ambient(app: tauri::AppHandle, session_id: String, observation: serde_json::Value) -> Result<(), String> {
+    let cfg = load_client_config(&app);
+    let response = authorized_request(&cfg, http_client()?.post(backend_url(&cfg, "/sensor/ambient")))
+        .header("X-Presence-Session", session_id)
+        .json(&observation)
+        .send().await.map_err(|error| error.to_string())?;
+    require_success(response).await?;
+    Ok(())
+}
+
+#[tauri::command]
 async fn get_video_call_state(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
     let resp = authorized_request(&cfg, http_client()?.get(backend_url(&cfg, "/video-call/state")))
@@ -3999,6 +4020,8 @@ pub fn run() {
             get_chat_request,
             preview_chat_attachment,
             transcribe_audio,
+            open_ambient_session,
+            publish_ambient,
             get_video_call_state,
             observe_video_call_frame,
             poll_video_call_camera,

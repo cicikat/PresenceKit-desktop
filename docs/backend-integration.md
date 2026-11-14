@@ -1417,3 +1417,6 @@ AGENT-06B 在会话状态中增加 `question`、`can_resume`、`resume_until`。
 AGENT-06C 使用现有设备轮询中的 `agent_cue` 驱动各显示器的边缘提示。`active` 覆盖规划和操作间隙，`weak` 用于等待或暂停。Esc、紧急停止和桌宠停止立即撤销本地执行权，再以绑定设备的 `stop_agent` 关闭轮询取消同一父会话。
 
 AGENT-06D 仅在 `visual_verify_supported` 协商后下发 `verify_visual`。此步骤只读取已匹配的后置帧，使用原 `X-Computer-Use-Lease` 和 JPEG 云端入口。Rust 核对授权、帧摘要与前台，在收到 `verified` 后重新检查画面并发送普通观察回执。截图未授权、模型异常或状态不确定时不执行替代输入。
+
+
+313 ambient: the room opens a Reality session using the configured desktop profile and sends only relative camera brightness or mixed microphone level to /sensor/ambient. No image, audio or transcript is included in that request.
