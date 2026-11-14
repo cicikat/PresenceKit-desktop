@@ -70,6 +70,14 @@ export function getChatRequest(requestId: string, scope: string): Promise<Deskto
   return tracked;
 }
 
+export function openAmbientSession(charId: string): Promise<string> {
+  return invokeGated('open_ambient_session', { charId });
+}
+
+export function publishAmbient(sessionId: string, observation: object): Promise<void> {
+  return invokeGated('publish_ambient', { sessionId, observation });
+}
+
 export async function getVideoCallState(): Promise<{ effective: boolean; blocking_reason: string }> {
   return invokeGated('get_video_call_state');
 }

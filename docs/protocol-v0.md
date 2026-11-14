@@ -149,3 +149,6 @@ GET /activity/records（state.read）默认仅列来源元数据；指定 source
 ### Computer Use 的 HTTP 扩展（CU-05）
 
 Computer Use 的授权与截图定位走 REST。现有 WebSocket 消息结构继续适用于桌宠订阅。见 [后端接入](backend-integration.md#302-cu-05-云端视觉)。
+
+
+313 ambient uses REST /sensor/ambient with a scoped Reality session; the desktop WebSocket wire protocol does not carry these readings.

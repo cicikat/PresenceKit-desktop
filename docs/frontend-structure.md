@@ -1075,3 +1075,6 @@ PetTextPresentation 仅在 PetStage 子树提供当前段的文本租约；Chara
 后端路由为 `cloud_proxy` 时，系统设置在开启会话前展示默认未勾选的云端截图授权。勾选结果传给本机执行器并绑定此次会话，停止后重新开启需重新选择。
 
 303 将默认授权入口简化为「允许操作电脑」和「停止」，具体窗口、整个桌面与有效期放在高级项。聊天和桌宠共用 `AgentSessionIndicator`，展示会话阶段或本机任务状态。原生蓝雾使用独立静态页面与 Tauri 窗口，透明区域不加载聊天主题。
+
+
+313: the room owns two independent, session-local ambient permissions. The camera toggle shares its live preview with the brightness meter. Ambient microphone sampling stops before call transcription starts.
