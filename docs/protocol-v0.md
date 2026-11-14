@@ -157,3 +157,5 @@ Computer Use 的授权与截图定位走 REST。现有 WebSocket 消息结构继
 
 313 ambient uses REST /sensor/ambient with a scoped Reality session; the desktop WebSocket wire protocol does not carry these readings.
 313 B: `device-file-agent.v1` HTTP polls may advertise `operations` for independent read commands `list_dir/stat/find_name/search_text/read_page`. Old clients omit this field; the updated backend returns `unsupported_operation` instead of sending an unsupported command. Atomic action options are JSON in `query`; discovery returns bounded entries/cursor/truncation, read returns hash/line range/has_more. This does not change desktop WebSocket messages. Backend-first rollout is required.
+
+File commands require immutable `operation_intent=inspect|search|read|edit|create`. Missing/unknown intent is rejected. The desktop rejects writes and journal entries for read intents even when the folder grant permits writing; create intent cannot patch/undo, and subsequent commands cannot elevate intent. Update the backend before this desktop; roll back the desktop first. An old desktop lacks this independent guard, and an updated desktop cannot consume commands from an old backend.

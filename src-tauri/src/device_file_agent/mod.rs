@@ -110,10 +110,22 @@ impl Action {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "lowercase")]
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum OperationIntent {
+    Inspect,
+    Search,
+    Read,
+    Edit,
+    Create,
+}
+
+#[derive(Deserialize)]
 struct Command {
     #[serde(rename = "ref")]
     reference: Reference,
     action: Action,
+    operation_intent: OperationIntent,
     ttl_ms: u64,
 }
 
@@ -155,7 +167,7 @@ struct Runtime {
     binding: String,
     records: Vec<Record>,
     online: bool,
-    seen: BTreeMap<String, u32>,
+    seen: BTreeMap<String, (u32, OperationIntent)>,
     action: Option<(String, String)>,
 }
 
@@ -286,6 +298,7 @@ impl Runtime {
         let Command {
             reference,
             action,
+            operation_intent,
             ttl_ms,
         } = command;
         let result = (|| {
@@ -306,11 +319,23 @@ impl Runtime {
             if self.seen.len() >= 512 && !self.seen.contains_key(&reference.task_id) {
                 return Err("storage_full");
             }
-            let last = self.seen.entry(reference.task_id.clone()).or_default();
+            let (last, frozen_intent) = self.seen.entry(reference.task_id.clone())
+                .or_insert((0, operation_intent));
             if reference.seq <= *last {
                 return Err("expired");
             }
             *last = reference.seq;
+            if *frozen_intent != operation_intent {
+                return Err("invalid_action");
+            }
+            if matches!(operation_intent, OperationIntent::Inspect | OperationIntent::Search | OperationIntent::Read)
+                && matches!(action.op.as_str(), "create" | "patch" | "undo") {
+                return Err("read_only");
+            }
+            if matches!(operation_intent, OperationIntent::Create)
+                && matches!(action.op.as_str(), "patch" | "undo") {
+                return Err("invalid_action");
+            }
             self.action = Some((action.op.clone(), action.path.clone()));
             match action.op.as_str() {
                 "list_dir" | "stat" | "find_name" | "search_text" | "read_page" =>

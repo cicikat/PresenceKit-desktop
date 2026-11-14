@@ -1,6 +1,67 @@
 use super::*;
 
 #[test]
+fn read_task_commands_cannot_mutate_a_writable_grant() {
+    // The authenticated command must carry task intent independently of grant
+    // write permission. A compromised planner must not reach the write journal.
+    for intent in ["inspect", "search", "read"] {
+        for op in ["create", "patch", "undo"] {
+            let (_tmp, grant) = fixture();
+            fs::write(grant.root.join("fixture.html"), "original").unwrap();
+            let mut runtime = Runtime {
+                base: grant.root.join("journal"),
+                settings: Settings {
+                    device_id: new_id().unwrap(), state: Mode::Enabled,
+                    grants: vec![grant.clone()], unrestricted: None,
+                },
+                epoch: new_id().unwrap(), binding: grant.binding.clone(),
+                records: vec![], online: true, seen: BTreeMap::new(), action: None,
+            };
+            let server_epoch = new_id().unwrap();
+            let mut wire = json!({
+                "ref": {"server_epoch": server_epoch, "device_id": runtime.settings.device_id,
+                    "device_epoch": runtime.epoch, "task_id": new_id().unwrap(),
+                    "workspace_id": grant.id, "revision": grant.revision,
+                    "nonce": new_id().unwrap(), "lease": "a".repeat(64), "seq": 1},
+                "action": {"op": op, "path": if op == "create" {"new.html"} else {"fixture.html"},
+                    "query": "", "start": 1, "expected_sha256": format!("{:x}", Sha256::digest(b"original")),
+                    "before": "original", "after": "changed", "version_id": null},
+                "ttl_ms": 30000, "operation_intent": intent,
+            });
+            let command: Command = serde_json::from_value(wire.clone()).unwrap();
+            let receipt = runtime.execute(&server_epoch, command, Instant::now());
+            assert_eq!(receipt.code, "read_only", "{intent}/{op}");
+            assert_eq!(fs::read_to_string(grant.root.join("fixture.html")).unwrap(), "original");
+            assert!(!grant.root.join("new.html").exists());
+            assert!(!runtime.base.exists());
+            assert!(runtime.records.is_empty());
+            wire["ref"]["seq"] = json!(2);
+            wire["action"]["op"] = json!("read");
+            wire["action"]["path"] = json!("fixture.html");
+            let read = runtime.execute(&server_epoch, serde_json::from_value(wire.clone()).unwrap(), Instant::now());
+            assert_eq!(read.code, "ok");
+            assert!(read.body["content"].as_str().unwrap().contains("original"));
+            wire["ref"]["seq"] = json!(3);
+            wire["operation_intent"] = json!("edit");
+            wire["action"]["op"] = json!("create");
+            wire["action"]["path"] = json!("new.html");
+            let escalated = runtime.execute(&server_epoch, serde_json::from_value(wire.clone()).unwrap(), Instant::now());
+            assert_eq!(escalated.code, "invalid_action");
+            assert!(!grant.root.join("new.html").exists());
+            assert!(runtime.records.is_empty());
+            // A separate edit task retains its legitimate write capability.
+            wire["ref"]["task_id"] = json!(new_id().unwrap());
+            wire["ref"]["seq"] = json!(1);
+            let edit = runtime.execute(&server_epoch, serde_json::from_value(wire.clone()).unwrap(), Instant::now());
+            assert_eq!(edit.code, "ok");
+            assert_eq!(fs::read_to_string(grant.root.join("new.html")).unwrap(), "changed");
+            wire.as_object_mut().unwrap().remove("operation_intent");
+            assert!(serde_json::from_value::<Command>(wire).is_err());
+        }
+    }
+}
+
+#[test]
 fn discovery_metadata_paging_search_and_readback_use_real_files() {
     // Catches implicit content reads, missing pagination and incorrect root-relative paths.
     let (_tmp, grant) = fixture();
