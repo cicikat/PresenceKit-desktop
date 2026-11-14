@@ -3,9 +3,8 @@ use super::*;
 fn fixture() -> (tempfile::TempDir, Grant) {
     #[cfg(target_os = "macos")]
     let fixture_parent = PathBuf::from(std::env::var_os("HOME").expect("runner HOME"));
-    #[cfg(not(target_os = "macos"))]
-    let fixture_parent = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .ancestors().nth(2).unwrap().to_owned();
+    #[cfg(windows)]
+    let fixture_parent = PathBuf::from(std::env::var_os("USERPROFILE").expect("runner USERPROFILE"));
     let tmp = tempfile::Builder::new()
         .prefix("device-file-test-")
         .tempdir_in(fixture_parent)
