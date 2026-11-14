@@ -17,7 +17,7 @@ pub use discovery::discover;
 pub const FILE_LIMIT: usize = 256 * 1024;
 const PAGE_LIMIT: usize = 8192;
 const EXTENSIONS: &[&str] = &[
-    "html", "htm", "css", "js", "mjs", "ts", "tsx", "jsx", "json", "md", "txt", "py",
+    "html", "htm", "css", "js", "mjs", "ts", "tsx", "jsx", "json", "md", "txt", "py", "svg",
 ];
 
 pub type FileError = &'static str;
@@ -394,6 +394,23 @@ fn read_at(parent: &Dir, name: &str) -> Result<TextFile> {
 fn read(grant: &Grant, path: &str) -> Result<TextFile> {
     let target = target(grant, path)?;
     read_at(&target.parent, &target.name)
+}
+
+pub(super) fn preview_manifest(grant: &Grant, paths: &[String]) -> Result<Value> {
+    let mut manifest = serde_json::Map::new();
+    let mut total = 0;
+    for path in paths {
+        if path.starts_with('/') || path.contains(['\\', ':', '?', '#'])
+            || !matches!(Path::new(path).extension().and_then(|s| s.to_str()),
+                          Some("html" | "htm" | "css" | "js" | "mjs" | "json" | "ts" | "tsx" | "jsx" | "svg")) {
+            return Err("path_denied");
+        }
+        let data = read(grant, path)?;
+        total += data.bytes.len();
+        if total > 2 * 1024 * 1024 { return Err("unsupported_text"); }
+        manifest.insert(path.clone(), json!(data.text()?));
+    }
+    Ok(Value::Object(manifest))
 }
 
 pub fn inspect(grant: &Grant, path: &str, start: usize) -> Result<Value> {

@@ -1,3 +1,5 @@
+314（open / observe）：真实打包Chromium、ReactTSX、Three/WebGL、Rust保存回读/刷新及撤权后完整进程树退出已验证；完整Tauri窗口→远程HTTP→真实VLM、物理断网/崩溃/跨进程重启仍未验收。源码预览不执行Vite server/插件/任意npm依赖。撤权与在途native调用串行，响应超时20秒。macOS不广告browser能力。详见 [接入合同](backend-integration.md#314-隔离浏览器预览current--observe) 及相邻后端314交付记录。
+
 318（open）：Windows Rust 文件测试覆盖原地修改、hash、反写保护和撤回。真实桌面聊天链路、物理断线、macOS 本机选择器和 TCC 待验收。JSON 以外的语法检查、构建和视觉检查返回 unknown。
 
 > observe（2026-10-25）：情绪指令已补角色/来源/过期校验，原生切角和表演恢复仍待设备验收，见 [情绪接入合同](affective-engine-integration.md)。

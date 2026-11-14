@@ -13,6 +13,14 @@ WS connected 后重读 prompt-assets 与角色头像；既有 IPC/REST 字段、
 
 # docs/backend-integration.md — 后端接口与接入现状
 
+## 314 隔离浏览器预览（current / observe）
+
+Windows文件poll的 `operations` 增加 `browser`，后端响应增加 `browser_tasks`。原生executor通过原grant/revision/epoch/nonce/lease/ACK处理 `action.op=browser` 和JSON query，任务冻结inspect；失联、新server epoch、任务不再列出或撤权时释放worker及Windows Job中的子进程。丢ACK不重放click，不把未知结果当完成。完整合同以相邻后端 `docs/device-file-agent-contract.md` 的314节为准。
+
+运行前在本仓 `npm.cmd ci`，再执行 `./scripts/build-browser-sidecar.ps1 -Python <Python3.12入口>`；生成产物ignored，由Tauri资源打包到browser-workbench。无worker不广告browser能力；macOS暂不执行。worker只收最多40项/2MiB已授权文本副本，无物理路径或个人profile。虚拟loopback origin全拦截，无监听端口；可信React/Three与stdin转译支持有限React/Vite源码，不运行项目scripts、Vite插件或任意npm依赖。
+
+复用桌面本地文件启用/暂停及具体工作区授权，拒绝无限制grant。后端沿用总闸、角色工具权限和screen视觉主备；管理面state.read提供600秒、no-store截图复核。没有新增桌面主界面、IPC或手机设置。真实Rust→Chromium、保存回读/刷新、撤权完整进程树清理和合成HTTP→真实视觉已分层通过；完整Tauri窗口→远程HTTP→VLM同链、物理故障/跨进程重启仍open。先更新后端再桌面，回滚反向；固定三仓SHA验证见后端314交付记录，未记录组合为not_verified。
+
 ## 远程 WebSocket 连接（2026-10-18，partial）
 
 Ribbon 左上角状态点由原生 WS 的 `hello_ack` 驱动，不是本机 HTTP 探活结果。
@@ -1420,4 +1428,6 @@ AGENT-06D 仅在 `visual_verify_supported` 协商后下发 `verify_visual`。此
 
 
 313 ambient: the room opens a Reality session using the configured desktop profile and sends only relative camera brightness or mixed microphone level to /sensor/ambient. No image, audio or transcript is included in that request.
+
+File intent hardening: every command must carry the backend's frozen `operation_intent=inspect|search|read|edit|create`. The executor rejects missing/unknown intent and task intent changes; inspect/search/read cannot create/patch/undo or touch the write journal, regardless of grant write permission. Create cannot patch/undo. Deploy the backend first, roll back the desktop first; new desktop plus old backend fails closed. No mobile, IPC, settings or WebSocket field changes.
 313 B: Poll additionally advertises atomic operations `list_dir/stat/find_name/search_text/read_page`. These commands reuse the file lease/ACK route; no new HTTP or IPC route is added. `action.query` carries strict bounded JSON options for these operations. Deploy the updated backend first (legacy backends reject unknown poll fields); a new backend rejects missing operations with `unsupported_operation`. Directory/name operations only inspect metadata; content search requires `content_search=true`. Root-relative paths, stable snapshot cursors and truncation accompany results. No mobile executor or new settings are introduced. See backend `docs/device-file-agent-contract.md` for limits and rollback.
