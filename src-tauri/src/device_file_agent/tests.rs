@@ -1,10 +1,14 @@
 use super::*;
 
 fn fixture() -> (tempfile::TempDir, Grant) {
-    let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    #[cfg(target_os = "macos")]
+    let fixture_parent = PathBuf::from(std::env::var_os("HOME").expect("runner HOME"));
+    #[cfg(not(target_os = "macos"))]
+    let fixture_parent = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .ancestors().nth(2).unwrap().to_owned();
     let tmp = tempfile::Builder::new()
         .prefix("device-file-test-")
-        .tempdir_in(repo.parent().unwrap().parent().unwrap())
+        .tempdir_in(fixture_parent)
         .unwrap();
     let root = tmp.path().join("demo");
     fs::create_dir(&root).unwrap();

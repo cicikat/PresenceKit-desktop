@@ -17,5 +17,6 @@ export const deviceFileAgent = {
   pick: (single: boolean, write: boolean) => invoke<void>('device_file_pick', { single, write }),
   grant: (id: string, write: boolean | null) => invoke<void>('device_file_grant', { id, write }),
   undo: (id: string) => invoke<void>('device_file_undo_local', { id }),
+  undoTask: (taskId: string) => invoke<{ restored: number; error?: string }>('device_file_undo_task', { taskId }),
   clear: () => invoke<void>('device_file_clear'),
 };

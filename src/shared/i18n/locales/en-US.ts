@@ -18,6 +18,7 @@ export const enUS: Record<MessageKey, string> = {
   'localFiles.savedPending': "Saved, waiting to sync",
   'localFiles.uncertain': "Save result pending",
   'localFiles.undo': "Undo",
+  'localFiles.undoTask': "Undo edits from this task",
   'localFiles.clear': "Clear local snapshots",
   'localFiles.conflict': "The file has since changed. Undo stopped.",
   'localFiles.error': "The local file operation could not finish.",

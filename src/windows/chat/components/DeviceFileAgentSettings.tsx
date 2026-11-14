@@ -89,6 +89,12 @@ export function DeviceFileAgentSettings() {
               {row.status === 'ok' && <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{row.diff}</pre>}
               {row.undoable && <button style={prefActionButtonStyle} disabled={busy}
                 onClick={() => void run(() => deviceFileAgent.undo(row.id))}>{t('localFiles.undo')}</button>}
+              {row.undoable && status.recent.find(item => item.task_id === row.task_id)?.id === row.id &&
+                <button style={prefActionButtonStyle} disabled={busy}
+                  onClick={() => void run(async () => {
+                    const result = await deviceFileAgent.undoTask(row.task_id);
+                    if (result.error) throw result.error;
+                  })}>{t('localFiles.undoTask')}</button>}
             </details>
           ))}
           <div>

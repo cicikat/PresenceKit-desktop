@@ -50,6 +50,14 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Confirm Apple Silicon target
+        if: runner.os == 'macOS'
+        shell: pwsh
+        run: |
+          if (!(rustc -vV | Select-String 'host: aarch64-apple-darwin')) { throw 'Apple Silicon runner required' }
 
       - name: Cargo check
         run: cargo check --locked

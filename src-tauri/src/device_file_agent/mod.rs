@@ -230,6 +230,7 @@ impl Runtime {
         reference: Reference,
         grant: &Grant,
         action: &Action,
+        local: bool,
     ) -> Result<Value, FileError> {
         let undo = action.version_id.as_ref().and_then(|id| {
             self.records.iter().find(|r| {
@@ -258,7 +259,7 @@ impl Runtime {
             reference: reference.clone(),
             version: mutation.version.clone(),
             receipt: None,
-            acknowledged: false,
+            acknowledged: local,
         });
         if let Err(code) = self.persist_records() {
             self.records.pop();
@@ -315,7 +316,7 @@ impl Runtime {
                     action.expected_sha256.as_deref().unwrap_or(""),
                 ),
                 "patch" | "create" | "undo" => {
-                    self.record_mutation(reference.clone(), &grant, &action)
+                    self.record_mutation(reference.clone(), &grant, &action, false)
                 }
                 _ => Err("invalid_action"),
             }
@@ -537,8 +538,47 @@ pub fn device_file_undo_local(window: WebviewWindow, id: String) -> Result<(), F
             after: String::new(),
             version_id: Some(id),
         };
-        r.record_mutation(reference.clone(), &grant, &action)?;
-        r.acknowledged(&reference)
+        r.record_mutation(reference, &grant, &action, true)
+            .map(|_| ())
+    })
+}
+
+#[tauri::command]
+pub fn device_file_undo_task(window: WebviewWindow, task_id: String) -> Result<Value, FileError> {
+    main_window(&window)?;
+    access(window.app_handle(), |r| {
+        let versions: Vec<_> = r
+            .records
+            .iter()
+            .rev()
+            .filter(|row| {
+                row.reference.task_id == task_id
+                    && row.binding == r.binding
+                    && row.version.before.is_some()
+                    && row.receipt.as_ref().is_some_and(|a| a.code == "ok")
+            })
+            .map(|row| (row.reference.clone(), row.version.clone()))
+            .collect();
+        let mut restored = 0;
+        for (mut reference, version) in versions {
+            let grant = r.grant(&reference).ok_or("grant_changed")?.clone();
+            reference.nonce = new_id()?;
+            let action = Action {
+                op: "undo".into(),
+                path: version.path,
+                query: String::new(),
+                start: 1,
+                expected_sha256: None,
+                before: String::new(),
+                after: String::new(),
+                version_id: Some(version.id),
+            };
+            if let Err(error) = r.record_mutation(reference, &grant, &action, true) {
+                return Ok(json!({"restored":restored,"error":error}));
+            }
+            restored += 1;
+        }
+        Ok(json!({"restored":restored}))
     })
 }
 

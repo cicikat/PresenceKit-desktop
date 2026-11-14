@@ -15,6 +15,7 @@ export const zhCN = {
   'localFiles.savedPending': "已保存，等待同步",
   'localFiles.uncertain': "待确认保存结果",
   'localFiles.undo': "撤回",
+  'localFiles.undoTask': "撤回这次任务的修改",
   'localFiles.clear': "清理本机快照",
   'localFiles.conflict': "文件已有其他改动，无法直接撤回。",
   'localFiles.error': "无法完成本地文件操作。",
