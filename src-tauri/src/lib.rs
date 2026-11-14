@@ -12,6 +12,7 @@
 // publisher.rs 另有 /sensor/realtime。后端路由变更时需手动同步这两个文件。
 mod actions;
 mod computer_use;
+mod device_file_agent;
 mod admin_bridge;
 mod client_config;
 mod diary_sync;
@@ -3821,6 +3822,7 @@ pub fn run() {
         .manage(VisualRunnerState::default())
         .manage(actions::PresenceNagState::default())
         .manage(computer_use::Executor::default())
+        .manage(device_file_agent::Executor::default())
         .manage(admin_bridge::AdminBridgeState::default())
         .manage(window_lifecycle::WindowLifecycleState::default())
         .manage(design_satellite::DesignSatelliteState::default())
@@ -3829,6 +3831,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .setup(|app| {
+            device_file_agent::start(app.handle().clone());
             if let Some(main_window) = app.get_webview_window(design_satellite::MAIN_WINDOW_LABEL) {
                 let app_handle = app.handle().clone();
                 main_window.on_window_event(move |event| {
@@ -3894,6 +3897,12 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            device_file_agent::device_file_status,
+            device_file_agent::device_file_mode,
+            device_file_agent::device_file_pick,
+            device_file_agent::device_file_grant,
+            device_file_agent::device_file_undo_local,
+            device_file_agent::device_file_clear,
             computer_use::computer_use_windows,
             computer_use::computer_use_open,
             computer_use::computer_use_status,

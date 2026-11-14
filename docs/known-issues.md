@@ -1,3 +1,5 @@
+318（open）：Windows Rust 文件测试覆盖原地修改、hash、反写保护和撤回。真实桌面聊天链路、物理断线、macOS 本机选择器和 TCC 待验收。JSON 以外的语法检查、构建和视觉检查返回 unknown。
+
 > observe（2026-10-25）：情绪指令已补角色/来源/过期校验，原生切角和表演恢复仍待设备验收，见 [情绪接入合同](affective-engine-integration.md)。
 
 ## 桌宠侧边气泡（2026-10-27，current / observe）

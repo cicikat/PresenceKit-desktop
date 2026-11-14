@@ -1,3 +1,5 @@
+「偏好 → 通用」下的本地文件 Agent 由 `DeviceFileAgentSettings` 渲染。原生选择器、权限与快照由 Rust 持有，React 接收档案别名与改动摘要。
+
 # docs/frontend-structure.md — 前端结构指南
 
 2026-10-27：shared/live2d/drawableVisibility.ts 只执行模型档案指定的原始 drawable 渲染显隐，用于一个 part 内的眼镜/企鹅眼罩分离。舞台清理时恢复 getter；原生眼睛、参数和动作曲线不改，普通表情保留当前配饰选择。现有人工表情预览列表消费标记为装配的本地静态预设，不增加后端情绪或手机 UI/设置。无跨端影响。叶瑄增量恢复/验收与后续 agent 入口见 hlr-recovery-workflow.md。

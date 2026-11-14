@@ -20,6 +20,7 @@ import { ConnectionSettingsPage } from '../ConnectionSettingsPage';
 import { DiarySyncSettingsPage } from '../DiarySyncSettingsPage';
 import { DesktopTtsSettingsPage } from '../DesktopTtsSettingsPage';
 import { ComputerUseSettingsPage } from '../ComputerUseSettingsPage';
+import { DeviceFileAgentSettings } from '../DeviceFileAgentSettings';
 import { VisualPerceptionSettingsPage } from '../VisualPerceptionSettingsPage';
 import { useI18n, type Language } from '../../../../shared/i18n';
 import { getUIPref, setUIPref } from '../../../../shared/uiPreferences';
@@ -171,6 +172,8 @@ export function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, 
                 <VisualPerceptionSettingsPage />
                 <div style={{ height: 1, background: 'var(--paper-edge)' }} />
                 <ComputerUseSettingsPage />
+                <div style={{ height: 1, background: 'var(--paper-edge)' }} />
+                <DeviceFileAgentSettings />
               </>
             ) : tab === 'interface' ? (
               <>
