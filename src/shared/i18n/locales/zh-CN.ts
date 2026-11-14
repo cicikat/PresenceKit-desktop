@@ -1,5 +1,8 @@
 export const zhCN = {
   'localFiles.title': "本地文件 Agent",
+  'localFiles.unrestricted': "无限制访问本地文件",
+  'localFiles.unrestrictedWrite': "允许修改选定范围以外的文件",
+  'localFiles.unrestrictedHint': "开启后可访问本地磁盘上的受支持文本文件。任务所需的文本可能发送给已配置的模型。",
   'localFiles.consent': "角色会将完成任务所需的文本片段发给服务端模型。选择文件或文件夹后，可随时撤销访问。",
   'localFiles.disabled': "关闭",
   'localFiles.enabled': "启用",
@@ -633,7 +636,7 @@ export const zhCN = {
   'computerUse.cloudAllowed': "本次会话已授权云端截图。",
   'computerUse.cloudPaused': "云端截图已暂停。",
   'computerUse.cloudDenied': "本次会话无法使用云端截图。",
-  'computerUse.description': "临时授权角色使用 Windows 应用。授权到期自动关闭。",
+  'computerUse.description': "允许角色为你交办的任务选择并操作 Windows 应用，可以随时关闭。",
   'computerUse.windowsOnly': "此功能需要 Windows。",
   'computerUse.scope': "授权范围",
   'computerUse.window': "单个窗口",

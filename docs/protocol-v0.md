@@ -152,5 +152,7 @@ GET /activity/records（state.read）默认仅列来源元数据；指定 source
 
 Computer Use 的授权与截图定位走 REST。现有 WebSocket 消息结构继续适用于桌宠订阅。见 [后端接入](backend-integration.md#302-cu-05-云端视觉)。
 
+322 设备开关授权通过 `/computer-use/poll` 的 `switch_authorization` 协商。后端按心跳续租，设备还可因关闭、紧急停止、锁屏或断连撤销授权。新设备收到 `list_windows` 后回传带身份的窗口列表，`focus_window` 只接受本任务已列出的窗口句柄。后续帧和输入绑定选中窗口。先部署后端，再启用新桌面。
+
 
 313 ambient uses REST /sensor/ambient with a scoped Reality session; the desktop WebSocket wire protocol does not carry these readings.

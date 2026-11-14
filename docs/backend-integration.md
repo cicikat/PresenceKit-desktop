@@ -1,4 +1,4 @@
-桌面本地文件 Agent 通过 `POST /device-file-agent/poll`、`POST /device-file-agent/result` 使用桌面 scoped token。独立于 GUI Computer Use。命令绑定 workspace 与 grant revision，写回执断线后按原身份续传。IPC 仅主窗口使用，实体路径留在 Rust。
+桌面本地文件 Agent 通过 `POST /device-file-agent/poll`、`POST /device-file-agent/result` 使用桌面 scoped token。独立于 GUI Computer Use。命令绑定 workspace 与 grant revision，写回执断线后按原身份续传。主窗口 IPC `device_file_unrestricted` 控制按连接绑定、默认关闭的全盘文本授权及其读写权限。该授权允许模型临时处理任务所需的绝对路径和摘录。
 
 > 2026-10-25：情绪 v3 保留明确表达 ABI；avatar 来源校验及验收边界见 [情绪接入合同](affective-engine-integration.md)。
 

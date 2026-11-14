@@ -3922,6 +3922,7 @@ pub fn run() {
             device_file_agent::device_file_mode,
             device_file_agent::device_file_pick,
             device_file_agent::device_file_grant,
+            device_file_agent::device_file_unrestricted,
             device_file_agent::device_file_undo_local,
             device_file_agent::device_file_undo_task,
             device_file_agent::device_file_clear,

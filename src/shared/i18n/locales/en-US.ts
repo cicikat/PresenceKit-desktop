@@ -3,6 +3,9 @@ import type { MessageKey } from './zh-CN';
 
 export const enUS: Record<MessageKey, string> = {
   'localFiles.title': "Local File Agent",
+  'localFiles.unrestricted': "Unrestricted local file access",
+  'localFiles.unrestrictedWrite': "Allow edits outside selected folders",
+  'localFiles.unrestrictedHint': "Allows access to supported text files anywhere on local drives. Text needed for the task can be sent to the configured model.",
   'localFiles.consent': "The backend model receives the text excerpts needed for each task. You can revoke access to a selected file or folder anytime.",
   'localFiles.disabled': "Off",
   'localFiles.enabled': "On",
@@ -632,7 +635,7 @@ export const enUS: Record<MessageKey, string> = {
   'computerUse.agent.outcome_unknown': "Result needs verification",
   'computerUse.agent.failureBudget': "Repeated attempts failed",
   'computerUse.agent.executionBudget': "Execution limit reached",
-  'computerUse.description': "Temporarily allow the character to use Windows apps. Access ends automatically when the session expires.",
+  'computerUse.description': "Allow the character to choose and use a Windows app for tasks you request. Turn access off at any time.",
   'computerUse.windowsOnly': "This feature requires Windows.",
   'computerUse.scope': "Access scope",
   'computerUse.window': "One window",

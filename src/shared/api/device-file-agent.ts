@@ -5,6 +5,8 @@ export type FileAgentMode = 'enabled' | 'paused' | 'disabled';
 export interface FileAgentStatus {
   state: FileAgentMode;
   online: boolean;
+  unrestricted: boolean;
+  unrestricted_write: boolean;
   grants: { id: string; alias: string; write: boolean }[];
   recent: { id: string; task_id: string; path: string; diff: string; sha256: string;
     status: string; synced: boolean; undoable: boolean }[];
@@ -16,6 +18,7 @@ export const deviceFileAgent = {
   mode: (mode: FileAgentMode) => invoke<void>('device_file_mode', { mode }),
   pick: (single: boolean, write: boolean) => invoke<void>('device_file_pick', { single, write }),
   grant: (id: string, write: boolean | null) => invoke<void>('device_file_grant', { id, write }),
+  unrestricted: (enabled: boolean, write: boolean) => invoke<void>('device_file_unrestricted', { enabled, write }),
   undo: (id: string) => invoke<void>('device_file_undo_local', { id }),
   undoTask: (taskId: string) => invoke<{ restored: number; error?: string }>('device_file_undo_task', { taskId }),
   clear: () => invoke<void>('device_file_clear'),

@@ -141,6 +141,18 @@ pub fn allowed_component(name: &str) -> bool {
         )
 }
 
+fn unrestricted_component(name: &str) -> bool {
+    let stem = name.split('.').next().unwrap_or_default().trim_end().to_ascii_lowercase();
+    let device = matches!(stem.as_str(), "con" | "prn" | "aux" | "nul" | "conin$" | "conout$")
+        || ["com", "lpt"].iter().any(|prefix| stem.strip_prefix(prefix).is_some_and(|suffix|
+            matches!(suffix, "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "¹" | "²" | "³")));
+    !matches!(name, "" | "." | "..")
+        && !device
+        && !name.ends_with([' ', '.'])
+        && !name.contains(['\\', '/', ':', '\0', '<', '>', '"', '|', '?', '*', '~'])
+        && !name.chars().any(char::is_control)
+}
+
 fn supported(name: &str) -> bool {
     Path::new(name)
         .extension()
@@ -177,7 +189,7 @@ fn checked_dir(parent: &Dir, name: &str, allow_mount: bool) -> Result<Dir> {
     Ok(child)
 }
 
-fn open_root(path: &Path) -> Result<Dir> {
+fn open_root(path: &Path, unrestricted: bool) -> Result<Dir> {
     let mut components = path.components();
     #[cfg(windows)]
     let anchor = {
@@ -217,7 +229,8 @@ fn open_root(path: &Path) -> Result<Dir> {
         };
         let name = name.to_str().ok_or("path_denied")?;
         // Standard home-directory ancestors are allowed only while opening the explicit grant.
-        if !allowed_component(name) && !matches!(name, "Users" | "home") {
+        if !(if unrestricted { unrestricted_component(name) }
+             else { allowed_component(name) || matches!(name, "Users" | "home") }) {
             return Err("path_denied");
         }
         // macOS exposes the local APFS Data volume through the /Users firmlink.
@@ -255,7 +268,7 @@ pub fn approve(
     if !allowed_component(leaf) || home.is_some_and(|h| h.starts_with(root)) {
         return Err("path_denied");
     }
-    let directory = open_root(root)?;
+    let directory = open_root(root, false)?;
     if let Some(name) = &file {
         read_at(&directory, name)?;
     }
@@ -272,21 +285,39 @@ struct Target {
 }
 
 fn root(grant: &Grant) -> Result<Dir> {
-    let directory = open_root(&grant.root)?;
+    let directory = open_root(&grant.root, grant.unrestricted)?;
     if Identity::of(&directory.dir_metadata().map_err(io)?) != grant.identity {
         return Err("grant_changed");
     }
     Ok(directory)
 }
 
+pub(super) fn unrestricted_identity(home: &Path) -> Result<Identity> {
+    Ok(Identity::of(&open_root(home, true)?.dir_metadata().map_err(io)?))
+}
+
 fn target(grant: &Grant, relative: &str) -> Result<Target> {
     if relative.len() > 512 || grant.file.as_deref().is_some_and(|name| name != relative) {
         return Err("path_denied");
     }
-    let mut parts = relative.split('/').peekable();
+    let normalized = if grant.unrestricted { relative.replace('\\', "/") } else { relative.to_owned() };
+    let path = Path::new(&normalized);
+    if grant.unrestricted && path.is_absolute() {
+        if normalized.split('/').any(|part| matches!(part, "." | "..")) {
+            return Err("path_denied");
+        }
+        let name = path.file_name().and_then(|name| name.to_str())
+            .filter(|name| unrestricted_component(name)).ok_or("path_denied")?;
+        if !supported(name) {
+            return Err("unsupported_text");
+        }
+        let parent = open_root(path.parent().ok_or("path_denied")?, true)?;
+        return Ok(Target { parent, name: name.to_owned() });
+    }
+    let mut parts = normalized.split('/').peekable();
     let mut parent = root(grant)?;
     while let Some(part) = parts.next() {
-        if !allowed_component(part) {
+        if !(if grant.unrestricted { unrestricted_component(part) } else { allowed_component(part) }) {
             return Err("path_denied");
         }
         if parts.peek().is_none() {
@@ -448,11 +479,32 @@ fn walk(
 
 pub fn find(grant: &Grant, query: &str) -> Result<Value> {
     let dir = root(grant)?;
-    let query = query.trim().to_lowercase();
+    let input = query.trim().replace('\\', "/");
+    let query = input.to_lowercase();
     let mut found = Vec::new();
     let mut visited = 0;
+    if let Ok(target) = target(grant, &input) {
+        search_entry(&target.parent, &target.name, &input, "", &mut found);
+    }
+    if !found.is_empty() {
+        return Ok(json!({"truncated":false,"files":found}));
+    }
     if let Some(name) = &grant.file {
         search_entry(&dir, name, name, &query, &mut found);
+    } else if grant.unrestricted {
+        // Check the common save locations before a bounded search under the home directory.
+        let mut truncated = false;
+        for name in ["Downloads", "Desktop", "Documents"] {
+            if let Ok(child) = checked_dir(&dir, name, false) {
+                let mut scanned = 0;
+                walk(&child, name, 0, &query, &mut scanned, &mut found)?;
+                truncated |= scanned >= 256;
+            }
+        }
+        if found.is_empty() {
+            walk(&dir, "", 0, &query, &mut visited, &mut found)?;
+        }
+        return Ok(json!({"truncated":truncated || visited >= 256 || found.len() >= 20,"files":found}));
     } else {
         walk(&dir, "", 0, &query, &mut visited, &mut found)?;
     }

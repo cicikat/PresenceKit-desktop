@@ -13,6 +13,7 @@ fn fixture() -> (tempfile::TempDir, Grant) {
     fs::create_dir(&root).unwrap();
     let (root, file, identity) = files::approve(&root, false, None).unwrap();
     let grant = Grant {
+        unrestricted: false,
         id: new_id().unwrap(),
         revision: new_id().unwrap(),
         root,
@@ -23,6 +24,27 @@ fn fixture() -> (tempfile::TempDir, Grant) {
         binding: "test".into(),
     };
     (tmp, grant)
+}
+
+#[test]
+fn unrestricted_grant_reads_outside_the_picked_folder_and_requires_write_consent() {
+    let (tmp, mut grant) = fixture();
+    let outside = tmp.path().join("outside.txt");
+    fs::write(&outside, "old text").unwrap();
+    let path = outside.to_str().unwrap();
+    assert_eq!(files::inspect(&grant, path, 1).err(), Some("path_denied"));
+    grant.unrestricted = true;
+    grant.write = false;
+    assert_eq!(files::find(&grant, path).unwrap()["files"].as_array().unwrap().len(), 1);
+    assert_eq!(files::inspect(&grant, path, 1).unwrap()["content"], "old text");
+    let patch = |g: &Grant| files::prepare(g, "task", path, "patch", &files::hash(b"old text"),
+        "old text", "new text", None);
+    assert_eq!(patch(&grant).err(), Some("read_only"));
+    grant.write = true;
+    patch(&grant).unwrap().commit(&grant).unwrap();
+    assert_eq!(fs::read(&outside).unwrap(), b"new text");
+    grant.unrestricted = false;
+    assert_eq!(files::inspect(&grant, path, 1).err(), Some("path_denied"));
 }
 
 #[test]

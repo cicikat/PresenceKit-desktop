@@ -27,6 +27,9 @@ mod unsupported {
     pub fn foreground_window() -> Result<WindowId, &'static str> {
         Err("unsupported_platform")
     }
+    pub fn focus_window(_: WindowId) -> Result<(), &'static str> {
+        Err("unsupported_platform")
+    }
     pub fn activity() -> u64 {
         0
     }

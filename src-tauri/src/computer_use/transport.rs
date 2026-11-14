@@ -92,6 +92,9 @@ pub(super) async fn run(
         if let Some(granted) = cloud_vision {
             poll["cloud_vision"] = json!(granted);
         }
+        if grant.switch_authorization {
+            poll["switch_authorization"] = json!(true);
+        }
         if visual_verify {
             poll["visual_verify"] = json!(true);
         }
