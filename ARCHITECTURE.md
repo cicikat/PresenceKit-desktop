@@ -1,3 +1,5 @@
+本地文件 Agent 在 Tauri 的 `device_file_agent` 模块执行文本文件操作，以专用 HTTP poll/result 与后端协调。文件授权由主窗口偏好中的 `DeviceFileAgentSettings` 发起，部署切换隔离原有授权。
+
 # PresenceKit-desktop 当前架构
 
 2026-10-11 增量：现有 MotionLibrary 接入本机 UAL 派生共享 Clip；Room EditorPanel 的
