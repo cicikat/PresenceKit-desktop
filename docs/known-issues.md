@@ -802,6 +802,8 @@ DPR 画布、调色滤镜降采样、桌宠窗口 set-size 权限/LogicalSize、
 
 ## 301 Windows Computer Use（observe）
 
+322 开关式授权和选窗已接入设备协议。Windows 前台切换受系统焦点策略限制，若目标未切到前台，设备返回失败。打包客户端、物理快捷键及生产角色真机验收仍开放。
+
 原生执行器可以用 `cargo test --manifest-path src-tauri/Cargo.toml --lib computer_use::tests::notepad_smoke -- --ignored --nocapture` 在解锁的 Windows 会话中测试。测试会启动临时记事本文档并操作前台，运行时需保持键鼠空闲。已在单屏 168 DPI 的真实记事本验证观察、全选、输入、保存、停止与拒绝重放。浏览器滚动与点击、多屏、锁屏和崩溃恢复仍待实测。
 
 301 补记：桌面组件浏览器回归已验证双窗口状态显示、单窗口/整个桌面授权、暂停/恢复与停止。原生 Edge 验收使用 `scripts/fixtures/computer-use.html`，可在解锁的 Windows 中启动 Vite 后打开该页，切到前台再运行 `cargo test --manifest-path src-tauri/Cargo.toml --lib computer_use::tests::browser_smoke -- --ignored --nocapture`。此轮原生 Edge 复测未运行到输入步骤。
@@ -820,3 +822,6 @@ AGENT-05 已用真实文本模型和原生桌面完成一次隔离记事本操�
 
 
 313 (observe): camera exposure, reflections, microphone availability, Windows lock and power consumption await physical checks. Ambient brightness currently requires an open call camera.
+## 313 原子设备文件能力（open / observe）
+
+原子目录/名称/正文/读页走现有文件 HTTP 协议；必须先更新后端，新桌面向旧后端广告 operations 会被严格 schema 拒绝。扫描与本机授权设置共用执行锁，合作式中途取消尚未实现；扫描限一秒，后端取消/撤权后不接受只读回执。Windows Rust 临时目录验证不等同真实 Tauri→HTTP→模型联调，后者及 macOS 仍 pending physical verification。跟踪：后端工单 313 交付报告及文件合同。

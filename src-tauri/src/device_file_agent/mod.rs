@@ -28,6 +28,8 @@ struct Grant {
     write: bool,
     alias: String,
     binding: String,
+    #[serde(default)]
+    unrestricted: bool,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -35,6 +37,8 @@ struct Settings {
     device_id: String,
     state: Mode,
     grants: Vec<Grant>,
+    #[serde(default)]
+    unrestricted: Option<Grant>,
 }
 
 #[derive(Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -98,7 +102,7 @@ struct Action {
 impl Action {
     fn valid(&self) -> bool {
         self.path.len() <= 512
-            && self.query.len() <= 1024
+            && self.query.len() <= 4096
             && self.before.len() <= 8192
             && self.after.len() <= 8192
             && (1..=262144).contains(&self.start)
@@ -197,6 +201,7 @@ impl Runtime {
                     device_id: new_id()?,
                     state: Mode::Disabled,
                     grants: vec![],
+                    unrestricted: None,
                 };
                 durable_json(&base.join("grants.json"), &value)?;
                 value
@@ -308,6 +313,8 @@ impl Runtime {
             *last = reference.seq;
             self.action = Some((action.op.clone(), action.path.clone()));
             match action.op.as_str() {
+                "list_dir" | "stat" | "find_name" | "search_text" | "read_page" =>
+                    files::discover(&grant, &action.op, &action.path, &action.query),
                 "find" => files::find(&grant, &action.query),
                 "read" => files::inspect(&grant, &action.path, action.start),
                 "verify" => files::verify(
@@ -318,7 +325,7 @@ impl Runtime {
                 "patch" | "create" | "undo" => {
                     self.record_mutation(reference.clone(), &grant, &action, false)
                 }
-                _ => Err("invalid_action"),
+                _ => Err("unsupported_operation"),
             }
         })();
         self.action = None;
@@ -326,7 +333,7 @@ impl Runtime {
     }
 
     fn grant(&self, reference: &Reference) -> Option<&Grant> {
-        self.settings.grants.iter().find(|g| {
+        self.settings.grants.iter().chain(self.settings.unrestricted.iter()).find(|g| {
             g.binding == self.binding
                 && g.id == reference.workspace_id
                 && g.revision == reference.revision
@@ -392,7 +399,10 @@ impl Runtime {
                     && r.receipt.as_ref().is_some_and(|a| a.code == "ok")})
             })
             .collect();
-        json!({"state":self.settings.state,"online":self.online,"grants":grants,"recent":recent,"action":self.action})
+        let unrestricted = self.settings.unrestricted.as_ref().filter(|g| g.binding == self.binding);
+        json!({"state":self.settings.state,"online":self.online,"grants":grants,"recent":recent,
+            "action":self.action,"unrestricted":unrestricted.is_some(),
+            "unrestricted_write":unrestricted.is_some_and(|g| g.write)})
     }
 }
 
@@ -475,7 +485,7 @@ pub async fn device_file_pick(
     }
     access(&app, |r| {
         let mut settings = r.settings.clone();
-        if settings.grants.len() >= 16 {
+        if settings.grants.len() >= 15 && settings.unrestricted.is_some() || settings.grants.len() >= 16 {
             return Err("storage_full");
         }
         settings.grants.push(Grant {
@@ -487,7 +497,42 @@ pub async fn device_file_pick(
             write,
             alias,
             binding,
+            unrestricted: false,
         });
+        r.persist_settings(settings)
+    })
+}
+
+#[tauri::command]
+pub fn device_file_unrestricted(
+    window: WebviewWindow,
+    enabled: bool,
+    write: bool,
+) -> Result<(), FileError> {
+    main_window(&window)?;
+    let app = window.app_handle();
+    let binding = connection(app).1;
+    let home = app.path().home_dir().map_err(|_| "path_denied")?;
+    access(app, |r| {
+        let mut settings = r.settings.clone();
+        if enabled && settings.grants.len() >= 16 {
+            return Err("storage_full");
+        }
+        settings.unrestricted = if enabled {
+            Some(Grant {
+                id: new_id()?,
+                revision: new_id()?,
+                identity: files::unrestricted_identity(&home)?,
+                root: home,
+                file: None,
+                write,
+                alias: "All local files".into(),
+                binding,
+                unrestricted: true,
+            })
+        } else {
+            None
+        };
         r.persist_settings(settings)
     })
 }
@@ -659,13 +704,15 @@ pub fn start(app: AppHandle) {
                     r.online = false;
                     r.seen.clear();
                 }
-                let grants: Vec<_> = r.settings.grants.iter().filter(|g| g.binding == binding)
+                let grants: Vec<_> = r.settings.grants.iter().chain(r.settings.unrestricted.iter())
+                    .filter(|g| g.binding == binding)
                     .map(|g| json!({"workspace_id":g.id,"revision":g.revision,"alias":g.alias,"write":g.write}))
                     .collect();
                 Ok((
                     r.settings.state,
                     json!({"protocol":PROTOCOL,"device_id":r.settings.device_id,
-                    "device_epoch":r.epoch,"state":r.settings.state,"grants":grants}),
+                    "device_epoch":r.epoch,"state":r.settings.state,"grants":grants,
+                    "operations":["list_dir","stat","find_name","search_text","read_page"]}),
                     r.pending(),
                 ))
             });

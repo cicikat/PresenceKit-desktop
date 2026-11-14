@@ -53,6 +53,23 @@ export function DeviceFileAgentSettings() {
         {status?.state === 'enabled' && <span>{t(status.online ? 'localFiles.online' : 'localFiles.offline')}</span>}
       </div>
       <label>
+        <input type="checkbox" role="switch" checked={status?.unrestricted ?? false} disabled={busy || !status}
+          onChange={event => {
+            const enabled = event.target.checked;
+            void run(() => deviceFileAgent.unrestricted(enabled, false));
+          }} />
+        {t('localFiles.unrestricted')}
+      </label>
+      {status?.unrestricted && <label>
+        <input type="checkbox" checked={status.unrestricted_write} disabled={busy}
+          onChange={event => {
+            const allowed = event.target.checked;
+            void run(() => deviceFileAgent.unrestricted(true, allowed));
+          }} />
+        {t('localFiles.unrestrictedWrite')}
+      </label>}
+      <p style={{ margin: 0, color: 'var(--ink-3)' }}>{t('localFiles.unrestrictedHint')}</p>
+      <label>
         <input type="checkbox" checked={write} disabled={busy} onChange={event => setWrite(event.target.checked)} />
         {t('localFiles.write')}
       </label>

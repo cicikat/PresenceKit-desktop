@@ -41,10 +41,11 @@ export const getComputerUseBackendStatus = () =>
 export const getAgentSessionStatus = () => invoke<AgentSessionStatus>('computer_use_agent_status');
 export const controlAgentSession = (sessionId: string, action: 'pause' | 'resume' | 'cancel') =>
   invoke<AgentSessionStatus>('computer_use_agent_control', { sessionId, action });
-export const openComputerUse = (scope: ComputerUseScope | null, durationSeconds: number, charId: string,
+export const openComputerUse = (charId: string,
   cloudVision?: boolean, overlayLabel?: string) =>
   invoke<ComputerUseStatus>('computer_use_open', {
-    scope, durationSeconds, charId, overlayLabel, ...(cloudVision === undefined ? {} : { cloudVision }),
+    scope: { kind: 'desktop' }, durationSeconds: 0, charId, overlayLabel,
+    ...(cloudVision === undefined ? {} : { cloudVision }),
   });
 export const controlComputerUse = (control: ComputerUseControl) =>
   invoke<ComputerUseStatus>('computer_use_control', { control });

@@ -29,7 +29,7 @@ static MONITOR: OnceLock<Result<(), &'static str>> = OnceLock::new();
 
 pub fn arm_monitor(seconds: u64) {
     let now = unsafe { GetTickCount64() };
-    MONITOR_UNTIL.store(now + seconds * 1000, Ordering::Relaxed);
+    MONITOR_UNTIL.store(now.saturating_add(seconds.saturating_mul(1000)), Ordering::Relaxed);
     arm_escape(None, Duration::ZERO);
 }
 
@@ -221,6 +221,27 @@ fn identify(handle: HWND) -> Option<WindowId> {
 
 pub fn valid_window(window: WindowId) -> bool {
     identify(hwnd(window)) == Some(window)
+}
+
+pub fn focus_window(window: WindowId) -> Result<(), &'static str> {
+    if !unlocked() || !valid_window(window) {
+        return Err("window_unavailable");
+    }
+    unsafe {
+        if GetForegroundWindow() == hwnd(window) {
+            return Ok(());
+        }
+        if !SetForegroundWindow(hwnd(window)).as_bool() {
+            return Err("window_focus_denied");
+        }
+    }
+    for _ in 0..5 {
+        if surface(Scope::Window { window }).is_ok() {
+            return Ok(());
+        }
+        std::thread::sleep(Duration::from_millis(30));
+    }
+    Err("window_focus_denied")
 }
 
 pub fn windows() -> Result<Vec<WindowChoice>, &'static str> {

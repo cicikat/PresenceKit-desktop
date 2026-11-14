@@ -26,7 +26,7 @@ pub struct WindowId {
     created: [u32; 2],
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct WindowChoice {
     id: WindowId,
     title: String,
@@ -97,6 +97,8 @@ pub enum Button {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Action {
     Observe {},
+    ListWindows {},
+    FocusWindow { handle: u64 },
     VerifyVisual {},
     Click {
         target: Target,
@@ -161,6 +163,8 @@ pub struct Receipt {
     status: &'static str,
     reason: Option<&'static str>,
     observation: Option<Observation>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    windows: Option<Vec<WindowChoice>>,
 }
 
 impl Receipt {
@@ -169,6 +173,7 @@ impl Receipt {
             status,
             reason: Some(reason),
             observation: None,
+            windows: None,
         }
     }
 }
@@ -184,7 +189,7 @@ struct Session {
     device_id: String,
     scope: Scope,
     cloud_vision: Option<bool>,
-    expires: Instant,
+    expires: Option<Instant>,
     paused: bool,
     stopped: Option<&'static str>,
     activity: u64,
@@ -217,6 +222,8 @@ struct Task {
     next: u32,
     deadline: Instant,
     frame: Option<Frame>,
+    selected: Option<WindowId>,
+    windows: Vec<WindowChoice>,
 }
 
 struct Frame {
@@ -241,12 +248,18 @@ pub struct Status {
     state: &'static str,
     reason: Option<&'static str>,
     remaining_ms: u64,
+    switch_authorization: bool,
     focus_ready: bool,
     task_id: Option<String>,
     steps: u32,
 }
 
 impl Session {
+    fn surface_scope(&self) -> Scope {
+        self.task.as_ref().and_then(|task| task.selected)
+            .map_or(self.scope, |window| Scope::Window { window })
+    }
+
     fn check(&mut self) {
         if self.stopped.is_some() {
             return;
@@ -261,18 +274,23 @@ impl Session {
             .is_some_and(|peer| peer.expires <= Instant::now())
         {
             Some("backend_offline")
-        } else if self.expires <= Instant::now() {
+        } else if self.expires.is_some_and(|expires| expires <= Instant::now()) {
             Some("expired")
         } else if !native::unlocked() {
             Some("desktop_locked")
-        } else if self.task.is_some() && native::surface(self.scope).is_err() {
+        } else if self.expires.is_some() && self.task.is_some() && native::surface(self.scope).is_err() {
             Some("scope_changed")
         } else if self
             .task
             .as_ref()
             .is_some_and(|t| t.deadline <= Instant::now())
         {
-            Some("task_expired")
+            if self.expires.is_some() {
+                Some("task_expired")
+            } else {
+                self.task = None;
+                None
+            }
         } else {
             None
         };
@@ -329,7 +347,9 @@ impl Executor {
         duration_seconds: u64,
         cloud_vision: Option<bool>,
     ) -> Result<Status, &'static str> {
-        if !(30..=900).contains(&duration_seconds) {
+        if duration_seconds == 0 && !matches!(scope, Scope::Desktop)
+            || duration_seconds != 0 && !(30..=900).contains(&duration_seconds)
+        {
             return Err("invalid_duration");
         }
         if let Scope::Window { window } = scope {
@@ -352,13 +372,14 @@ impl Executor {
             .as_ref()
             .map(|s| s.device_id.clone())
             .map_or_else(random_id, Ok)?;
-        native::arm_monitor(duration_seconds);
+        native::arm_monitor(if duration_seconds == 0 { u64::MAX } else { duration_seconds });
         *session = Some(Session {
             id: random_id()?,
             device_id,
             scope,
             cloud_vision,
-            expires: Instant::now() + Duration::from_secs(duration_seconds),
+            expires: (duration_seconds != 0)
+                .then(|| Instant::now() + Duration::from_secs(duration_seconds)),
             paused: false,
             stopped: None,
             activity: native::activity(),
@@ -386,6 +407,7 @@ impl Executor {
                 state: "closed",
                 reason: None,
                 remaining_ms: 0,
+                switch_authorization: false,
                 focus_ready: false,
                 task_id: None,
                 steps: 0,
@@ -417,10 +439,10 @@ impl Executor {
             } else {
                 session
                     .expires
-                    .saturating_duration_since(Instant::now())
-                    .as_millis() as u64
+                    .map_or(900_000, |expires| expires.saturating_duration_since(Instant::now()).as_millis() as u64)
             },
-            focus_ready: session.stopped.is_none() && native::surface(session.scope).is_ok(),
+            switch_authorization: session.expires.is_none(),
+            focus_ready: session.stopped.is_none() && native::surface(session.surface_scope()).is_ok(),
             task_id: session.task.as_ref().map(|t| t.id.clone()),
             steps: session.task.as_ref().map_or(0, |t| t.next - 1),
         })
@@ -513,8 +535,9 @@ impl Executor {
             native::arm_escape(Some(Scope::Desktop), remaining);
             return Some(Some(if session.paused { Cue::Weak } else { cue }));
         }
-        let legacy = !session.paused && peer.task_id.is_some() && native::surface(session.scope).is_ok();
-        native::arm_escape(None, Duration::ZERO);
+        let scope = session.surface_scope();
+        let legacy = !session.paused && peer.task_id.is_some() && native::surface(scope).is_ok();
+        native::arm_escape((legacy && session.expires.is_none()).then_some(scope), remaining);
         Some(legacy.then_some(Cue::Legacy))
     }
 
@@ -566,13 +589,15 @@ impl Executor {
             }
             if step.seq == 1
                 && session.task.is_none()
-                && matches!(step.action, Action::Observe {})
+                && (matches!(step.action, Action::Observe {})
+                    || session.expires.is_none() && matches!(step.action, Action::ListWindows {}))
                 && (1..=80).contains(&step.task_id.len())
-                && session.seen_tasks.len() < 128
                 && !session.seen_tasks.contains(&step.task_id)
             {
                 // The owner may focus the approved window before the first step.
-                native::surface(session.scope).map_err(|e| Receipt::error("stale", e))?;
+                if session.expires.is_some() {
+                    native::surface(session.scope).map_err(|e| Receipt::error("stale", e))?;
+                }
                 session.activity = native::activity();
                 session.seen_tasks.insert(step.task_id.clone());
                 session.task = Some(Task {
@@ -580,19 +605,42 @@ impl Executor {
                     next: 1,
                     deadline: Instant::now() + TASK_TTL,
                     frame: None,
+                    selected: None,
+                    windows: vec![],
                 });
             }
+            session.active()?;
+            let switch_authorization = session.expires.is_none();
             let task = match_task(session, &step)?;
             if task.next != step.seq || step.seq > MAX_STEPS {
                 return Err(Receipt::error("stale", "invalid_sequence"));
             }
             task.next += 1;
             let previous = task.frame.take();
-            if session.paused {
-                return Err(Receipt::error("canceled", "paused"));
+            if switch_authorization {
+                match step.action {
+                    Action::ListWindows {} => {
+                        task.windows = native::windows().map_err(|e| Receipt::error("failed", e))?
+                            .into_iter().take(32).collect();
+                        return Ok(Receipt { status: "ok", reason: None, observation: None,
+                            windows: Some(task.windows.clone()) });
+                    }
+                    Action::FocusWindow { handle } => {
+                        let selected = task.windows.iter().find(|choice| choice.id.handle == handle)
+                            .ok_or_else(|| Receipt::error("failed", "window_unavailable"))?.id;
+                        native::focus_window(selected).map_err(|e| Receipt::error("failed", e))?;
+                        task.selected = Some(selected);
+                    }
+                    _ if task.selected.is_none() => {
+                        return Err(Receipt::error("failed", "window_selection_required"));
+                    }
+                    _ => {}
+                }
+            } else if matches!(step.action, Action::ListWindows {} | Action::FocusWindow { .. }) {
+                return Err(Receipt::error("failed", "window_selection_unavailable"));
             }
             (
-                session.scope,
+                session.surface_scope(),
                 previous,
                 session.revision,
                 session.cloud_vision == Some(true),
@@ -601,7 +649,7 @@ impl Executor {
 
         let before = native::surface(scope).map_err(|e| Receipt::error("stale", e))?;
         let mut action = step.action.clone();
-        let observing = matches!(action, Action::Observe {});
+        let observing = matches!(action, Action::Observe {} | Action::FocusWindow { .. });
         if !observing {
             let frame = previous
                 .as_ref()
@@ -779,6 +827,7 @@ impl Executor {
                 surface: after,
                 nodes,
             }),
+            windows: None,
         })
     }
 
@@ -810,7 +859,7 @@ impl Executor {
         let mut guard = self.session().map_err(|e| Receipt::error("failed", e))?;
         let session = match_session(&mut guard, step)?;
         session.active()?;
-        if native::surface(session.scope) != Ok(expected) {
+        if native::surface(session.surface_scope()) != Ok(expected) {
             return Err(Receipt::error("stale", "observation_changed"));
         }
         session.active()?;

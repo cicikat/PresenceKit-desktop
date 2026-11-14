@@ -1,5 +1,74 @@
 use super::*;
 
+#[test]
+fn discovery_metadata_paging_search_and_readback_use_real_files() {
+    // Catches implicit content reads, missing pagination and incorrect root-relative paths.
+    let (_tmp, grant) = fixture();
+    fs::create_dir(grant.root.join("子 目录")).unwrap();
+    fs::create_dir(grant.root.join("empty")).unwrap();
+    fs::write(grant.root.join("config.json"), "private configuration").unwrap();
+    fs::write(grant.root.join(".hidden.txt"), "hidden").unwrap();
+    fs::write(grant.root.join("a.html"), "<title>Old</title>\nsecond\n").unwrap();
+    fs::write(grant.root.join("子 目录/a.html"), "<title>Nested</title>").unwrap();
+    let find = files::discover(&grant, "find_name", "", r#"{"query":"**/*.html","mode":"glob"}"#).unwrap();
+    assert_eq!(find["total"], 2);
+    assert_eq!(find["read_bytes"], 0);
+    let config = files::discover(&grant, "find_name", "", r#"{"query":"config.json","mode":"exact"}"#).unwrap();
+    assert_eq!(config["total"], 1);
+    assert_eq!(config["read_bytes"], 0);
+    assert_eq!(files::inspect(&grant, "config.json", 1), Err("path_denied"));
+    let page = files::discover(&grant, "list_dir", "", r#"{"limit":1}"#).unwrap();
+    assert_eq!(page["truncated"], true);
+    let next = files::discover(&grant, "list_dir", "", &json!({"limit":1,"cursor":page["next_cursor"]}).to_string()).unwrap();
+    assert_ne!(page["entries"][0], next["entries"][0]);
+    let empty = files::discover(&grant, "list_dir", "empty", "{}").unwrap();
+    assert_eq!(empty["total"], 0);
+    assert_eq!(empty["truncated"], false);
+    let stat = files::discover(&grant, "stat", "子 目录", "{}").unwrap();
+    assert_eq!(stat["type"], "directory");
+    assert_eq!(files::discover(&grant, "stat", "missing.txt", "{}"), Err("not_found"));
+    let text = files::discover(&grant, "search_text", "子 目录", r#"{"query":"<title>.*</title>","mode":"regex","content_search":true}"#).unwrap();
+    assert_eq!(text["entries"][0]["relative_path"], "子 目录/a.html");
+    assert_eq!(text["entries"][0]["line"], 1);
+    assert_eq!(files::discover(&grant, "search_text", "", r#"{"query":"title"}"#), Err("invalid_action"));
+    let read = files::discover(&grant, "read_page", "a.html", "{}").unwrap();
+    assert_eq!(read["has_more"], false);
+    assert_eq!(read["end"], 2);
+    for path in ["../", "a.html:stream", "//server/share", "子 目录/../../"] {
+        assert!(files::discover(&grant, "stat", path, "{}").is_err(), "{path}");
+    }
+    let old = files::inspect(&grant, "a.html", 1).unwrap();
+    let patch = files::prepare(&grant, "fixture-task", "a.html", "patch", old["sha256"].as_str().unwrap(),
+                               "Old", "Hello", None).unwrap();
+    patch.commit(&grant).unwrap();
+    assert_eq!(files::verify(&grant, "a.html", &patch.version.after_hash).unwrap()["verified"], true);
+    assert!(files::inspect(&grant, "a.html", 1).unwrap()["content"].as_str().unwrap().contains("Hello"));
+
+    let stale = files::discover(&grant, "list_dir", "", &json!({"cursor":page["next_cursor"]}).to_string());
+    assert_eq!(stale, Err("stale_cursor"));
+    let hidden = files::discover(&grant, "find_name", "", r#"{"query":".hidden.txt","mode":"exact"}"#).unwrap();
+    assert_eq!(hidden["total"], 1);
+    let none = files::discover(&grant, "find_name", "", r#"{"query":"absent"}"#).unwrap();
+    assert_eq!(none["total"], 0);
+    let literal = files::discover(&grant, "search_text", "", r#"{"query":"Hello","content_search":true}"#).unwrap();
+    assert_eq!(literal["entries"][0]["relative_path"], "a.html");
+    fs::write(grant.root.join("long.txt"), "line\n".repeat(201)).unwrap();
+    let first = files::discover(&grant, "read_page", "long.txt", "{}").unwrap();
+    assert_eq!(first["has_more"], true);
+    assert_eq!(first["next"], 101);
+    let last = files::discover(&grant, "read_page", "long.txt", r#"{"start":201}"#).unwrap();
+    assert_eq!(last["has_more"], false);
+    assert_eq!(first["sha256"], last["sha256"]);
+    #[cfg(windows)]
+    {
+        let absolute = grant.root.join("A.HTML").to_string_lossy().to_uppercase();
+        assert_eq!(files::discover(&grant, "read_page", &absolute, "{}").unwrap()["sha256"],
+                   files::inspect(&grant, "a.html", 1).unwrap()["sha256"]);
+        let slash = grant.root.join("子 目录/a.html").to_string_lossy().replace('\\', "/");
+        assert_eq!(files::discover(&grant, "stat", &slash, "{}").unwrap()["type"], "file");
+    }
+}
+
 fn fixture() -> (tempfile::TempDir, Grant) {
     #[cfg(target_os = "macos")]
     let fixture_parent = PathBuf::from(std::env::var_os("HOME").expect("runner HOME"));
@@ -13,6 +82,7 @@ fn fixture() -> (tempfile::TempDir, Grant) {
     fs::create_dir(&root).unwrap();
     let (root, file, identity) = files::approve(&root, false, None).unwrap();
     let grant = Grant {
+        unrestricted: false,
         id: new_id().unwrap(),
         revision: new_id().unwrap(),
         root,
@@ -23,6 +93,41 @@ fn fixture() -> (tempfile::TempDir, Grant) {
         binding: "test".into(),
     };
     (tmp, grant)
+}
+
+#[test]
+fn discovery_hard_cap_reports_partial_rows_instead_of_a_false_empty_result() {
+    // More directory entries than the cap must retain useful rows and admit incompleteness.
+    let (_tmp, grant) = fixture();
+    for index in 0..4100 {
+        fs::write(grant.root.join(format!("item-{index:04}.html")), "fixture").unwrap();
+    }
+    let result = files::discover(&grant, "list_dir", "", r#"{"limit":100}"#).unwrap();
+    assert_eq!(result["truncated"], true);
+    assert_eq!(result["total"], Value::Null);
+    assert!(!result["entries"].as_array().unwrap().is_empty());
+    assert_eq!(result["read_bytes"], 0);
+}
+
+#[test]
+fn unrestricted_grant_reads_outside_the_picked_folder_and_requires_write_consent() {
+    let (tmp, mut grant) = fixture();
+    let outside = tmp.path().join("outside.txt");
+    fs::write(&outside, "old text").unwrap();
+    let path = outside.to_str().unwrap();
+    assert_eq!(files::inspect(&grant, path, 1).err(), Some("path_denied"));
+    grant.unrestricted = true;
+    grant.write = false;
+    assert_eq!(files::find(&grant, path).unwrap()["files"].as_array().unwrap().len(), 1);
+    assert_eq!(files::inspect(&grant, path, 1).unwrap()["content"], "old text");
+    let patch = |g: &Grant| files::prepare(g, "task", path, "patch", &files::hash(b"old text"),
+        "old text", "new text", None);
+    assert_eq!(patch(&grant).err(), Some("read_only"));
+    grant.write = true;
+    patch(&grant).unwrap().commit(&grant).unwrap();
+    assert_eq!(fs::read(&outside).unwrap(), b"new text");
+    grant.unrestricted = false;
+    assert_eq!(files::inspect(&grant, path, 1).err(), Some("path_denied"));
 }
 
 #[test]
