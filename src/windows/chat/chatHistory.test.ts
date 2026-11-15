@@ -22,7 +22,7 @@ it('keeps legacy text and ignores invalid sidecars without empty bubbles', () =>
 });
 
 it('hides only a terminal writer footer and keeps ordinary body quotes', () => {
-  expect(historyVisibleText('我觉得你好像有点不一样了\n> speaker:user turn_id:1043484516_1794717917531')).toBe('我觉得你好像有点不一样了');
+  expect(historyVisibleText('我觉得你好像有点不一样了\n> speaker:user turn_id:fixture-user-turn')).toBe('我觉得你好像有点不一样了');
   expect(historyVisibleText('body\n> speaker:user turn_id:inside\nmore')).toBe('body\n> speaker:user turn_id:inside\nmore');
   expect(historyVisibleText('explain turn_id:please')).toBe('explain turn_id:please');
   expect(historyVisibleText('voice\n> speaker:user source:mobile modality:voice asr_low:1')).toBe('voice');
