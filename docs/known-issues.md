@@ -1,3 +1,7 @@
+## 工单56 流中断与历史显示（2026-11-15，observe / open）
+
+已修复流可见后忽略请求错误、失败回执删除部分正文；晚到完整回复原位替换，失败感叹号可显式重发。历史末尾 writer footer 不再显示。80项聊天测试、真实ChatPanel浏览器回归与构建通过；真实Windows断网及修改后的生产联调未验收，历史坏尾包形态仍open。见 [56交付](chat-recovery-stream-56.md)。
+
 314（open / observe）：真实打包Chromium、ReactTSX、Three/WebGL、Rust保存回读/刷新及撤权后完整进程树退出已验证；完整Tauri窗口→远程HTTP→真实VLM、物理断网/崩溃/跨进程重启仍未验收。源码预览不执行Vite server/插件/任意npm依赖。撤权与在途native调用串行，响应超时20秒。macOS不广告browser能力。详见 [接入合同](backend-integration.md#314-隔离浏览器预览current--observe) 及相邻后端314交付记录。
 
 318（open）：Windows Rust 文件测试覆盖原地修改、hash、反写保护和撤回。真实桌面聊天链路、物理断线、macOS 本机选择器和 TCC 待验收。JSON 以外的语法检查、构建和视觉检查返回 unknown。
