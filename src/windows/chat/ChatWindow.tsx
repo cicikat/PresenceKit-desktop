@@ -1,4 +1,5 @@
-﻿import { lazy, Suspense, useState, useEffect, useRef, useCallback, type CSSProperties } from 'react';
+﻿import { deferredComponent } from '../../shared/ui/deferredComponent';
+import { Suspense, useState, useEffect, useRef, useCallback, type CSSProperties } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { StateEngine } from '../../shared/state/store';
 import { ToolStatusOverlayController, type ToolStatusOverlayState } from '../../shared/state/toolStatusOverlay';
@@ -22,7 +23,6 @@ import { GroupListPanel } from './components/GroupListPanel';
 import { PaneHost } from './components/Panes';
 import { SpecPanel } from './components/SpecPanel';
 import { DreamAfterglowBanner } from '../dream/components/DreamAfterglowBanner';
-import { DreamWindow } from '../dream/DreamWindow';
 import { PreferencesPanel } from './components/preferences/PreferencesPanel';
 import { Divider, VideoBg } from './components/ChatShellAtoms';
 import { LayoutHost } from './components/LayoutHost';
@@ -34,8 +34,13 @@ import { setSelectedDesignModId } from '../../shared/design-mod/runtime';
 import { useChatAppearanceController } from './hooks/useChatAppearanceController';
 import { usePetController } from './hooks/usePetController';
 import { useChatWindowNavigation } from './hooks/useChatWindowNavigation';
+import { LoadingSurface } from '../../shared/window/LoadingSurface';
+import { preloadPreferenceTab } from './components/preferences/deferredPages';
 
-const ActivityWindow = lazy(() => import('../activity/ActivityWindow').then(m => ({ default: m.ActivityWindow })));
+const { Component: ActivityWindow, preload: loadActivity } = deferredComponent(() => import('../activity/ActivityWindow').then(m => ({ default: m.ActivityWindow })));
+const { Component: DreamWindow, preload: loadDream } = deferredComponent(() => import('../dream/DreamWindow').then(m => ({ default: m.DreamWindow })), <div style={{ position: 'absolute', inset: 0, zIndex: 100 }}><LoadingSurface /></div>);
+const warmActivity = () => { void loadActivity().catch(() => {}); };
+const warmDream = () => { void loadDream().catch(() => {}); };
 
 export function ChatWindow({ onToyOpen, onRoomOpen, isCovered = false }: { onToyOpen?: () => void; onRoomOpen?: () => void; isCovered?: boolean } = {}) {
   const engineRef = useRef<StateEngine | null>(null);
@@ -218,6 +223,9 @@ export function ChatWindow({ onToyOpen, onRoomOpen, isCovered = false }: { onToy
               onPetRetry={petController.retryPet}
               onOpenSpec={() => navigation.setSpecOpen(true)}
               onOpenPrefs={() => navigation.setPrefsOpen(true)}
+              onPrefsIntent={() => preloadPreferenceTab('interface')}
+              onActivityIntent={warmActivity}
+              onDreamIntent={warmDream}
               dreamWindowOpen={navigation.dreamWindowOpen}
               onDreamToggle={navigation.toggleDreamWindow}
               activityActive={activityOpen}
@@ -256,7 +264,7 @@ export function ChatWindow({ onToyOpen, onRoomOpen, isCovered = false }: { onToy
               {!isCovered && !activityOpen && navigation.groupView === null && !navigation.dreamWindowOpen && <AgentSessionIndicator />}
               <ChatPanel hidden={activityOpen || navigation.groupView !== null} key={charSwitchKey} engine={engine} chatRectRef={chatRectRef} headerVisible={appearanceController.chatHeaderVisible} chatFontSize={appearanceController.appearance.chatFontSize} chatOpacity={appearanceController.appearance.chatOpacity} showEmotionAccent={appearanceController.appearance.showEmotionAccent} showEmotionLabel={appearanceController.appearance.showEmotionLabel} dreamActive={navigation.dreamWindowOpen} characterAvatarDataUrl={characterAvatarDataUrl} mainLayout={appearanceController.activeLayout.manifest.mainLayout} onOpenRoom={onRoomOpen} onOpenPrefs={() => navigation.setPrefsOpen(true)} />
             {activityOpen ? (
-              <Suspense fallback={null}><ActivityWindow onClose={() => setActivityOpen(false)} /></Suspense>
+              <Suspense fallback={<LoadingSurface />}><ActivityWindow onClose={() => setActivityOpen(false)} /></Suspense>
             ) : navigation.groupView === null ? (
               null
             ) : navigation.groupView === 'list' ? (
@@ -280,6 +288,7 @@ export function ChatWindow({ onToyOpen, onRoomOpen, isCovered = false }: { onToy
       </div>
 
       {navigation.dreamWindowOpen && (
+        <Suspense fallback={<div style={{ position: 'absolute', inset: 0, zIndex: 100 }}><LoadingSurface /></div>}>
         <DreamWindow
           mode={navigation.dreamContext.mode}
           groupId={navigation.dreamContext.groupId}
@@ -287,6 +296,7 @@ export function ChatWindow({ onToyOpen, onRoomOpen, isCovered = false }: { onToy
           characterAvatarDataUrl={characterAvatarDataUrl}
           onClose={navigation.closeDream}
         />
+        </Suspense>
       )}
       <DreamAfterglowBanner
         visible={navigation.dreamAfterglow}

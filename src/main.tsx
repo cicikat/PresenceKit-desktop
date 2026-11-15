@@ -1,3 +1,4 @@
+import { deferredComponent } from './shared/ui/deferredComponent';
 import React, { Component, lazy, Suspense, type ErrorInfo, type ReactNode } from "react";
 import ReactDOM from "react-dom/client";
 import { MainWindowFrame } from "./shared/window/MainWindowFrame";
@@ -11,12 +12,13 @@ import "./shared/theme/globals.css";
 import { initTheme } from "./shared/theme/registry";
 import { initUIPrefs } from "./shared/uiPreferences";
 import { initI18n, t } from "./shared/i18n";
+import { LoadingSurface } from "./shared/window/LoadingSurface";
 
 const windowView = new URLSearchParams(window.location.search).get("window");
 const isSatelliteWindow = windowView === "design-satellite";
 const isMainWindow = !isSatelliteWindow && windowView !== "pet" && windowView !== "presence-nag" && windowView !== "diary-detail" && windowView !== "video-call-invite";
 
-const ChatWindow = lazy(() => import("./windows/chat/ChatWindow").then(module => ({ default: module.ChatWindow })));
+const { Component: ChatWindow, preload: loadChatWindow } = deferredComponent(() => import("./windows/chat/ChatWindow").then(module => ({ default: module.ChatWindow })));
 const ToyWindow = lazy(() => import("./windows/toy").then(module => ({ default: module.ToyWindow })));
 const RoomWindow = lazy(() => import("./windows/room").then(module => ({ default: module.RoomWindow })));
 const PetWindow = lazy(() => import("./windows/pet/PetWindow").then(module => ({ default: module.PetWindow })));
@@ -24,10 +26,10 @@ const PresenceNagWindow = lazy(() => import("./windows/presence-nag/PresenceNagW
 const DiaryDetailWindow = lazy(() => import("./windows/diary-detail/DiaryDetailWindow").then(module => ({ default: module.DiaryDetailWindow })));
 const DesignSatelliteWindow = lazy(() => import("./windows/design-satellite/DesignSatelliteWindow").then(module => ({ default: module.DesignSatelliteWindow })));
 const IncomingCallWindow = lazy(() => import("./windows/room/IncomingCallWindow").then(module => ({ default: module.IncomingCallWindow })));
-const OnboardingGate = lazy(() => import("./features/onboarding/OnboardingGate").then(module => ({ default: module.OnboardingGate })));
+const { Component: OnboardingGate, preload: loadOnboarding } = deferredComponent(() => import("./features/onboarding/OnboardingGate").then(module => ({ default: module.OnboardingGate })));
 
 function LoadingView() {
-  return <main style={{ padding: 24, color: "var(--ink-2)" }}>{t("common.loading")}</main>;
+  return <LoadingSurface />;
 }
 
 class RoleLoadBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
@@ -112,17 +114,41 @@ function RoleRoot() {
 }
 
 initI18n();
-if (!isSatelliteWindow) {
-  await initUIPrefs();
-  initTheme().catch(error => console.warn("[theme] 初始化失败:", error));
-  import("./shared/voice/crossWindowPlayback")
-    .then(module => module.initCrossWindowAudioPlayback())
-    .catch(error => console.warn("[voice] 初始化失败:", error));
-}
-if (isMainWindow) {
-  import("./shared/avatars/store")
-    .then(module => module.avatarStore.init())
-    .catch(error => console.warn("[avatar] 初始化失败:", error));
+// Render the window frame before disk IPC. Keep preference-dependent modules
+// behind this barrier so their initial state still reads the authoritative file.
+const preferencesReady = isSatelliteWindow ? Promise.resolve() : initUIPrefs();
+const roleReady = isMainWindow
+  ? preferencesReady.then(() => Promise.all([loadChatWindow(), loadOnboarding()]))
+  : preferencesReady;
+void preferencesReady.then(() => {
+  if (!isSatelliteWindow) {
+    initTheme().catch(error => console.warn("[theme] 初始化失败:", error));
+    import("./shared/voice/crossWindowPlayback")
+      .then(module => module.initCrossWindowAudioPlayback())
+      .catch(error => console.warn("[voice] 初始化失败:", error));
+  }
+  if (isMainWindow) {
+    import("./shared/avatars/store")
+      .then(module => module.avatarStore.init())
+      .catch(error => console.warn("[avatar] 初始化失败:", error));
+  }
+});
+
+function Bootstrap() {
+  const [ready, setReady] = React.useState(isSatelliteWindow);
+  React.useEffect(() => {
+    let disposed = false;
+    const finish = () => { if (!disposed) setReady(true); };
+    // Resolve code before mounting, so startup cannot waterfall through nested
+    // Suspense fallbacks. Failed imports still reach RoleLoadBoundary on render.
+    void roleReady.then(finish, finish);
+    // Optional remote fonts must never hold up the first frame.
+    const frame = requestAnimationFrame(() => {
+      document.querySelector<HTMLLinkElement>('#optional-fonts')?.setAttribute('media', 'all');
+    });
+    return () => { disposed = true; cancelAnimationFrame(frame); };
+  }, []);
+  return ready ? roleContent : <LoadingView />;
 }
 
 const roleContent = (
@@ -135,6 +161,6 @@ const roleContent = (
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    {isMainWindow ? <MainWindowFrame>{roleContent}</MainWindowFrame> : roleContent}
+    {isMainWindow ? <MainWindowFrame><Bootstrap /></MainWindowFrame> : <Bootstrap />}
   </React.StrictMode>,
 );

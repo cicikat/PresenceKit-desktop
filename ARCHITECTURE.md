@@ -177,3 +177,7 @@ PetTextPresentation 仅在 PetStage 子树提供当前段的文本租约；Chara
 CU-05 的云端截图授权由主窗口设置页在开会话时传入 Rust，随当前设备、角色和范围同步到后端。界面只读取授权状态。
 
 `src-tauri/src/computer_use.rs` 持有短时本机授权，负责 UIA、截图、输入和停止。后端任务通过专用 HTTPS/HTTP scoped 轮询与回执关联，Tauri 状态供主窗口和桌宠消费。图片只保存在执行器内存，视觉定位时原生客户端直连已授权的本机或私网模型。
+
+## 启动与交互延迟（2026-11-15）
+
+主窗口先渲染标题栏；偏好文件读取之后并行载入 Chat/Onboarding 代码，鉴权通过后才挂载业务。Dream 和偏好子页由 shared/ui/deferredComponent 按需载入，预载只解析代码，不挂载 effect。辅助透明窗口不使用 HTML 主窗底壳。无跨端影响；计时边界与原生 open 见 [工单](cc-tasks/2026-11-15-startup-performance.md)。

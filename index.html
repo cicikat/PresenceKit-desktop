@@ -4,13 +4,23 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>陪伴</title>
+    <style>
+      html, body { margin: 0; height: 100%; }
+      html[data-window="chat"] { background: #f3ede3; }
+      #root { height: 100%; }
+      .startup-shell { display: none; }
+      html[data-window="chat"] .startup-shell { display: flex; height: 100%; }
+      .startup-shell::before { content: ""; width: 52px; background: #254138; }
+      .startup-shell::after { content: ""; flex: 1; background: #f3ede3; }
+    </style>
+    <script src="/startup.js"></script>
     <!-- TODO: 迁移到 npm 本地字体包 -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Noto+Serif+SC:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+    <link id="optional-fonts" rel="stylesheet" media="print" href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Noto+Serif+SC:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><div class="startup-shell" aria-hidden="true"></div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

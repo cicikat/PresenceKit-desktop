@@ -75,6 +75,9 @@
 
 * { box-sizing: border-box; }
 
+.loading-surface { height: 100%; min-height: 64px; display: flex; align-items: center; justify-content: center; gap: 5px; background: var(--paper); }
+.loading-surface__dot { width: 4px; height: 4px; border-radius: 50%; background: var(--ink-3); }
+
 html, body {
   margin: 0; padding: 0; height: 100%; overflow: hidden;
   background: var(--paper);
@@ -82,7 +85,7 @@ html, body {
   font-family: var(--font-sans);
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
-  transition: background 0.4s ease, color 0.4s ease;
+  transition: background 0.12s ease, color 0.12s ease;
 }
 
 body::before {
@@ -91,7 +94,7 @@ body::before {
     radial-gradient(ellipse at 18% 12%, var(--paper-grain-1), transparent 50%),
     radial-gradient(ellipse at 92% 88%, var(--paper-grain-2), transparent 55%);
   mix-blend-mode: multiply;
-  transition: opacity 0.4s ease;
+  transition: opacity 0.12s ease;
 }
 
 /* ── Motion tokens ──────────────────────────────────────────────────────────── */
@@ -101,7 +104,7 @@ body::before {
   to   { opacity: 1; transform: none; }
 }
 .msg-enter {
-  animation: msg-in calc(var(--motion-base) * var(--motion-scale)) var(--ease-emphasized) both;
+  animation: msg-in min(0.16s, calc(var(--motion-base) * var(--motion-scale))) var(--ease-emphasized) both;
 }
 
 /* Keep theme changes responsive: animate only the document surfaces. */
@@ -109,9 +112,9 @@ html.theme-transitioning,
 html.theme-transitioning body,
 html.theme-transitioning #root {
   transition:
-    background-color calc(var(--motion-slow) * var(--motion-scale)) var(--ease-standard),
-    color            calc(var(--motion-slow) * var(--motion-scale)) var(--ease-standard),
-    border-color     calc(var(--motion-slow) * var(--motion-scale)) var(--ease-standard) !important;
+    background-color min(0.16s, calc(var(--motion-slow) * var(--motion-scale))) var(--ease-standard),
+    color            min(0.16s, calc(var(--motion-slow) * var(--motion-scale))) var(--ease-standard),
+    border-color     min(0.16s, calc(var(--motion-slow) * var(--motion-scale))) var(--ease-standard) !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -26,7 +26,7 @@ function HeartIcon({ size = 18 }: { size?: number }) {
   );
 }
 
-function RibBtn({ icon, label, active, onClick, customIcon }: any) {
+function RibBtn({ icon, label, active, onClick, customIcon, onIntent }: any) {
   const [hover, setHover] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [tooltipPosition, setTooltipPosition] = useState({ left: 0, top: 0 });
@@ -37,7 +37,9 @@ function RibBtn({ icon, label, active, onClick, customIcon }: any) {
   };
   return (
     <div style={{ position: 'relative', flexShrink: 0 }}
-      onMouseEnter={showTooltip}
+      onMouseEnter={() => { showTooltip(); onIntent?.(); }}
+      onFocus={onIntent}
+      onPointerDown={onIntent}
       onMouseLeave={() => setHover(false)}>
       <button ref={buttonRef} aria-label={label} aria-pressed={Boolean(active)} onClick={onClick} style={{
         width: 38, height: 38, borderRadius: 'var(--radius-md)',
@@ -82,6 +84,7 @@ export function Ribbon({
   onToyOpen,
   playModeEnabled,
   onGroupOpen,
+  onPrefsIntent, onActivityIntent, onDreamIntent,
 }: any) {
   const { t } = useI18n();
   const [connState, setConnState] = useState<ConnectionState>(wsClient.getState());
@@ -140,8 +143,10 @@ export function Ribbon({
           active={sidebarOpen && sidebarTab === 'garden'}
           onClick={() => { if (sidebarOpen && sidebarTab === 'garden') onCloseSidebar(); else onSidebarTab('garden'); }} />
         <Sep />
-        <DreamEntryButton active={dreamWindowOpen} onToggle={onDreamToggle} />
-        <RibBtn icon="grid2" label="一起做事" active={activityActive} onClick={onActivityOpen} />
+        <div onPointerEnter={onDreamIntent} onFocus={onDreamIntent} onPointerDown={onDreamIntent}>
+          <DreamEntryButton active={dreamWindowOpen} onToggle={onDreamToggle} />
+        </div>
+        <RibBtn icon="grid2" label="一起做事" active={activityActive} onClick={onActivityOpen} onIntent={onActivityIntent} />
         {playModeEnabled && (
           <RibBtn label="玩耍模式" customIcon={<HeartIcon />} onClick={onToyOpen} />
         )}
@@ -149,7 +154,7 @@ export function Ribbon({
         <RibBtn icon="pet" label={petError ? t('pet.retry') : t('pet.toggle')} active={petVisible} onClick={petError ? onPetRetry : onPetToggle} customIcon={petBusy ? <span aria-hidden="true">...</span> : undefined} />
       </div>
       <div className="chat-ribbon__footer">
-        <RibBtn icon="settings" label="偏好" onClick={onOpenPrefs} />
+        <RibBtn icon="settings" label="偏好" onClick={onOpenPrefs} onIntent={onPrefsIntent} />
         <RibBtn icon="spec"     label="帮助" onClick={onOpenSpec} />
         <Sep />
         <RibBtn
