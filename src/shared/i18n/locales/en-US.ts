@@ -86,6 +86,8 @@ export const enUS: Record<MessageKey, string> = {
 "room.motion.unavailable": "Motion unavailable. Check assets and motion diagnostics.",
 "chat.send.failed": "Send failed",
 "chat.send.retry": "Retry",
+"chat.send.failedRetry": "Send failed. Click to resend",
+"chat.send.noReplyRetry": "No reply received. Click to resend",
 "chat.send.connectionFailed": "Could not connect to the server. Check your network and desktop server address before retrying.",
 "chat.send.responseTimeout": "The server took too long to respond. Check the conversation for a reply before retrying.",
 "chat.send.interrupted": "The chat request was interrupted. Check the conversation for a reply before retrying.",

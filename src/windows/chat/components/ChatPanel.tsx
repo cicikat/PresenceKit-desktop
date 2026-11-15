@@ -59,9 +59,9 @@ import { createLatestTimer } from '../chatTimer';
 import { bindHttpReplyIdentity, matchesHistoryReplay } from '../httpReplyIdentity';
 import { ChatReplyFallbacks, type ReplySource } from '../chatReplyFallbacks';
 import { ChatRequests, type ChatRequestToken } from '../chatRequests';
-import { advanceChatRecovery, deliveryFromReceipt, isTerminalDelivery, newChatRequestId, pendingChatIds, recoveredReply, rememberChatRequest, requestForCanonicalReply, safeChatPrefix, type ChatDelivery, type ReplyAvailability, type ReplyIdentity } from '../chatReconciliation';
+import { advanceChatRecovery, canResendChat, deliveryFromReceipt, isTerminalDelivery, newChatRequestId, pendingChatIds, recoveredReply, rememberChatRequest, requestForCanonicalReply, safeChatPrefix, type ChatDelivery, type ReplyAvailability, type ReplyIdentity } from '../chatReconciliation';
 import { ChatReceiptPolling } from '../chatReceiptPolling';
-import { historyAssistantParts } from '../chatHistory';
+import { historyAssistantParts, historyVisibleText } from '../chatHistory';
 
 function splitReply(text: string): string[] {
   return text.split(/\n+/).map(s => s.trim()).filter(s => s.length > 0);
@@ -281,7 +281,7 @@ function entriesToMsgs(dateStr: string, entries: ChatLogEntry[], rawFallback: bo
       else msgs.push({ id: `tool:${activity.chain_id}`, role: 'system', text: '', time: ts, historyDate: dateStr, toolActivities: [activity] });
     }
     if (entry.user) {
-      msgs.push({ id: newId(), role: 'user', text: entry.user, time: ts, turnId: entry.turn_id, requestId: entry.request_id, historyDate: dateStr });
+      msgs.push({ id: newId(), role: 'user', text: historyVisibleText(entry.user), time: ts, turnId: entry.turn_id, requestId: entry.request_id, historyDate: dateStr });
     }
     historyAssistantParts(entry).forEach(({ text, artifacts }) => {
       if (safeChatPrefix(text) !== text) return;
@@ -627,7 +627,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       if (item.id !== id || !item.delivery) return item;
       const next = advanceChatRecovery(item, delivery, availability, identity);
       return { ...item, ...next,
-        retryDraft: next.delivery && isTerminalDelivery(next.delivery) && next.delivery !== 'not_executed' ? undefined : item.retryDraft };
+        retryDraft: next.delivery === 'completed' ? undefined : item.retryDraft };
     }));
     if (isTerminalDelivery(delivery)) receiptPolling.current?.finish(id);
     if (availability === 'rendered') recoveryIdentities.current.delete(id);
@@ -1029,9 +1029,15 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
         if (msgId && !recoveringBody) {
           chatRequests.streamEnd(msgId);
           const bubbleIds = streamingLocalIdRef.current.get(msgId) ?? [];
-          streamingLocalIdRef.current.delete(msgId);
-          streamingTextRef.current.delete(msgId);
-          setMessages(previous => previous.filter(item => !bubbleIds.includes(item.id)));
+          // Keep visible stream identity so a late canonical reply replaces
+          // the preserved prose instead of appending a duplicate.
+          if (!safeChatPrefix(streamingTextRef.current.get(msgId) ?? '').trim()) {
+            streamingLocalIdRef.current.delete(msgId);
+            streamingTextRef.current.delete(msgId);
+          }
+          setMessages(previous => previous
+            .filter(item => !bubbleIds.includes(item.id) || Boolean(item.text.trim()))
+            .map(item => bubbleIds.includes(item.id) ? { ...item, isStreaming: false, streamingDone: true } : item));
         }
       }
       return isTerminalDelivery(delivery);
@@ -2001,19 +2007,22 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
     if (preparingRef.current) return;
     if (retry?.retryDraft?.attachments.length || (!retry && attachments.length)) { await doUpload(retry); return; }
     if (!t) return;
-    if (retry && (retry.delivery !== 'not_executed' || replacedRequests.current.has(retry.id))) return;
+    if (retry && (!canResendChat(retry.delivery) || !retry.retryDraft || replacedRequests.current.has(retry.id))) return;
     const quote = retry?.retryDraft?.quote ?? (retry ? undefined : replyTarget);
     const userId = newChatRequestId();
     const token = chatRequests.begin(userId);
     if (!token) return;
-    if (retry) setBoundedMapEntry(replacedRequests.current, retry.id, userId, MAX_WS_MSG_ID_MAPPINGS);
+    if (retry) {
+      setBoundedMapEntry(replacedRequests.current, retry.id, userId, MAX_WS_MSG_ID_MAPPINGS);
+      receiptPolling.current?.finish(retry.id);
+    }
     if (chatRequests.size > 1) replyFallbacks.disableLegacySendMatching();
     const replyTo = quote
       ? { text: truncateForReplyTo(quote.text), ts: quote.time / 1000, message_id: quote.messageId }
       : undefined;
     if (!retry) { setInput(''); setReplyTarget(null); }
     setMessages(m => retry
-      ? m.map(item => item.id === retry.id ? { ...item, id: userId, delivery: 'sending' } : item)
+      ? m.map(item => item.id === retry.id ? { ...item, id: userId, delivery: 'sending', replyAvailability: undefined, replyIdentity: undefined } : item)
       : [...m, { id: userId, role: 'user', text: t, time: Date.now(), delivery: 'sending',
           replyTo: quote ?? undefined, retryDraft: { text: t, attachments: [], quote: quote ?? undefined } }]);
     chatSessionMetrics.recordTurn();
@@ -2034,7 +2043,8 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       }
       queueHttpReply(response, 'send', token);
     } catch (err) {
-      if (!mountedRef.current || !chatRequests.settle(token)) return;
+      if (!mountedRef.current || replacedRequests.current.has(userId) || canonicalRequests.current.has(userId)) return;
+      if (!chatRequests.settle(token) && !streamByRequest.current.has(userId)) return;
       if (err === 'CHAT_NOT_EXECUTED') {
         updateDelivery(userId, 'not_executed');
         const text = await describeDreamBlockedChat();
@@ -2047,13 +2057,16 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
   };
 
   const doUpload = async (retry?: ChatMsg) => {
-    if (retry && (retry.delivery !== 'not_executed' || replacedRequests.current.has(retry.id))) return;
+    if (retry && (!canResendChat(retry.delivery) || !retry.retryDraft || replacedRequests.current.has(retry.id))) return;
     const submitted = retry?.retryDraft?.attachments ?? attachments;
     const quote = retry?.retryDraft?.quote ?? (retry ? undefined : replyTarget);
     const userId = newChatRequestId();
     const token = chatRequests.begin(userId);
     if (!token) return;
-    if (retry) setBoundedMapEntry(replacedRequests.current, retry.id, userId, MAX_WS_MSG_ID_MAPPINGS);
+    if (retry) {
+      setBoundedMapEntry(replacedRequests.current, retry.id, userId, MAX_WS_MSG_ID_MAPPINGS);
+      receiptPolling.current?.finish(retry.id);
+    }
     if (chatRequests.size > 1) replyFallbacks.disableLegacySendMatching();
     // Image filenames are opaque hashes; show a neutral label instead.
     const filename = submitted.every(item => attachmentKind(item.filename) === 'image')
@@ -2063,7 +2076,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
     const placeholderText = userMessage
       ? `📎 ${filename}\n${userMessage}`
       : `📎 ${filename}`;
-    setMessages(prev => retry ? prev.map(item => item.id === retry.id ? { ...item, id: userId, delivery: 'sending' } : item) : [...prev, {
+    setMessages(prev => retry ? prev.map(item => item.id === retry.id ? { ...item, id: userId, delivery: 'sending', replyAvailability: undefined, replyIdentity: undefined } : item) : [...prev, {
       retryDraft: { text: userMessage, attachments: submitted, quote: quote ?? undefined },
       delivery: 'sending',
       id: userId, role: 'user', text: placeholderText, time: Date.now(), replyTo: quote ?? undefined, attachmentPreview: submitted.length === 1 ? submitted[0].preview : undefined,
@@ -2094,7 +2107,8 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       }
       queueHttpReply(resp, 'upload', token);
     } catch (err: unknown) {
-      if (!mountedRef.current || !chatRequests.settle(token)) return;
+      if (!mountedRef.current || replacedRequests.current.has(userId) || canonicalRequests.current.has(userId)) return;
+      if (!chatRequests.settle(token) && !streamByRequest.current.has(userId)) return;
       if (err === 'CHAT_NOT_EXECUTED') updateDelivery(userId, 'not_executed');
       else {
         updateDelivery(userId, 'unknown');
@@ -2318,8 +2332,13 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
               onDownloadArtifact={onDownloadArtifact}
               onPreviewArtifact={onPreviewArtifact}
             />}
-            {m.delivery === 'not_executed' && m.retryDraft && <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'center', color: 'var(--ink-3)' }}>
-              <button type="button" disabled={preparing || chatRequests.has(m.id)} onClick={() => void send(m)}>{t('chat.send.retry')}</button>
+            {canResendChat(m.delivery) && m.retryDraft && <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: -5, marginBottom: 8 }}>
+              <button type="button" aria-label={t(m.delivery === 'unknown' || m.delivery === 'interrupted_unknown' ? 'chat.send.noReplyRetry' : 'chat.send.failedRetry')}
+                title={t(m.delivery === 'unknown' || m.delivery === 'interrupted_unknown' ? 'chat.send.noReplyRetry' : 'chat.send.failedRetry')}
+                disabled={preparing || chatRequests.has(m.id)} onClick={() => void send(m)}
+                style={{ width: 24, height: 24, padding: 0, border: 'none', borderRadius: '50%', background: 'transparent', color: '#dc4444', fontSize: 18, fontWeight: 700, cursor: 'pointer' }}>
+                <span aria-hidden="true">❗</span>
+              </button>
             </div>}
           </div>
         ))}

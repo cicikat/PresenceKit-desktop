@@ -10,15 +10,18 @@ await page.addInitScript(() => {
   window.sent = [];
   window.reads = [];
   window.pending = [];
+  window.rejects = {};
   window.extraHistory = [];
   window.sendReceipts = {};
   window.historyOnReceipt = {};
+  window.holdSends = [];
   window.fixtureBackend = 'http://fixture.invalid';
   window.__TAURI_INTERNALS__.invoke = async (cmd, args) => {
     if (cmd === 'load_public_client_config') return { backendBase: window.fixtureBackend };
     if (cmd === 'send_chat') {
       window.sent.push(args);
-      if (args.message === 'late-http') return new Promise(resolve => window.pending.push(resolve));
+      if (args.message === 'partial-stream') return new Promise((resolve, reject) => {window.rejects[args.requestId] = reject;});
+      if (args.message === 'late-http' || window.holdSends.includes(args.message)) return new Promise(resolve => window.pending.push(resolve));
       if (window.sendReceipts[args.message]) {
         window.receipts[args.requestId] = window.sendReceipts[args.message];
       }
@@ -36,7 +39,7 @@ await page.addInitScript(() => {
     }
     if (cmd === 'load_chat_log_day') {
       const history = await original(cmd, args);
-      return { ...history, entries: [...history.entries, ...window.extraHistory] };
+      return { ...history, entries: [...history.entries.map(entry => entry.user === 'My previous message' ? {...entry, user: entry.user + '\\n> speaker:user turn_id:fixture-user'} : entry), ...window.extraHistory] };
     }
     return original(cmd, args);
   };
@@ -51,7 +54,9 @@ const setReceipt = async (text, receipt) => page.evaluate(({text, receipt}) => {
 const row = text => page.locator('.msg-enter').filter({has:page.getByText(text, {exact:true})});
 const waitForRead = id => page.waitForFunction(id => window.reads.includes(id), id);
 const canonical = async (id, msg, content) => page.evaluate(async ({id, msg, content}) => {
-  const {wsClient} = await import('/src/shared/api/ws.ts');
+  // Reuse Vite's loaded URL, including its HMR version, to reach ChatPanel's singleton.
+  const moduleUrl = performance.getEntriesByType('resource').find(entry => new URL(entry.name).pathname === '/src/shared/api/ws.ts')?.name;
+  const {wsClient} = await import(moduleUrl || '/src/shared/api/ws.ts');
   wsClient._handleMessage(JSON.stringify({type:'channel_message', request_id:id, msg_id:msg, content}));
 }, {id, msg, content});
 try {
@@ -89,11 +94,30 @@ try {
     await setReceipt(status, {status});
     const id = await start(status);
     await waitForRead(id);
-    check(await row(status).getByRole('button', {name:'重试', exact:true}).count() === 0, status + ' offered a send retry');
+    const retry = row(status).getByRole('button', {name: status === 'failed' ? '发送失败，点击重新发送' : '未收到回复，点击重新发送', exact:true});
+    await retry.waitFor();
+    check(await retry.locator('span').innerText() === '❗', status + ' did not show a red exclamation');
+    if (status === 'failed') {
+      await retry.scrollIntoViewIfNeeded();
+      await page.screenshot({path:'.tmp/chat-send-retry.png'});
+    }
+    const count = await page.evaluate(() => window.sent.length);
+    await page.locator('textarea').fill('Keep my next draft');
+    await page.evaluate(text => { delete window.sendReceipts[text]; window.holdSends.push(text); }, status);
+    await retry.dblclick();
+    await page.waitForFunction(count => window.sent.length === count + 1, count);
+    const attempts = await page.evaluate(text => window.sent.filter(item => item.message === text), status);
+    check(attempts.length === 2 && attempts[1].requestId !== id, status + ' retry did not send exactly once with a new ID');
+    check(await row(status).count() === 1, status + ' retry duplicated the user bubble');
+    check(await page.locator('textarea').inputValue() === 'Keep my next draft', 'retry replaced the next draft');
+    await canonical(attempts[1].requestId, status + '-retry-wire', status + ' recovered');
+    await page.getByText(status + ' recovered', {exact:true}).waitFor();
+    await page.evaluate(status => window.pending.shift()({reply:status + ' recovered', emotion:'neutral', msg_id:status + '-retry-wire'}), status);
+    check(await row(status).getByRole('button').count() === 0, 'successful retry kept the failure indicator');
   }
   await setReceipt('unsent', {status:'not_executed'});
   await start('unsent');
-  await row('unsent').getByRole('button', {name:'重试', exact:true}).waitFor();
+  await row('unsent').getByRole('button', {name:'发送失败，点击重新发送', exact:true}).waitFor();
   await setReceipt('unsafe-result', {status:'completed', result:{reply:'__TOOL_CALL__:[]', emotion:'neutral'}});
   const unsafe = await start('unsafe-result');
   await waitForRead(unsafe);
@@ -105,8 +129,27 @@ try {
   await page.evaluate(() => window.pending.shift()({reply:'Canonical wins', emotion:'neutral', msg_id:'late-wire', turn_id:'late-turn'}));
   check(await page.getByText('Canonical wins', {exact:true}).count() === 1, 'late HTTP duplicated canonical');
 
+  const partialId = await start('partial-stream');
+  await page.evaluate(async id => {
+    const moduleUrl = performance.getEntriesByType('resource').find(entry => new URL(entry.name).pathname === '/src/shared/api/ws.ts')?.name;
+    const {wsClient} = await import(moduleUrl || '/src/shared/api/ws.ts');
+    wsClient._handleMessage(JSON.stringify({type:'message_stream_start', request_id:id, msg_id:'partial-wire'}));
+    wsClient._handleMessage(JSON.stringify({type:'message_stream_delta', msg_id:'partial-wire', delta:'Reply received before disconnect'}));
+  }, partialId);
+  await page.getByText('Reply received before disconnect', {exact:true}).waitFor();
+  await page.evaluate(id => {window.receipts[id] = {status:'failed'}; window.rejects[id]('CHAT_REQUEST_INTERRUPTED');}, partialId);
+  await row('partial-stream').getByRole('button', {name:'发送失败，点击重新发送', exact:true}).waitFor();
+  check(await page.getByText('Reply received before disconnect', {exact:true}).count() === 1, 'failed receipt deleted partial stream text');
+
+  await page.getByText('Reply received before disconnect', {exact:true}).scrollIntoViewIfNeeded();
+  await page.screenshot({path:'.tmp/chat-recovery-partial.png'});
+  await canonical(partialId, 'partial-wire', 'Late full reply replaces partial');
+  await page.getByText('Late full reply replaces partial', {exact:true}).waitFor();
+  check(await page.getByText('Reply received before disconnect', {exact:true}).count() === 0, 'late canonical duplicated preserved partial prose');
+  check(await row('partial-stream').getByRole('button').count() === 0, 'late canonical kept failure indicator');
+  check(!(await page.locator('[data-chat-region="transcript"]').innerText()).includes('speaker:user'), 'writer metadata leaked after reload');
   const before = await page.evaluate(() => window.sent.length);
-  check(await page.evaluate(() => window.sent.length) === 8, 'automatic recovery replayed a send');
+  check(await page.evaluate(() => window.sent.length) === 12, 'automatic recovery replayed a send');
   const transcript = page.locator('[data-chat-region="transcript"]');
   for (const label of ['上次未对账的聊天请求', '处理中', '查看结果', '执行状态待确认', '已完成']) {
     check(await transcript.getByText(label, {exact:true}).count() === 0, 'technical copy leaked: ' + label);
@@ -123,10 +166,11 @@ try {
   check(await page.evaluate(id => window.reads.filter(value => value === id).length, oldId) === count, 'old backend polling survived scope switch');
   check(await page.evaluate(() => window.sent.length) === before + 1, 'scope switch replayed a send');
   check(errors.length === 0, 'Browser errors: ' + errors.join('; '));
-  console.log('PASS: reload restores real chat, silent recovery, history/WS dedup, safe retry gating, late HTTP and backend switch cancellation');
+  console.log('PASS: reload restores real chat, failure indicators and explicit resend, draft preservation, history/WS dedup, late HTTP and backend switch cancellation');
 } catch (error) {
   console.error(error.message);
   console.error('Browser errors:', errors);
+  console.error('Chat events:', chatLogs);
   await page.screenshot({path:'.tmp/chat-recovery-failure.png', timeout:5000}).catch(() => {});
   await page.locator('body').innerText({timeout:5000}).then(text => console.error(text.slice(-3500))).catch(() => {});
   process.exitCode = 1;

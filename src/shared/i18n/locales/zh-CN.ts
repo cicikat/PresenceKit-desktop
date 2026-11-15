@@ -83,6 +83,8 @@ export const zhCN = {
 "room.motion.unavailable": "动作不可用，请检查素材与动作诊断。",
 "chat.send.failed": "发送失败",
 "chat.send.retry": "重试",
+"chat.send.failedRetry": "发送失败，点击重新发送",
+"chat.send.noReplyRetry": "未收到回复，点击重新发送",
 "chat.send.connectionFailed": "无法连接后端，请检查网络和桌面端的后端地址后重试。",
 "chat.send.responseTimeout": "等待后端响应超时。重试前请先确认聊天中是否已收到回复。",
 "chat.send.interrupted": "聊天请求中断。重试前请先确认聊天中是否已收到回复。",

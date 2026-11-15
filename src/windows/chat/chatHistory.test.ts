@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { historyAssistantParts } from './chatHistory';
+import { historyAssistantParts, historyVisibleText } from './chatHistory';
 
 const artifact = { id: 'aa'.repeat(16), filename: 'report.html', mime: 'text/html', size: 12, previewable: true };
 
@@ -19,4 +19,12 @@ it('restores file-only turns, including after a serialized history round trip', 
 it('keeps legacy text and ignores invalid sidecars without empty bubbles', () => {
   expect(historyAssistantParts({ time: '12:00', user: '', assistant: 'old reply' })).toEqual([{ text: 'old reply', artifacts: undefined }]);
   expect(historyAssistantParts({ time: '12:00', user: '', assistant: '', artifacts: [{ ...artifact, id: 'invalid' }] })).toEqual([]);
+});
+
+it('hides only a terminal writer footer and keeps ordinary body quotes', () => {
+  expect(historyVisibleText('我觉得你好像有点不一样了\n> speaker:user turn_id:fixture-user-turn')).toBe('我觉得你好像有点不一样了');
+  expect(historyVisibleText('body\n> speaker:user turn_id:inside\nmore')).toBe('body\n> speaker:user turn_id:inside\nmore');
+  expect(historyVisibleText('explain turn_id:please')).toBe('explain turn_id:please');
+  expect(historyVisibleText('voice\n> speaker:user source:mobile modality:voice asr_low:1')).toBe('voice');
+  expect(historyVisibleText('text\n> speaker:user')).toBe('text');
 });

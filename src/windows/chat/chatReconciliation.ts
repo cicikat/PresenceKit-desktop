@@ -5,6 +5,11 @@ export type ChatDelivery = 'sending' | 'processing' | 'completed' | 'unknown' | 
 export type ReplyAvailability = 'rendered' | 'recoverable' | 'unavailable';
 export type ReplyIdentity = Pick<DesktopChatReceipt, 'msg_id' | 'turn_id'>;
 
+// A new attempt is sent only after an explicit user click, never by receipt polling.
+export function canResendChat(delivery?: ChatDelivery): boolean {
+  return delivery === 'failed' || delivery === 'not_executed' || delivery === 'unknown' || delivery === 'interrupted_unknown';
+}
+
 export interface ChatRecoveryState {
   delivery?: ChatDelivery;
   replyAvailability?: ReplyAvailability;
