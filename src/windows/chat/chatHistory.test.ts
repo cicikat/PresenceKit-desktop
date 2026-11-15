@@ -28,3 +28,11 @@ it('hides only a terminal writer footer and keeps ordinary body quotes', () => {
   expect(historyVisibleText('voice\n> speaker:user source:mobile modality:voice asr_low:1')).toBe('voice');
   expect(historyVisibleText('text\n> speaker:user')).toBe('text');
 });
+
+it('hides compact and trailing-blank legacy footer variants after failure', () => {
+  for (const footer of ['\n> speaker:user turn_id:fixture-turn\n\n', '\r\n>speaker:user turn_id:fixture-turn\r\n']) {
+    expect(historyVisibleText('original' + footer)).toBe('original');
+  }
+  expect(historyVisibleText('>speaker:user turn_id:fixture-turn\n')).toBe('');
+  expect(historyVisibleText('ordinary >speaker:user example')).toBe('ordinary >speaker:user example');
+});

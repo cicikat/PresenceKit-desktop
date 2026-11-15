@@ -12,5 +12,5 @@ export function historyAssistantParts(entry: ChatLogEntry): { text: string; arti
 
 // Legacy servers may include a writer footer on an unanswered history row.
 export function historyVisibleText(text: string): string {
-  return text.replace(/\r?\n[ \t]*\\?>[ \t]+speaker:(?:user|assistant)(?:[ \t]+(?:turn_id|emotion|intensity|trigger|source|modality|asr_low):\S+)*[ \t]*$/, '').trimEnd();
+  return text.trimEnd().replace(/(?:^|\r?\n)[ \t]*\\?>[ \t]*speaker:(?:user|assistant)(?:[ \t]+(?:turn_id|emotion|intensity|trigger|source|modality|asr_low):\S+)*[ \t]*$/, '').trimEnd();
 }
