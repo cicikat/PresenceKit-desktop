@@ -1903,7 +1903,7 @@ fn read_chat_attachment(item: ChatAttachment) -> Result<(String, Vec<u8>), Strin
     let suffix = Path::new(&filename).extension().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
     let max = match suffix.as_str() {
         "png" | "jpg" | "jpeg" | "gif" | "webp" => 10 * 1024 * 1024,
-        "txt" | "md" | "docx" => 5 * 1024 * 1024,
+        "txt" | "md" | "docx" | "csv" | "tsv" | "xlsx" | "pdf" | "pptx" | "json" | "jsonl" | "yaml" | "yml" | "xml" | "log" | "py" | "js" | "ts" | "tsx" | "jsx" | "css" | "sql" | "sh" | "ps1" | "ini" | "toml" | "rst" | "html" | "htm" => 5 * 1024 * 1024,
         _ => return Err("HTTP 415: unsupported attachment".into()),
     };
     let bytes = match (item.file_path, item.data_b64) {
@@ -4732,6 +4732,12 @@ mod avatar_file_tests {
         let (name, bytes) = read_chat_attachment(item("paste.png", "aGVsbG8=")).unwrap();
         assert_eq!(name, "paste.png");
         assert_eq!(bytes, b"hello");
+        // Regression: JS accepting a document must not end in native HTTP 415.
+        for name in ["ledger.CSV", "book.xlsx", "scan.pdf", "slides.pptx", "data.json", "script.py"] {
+            let (filename, bytes) = read_chat_attachment(item(name, "aGVsbG8=")).unwrap();
+            assert_eq!(filename, name);
+            assert_eq!(bytes, b"hello");
+        }
         assert!(read_chat_attachment(item("paste.exe", "aGVsbG8=")).unwrap_err().starts_with("HTTP 415"));
         assert!(read_chat_attachment(item("paste.png", "!invalid")).unwrap_err().starts_with("HTTP 422"));
         assert!(read_chat_attachment(ChatAttachment {

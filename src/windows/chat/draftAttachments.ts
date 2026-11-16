@@ -1,4 +1,4 @@
-import type { UploadAttachment } from '../../shared/api/backend';
+import { UPLOAD_ALLOWED_EXTS, type UploadAttachment } from '../../shared/api/backend';
 
 export interface DraftAttachment extends UploadAttachment {
   id: string;
@@ -8,7 +8,7 @@ export interface DraftAttachment extends UploadAttachment {
 
 export function attachmentKind(filename: string): 'image' | 'document' | null {
   if (/\.(png|jpe?g|gif|webp)$/i.test(filename)) return 'image';
-  if (/\.(txt|md|docx)$/i.test(filename)) return 'document';
+  if (UPLOAD_ALLOWED_EXTS.some(ext => filename.toLowerCase().endsWith(ext))) return 'document';
   return null;
 }
 

@@ -9,6 +9,13 @@ describe('attachment draft contract', () => {
     expect(first).toHaveLength(1);
     expect(attachmentKind('scan.JPEG')).toBe('image');
   });
+  it('accepts new document types through the same staging boundary', () => {
+    for (const filename of ['ledger.CSV', 'table.tsv', 'book.xlsx', 'note.pdf', 'slides.pptx', 'data.json', 'config.yaml', 'page.html', 'script.py']) {
+      expect(attachmentKind(filename)).toBe('document');
+      expect(mergeAttachments([], [draft(filename)])[0].filename).toBe(filename);
+      expect(() => mergeAttachments([draft(filename)], [draft('photo.png')])).toThrow('singleDocument');
+    }
+  });
   it('rejects mixed media, multiple documents and unsupported types atomically', () => {
     expect(() => mergeAttachments([draft('note.md')], [draft('photo.png')])).toThrow('singleDocument');
     expect(() => mergeAttachments([draft('note.md')], [draft('other.txt')])).toThrow('singleDocument');
