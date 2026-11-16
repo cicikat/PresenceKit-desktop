@@ -56,8 +56,12 @@ rendered、recoverable 或 unavailable。completed 不等于正文已显示，re
   自动补读近期历史。刷新直接呈现真实聊天，只有请求 ID 的旧记录继续在后台处理。
 - 有效 result 继续经过 safeChatPrefix、request_id 和 canonical ID 一致性校验，复用 HTTP fallback。
   WS 或历史已呈现同一稳定身份时只补绑定，不追加重复气泡。历史恢复按显式 turn_id，不能用同文推断执行成功。
-- failed、interrupted_unknown、unknown、回执缺失或查询失败都不自动重发；只有明确 not_executed
-  且仍有本地草稿时，用户才可显式用新 ID 重试。已恢复正文后删除未结算记录。
+- failed、interrupted_unknown、unknown、回执缺失或查询失败都不自动重发。2026-11-15 起，
+  failed、not_executed、interrupted_unknown、unknown 且仍有本地草稿时显示红色感叹号，
+  用户点击后以新 ID 重发，复用原用户气泡并保留输入区的新草稿；双击不会重复提交。
+  unknown/interrupted_unknown 使用“未收到回复”的提示，不能证明旧请求未执行；手动重发
+  仍可能再次执行原请求的工具动作。重发停止旧请求轮询，成功后释放重发草稿。
+  已恢复正文后删除未结算记录。
 - 未结算 ID 按后端地址与角色隔离，只存 ID，不存正文或凭据；兼容读取旧版仅按后端地址存储的记录。
   切换角色或保存连接配置时取消旧观察并重挂载 ChatPanel，迟到查询不能应用到新上下文。
 
@@ -72,5 +76,5 @@ API 层按 scope/request_id 合并在途 GET；支持 Web Locks 时，其他 Web
 卸载及上下文切换清除 timer 并使在途结果失效，不承诺取消已发出的底层 HTTP。
 
 `node scripts/chat-recovery-browser.mjs` 使用真实 ChatPanel 与模拟 Tauri/WS 边界，覆盖刷新恢复真实历史、
-回执正文与补读历史、历史/WS 去重、重发入口限制、晚到 HTTP 及后端切换。真实 Windows/Tauri 断网、
+回执正文与补读历史、历史/WS 去重、失败感叹号、显式重发与草稿保留、晚到 HTTP 及后端切换。真实 Windows/Tauri 断网、
 快速重启与 OrangeVPS 联调仍为 open。

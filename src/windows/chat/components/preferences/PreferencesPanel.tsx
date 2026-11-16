@@ -1,8 +1,6 @@
-import { CurrentCharacterAvatar } from './CurrentCharacterAvatar';
-import { ReasoningDisplaySettings } from './ReasoningDisplaySettings';
-import { CurrentCharacterStatus } from './CurrentCharacterStatus';
-import { ActivityAppearanceSettings } from './ActivityAppearanceSettings';
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { CurrentCharacterAvatar, ReasoningDisplaySettings, CurrentCharacterStatus, ActivityAppearanceSettings, ChatColorPage, CallSettingsPage, Live2DSettingsSection, CoplaySettingsPage, ConnectionSettingsPage, DiarySyncSettingsPage, DesktopTtsSettingsPage, ComputerUseSettingsPage, DeviceFileAgentSettings, VisualPerceptionSettingsPage, PeriodDateSettings, DesignModSettings, preloadPreferenceTab } from './deferredPages';
+import { LoadingSurface } from '../../../../shared/window/LoadingSurface';
+import { Suspense, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { avatarStore } from '../../../../shared/avatars/store';
 import { getActiveCharacterName, subscribeActiveCharacter } from '../../../../shared/activeCharacter';
@@ -12,23 +10,11 @@ import { chatFontFamily, chatFontUrl, listChatFonts, type BackgroundKind, type C
 import { AvatarCropper } from '../AvatarCropper';
 import { DreamBackgroundCropper } from '../../../dream/components/DreamBackgroundCropper';
 import { ThemePicker } from '../../../../shared/theme/ThemePicker';
-import { ChatColorPage } from '../ChatColorPage';
-import { CallSettingsPage } from '../CallSettingsPage';
-import { Live2DSettingsSection } from '../Live2DSettingsSection';
-import { CoplaySettingsPage } from '../CoplaySettingsPage';
-import { ConnectionSettingsPage } from '../ConnectionSettingsPage';
-import { DiarySyncSettingsPage } from '../DiarySyncSettingsPage';
-import { DesktopTtsSettingsPage } from '../DesktopTtsSettingsPage';
-import { ComputerUseSettingsPage } from '../ComputerUseSettingsPage';
-import { DeviceFileAgentSettings } from '../DeviceFileAgentSettings';
-import { VisualPerceptionSettingsPage } from '../VisualPerceptionSettingsPage';
 import { useI18n, type Language } from '../../../../shared/i18n';
 import { getUIPref, setUIPref } from '../../../../shared/uiPreferences';
 import { emitPetPrefs } from '../../../../shared/pet/bridge';
 import { Icon } from '../UIKit';
 import { MinuteSelect, PrefRange, PrefRow, PrefSwitch, prefActionButtonStyle, prefSelectStyle } from './PrefAtoms';
-import { PeriodDateSettings } from './PeriodDateSettings';
-import { DesignModSettings } from './DesignModSettings';
 import { CHAT_PREFERENCE_TABS, type ChatPreferenceTab } from './preferencesInfoArchitecture';
 export function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, chatHeaderVisible, onChatHeaderToggle, appearance, onAppearanceChange, activeLayout, layoutOptions, onLayoutChange, onCharacterAvatarChange, onCharacterSwitched, petMouseSettings, onPetMouseSettingsChange, petVisualStyle, onPetVisualStyleChange, model3dZoom, onModel3dZoomChange, live2dZoom, onLive2dZoomChange, presenceNagEnabled, onPresenceNagToggle, proactiveGapHours, onProactiveGapChange, playModeEnabled, onPlayModeToggle, petRoamEnabled, onPetRoamToggle, petRippleEnabled, onPetRippleToggle, onYandereOpen }: any) {
   const [petWindowScale, setPetWindowScale] = useState(() => getUIPref('pet.windowScale', 1));
@@ -139,7 +125,7 @@ export function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, 
           </div>
           <div style={{ padding: '10px 20px 0', display: 'flex', flexWrap: 'wrap', gap: 2, borderBottom: '1px solid var(--paper-edge)' }}>
             {CHAT_PREFERENCE_TABS.map(({ key, labelKey }, index) => (
-              <button key={key} onClick={() => setTab(key)} style={{
+              <button key={key} onPointerEnter={() => preloadPreferenceTab(key)} onFocus={() => preloadPreferenceTab(key)} onClick={() => setTab(key)} style={{
                 padding: '5px 10px', border: 'none', borderRadius: '6px 6px 0 0',
                 background: tab === key ? 'var(--paper)' : 'transparent',
                 color: tab === key ? 'var(--ink)' : 'var(--ink-3)',
@@ -153,6 +139,7 @@ export function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, 
             ))}
           </div>
           <div style={{ padding: '18px 22px', display: 'grid', alignContent: 'start', gap: 18, flex: 1, minHeight: 0, overflowY: 'auto' }}>
+            <Suspense key={tab} fallback={<LoadingSurface />}>
             {tab === 'general' ? (
               <>
                 <PrefRow label={t('common.language')} hint={t('settings.language.hint')}>
@@ -561,6 +548,7 @@ export function PreferencesPanel({ open, onClose, themeMode, onThemeModeChange, 
                 未完待续
               </div>
             )}
+            </Suspense>
           </div>
         </div>
       </div>
