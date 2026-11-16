@@ -169,7 +169,7 @@ export async function clearPeriodDate(): Promise<PeriodDateResponse> {
 }
 
 export const UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
-export const UPLOAD_ALLOWED_EXTS = ['.txt', '.md', '.docx'] as const;
+export const UPLOAD_ALLOWED_EXTS = ['.txt', '.md', '.docx', '.csv', '.tsv', '.xlsx', '.pdf', '.pptx', '.json', '.jsonl', '.yaml', '.yml', '.xml', '.log', '.py', '.js', '.ts', '.tsx', '.jsx', '.css', '.sql', '.sh', '.ps1', '.ini', '.toml', '.rst', '.html', '.htm'] as const;
 
 export function validateUploadFile(filePath: string, fileSize: number): UploadError | null {
   const lower = filePath.toLowerCase();

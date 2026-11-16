@@ -276,7 +276,7 @@ export const enUS: Record<MessageKey, string> = {
   'settings.avatar.error': "Could not load or save the avatar. Check the image format, size and connection, then retry.",
   "chat.attachments.pending": "Pending attachments",
   "chat.attachments.remove": "Remove attachment",
-  "chat.attachments.unsupported": "Supported: TXT, MD, DOCX, PNG, JPG, GIF and WebP.",
+  "chat.attachments.unsupported": "Supported: PDF, DOCX, XLSX, CSV, PPTX, text and code files, plus PNG, JPG, GIF and WebP images.",
   "chat.attachments.countLimit": "Send up to 10 images at once.",
   "chat.attachments.singleDocument": "Send one document at a time, without images.",
   "chat.attachments.sizeLimit": "Images: up to 10MB. Documents: up to 5MB.",
