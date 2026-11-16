@@ -42,6 +42,9 @@ Room 的 GLB 透视相机预设由 ThreeCallStage 的场景加载过程提取，
 
 ## 消息与身份
 
+ChatPanel 保留失败请求的本地重发草稿，以红色感叹号提供显式重发；新请求 ID 复用原用户气泡，
+旧请求轮询结束，当前输入草稿保留。恢复查询不自动重发，详见 [对账契约](docs/chat-correlation.md)。
+
 HTTP 经 `src/shared/api/` → Tauri command → Rust reqwest（显式 no_proxy）；WebView 不直接 fetch 后端。
 WS 经 `ws_bridge.rs` 原生 Bearer 握手与 Tauri 事件，token 不进入 URL 或 WebView。
 原生 WS 支持系统证书校验的 WSS；默认地址随 HTTP 配置推导，自定义 WS 地址保留。

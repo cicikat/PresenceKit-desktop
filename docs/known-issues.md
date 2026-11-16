@@ -17,11 +17,18 @@ current：侧边漫画气泡不覆盖立绘，按工作区左右位置选边；�
 
 ## 307 聊天恢复（2026-11-12，current / 原生联调 open）
 
-执行完成与正文恢复已分离；未知结果只读查询，只有 not_executed 允许新请求重试。638 项 Vitest、
+执行完成与正文恢复已分离；恢复查询不自动重发。2026-11-15 起，保留本地草稿的失败或未知结果
+显示红色感叹号，允许用户显式用新 ID 重发；未知结果不保证原请求未执行。原恢复实现的 638 项 Vitest、
 TypeScript、生产构建、cargo check 和真实 ChatPanel 的隔离浏览器场景通过。浏览器替换 Tauri/WS 外部边界，
 未覆盖真实 Windows/Tauri 断网重连、快速重启、HTTP 返回中断及 OrangeVPS 部署联调，这些仍 open。
 不支持 Web Locks 的旧 WebView 仅在单 WebView 内合并在途查询。Gmail 不在 307 范围。
 规则、红绿证据与复现入口见 [聊天恢复契约](chat-correlation.md)。
+
+2026-11-15 增量：41 项定向 Vitest、生产构建及真实 ChatPanel 隔离浏览器回归通过，覆盖失败提示、
+双击只发一次、新 request_id、原气泡复用、保留新草稿、成功移除提示及既有恢复/去重。
+截图为 ignored 产物 `.tmp/chat-send-retry.png`；真实安装版 Windows/Tauri 点击重发仍 open。
+`npm.cmd run check:naming` 被未修改的 rigProfile/backgroundAssets/clipPlayer/roomToonValidation
+测试中的 5 处既有字面名称阻断，本批新代码无该类命中。无新增协议、设置或手机行为影响。
 
 312 将恢复收回后台。刷新时展示已保存的对话，成功后无正文的回执会触发历史补读。仅有旧请求 ID 且
 服务端已无对应正文时没有可重建的用户消息。浏览器可模拟刷新和后台补读，原生 Windows 实窗刷新、
