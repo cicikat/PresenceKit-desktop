@@ -13,7 +13,7 @@ import { MOOD_TABLE } from '../../../shared/state/store';
 import { avatarStore } from '../../../shared/avatars/store';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
-import { sendChat, uploadDocument, previewChatAttachment, desktopWake, getChatRequest } from '../../../shared/api/backend';
+import { UPLOAD_ALLOWED_EXTS, sendChat, uploadDocument, previewChatAttachment, desktopWake, getChatRequest } from '../../../shared/api/backend';
 import { shouldSkipDesktopWake, markDesktopWakeFired } from '../../../shared/desktopWakeGate';
 import { useVoiceInput } from '../../../shared/voice/useVoiceInput';
 import { getDesktopTtsEnabled, getTtsAutoPlay, type TtsAutoPlaySettings } from '../../../shared/api/runtimeSettings';
@@ -2146,7 +2146,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
   const pickAttachment = async (image: boolean) => {
     setShowAttachMenu(false);
     try {
-      const picked = await open({ multiple: image, filters: [{ name: t(image ? 'chat.attachments.images' : 'chat.attachments.documents'), extensions: image ? ['png', 'jpg', 'jpeg', 'gif', 'webp'] : ['txt', 'md', 'docx'] }] });
+      const picked = await open({ multiple: image, filters: [{ name: t(image ? 'chat.attachments.images' : 'chat.attachments.documents'), extensions: image ? ['png', 'jpg', 'jpeg', 'gif', 'webp'] : UPLOAD_ALLOWED_EXTS.map(ext => ext.slice(1)) }] });
       if (picked) await stagePaths(typeof picked === 'string' ? [picked] : picked);
     } catch { setDraftError(t('chat.attachments.readFailed')); }
   };
@@ -2448,7 +2448,11 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
             <button onClick={() => setAttachments(current => current.filter(draft => draft.id !== item.id))} aria-label={t('chat.attachments.remove')} title={t('chat.attachments.remove')}>×</button>
           </div>)}
           {preparing && <span role="status">{t('common.loading')}</span>}
-          {draftError && <span role="alert">{draftError}</span>}
+          {draftError && <div role="alert" style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%' }}>
+            <span style={{ flex: 1, minWidth: 0 }}>{draftError}</span>
+            <button type="button" onClick={() => setDraftError(null)} aria-label={t('chat.attachments.dismiss')} title={t('chat.attachments.dismiss')}
+              style={{ flexShrink: 0, border: 'none', background: 'transparent', color: 'inherit', cursor: 'pointer', padding: '4px 8px', fontSize: 20 }}>×</button>
+          </div>}
         </div>}
         {replyTarget && (
           <div style={{
@@ -2481,7 +2485,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
             boxShadow: '0 12px 32px oklch(0.30 0.04 60 / 0.20)', zIndex: 10,
           }}>
             {([
-              ['attach', '附加文件',   '.txt .md .docx',       'doc'],
+              ['attach', '附加文件',   'PDF · Word · Excel · CSV · PPT · 文本',       'doc'],
               ['attach', '插入图片',    '.png .jpg .gif .webp', 'img'],
               ['video',  '视频通话',   '进入她的空间',           'room'],
             ] as [string, string, string, string][]).map(([icon, label, sub, action]) => (

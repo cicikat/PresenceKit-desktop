@@ -1431,3 +1431,13 @@ AGENT-06D 仅在 `visual_verify_supported` 协商后下发 `verify_visual`。此
 
 File intent hardening: every command must carry the backend's frozen `operation_intent=inspect|search|read|edit|create`. The executor rejects missing/unknown intent and task intent changes; inspect/search/read cannot create/patch/undo or touch the write journal, regardless of grant write permission. Create cannot patch/undo. Deploy the backend first, roll back the desktop first; new desktop plus old backend fails closed. No mobile, IPC, settings or WebSocket field changes.
 313 B: Poll additionally advertises atomic operations `list_dir/stat/find_name/search_text/read_page`. These commands reuse the file lease/ACK route; no new HTTP or IPC route is added. `action.query` carries strict bounded JSON options for these operations. Deploy the updated backend first (legacy backends reject unknown poll fields); a new backend rejects missing operations with `unsupported_operation`. Directory/name operations only inspect metadata; content search requires `content_search=true`. Root-relative paths, stable snapshot cursors and truncation accompany results. No mobile executor or new settings are introduced. See backend `docs/device-file-agent-contract.md` for limits and rollback.
+
+## 工单331：多格式聊天附件（2026-11-16）
+
+`POST /upload/ingest` 新增 CSV/TSV、XLSX、PDF、PPTX、JSON/JSONL、YAML、HTML、XML、日志及常用代码文本。TXT/MD/DOCX与既有图片、语音入口继续保留。桌面TS/Rust/选择器与手机Dart/Android MIME同步；后缀校验不依赖操作系统上报的MIME。附件提示右侧可关闭，关闭不删除已选附件。
+
+保持单文档5MB、图片10MB、单文档不与图片混传、正文50万字符上限。Bearer/chat scope、session、request_id、trusted_user_text、media_refs、历史、重试、poll/ack和WS字段不变。全文复用资料库与read_document，不新增设置开关、权限或状态库，资料库既有只读观测继续适用。
+
+CSV按行保留空单元格、引号与换行；XLSX保留工作表和单元格地址，数字/日期以底层值呈现，公式以原文呈现且不执行；PPTX按页序提取正文和表格；PDF逐页提取文字。文档内图片、图表、PDF扫描页与版面尚无自动视觉识别，混合PDF对无文字页标记未读；全无文字返回422 `document_needs_ocr`，提示上传页面图片或转换为可搜索PDF。容器超限返回422 `document_container_too_large`；无效、加密或空正文返回既有 `file_parse_failed`。旧DOC/XLS/PPT需要转换；图片/语音继续走已有识别链。
+
+observe：真实安装版桌面、手机文件提供器/真机上传和真实模型阅读效果尚未验收；本地HTTP入口与浏览器IPC夹具分别验证各自边界，不能作为真实设备或生产验收。

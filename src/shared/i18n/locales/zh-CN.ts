@@ -272,7 +272,7 @@ export const zhCN = {
   'settings.avatar.error': '头像读取或保存失败，请重试并检查图片格式、大小与连接。',
   "chat.attachments.pending": "待发送附件",
   "chat.attachments.remove": "移除附件",
-  "chat.attachments.unsupported": "支持 TXT、MD、DOCX 和 PNG、JPG、GIF、WebP 图片。",
+  "chat.attachments.unsupported": "支持 PDF、Word、Excel、CSV、PPTX、文本和代码文件，也可发送 PNG、JPG、GIF、WebP 图片。",
   "chat.attachments.countLimit": "一次最多发送 10 张图片。",
   "chat.attachments.singleDocument": "文档一次只能发送一个，不能与图片混发。",
   "chat.attachments.sizeLimit": "图片最大 10MB，文档最大 5MB。",
