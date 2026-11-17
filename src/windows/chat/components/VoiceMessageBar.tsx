@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { synthesizeDesktopVoice } from '../../../shared/api/runtimeSettings';
 import { audioPlaybackQueue, type PlaybackQueueHandle } from '../../../shared/voice/playbackQueue';
-import { normalizeChatDisplayText } from '../chatDisplay';
-import { renderInlineStyled, spokenInlineText } from '../inlineStyle';
+import { spokenInlineText } from '../inlineStyle';
+import { AssistantMarkdown } from '../AssistantMarkdown';
 import { publishBehavior } from '../../../shared/character/behaviorEvents';
 import { getActiveCharacterInfo } from '../../../shared/activeCharacter';
 import { monitorPlaybackLevel } from '../../../shared/voice/playbackLevel';
@@ -166,7 +166,7 @@ export function VoiceMessageBar({ text, emotion = 'neutral', fontSize, autoPlay 
           {showText ? '收起文字' : '转文字'}
         </button>
       </div>
-      {showText && <div style={{ padding: '8px 10px', borderRadius: 'var(--radius-sm)', background: 'var(--paper)', border: '1px solid var(--paper-edge)', fontSize: fontSize ?? 12.5, lineHeight: 1.65 }}>{renderInlineStyled(normalizeChatDisplayText(text))}</div>}
+      {showText && <div style={{ padding: '8px 10px', borderRadius: 'var(--radius-sm)', background: 'var(--paper)', border: '1px solid var(--paper-edge)', fontSize: fontSize ?? 12.5, lineHeight: 1.65 }}><AssistantMarkdown text={text} /></div>}
       {error && <div className="mono" style={{ fontSize: 9.5, color: 'var(--danger)' }}>语音生成失败：{error}</div>}
     </div>
   );

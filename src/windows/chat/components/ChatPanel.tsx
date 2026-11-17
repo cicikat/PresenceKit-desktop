@@ -44,6 +44,8 @@ import { TypingDots } from '../../../shared/ui/TypingDots';
 import type { ChatArtifactPayload, ChatLogEntry, NarrativeSegment, StickerPayload } from '../../../shared/api/types';
 import { normalizeChatDisplayText } from '../chatDisplay';
 import { renderInlineStyled } from '../inlineStyle';
+import { AssistantMarkdown } from '../AssistantMarkdown';
+import { splitReplyParagraphs } from '../replyParagraphs';
 import { streamDisplayText } from '../streamDisplay';
 import type { MainLayoutId } from '../../../shared/layout/contract';
 import {
@@ -64,7 +66,7 @@ import { ChatReceiptPolling } from '../chatReceiptPolling';
 import { historyAssistantParts, historyVisibleText } from '../chatHistory';
 
 function splitReply(text: string): string[] {
-  return text.split(/\n+/).map(s => s.trim()).filter(s => s.length > 0);
+  return splitReplyParagraphs(text);
 }
 
 function mainLayoutGrid(layout: MainLayoutId): CSSProperties {
@@ -337,7 +339,9 @@ function renderStreamingContent(text: string, isDone: boolean): ReactNode {
     if (/^<\/?(?:say|do|think|narration)>$/.test(part)) {
       nodes.push(<StreamTagBox key={index} raw={part} done />);
     } else {
-      nodes.push(<span key={index}>{renderInlineStyled(normalizeChatDisplayText(streamDisplayText(part)))}</span>);
+      nodes.push(isDone
+        ? <AssistantMarkdown key={index} text={part} />
+        : <span key={index}>{renderInlineStyled(streamDisplayText(part))}</span>);
     }
   });
   if (!isDone) nodes.push(<span key="cur" style={{ opacity: 0.6, animation: 'streaming-cursor-blink 0.8s step-end infinite' }}>▌</span>);
@@ -412,7 +416,7 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
   const fromUser = msg.role === 'user';
   const hue = msg.moodHue ?? currentHue;
   const time = msg.time ? new Date(msg.time).toLocaleTimeString('zh', { hour: '2-digit', minute: '2-digit' }) : '';
-  const displayText = normalizeChatDisplayText(msg.segmentedContent ?? msg.text);
+  const displayText = msg.segmentedContent ?? msg.text;
   const hasText = Boolean(displayText.trim());
   const stickerOnly = Boolean(msg.sticker && !hasText && !msg.artifacts?.length);
 
@@ -593,7 +597,7 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
             )}
             {msg.isStreaming
               ? renderStreamingContent(msg.text, msg.streamingDone ?? false)
-              : renderInlineStyled(displayText)
+              : <AssistantMarkdown text={displayText} />
             }
             {msg.meta && (
               <div className="mono" style={{ fontSize: chatThemeFontSize(10), color: 'var(--ink-3)', marginTop: 6, letterSpacing: 0.8 }}>{msg.meta}</div>
@@ -710,12 +714,14 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
   }, []);
 
   const onReplyToMsg = useCallback((msg: ChatMsg) => {
-    setReplyTarget({ text: normalizeChatDisplayText(msg.segmentedContent ?? msg.text), time: msg.time, messageId: msg.turnId && (msg.role === 'user' || msg.role === 'assistant') ? `${msg.turnId}:${msg.role}` : undefined });
+    const text = msg.segmentedContent ?? msg.text;
+    setReplyTarget({ text: msg.role === 'assistant' ? text : normalizeChatDisplayText(text), time: msg.time, messageId: msg.turnId && (msg.role === 'user' || msg.role === 'assistant') ? `${msg.turnId}:${msg.role}` : undefined });
     setCtxMenu(null);
   }, []);
 
   const onCopyMsg = useCallback((msg: ChatMsg) => {
-    const text = normalizeChatDisplayText(msg.segmentedContent ?? msg.text);
+    const raw = msg.segmentedContent ?? msg.text;
+    const text = msg.role === 'assistant' ? raw : normalizeChatDisplayText(raw);
     navigator.clipboard?.writeText(text).catch(() => {});
     setCtxMenu(null);
   }, []);
