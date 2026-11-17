@@ -2,6 +2,10 @@
 
 # PresenceKit-desktop 当前架构
 
+第一轮 F2：主聊天与语音文字展开共用 `windows/chat/AssistantMarkdown.tsx`，
+以 AST 渲染安全 Markdown；`replyParagraphs.ts` 仅维护显示分段，保留结构化块。
+正文、消息身份与后端合同不变。验收边界见 `cc-tasks/round1-safe-markdown.md`。
+
 2026-10-11 增量：现有 MotionLibrary 接入本机 UAL 派生共享 Clip；Room EditorPanel 的
 MotionPreview 提供播放/暂停/继续/恢复 idle，预览临时暂停自动选择，关闭恢复。无新架构或 WS
 字段。ChatWindow 在连接恢复时刷新角色头像。详见 docs/motion-assets/tv-ual-import.md。

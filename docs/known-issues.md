@@ -1,5 +1,10 @@
 ## 工单56 流中断与历史显示（2026-11-15，observe / open）
 
+第一轮 Markdown（observe）：合成浏览器、TS/Vite 和90项聊天/协议验证通过；
+实际 Windows 安装包/WebView2、真实后端与 TTS 听感未验收。
+旧 chat-send-retry-browser 的文字“重试”选择器与已有失败图标实现不符，脚本仍失败；
+较新的 chat-recovery-browser 已覆盖该路径并通过。详见第一轮工单，不据单测宣称生产完成。
+
 已修复流可见后忽略请求错误、失败回执删除部分正文；晚到完整回复原位替换，失败感叹号可显式重发。历史末尾 writer footer 不再显示。80项聊天测试、真实ChatPanel浏览器回归与构建通过；真实Windows断网及修改后的生产联调未验收，历史坏尾包形态仍open。见 [56交付](chat-recovery-stream-56.md)。
 
 314（open / observe）：真实打包Chromium、ReactTSX、Three/WebGL、Rust保存回读/刷新及撤权后完整进程树退出已验证；完整Tauri窗口→远程HTTP→真实VLM、物理断网/崩溃/跨进程重启仍未验收。源码预览不执行Vite server/插件/任意npm依赖。撤权与在途native调用串行，响应超时20秒。macOS不广告browser能力。详见 [接入合同](backend-integration.md#314-隔离浏览器预览current--observe) 及相邻后端314交付记录。

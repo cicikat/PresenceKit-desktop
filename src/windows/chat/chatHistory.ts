@@ -1,11 +1,11 @@
 import type { ChatArtifactPayload, ChatLogEntry } from '../../shared/api/types';
 import { normalizeChatArtifacts } from '../../shared/api/chatArtifacts';
+import { splitReplyParagraphs } from './replyParagraphs';
 
 // Both initial history and pagination must restore sidecars, including file-only turns.
 export function historyAssistantParts(entry: ChatLogEntry): { text: string; artifacts?: ChatArtifactPayload[] }[] {
   const artifacts = normalizeChatArtifacts(entry.artifacts);
-  const parts = historyVisibleText(entry.assistant_display_text || entry.assistant || '')
-    .split(/\n+/).map(text => text.trim()).filter(Boolean);
+  const parts = splitReplyParagraphs(historyVisibleText(entry.assistant_display_text || entry.assistant || ''));
   if (!parts.length && artifacts?.length) parts.push('');
   return parts.map((text, index) => ({ text, artifacts: index === 0 ? artifacts : undefined }));
 }
