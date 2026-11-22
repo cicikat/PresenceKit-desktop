@@ -87,6 +87,7 @@ export const enUS: Record<MessageKey, string> = {
 "chat.send.failed": "Send failed",
 "chat.send.retry": "Retry",
 "chat.send.failedRetry": "Send failed. Click to resend",
+"chat.send.quotaRetry": "The model service is out of quota. Click to resend",
 "chat.send.noReplyRetry": "No reply received. Click to resend",
 "chat.send.connectionFailed": "Could not connect to the server. Check your network and desktop server address before retrying.",
 "chat.send.responseTimeout": "The server took too long to respond. Check the conversation for a reply before retrying.",

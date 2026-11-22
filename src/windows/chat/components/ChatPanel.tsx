@@ -140,6 +140,7 @@ interface ChatMsg {
   historyDate?: string;
   attachmentPreview?: string;
   delivery?: ChatDelivery;
+  quotaExhausted?: boolean;
   replyAvailability?: ReplyAvailability;
   replyIdentity?: ReplyIdentity;
   retryDraft?: { text: string; attachments: DraftAttachment[]; quote?: { text: string; time: number; messageId?: string } };
@@ -626,11 +627,11 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
   const recoveryIdentities = useRef(new Map<string, ReplyIdentity>());
   const replacedRequests = useRef(new Map<string, string>());
   const streamByRequest = useRef(new Map<string, string>());
-  const updateDelivery = useCallback((id: string, delivery: ChatDelivery, availability?: ReplyAvailability, identity?: ReplyIdentity) => {
+  const updateDelivery = useCallback((id: string, delivery: ChatDelivery, availability?: ReplyAvailability, identity?: ReplyIdentity, quotaExhausted = false) => {
     setMessages(previous => previous.map(item => {
       if (item.id !== id || !item.delivery) return item;
       const next = advanceChatRecovery(item, delivery, availability, identity);
-      return { ...item, ...next,
+      return { ...item, ...next, quotaExhausted: next.delivery === 'failed' && (quotaExhausted || item.quotaExhausted),
         retryDraft: next.delivery === 'completed' ? undefined : item.retryDraft };
     }));
     if (isTerminalDelivery(delivery)) receiptPolling.current?.finish(id);
@@ -1026,7 +1027,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
         if (result && recoveringBody && !rendered) queueHttpReply(result, 'send');
         else if (!rendered) refreshHistory.current();
       } else {
-        updateDelivery(id, delivery);
+        updateDelivery(id, delivery, undefined, undefined, receipt.error_code === 'upstream_quota_exhausted');
       }
       if (isTerminalDelivery(delivery)) {
         chatRequests.release(id);
@@ -2339,8 +2340,9 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
               onPreviewArtifact={onPreviewArtifact}
             />}
             {canResendChat(m.delivery) && m.retryDraft && <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: -5, marginBottom: 8 }}>
-              <button type="button" aria-label={t(m.delivery === 'unknown' || m.delivery === 'interrupted_unknown' ? 'chat.send.noReplyRetry' : 'chat.send.failedRetry')}
-                title={t(m.delivery === 'unknown' || m.delivery === 'interrupted_unknown' ? 'chat.send.noReplyRetry' : 'chat.send.failedRetry')}
+              <button type="button"
+                aria-label={t(m.quotaExhausted ? 'chat.send.quotaRetry' : m.delivery === 'unknown' || m.delivery === 'interrupted_unknown' ? 'chat.send.noReplyRetry' : 'chat.send.failedRetry')}
+                title={t(m.quotaExhausted ? 'chat.send.quotaRetry' : m.delivery === 'unknown' || m.delivery === 'interrupted_unknown' ? 'chat.send.noReplyRetry' : 'chat.send.failedRetry')}
                 disabled={preparing || chatRequests.has(m.id)} onClick={() => void send(m)}
                 style={{ width: 24, height: 24, padding: 0, border: 'none', borderRadius: '50%', background: 'transparent', color: '#dc4444', fontSize: 18, fontWeight: 700, cursor: 'pointer' }}>
                 <span aria-hidden="true">❗</span>

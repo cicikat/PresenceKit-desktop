@@ -90,30 +90,35 @@ try {
   await canonical(recoverable, 'result-wire', 'Receipt recovered reply');
   check(await page.getByText('Receipt recovered reply', {exact:true}).count() === 1, 'receipt/WS duplicated a reply');
 
-  for (const status of ['failed','interrupted_unknown','unknown']) {
-    await setReceipt(status, {status});
-    const id = await start(status);
+  for (const [text, status, error_code] of [
+    ['failed', 'failed'], ['interrupted_unknown', 'interrupted_unknown'], ['unknown', 'unknown'],
+    ['quota', 'failed', 'upstream_quota_exhausted'],
+  ]) {
+    await setReceipt(text, {status, error_code});
+    const id = await start(text);
     await waitForRead(id);
-    const retry = row(status).getByRole('button', {name: status === 'failed' ? '发送失败，点击重新发送' : '未收到回复，点击重新发送', exact:true});
+    const label = error_code ? '模型服务额度不足，点击重新发送'
+      : status === 'failed' ? '发送失败，点击重新发送' : '未收到回复，点击重新发送';
+    const retry = row(text).getByRole('button', {name: label, exact:true});
     await retry.waitFor();
     check(await retry.locator('span').innerText() === '❗', status + ' did not show a red exclamation');
-    if (status === 'failed') {
+    if (text === 'failed') {
       await retry.scrollIntoViewIfNeeded();
       await page.screenshot({path:'.tmp/chat-send-retry.png'});
     }
     const count = await page.evaluate(() => window.sent.length);
     await page.locator('textarea').fill('Keep my next draft');
-    await page.evaluate(text => { delete window.sendReceipts[text]; window.holdSends.push(text); }, status);
+    await page.evaluate(text => { delete window.sendReceipts[text]; window.holdSends.push(text); }, text);
     await retry.dblclick();
     await page.waitForFunction(count => window.sent.length === count + 1, count);
-    const attempts = await page.evaluate(text => window.sent.filter(item => item.message === text), status);
+    const attempts = await page.evaluate(text => window.sent.filter(item => item.message === text), text);
     check(attempts.length === 2 && attempts[1].requestId !== id, status + ' retry did not send exactly once with a new ID');
-    check(await row(status).count() === 1, status + ' retry duplicated the user bubble');
+    check(await row(text).count() === 1, text + ' retry duplicated the user bubble');
     check(await page.locator('textarea').inputValue() === 'Keep my next draft', 'retry replaced the next draft');
-    await canonical(attempts[1].requestId, status + '-retry-wire', status + ' recovered');
-    await page.getByText(status + ' recovered', {exact:true}).waitFor();
-    await page.evaluate(status => window.pending.shift()({reply:status + ' recovered', emotion:'neutral', msg_id:status + '-retry-wire'}), status);
-    check(await row(status).getByRole('button').count() === 0, 'successful retry kept the failure indicator');
+    await canonical(attempts[1].requestId, text + '-retry-wire', text + ' recovered');
+    await page.getByText(text + ' recovered', {exact:true}).waitFor();
+    await page.evaluate(text => window.pending.shift()({reply:text + ' recovered', emotion:'neutral', msg_id:text + '-retry-wire'}), text);
+    check(await row(text).getByRole('button').count() === 0, 'successful retry kept the failure indicator');
   }
   await setReceipt('unsent', {status:'not_executed'});
   await start('unsent');
@@ -149,7 +154,7 @@ try {
   check(await row('partial-stream').getByRole('button').count() === 0, 'late canonical kept failure indicator');
   check(!(await page.locator('[data-chat-region="transcript"]').innerText()).includes('speaker:user'), 'writer metadata leaked after reload');
   const before = await page.evaluate(() => window.sent.length);
-  check(await page.evaluate(() => window.sent.length) === 12, 'automatic recovery replayed a send');
+  check(await page.evaluate(() => window.sent.length) === 14, 'automatic recovery replayed a send');
   const transcript = page.locator('[data-chat-region="transcript"]');
   for (const label of ['上次未对账的聊天请求', '处理中', '查看结果', '执行状态待确认', '已完成']) {
     check(await transcript.getByText(label, {exact:true}).count() === 0, 'technical copy leaked: ' + label);
