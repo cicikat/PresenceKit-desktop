@@ -107,6 +107,43 @@ fn authorized_request(
     request.bearer_auth(&cfg.admin_token)
 }
 
+// Connection identity is opaque outside Rust; credentials never enter a grant.
+#[tauri::command]
+fn reality_connection_key(app: tauri::AppHandle) -> String {
+    connection_key(&load_client_config(&app))
+}
+
+fn connection_key(cfg: &crate::client_config::ClientConfig) -> String {
+    use std::hash::{Hash, Hasher};
+    let mut hash = std::collections::hash_map::DefaultHasher::new();
+    (&cfg.backend_base, &cfg.admin_token).hash(&mut hash);
+    format!("{:016x}", hash.finish())
+}
+
+fn session_request(cfg: &crate::client_config::ClientConfig, request: reqwest::RequestBuilder,
+    session_id: &str, key: &str) -> Result<reqwest::RequestBuilder, String> {
+    if session_id.is_empty() || connection_key(cfg) != key {
+        return Err("CHAT_NOT_EXECUTED".into());
+    }
+    Ok(authorized_request(cfg, request).header("X-Presence-Session", session_id))
+}
+
+#[tauri::command]
+async fn open_reality_session(app: tauri::AppHandle, char_id: String) -> Result<serde_json::Value, String> {
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let discovery = authorized_request(&cfg, client.get(backend_url(&cfg, "/auth/whoami")))
+        .send().await.map_err(|_| "CHAT_CONNECT_FAILED")?;
+    let discovery: serde_json::Value = require_success(discovery).await?.json().await.map_err(|_| "CHAT_RESPONSE_UNREADABLE")?;
+    if discovery["capabilities"]["session_scope"] != "v1" { return Err("session_scope_unsupported".into()); }
+    let response = authorized_request(&cfg, client.post(backend_url(&cfg, "/v1/sessions")))
+        .json(&serde_json::json!({"char_id": char_id, "domain": "reality"}))
+        .send().await.map_err(|_| "CHAT_CONNECT_FAILED")?;
+    let mut grant: serde_json::Value = require_success(response).await?.json().await.map_err(|_| "CHAT_RESPONSE_UNREADABLE")?;
+    grant["connection_key"] = serde_json::json!(connection_key(&cfg));
+    Ok(grant)
+}
+
 // 401 = token 无效；403 = token 有效但 scope 不足（后端语义，见 docs/security.md）。
 // 403 的 detail 里含所需 scope，可以展示给用户；401/403 文案均不得包含 token 值。
 // 401 的 detail 现为结构化 {"message":..., "hint":...}（后端 Brief 93 §6），hint 指引去管理
@@ -148,7 +185,13 @@ async fn safe_http_error(response: reqwest::Response) -> String {
 
     let mut scope_detail: Option<String> = None;
     let mut unauthorized_hint: Option<String> = None;
-    if status.as_u16() == 409 || status.as_u16() == 422 {
+    if status.as_u16() == 404 {
+        if let Ok(body) = response.json::<serde_json::Value>().await {
+            if let Some(code @ ("session_not_found" | "character_unavailable")) = body["detail"].as_str() {
+                return format!("HTTP 404: {code}");
+            }
+        }
+    } else if status.as_u16() == 409 || status.as_u16() == 422 {
         if let Ok(body) = response.json::<serde_json::Value>().await {
             if let Some(detail) = body.get("detail") {
                 if let Some(message) = detail.as_str() {
@@ -1358,7 +1401,7 @@ struct ReplyToPayload {
 }
 
 #[tauri::command]
-async fn send_chat(
+async fn send_chat(session_id: String, connection_key: String,
     app: tauri::AppHandle,
     message: String,
     reply_to: Option<ReplyToPayload>,
@@ -1393,7 +1436,7 @@ async fn send_chat(
         body["reply_to"] = serde_json::json!({ "text": reply_to.text, "ts": reply_to.ts, "message_id": reply_to.message_id });
     }
 
-    let request = authorized_request(&cfg, client.post(backend_url(&cfg, "/desktop/chat")));
+    let request = session_request(&cfg, client.post(backend_url(&cfg, "/desktop/chat")), &session_id, &connection_key)?;
     let resp = with_chat_request_id(request, request_id)?
         .json(&body)
         .send()
@@ -1439,19 +1482,19 @@ async fn require_chat_success(response: reqwest::Response) -> Result<reqwest::Re
 }
 
 #[tauri::command]
-async fn get_chat_request(app: tauri::AppHandle, request_id: String) -> Result<serde_json::Value, String> {
+async fn get_chat_request(session_id: String, connection_key: String, app: tauri::AppHandle, request_id: String) -> Result<serde_json::Value, String> {
     if !valid_chat_request_id(&request_id) {
         return Err("HTTP 422".into());
     }
     let cfg = load_client_config(&app);
     let path = format!("/desktop/chat/requests/{request_id}");
-    let response = authorized_request(&cfg, http_client()?.get(backend_url(&cfg, &path)))
+    let response = session_request(&cfg, http_client()?.get(backend_url(&cfg, &path)), &session_id, &connection_key)?
         .send().await.map_err(|_| "CHAT_REQUEST_INTERRUPTED".to_string())?;
     require_success(response).await?.json().await.map_err(|_| "CHAT_RESPONSE_UNREADABLE".into())
 }
 
 #[tauri::command]
-async fn load_turn_reasoning(app: tauri::AppHandle, turn_id: String) -> Result<serde_json::Value, String> {
+async fn load_turn_reasoning(session_id: String, connection_key: String, app: tauri::AppHandle, turn_id: String) -> Result<serde_json::Value, String> {
     if turn_id.trim().is_empty() || turn_id.chars().count() > 128 {
         return Err("HTTP 422".to_string());
     }
@@ -1461,7 +1504,7 @@ async fn load_turn_reasoning(app: tauri::AppHandle, turn_id: String) -> Result<s
         .map_err(|_| "Invalid backend URL".to_string())?;
     url.path_segments_mut().map_err(|_| "Invalid backend URL".to_string())?
         .pop_if_empty().push(&turn_id).push("reasoning");
-    let response = authorized_request(&cfg, client.get(url)).send().await
+    let response = session_request(&cfg, client.get(url), &session_id, &connection_key)?.send().await
         .map_err(|_| "Reasoning request failed".to_string())?;
     if !response.status().is_success() {
         // Only status crosses IPC; backend error bodies may contain private data.
@@ -1494,7 +1537,7 @@ fn chat_artifact_url(
 }
 
 #[tauri::command]
-async fn download_chat_artifact(
+async fn download_chat_artifact(session_id: String, connection_key: String,
     app: tauri::AppHandle,
     artifact_id: String,
     dest_path: String,
@@ -1512,7 +1555,7 @@ async fn download_chat_artifact(
     let cfg = load_client_config(&app);
     let client = reqwest::Client::builder().no_proxy().redirect(reqwest::redirect::Policy::none()).timeout(std::time::Duration::from_secs(60)).build().map_err(|_| "Cannot connect")?;
     let url = chat_artifact_url(&cfg, &artifact_id, false)?;
-    let response = authorized_request(&cfg, client.get(url))
+    let response = session_request(&cfg, client.get(url), &session_id, &connection_key)?
         .send()
         .await
         .map_err(|_| "Artifact download failed".to_string())?;
@@ -1546,14 +1589,14 @@ async fn bounded_artifact_bytes(mut response: reqwest::Response) -> Result<Vec<u
 }
 
 #[tauri::command]
-async fn preview_chat_image(app: tauri::AppHandle, artifact_id: String) -> Result<String, String> {
+async fn preview_chat_image(session_id: String, connection_key: String, app: tauri::AppHandle, artifact_id: String) -> Result<String, String> {
     if !is_chat_artifact_id(&artifact_id) { return Err("HTTP 422".into()); }
     let cfg = load_client_config(&app);
     let client = reqwest::Client::builder().no_proxy()
         .redirect(reqwest::redirect::Policy::none())
         .connect_timeout(std::time::Duration::from_secs(8))
         .timeout(std::time::Duration::from_secs(60)).build().map_err(|_| "Cannot connect")?;
-    let response = authorized_request(&cfg, client.get(chat_artifact_url(&cfg, &artifact_id, true)?))
+    let response = session_request(&cfg, client.get(chat_artifact_url(&cfg, &artifact_id, true)?), &session_id, &connection_key)?
         .send().await.map_err(|_| "Image preview failed")?;
     let mime = response.headers().get(reqwest::header::CONTENT_TYPE).and_then(|v| v.to_str().ok())
         .unwrap_or("").split(';').next().unwrap_or("").trim().to_string();
@@ -1564,14 +1607,14 @@ async fn preview_chat_image(app: tauri::AppHandle, artifact_id: String) -> Resul
 }
 
 #[tauri::command]
-async fn preview_chat_artifact(app: tauri::AppHandle, artifact_id: String) -> Result<String, String> {
+async fn preview_chat_artifact(session_id: String, connection_key: String, app: tauri::AppHandle, artifact_id: String) -> Result<String, String> {
     if !is_chat_artifact_id(&artifact_id) {
         return Err("HTTP 422".to_string());
     }
     let cfg = load_client_config(&app);
     let client = http_client()?;
     let url = chat_artifact_url(&cfg, &artifact_id, true)?;
-    let response = authorized_request(&cfg, client.get(url))
+    let response = session_request(&cfg, client.get(url), &session_id, &connection_key)?
         .send()
         .await
         .map_err(|_| "Artifact preview failed".to_string())?;
@@ -1709,13 +1752,11 @@ async fn load_diary_entry(app: tauri::AppHandle, date: String, char_id: Option<S
 }
 
 #[tauri::command]
-async fn load_chat_log_dates(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+async fn load_chat_log_dates(session_id: String, connection_key: String, app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
     let client = http_client()?;
 
-    let resp = client
-        .get(backend_url(&cfg, "/chat-log/dates"))
-        .bearer_auth(cfg.admin_token)
+    let resp = session_request(&cfg, client.get(backend_url(&cfg, "/chat-log/dates")), &session_id, &connection_key)?
         .send()
         .await
         .map_err(|e| e.to_string())?;
@@ -1730,14 +1771,12 @@ async fn load_chat_log_dates(app: tauri::AppHandle) -> Result<serde_json::Value,
 }
 
 #[tauri::command]
-async fn load_chat_log_day(app: tauri::AppHandle, date: String) -> Result<serde_json::Value, String> {
+async fn load_chat_log_day(session_id: String, connection_key: String, app: tauri::AppHandle, date: String) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
     let client = http_client()?;
 
     let url = backend_url(&cfg, &format!("/chat-log/{}", date));
-    let resp = client
-        .get(&url)
-        .bearer_auth(cfg.admin_token)
+    let resp = session_request(&cfg, client.get(&url), &session_id, &connection_key)?
         .send()
         .await
         .map_err(|e| e.to_string())?;
@@ -1932,7 +1971,7 @@ async fn preview_chat_attachment(file_path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-async fn upload_document(
+async fn upload_document(session_id: String, connection_key: String,
     app: tauri::AppHandle,
     file_path: Option<String>,
     message: String,
@@ -1951,7 +1990,7 @@ async fn upload_document(
     // Upload ingest includes recognition and a complete chat turn.
     let client = chat_http_client()?;
 
-    let request = authorized_request(&cfg, client.post(backend_url(&cfg, "/upload/ingest")));
+    let request = session_request(&cfg, client.post(backend_url(&cfg, "/upload/ingest")), &session_id, &connection_key)?;
     let resp = with_chat_request_id(request, request_id)?
         .multipart(form)
         .send()
@@ -1973,7 +2012,7 @@ async fn upload_document(
 }
 
 #[tauri::command]
-async fn transcribe_audio(app: tauri::AppHandle, audio_b64: String) -> Result<serde_json::Value, String> {
+async fn transcribe_audio(session_id: String, connection_key: String, app: tauri::AppHandle, audio_b64: String) -> Result<serde_json::Value, String> {
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(&audio_b64)
         .map_err(|_| "HTTP 422: base64 解码失败".to_string())?;
@@ -1988,7 +2027,7 @@ async fn transcribe_audio(app: tauri::AppHandle, audio_b64: String) -> Result<se
         .text("channel", "desktop");
 
     let client = llm_http_client()?;
-    let resp = authorized_request(&cfg, client.post(backend_url(&cfg, "/transcribe")))
+    let resp = session_request(&cfg, client.post(backend_url(&cfg, "/transcribe")), &session_id, &connection_key)?
         .multipart(form)
         .send()
         .await
@@ -2031,15 +2070,15 @@ async fn publish_ambient(app: tauri::AppHandle, session_id: String, observation:
 }
 
 #[tauri::command]
-async fn get_video_call_state(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+async fn get_video_call_state(session_id: String, connection_key: String, app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
-    let resp = authorized_request(&cfg, http_client()?.get(backend_url(&cfg, "/video-call/state")))
+    let resp = session_request(&cfg, http_client()?.get(backend_url(&cfg, "/video-call/state")), &session_id, &connection_key)?
         .send().await.map_err(|e| e.to_string())?;
     require_success(resp).await?.json().await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn observe_video_call_frame(app: tauri::AppHandle, frame_b64: String) -> Result<serde_json::Value, String> {
+async fn observe_video_call_frame(session_id: String, connection_key: String, app: tauri::AppHandle, frame_b64: String) -> Result<serde_json::Value, String> {
     if frame_b64.len() > 1_100_000 { return Err("HTTP 413: camera frame too large".into()); }
     let bytes = base64::engine::general_purpose::STANDARD.decode(&frame_b64)
         .map_err(|_| "HTTP 422: invalid camera frame".to_string())?;
@@ -2047,26 +2086,26 @@ async fn observe_video_call_frame(app: tauri::AppHandle, frame_b64: String) -> R
         .mime_str("image/jpeg").map_err(|e| e.to_string())?;
     let form = reqwest::multipart::Form::new().part("file", part);
     let cfg = load_client_config(&app);
-    let resp = authorized_request(&cfg, llm_http_client()?.post(backend_url(&cfg, "/video-call/observe")))
+    let resp = session_request(&cfg, llm_http_client()?.post(backend_url(&cfg, "/video-call/observe")), &session_id, &connection_key)?
         .multipart(form).send().await.map_err(|_| "Camera observation request failed".to_string())?;
     require_success(resp).await?.json().await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn poll_video_call_camera(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+async fn poll_video_call_camera(session_id: String, connection_key: String, app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
-    let resp = authorized_request(&cfg, http_client()?.post(backend_url(&cfg, "/video-call/camera/poll")))
+    let resp = session_request(&cfg, http_client()?.post(backend_url(&cfg, "/video-call/camera/poll")), &session_id, &connection_key)?
         .send().await.map_err(|e| e.to_string())?;
     require_success(resp).await?.json().await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn submit_video_call_camera_frame(app: tauri::AppHandle, request_id: String, frame_b64: Option<String>) -> Result<(), String> {
+async fn submit_video_call_camera_frame(session_id: String, connection_key: String, app: tauri::AppHandle, request_id: String, frame_b64: Option<String>) -> Result<(), String> {
     if request_id.len() > 128 || frame_b64.as_ref().is_some_and(|value| value.len() > 1_100_000) {
         return Err("HTTP 422: invalid camera request".into());
     }
     let cfg = load_client_config(&app);
-    let resp = authorized_request(&cfg, http_client()?.post(backend_url(&cfg, "/video-call/camera/result")))
+    let resp = session_request(&cfg, http_client()?.post(backend_url(&cfg, "/video-call/camera/result")), &session_id, &connection_key)?
         .json(&serde_json::json!({"request_id": request_id, "frame_base64": frame_b64}))
         .send().await.map_err(|e| e.to_string())?;
     require_success(resp).await?;
@@ -2074,21 +2113,21 @@ async fn submit_video_call_camera_frame(app: tauri::AppHandle, request_id: Strin
 }
 
 #[tauri::command]
-async fn close_video_call_camera(app: tauri::AppHandle) -> Result<(), String> {
+async fn close_video_call_camera(session_id: String, connection_key: String, app: tauri::AppHandle) -> Result<(), String> {
     let cfg = load_client_config(&app);
-    let resp = authorized_request(&cfg, http_client()?.post(backend_url(&cfg, "/video-call/close")))
+    let resp = session_request(&cfg, http_client()?.post(backend_url(&cfg, "/video-call/close")), &session_id, &connection_key)?
         .send().await.map_err(|e| e.to_string())?;
     require_success(resp).await?;
     Ok(())
 }
 
 #[tauri::command]
-async fn respond_video_call_invite(app: tauri::AppHandle, invite_id: String, status: String) -> Result<(), String> {
+async fn respond_video_call_invite(session_id: String, connection_key: String, app: tauri::AppHandle, invite_id: String, status: String) -> Result<(), String> {
     if invite_id.len() > 128 || !matches!(status.as_str(), "accepted" | "declined") {
         return Err("HTTP 422: invalid video call decision".into());
     }
     let cfg = load_client_config(&app);
-    let resp = authorized_request(&cfg, http_client()?.post(backend_url(&cfg, "/video-call/invite/respond")))
+    let resp = session_request(&cfg, http_client()?.post(backend_url(&cfg, "/video-call/invite/respond")), &session_id, &connection_key)?
         .json(&serde_json::json!({"invite_id": invite_id, "status": status}))
         .send().await.map_err(|e| e.to_string())?;
     require_success(resp).await?;
@@ -2096,10 +2135,10 @@ async fn respond_video_call_invite(app: tauri::AppHandle, invite_id: String, sta
 }
 
 #[tauri::command]
-async fn hangup_video_call_invite(app: tauri::AppHandle, invite_id: String) -> Result<(), String> {
+async fn hangup_video_call_invite(session_id: String, connection_key: String, app: tauri::AppHandle, invite_id: String) -> Result<(), String> {
     if invite_id.len() > 128 { return Err("HTTP 422: invalid video call id".into()); }
     let cfg = load_client_config(&app);
-    let resp = authorized_request(&cfg, http_client()?.post(backend_url(&cfg, "/video-call/invite/hangup")))
+    let resp = session_request(&cfg, http_client()?.post(backend_url(&cfg, "/video-call/invite/hangup")), &session_id, &connection_key)?
         .json(&serde_json::json!({"invite_id": invite_id, "status": "owner_hung_up"}))
         .send().await.map_err(|e| e.to_string())?;
     require_success(resp).await?;
@@ -2641,7 +2680,7 @@ async fn patch_prompt_assets(
 }
 
 #[tauri::command]
-async fn desktop_wake(app: tauri::AppHandle, last_seen: Option<f64>) -> Result<serde_json::Value, String> {
+async fn desktop_wake(session_id: String, connection_key: String, app: tauri::AppHandle, last_seen: Option<f64>) -> Result<serde_json::Value, String> {
     let cfg = load_client_config(&app);
     let client = llm_http_client()?;
     let body = if let Some(ts) = last_seen {
@@ -2649,7 +2688,7 @@ async fn desktop_wake(app: tauri::AppHandle, last_seen: Option<f64>) -> Result<s
     } else {
         serde_json::json!({})
     };
-    let resp = authorized_request(&cfg, client.post(backend_url(&cfg, "/desktop/wake")))
+    let resp = session_request(&cfg, client.post(backend_url(&cfg, "/desktop/wake")), &session_id, &connection_key)?
         .json(&body)
         .send()
         .await
@@ -4023,6 +4062,8 @@ pub fn run() {
             preview_chat_attachment,
             transcribe_audio,
             open_ambient_session,
+            reality_connection_key,
+            open_reality_session,
             publish_ambient,
             get_video_call_state,
             observe_video_call_frame,

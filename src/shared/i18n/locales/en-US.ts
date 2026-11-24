@@ -2,6 +2,7 @@ import type { MessageKey } from './zh-CN';
 
 
 export const enUS: Record<MessageKey, string> = {
+  'chat.send.sessionUnavailable': 'Could not connect to this character. Please reopen the chat window and try again.',
   'localFiles.title': "Local File Agent",
   'localFiles.unrestricted': "Unrestricted local file access",
   'localFiles.unrestrictedWrite': "Allow edits outside selected folders",

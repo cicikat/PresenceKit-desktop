@@ -28,6 +28,7 @@ import { downloadChatArtifact, normalizeChatArtifacts, previewChatArtifact } fro
 import { TurnReasoningCache, attachCanonicalTurn } from '../../../shared/api/turnReasoningState';
 import { VoiceMessageBar } from './VoiceMessageBar';
 import { loadChatLogDates, loadChatLogDay } from '../../../shared/api/backend';
+import { SessionPreparationError } from '../../../shared/api/sessionScope';
 import { getClientConfig, onClientConfigChange } from '../../../shared/api/config';
 import { classifyHttpError } from '../../../shared/api/httpError';
 import { dreamGetState } from '../../../shared/api/dream';
@@ -2052,7 +2053,10 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
     } catch (err) {
       if (!mountedRef.current || replacedRequests.current.has(userId) || canonicalRequests.current.has(userId)) return;
       if (!chatRequests.settle(token) && !streamByRequest.current.has(userId)) return;
-      if (err === 'CHAT_NOT_EXECUTED') {
+      if (err instanceof SessionPreparationError) {
+        updateDelivery(userId, 'not_executed');
+        setDraftError(err.message);
+      } else if (err === 'CHAT_NOT_EXECUTED') {
         updateDelivery(userId, 'not_executed');
         const text = await describeDreamBlockedChat();
         setMessages(prev => [...prev, { id: newId(), role: 'system', text, time: Date.now() }]);
@@ -2116,7 +2120,10 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
     } catch (err: unknown) {
       if (!mountedRef.current || replacedRequests.current.has(userId) || canonicalRequests.current.has(userId)) return;
       if (!chatRequests.settle(token) && !streamByRequest.current.has(userId)) return;
-      if (err === 'CHAT_NOT_EXECUTED') updateDelivery(userId, 'not_executed');
+      if (err instanceof SessionPreparationError) {
+        updateDelivery(userId, 'not_executed');
+        setDraftError(err.message);
+      } else if (err === 'CHAT_NOT_EXECUTED') updateDelivery(userId, 'not_executed');
       else {
         updateDelivery(userId, 'unknown');
         receiptPolling.current?.observe(userId);

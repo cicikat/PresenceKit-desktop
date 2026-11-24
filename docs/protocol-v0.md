@@ -1,3 +1,9 @@
+## T4 Session Header 切断（2026-11-24，本地 partial）
+
+Reality HTTP 使用服务端签发的 `X-Presence-Session`。聊天、上传、转写、wake、历史、
+思考和产物请求经共享请求层传递 grant；无 Header 的 live-active 兼容不再适用于本检查点。
+WS 消息全集未变，原请求关联与持久回执保留；配套验收见 `docs/backend-integration.md`。
+
 本地文件 Agent 使用独立的 `device-file-agent.v1` HTTP 租约协议。`/ws/desktop` 不承载文件操作或回执。
 
 314：Windows安装打包worker时，HTTP poll的operations增加browser；响应browser_tasks列出仍授权的任务。

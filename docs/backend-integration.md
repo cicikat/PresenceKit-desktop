@@ -1,3 +1,16 @@
+## T4 Reality Session 接入（2026-11-24，partial）
+
+共享 `invokeGated` 为 Reality 相关聊天、上传、转写、wake、历史、思考、产物和摄像头命令
+发现能力并绑定 grant；Rust IPC 接收 `sessionId` 与不透明 `connectionKey`，实际 HTTP
+携带 `X-Presence-Session`，连接变化时拒绝旧 grant。凭据不进入 grant 或前端连接标识。
+缓存按角色及连接区分，窗口重开重新绑定；过期、拒绝或绑定失败不会自动换 scope 重发。
+明确未准入的发送标记未执行，并显示自然语言提示；原持久聊天回执继续使用。
+
+本地定向测试、前端构建和 Rust 构建通过，隔离真实模型对话可见。
+用户停止 Computer Use 后未继续最终重开历史、失效反馈和附件/产物 UI 联验；仍为 partial。
+后端必须与已接入客户端配套升级，旧无 Session 客户端不兼容。完整记录在相邻后端
+`docs/refactors/migration-cutover-t4.md`；本次未推送或部署。
+
 桌面本地文件 Agent 通过 `POST /device-file-agent/poll`、`POST /device-file-agent/result` 使用桌面 scoped token。独立于 GUI Computer Use。命令绑定 workspace 与 grant revision，写回执断线后按原身份续传。主窗口 IPC `device_file_unrestricted` 控制按连接绑定、默认关闭的全盘文本授权及其读写权限。该授权允许模型临时处理任务所需的绝对路径和摘录。
 
 > 2026-10-25：情绪 v3 保留明确表达 ABI；avatar 来源校验及验收边界见 [情绪接入合同](affective-engine-integration.md)。

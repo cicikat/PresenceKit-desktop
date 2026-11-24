@@ -1,3 +1,6 @@
+import { RealitySessions, realityCommands, SessionPreparationError, type RealityGrant } from './sessionScope';
+import { getActiveCharacterInfo } from '../activeCharacter';
+import { t } from '../i18n';
 import { invoke } from '@tauri-apps/api/core';
 import { classifyHttpError } from './httpError';
 import { runtimeDiagnostics } from '../runtimeDiagnostics';
@@ -5,6 +8,7 @@ import { runtimeDiagnostics } from '../runtimeDiagnostics';
 // 全局"本地 token 失效"信号：任意经 invokeGated() 的请求收到 401，就置位。401 永远不会
 // 自己重试变好（后端语义），因此这里不做重试，只广播一次状态，由 App 根组件的引导页门禁
 // （src/features/onboarding/）订阅并接管界面，等用户重新填写 token 后清零（cc-tasks/35 §1/§2）。
+const realitySessions = new RealitySessions();
 let authInvalid = false;
 const listeners = new Set<(invalid: boolean) => void>();
 
@@ -28,11 +32,27 @@ export function onAuthInvalidChange(listener: (invalid: boolean) => void): () =>
 // 做重试 —— 一次性动作（发消息等）交给调用方展示错误，轮询交给 backoffPoll.ts 的调度器处理。
 export async function invokeGated<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   try {
+    if (realityCommands.has(cmd)) {
+      try {
+        const charId = getActiveCharacterInfo().id;
+        const connectionKey = await invoke<string>('reality_connection_key');
+        const grant = await realitySessions.acquire(charId, connectionKey,
+          () => invoke<RealityGrant>('open_reality_session', { charId }));
+        if (getActiveCharacterInfo().id !== charId) throw new Error('session_scope_stale');
+        args = { ...args, sessionId: grant.session_id, connectionKey };
+      } catch (error) {
+        if (classifyHttpError(error).kind === 'unauthorized') setAuthInvalid(true);
+        throw new SessionPreparationError(t('chat.send.sessionUnavailable'));
+      }
+    }
     const result = await runtimeDiagnostics.measureCommand(cmd, () => invoke<T>(cmd, args));
     return result;
   } catch (err) {
     const classified = classifyHttpError(err);
     if (classified.kind === 'unauthorized') setAuthInvalid(true);
+    if (realityCommands.has(cmd) && /\b(session_not_found|session_scope_required|character_not_authorized|character_revoked|character_unavailable)\b/.test(String(err))) {
+      throw new SessionPreparationError(t('chat.send.sessionUnavailable'));
+    }
     throw err;
   }
 }
