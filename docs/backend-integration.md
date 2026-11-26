@@ -7,9 +7,14 @@
 明确未准入的发送标记未执行，并显示自然语言提示；原持久聊天回执继续使用。
 
 本地定向测试、前端构建和 Rust 构建通过，隔离真实模型对话可见。
-用户停止 Computer Use 后未继续最终重开历史、失效反馈和附件/产物 UI 联验；仍为 partial。
+2026-11-26 已用同一运行时代码的真实 Tauri 窗口补齐：合成 A 历史、思考、产物预览与下载，
+下载 PNG 哈希匹配；切换 B 后 A 内容消失，并以实际 B grant 核对 A 产物 404、媒体 410、
+显式 A 历史 403、A 思考 available=false。后端重启后旧 Session 404，界面提示重开；
+重新开窗建立新 grant 并恢复历史。断网恢复只有回执 GET，没有聊天 POST 自动重发。
+资料为隔离 fixture，通过正式 capture/artifact/reasoning 存储入口预置，不是本轮模型生成。
 后端必须与已接入客户端配套升级，旧无 Session 客户端不兼容。完整记录在相邻后端
-`docs/refactors/migration-cutover-t4.md`；本次未推送或部署。
+`docs/refactors/t4-02-final-acceptance.md`。PR #14 已合并，后端媒体补丁 #41 已合并；
+本轮文档同步不改变协议或运行时，无新增设置。手机真机 NOT RUN、独立审查未记录，整体仍 partial；未部署/正式发布。
 
 桌面本地文件 Agent 通过 `POST /device-file-agent/poll`、`POST /device-file-agent/result` 使用桌面 scoped token。独立于 GUI Computer Use。命令绑定 workspace 与 grant revision，写回执断线后按原身份续传。主窗口 IPC `device_file_unrestricted` 控制按连接绑定、默认关闭的全盘文本授权及其读写权限。该授权允许模型临时处理任务所需的绝对路径和摘录。
 
