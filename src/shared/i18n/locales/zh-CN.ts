@@ -1,4 +1,5 @@
 export const zhCN = {
+  'chat.send.sessionUnavailable': '暂时无法连接当前角色。请重新打开聊天窗口后再试。',
   'localFiles.title': "本地文件 Agent",
   'localFiles.unrestricted': "无限制访问本地文件",
   'localFiles.unrestrictedWrite': "允许修改选定范围以外的文件",
