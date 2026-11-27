@@ -45,7 +45,9 @@ export function nextChatDelivery(previous: ChatDelivery | undefined, next: ChatD
 
 export function deliveryFromReceipt(id: string, receipt: DesktopChatReceipt): ChatDelivery {
   if (receipt.request_id !== id) return 'unknown';
-  if (receipt.status === 'running') return 'processing';
+  if (receipt.status === 'stopped' || receipt.status === 'deleted') return 'completed';
+  if (receipt.status === 'interrupted') return 'interrupted_unknown';
+  if (receipt.status === 'running' || receipt.status === 'stop_requested') return 'processing';
   if (receipt.status === 'interrupted_unknown' || receipt.status === 'completed' || receipt.status === 'failed' || receipt.status === 'not_executed') return receipt.status;
   return 'unknown';
 }

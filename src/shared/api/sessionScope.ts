@@ -19,7 +19,7 @@ export interface RealitySessionSnapshot {
 export class SessionPreparationError extends Error {}
 
 export const realityCommands = new Set([
-  'transcribe_audio', 'send_chat', 'get_chat_request', 'upload_document', 'desktop_wake',
+  'conversation_request', 'transcribe_audio', 'send_chat', 'get_chat_request', 'upload_document', 'desktop_wake',
   'load_chat_log_dates', 'load_chat_log_day', 'load_turn_reasoning',
   'download_chat_artifact', 'preview_chat_artifact', 'preview_chat_image',
   'get_video_call_state', 'observe_video_call_frame', 'poll_video_call_camera',

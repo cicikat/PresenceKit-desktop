@@ -59,7 +59,7 @@ export async function sendChat(message: string, replyTo?: ReplyToPayload, videoO
 
 export interface DesktopChatReceipt {
   request_id: string;
-  status: 'unknown' | 'running' | 'completed' | 'failed' | 'interrupted_unknown' | 'not_executed';
+  status: 'unknown' | 'running' | 'completed' | 'failed' | 'interrupted_unknown' | 'not_executed' | 'stopped' | 'stop_requested' | 'interrupted' | 'deleted';
   error_code?: 'upstream_quota_exhausted';
   result?: ChatResponse;
   msg_id?: string;

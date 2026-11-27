@@ -1468,3 +1468,18 @@ File intent hardening: every command must carry the backend's frozen `operation_
 CSV按行保留空单元格、引号与换行；XLSX保留工作表和单元格地址，数字/日期以底层值呈现，公式以原文呈现且不执行；PPTX按页序提取正文和表格；PDF逐页提取文字。文档内图片、图表、PDF扫描页与版面尚无自动视觉识别，混合PDF对无文字页标记未读；全无文字返回422 `document_needs_ocr`，提示上传页面图片或转换为可搜索PDF。容器超限返回422 `document_container_too_large`；无效、加密或空正文返回既有 `file_parse_failed`。旧DOC/XLS/PPT需要转换；图片/语音继续走已有识别链。
 
 observe：真实安装版桌面、手机文件提供器/真机上传和真实模型阅读效果尚未验收；本地HTTP入口与浏览器IPC夹具分别验证各自边界，不能作为真实设备或生产验收。
+
+
+## 2026-11-27：单轮删除与服务端停止
+
+Reality 聊天新增 Session-scoped `/conversation/state`、精确 turn delete 与 execution/request stop；WS `conversation_changed` 只做无正文 revision 提示。前台 2s state 补校准独立于原 ACK/seq/history_index，删除按 canonical turn_id 屏蔽迟到 history/WS/HTTP，恢复重读已加载旧日页。停止只保留安全已见前缀为显示记录，不写普通记忆，不保证上游停止计费或撤回已完成工具动作。
+
+桌面 `shared/api/conversation.ts` → allowlisted Tauri `conversation_request`；右键确认删除，输入区停止与独立删除记录列表/详情/恢复/repair。`chat.recovery` 为 desktop profile 专用，手机 profile 不含。手机 `ConversationControl` → BackendClient，长按确认删除、输入区停止，仍 final-only WS，无恢复 API/UI。权限、归档、失败与 CAS 状态以后端为真；没有新增本地能力开关。
+
+观测：后端 executions/state/mutations 与 desktop archive。自动化覆盖 scoped 请求、真实取消、迟到/重连过滤、长按菜单；desktop 隔离组件浏览器验收不等于 native/双设备/真实模型验收。未安装新包、未生产部署。旧无可靠来源的 facts/identity 不做猜测批量删除，恢复向量待既有 missing-projection 修复，Dossier 源恢复后需重算。
+
+
+验收补记：`npm run build`、`cargo check --manifest-path src-tauri/Cargo.toml` 与全套 Vitest 已验证；最终测试数量/SHA见三仓交付记录。隔离合成数据浏览器实点停止、右键删除确认、档案详情与恢复，补验 Escape 关闭/焦点回位和窄屏边距。未启动带真实凭据的生产客户端。新增 withdrawn_requests 同步清理未知本地请求副本，停止/删除回执终止 journal 等待，不自动重发。
+
+
+本批最终验证：全套 Vitest 121 files / 664 tests passed；production build passed（仅 chunk size 提醒）；Rust cargo check passed。单次停止只选择当前 running（其次 stop_requested/queued）一个 execution，不批量撤销之后排队的其他输入；另有无准入 request 的精确停止意图。前端组件最终停止交互已在隔离浏览器复验。

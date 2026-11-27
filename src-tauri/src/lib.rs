@@ -1493,6 +1493,33 @@ async fn get_chat_request(session_id: String, connection_key: String, app: tauri
     require_success(response).await?.json().await.map_err(|_| "CHAT_RESPONSE_UNREADABLE".into())
 }
 
+// Only this closed action list is available; never a general HTTP proxy.
+#[tauri::command]
+async fn conversation_request(session_id: String, connection_key: String, app: tauri::AppHandle,
+    action: String, identifier: String, body: serde_json::Value) -> Result<serde_json::Value, String> {
+    if identifier.len() > 128 || !identifier.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ':') {
+        return Err("HTTP 422".into());
+    }
+    let (path, post) = match action.as_str() {
+        "state" => ("/conversation/state".to_string(), false),
+        "list" => (body.get("before").and_then(|value| value.as_f64()).filter(|value| value.is_finite()).map(|before| format!("/conversation/deletions?before={before}")).unwrap_or_else(|| "/conversation/deletions".to_string()), false),
+        "detail" if !identifier.is_empty() => (format!("/conversation/deletions/{identifier}"), false),
+        "delete" if !identifier.is_empty() => (format!("/conversation/turns/{identifier}/delete"), true),
+        "restore" if !identifier.is_empty() => (format!("/conversation/deletions/{identifier}/restore"), true),
+        "repair" if !identifier.is_empty() => (format!("/conversation/deletions/{identifier}/repair"), true),
+        "stop" if !identifier.is_empty() => (format!("/conversation/executions/{identifier}/stop"), true),
+        "stop_request" if !identifier.is_empty() => (format!("/conversation/requests/{identifier}/stop"), true),
+        _ => return Err("HTTP 422".into()),
+    };
+    let cfg = load_client_config(&app);
+    let client = http_client()?;
+    let url = backend_url(&cfg, &path);
+    let request = if post { client.post(url).json(&body) } else { client.get(url) };
+    let response = session_request(&cfg, request, &session_id, &connection_key)?.send().await
+        .map_err(|_| "Conversation request failed".to_string())?;
+    require_success(response).await?.json().await.map_err(|_| "Conversation response unreadable".into())
+}
+
 #[tauri::command]
 async fn load_turn_reasoning(session_id: String, connection_key: String, app: tauri::AppHandle, turn_id: String) -> Result<serde_json::Value, String> {
     if turn_id.trim().is_empty() || turn_id.chars().count() > 128 {
@@ -4059,6 +4086,7 @@ pub fn run() {
             clear_period_date,
             upload_document,
             get_chat_request,
+            conversation_request,
             preview_chat_attachment,
             transcribe_audio,
             open_ambient_session,

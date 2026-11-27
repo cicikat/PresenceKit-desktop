@@ -3,6 +3,20 @@ import type { MessageKey } from './zh-CN';
 
 
 export const enUS: Record<MessageKey, string> = {
+  'chat.control.more': 'Earlier records',
+  'chat.control.stop': 'Stop generating',
+  'chat.control.archive': 'Deleted conversations',
+  'chat.control.delete': 'Delete this round',
+  'chat.control.deleteHint': 'Delete the question and answer on all devices. You can restore it here on desktop later.',
+  'chat.control.cancel': 'Cancel',
+  'chat.control.failed': 'Could not complete this. Try again shortly. Stop the current reply first if needed.',
+  'chat.control.archiveHint': 'Deleted conversations are kept here. Restoring syncs to your other devices. Older memories without precise sources need separate review.',
+  'chat.control.close': 'Close',
+  'chat.control.empty': 'No deleted conversations yet.',
+  'chat.control.view': 'View',
+  'chat.control.restored': 'Restored',
+  'chat.control.restore': 'Restore',
+  'chat.control.repair': 'Resume cleanup',
   ...startupMessages['en-US'],
   'chat.send.sessionUnavailable': 'Could not connect to this character. Please reopen the chat window and try again.',
   'localFiles.title': "Local File Agent",

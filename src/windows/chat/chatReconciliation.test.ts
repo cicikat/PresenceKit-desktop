@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { advanceChatRecovery, deliveryFromReceipt, nextChatDelivery, pendingChatIds, recoveredReply, rememberChatRequest, requestForCanonicalReply, safeChatPrefix } from './chatReconciliation';
+import { canResendChat, advanceChatRecovery, deliveryFromReceipt, nextChatDelivery, pendingChatIds, recoveredReply, rememberChatRequest, requestForCanonicalReply, safeChatPrefix } from './chatReconciliation';
 import { bindHttpReplyIdentity } from './httpReplyIdentity';
 
 const id = 'dc-1794450000000-1234567890abcdef1234567890abcdef';
@@ -92,4 +92,15 @@ describe('desktop chat reconciliation', () => {
       }
     },
   );
+});
+
+
+it('stopped and deleted receipts settle without authorizing replay; stop_requested stays pending',()=>{
+  const id='fixture_request';
+  expect(deliveryFromReceipt(id,{request_id:id,status:'stop_requested'})).toBe('processing');
+  for(const status of ['stopped','deleted'] as const) {
+    expect(deliveryFromReceipt(id,{request_id:id,status})).toBe('completed');
+    expect(canResendChat(deliveryFromReceipt(id,{request_id:id,status}))).toBe(false);
+    expect(recoveredReply(id,{request_id:id,status}).result).toBeUndefined();
+  }
 });

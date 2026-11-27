@@ -59,6 +59,7 @@ export interface ToolStatusPayload {
 export type ServerMessage =
   | import('./toolActivity').ToolActivity
   | { type: 'hello_ack'; server_version: string }
+  | { type: 'conversation_changed'; char_id: string; domain: 'reality'; revision: number }
   | { type: 'channel_message'; content: string; msg_id: string; request_id?: string; source?: string; domain?: GroupDomain; char_id?: string; round_id?: string; sticker?: StickerPayload; artifacts?: ChatArtifactPayload[] }
   | { type: 'message_segments'; content: string; segments: NarrativeSegment[]; msg_id: string; source?: string; domain?: GroupDomain; char_id?: string; round_id?: string }
   | { type: 'action'; action: DesktopActionPayload; msg_id: string }
@@ -110,6 +111,8 @@ export type DesktopActionPayload = {
 };
 
 export interface ChatResponse {
+  state?: string;
+  incomplete?: boolean;
   request_id?: string;
   reply: string;
   emotion: string;

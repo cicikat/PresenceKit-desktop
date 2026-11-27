@@ -21,6 +21,7 @@ import { createAvatarDirectiveGate } from './avatarDirectiveGate';
 const acceptAvatarDirective = createAvatarDirectiveGate();
 
 type EventMap = {
+  conversation_changed: { char_id: string; domain: string; revision: number };
   tool_activity: ToolActivity;
   state: ConnectionState;
   channel_message: { content: string; msg_id: string; request_id?: string; source?: string; domain?: 'reality' | 'dream'; char_id?: string; round_id?: string; sticker?: StickerPayload; artifacts?: ChatArtifactPayload[] };
@@ -204,6 +205,9 @@ class WSClient {
         break;
       case 'ping':
         this._send({ type: 'pong' });
+        break;
+      case 'conversation_changed':
+        this.emit('conversation_changed', msg);
         break;
       case 'message_stream_start':
         this.emit('message_stream_start', { msg_id: msg.msg_id, request_id: msg.request_id, source: msg.source, domain: msg.domain, char_id: msg.char_id, round_id: msg.round_id });

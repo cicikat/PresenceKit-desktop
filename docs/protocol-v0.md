@@ -171,3 +171,12 @@ Computer Use 的授权与截图定位走 REST。现有 WebSocket 消息结构继
 313 B: `device-file-agent.v1` HTTP polls may advertise `operations` for independent read commands `list_dir/stat/find_name/search_text/read_page`. Old clients omit this field; the updated backend returns `unsupported_operation` instead of sending an unsupported command. Atomic action options are JSON in `query`; discovery returns bounded entries/cursor/truncation, read returns hash/line range/has_more. This does not change desktop WebSocket messages. Backend-first rollout is required.
 
 File commands require immutable `operation_intent=inspect|search|read|edit|create`. Missing/unknown intent is rejected. The desktop rejects writes and journal entries for read intents even when the folder grant permits writing; create intent cannot patch/undo, and subsequent commands cannot elevate intent. Update the backend before this desktop; roll back the desktop first. An old desktop lacks this independent guard, and an updated desktop cannot consume commands from an old backend.
+
+
+## 2026-11-27：单轮删除与服务端停止
+
+Reality 聊天新增 Session-scoped `/conversation/state`、精确 turn delete 与 execution/request stop；WS `conversation_changed` 只做无正文 revision 提示。前台 2s state 补校准独立于原 ACK/seq/history_index，删除按 canonical turn_id 屏蔽迟到 history/WS/HTTP，恢复重读已加载旧日页。停止只保留安全已见前缀为显示记录，不写普通记忆，不保证上游停止计费或撤回已完成工具动作。
+
+桌面 `shared/api/conversation.ts` → allowlisted Tauri `conversation_request`；右键确认删除，输入区停止与独立删除记录列表/详情/恢复/repair。`chat.recovery` 为 desktop profile 专用，手机 profile 不含。手机 `ConversationControl` → BackendClient，长按确认删除、输入区停止，仍 final-only WS，无恢复 API/UI。权限、归档、失败与 CAS 状态以后端为真；没有新增本地能力开关。
+
+观测：后端 executions/state/mutations 与 desktop archive。自动化覆盖 scoped 请求、真实取消、迟到/重连过滤、长按菜单；desktop 隔离组件浏览器验收不等于 native/双设备/真实模型验收。未安装新包、未生产部署。旧无可靠来源的 facts/identity 不做猜测批量删除，恢复向量待既有 missing-projection 修复，Dossier 源恢复后需重算。

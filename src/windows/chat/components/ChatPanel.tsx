@@ -3,6 +3,8 @@
  * Phase 2c+: 按日文件懒加载历史，滚顶继续往前拉
  * ============================================================ */
 
+import { ConversationControls } from './ConversationControls';
+import { visibleConversationMessages, type ConversationState } from '../../../shared/api/conversation';
 import { GeneratedImage } from './GeneratedImage';
 import { useState, useEffect, useRef, useCallback, useMemo, useSyncExternalStore, memo, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
@@ -621,7 +623,13 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
   const [avatars, setAvatars] = useState(avatarStore.get());
   useEffect(() => avatarStore.subscribe(setAvatars), []);
 
-  const [messages, setMessages] = useState<ChatMsg[]>([]);
+  const hiddenTurns = useRef(new Set<string>());
+  const deletedLocalIds = useRef(new Set<string>());
+  const [messages, rawSetMessages] = useState<ChatMsg[]>([]);
+  const setMessages = useCallback((update: React.SetStateAction<ChatMsg[]>) => {
+    rawSetMessages(previous => visibleConversationMessages(typeof update==='function'?update(previous):update,hiddenTurns.current,deletedLocalIds.current));
+  },[]);
+  const [deleteTurn, setDeleteTurn] = useState<string>();
   const receiptScope = useRef<{ backend: string; journal: string; charId: string } | undefined>(undefined);
   const receiptPolling = useRef<ChatReceiptPolling | undefined>(undefined);
   const canonicalRequests = useRef(new Map<string, string>());
@@ -813,6 +821,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
   const initInFlightRef = useRef(false);
   const historyRefreshPending = useRef(false);
   const refreshHistory = useRef<() => void>(() => {});
+  const controlRereadDates = useRef(false);
   // scheduleAssistantSegments is declared later in this component; init() is declared
   // earlier so it can be reused by both the mount effect and the WS reconnect effect.
   // Route through a ref (kept in sync on every render, below) instead of a direct closure
@@ -864,6 +873,25 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
   const streamingLocalIdRef = useRef<Map<string, string[]>>(new Map());
   // 流式累计原始文本：msg_id → 已到达的 token 拼接（用于按 \n+ 实时切段）
   const streamingTextRef = useRef<Map<string, string>>(new Map());
+
+  const settledStoppedRequests = useRef(new Set<string>());
+  const retireStoppedRequest = useCallback((requestId: string) => {
+    if(settledStoppedRequests.current.has(requestId) && !streamByRequest.current.has(requestId))return;
+    settledStoppedRequests.current.add(requestId);
+    const scope=receiptScope.current;
+    if(scope)rememberChatRequest(localStorage,scope.journal,requestId,false);
+    chatRequests.release(requestId);
+    const msgId=streamByRequest.current.get(requestId);
+    if (msgId) {
+      chatRequests.streamEnd(msgId);
+      for(const id of streamingLocalIdRef.current.get(msgId) ?? []) deletedLocalIds.current.add(id);
+      deletedLocalIds.current.add(msgId);
+      streamingLocalIdRef.current.delete(msgId);streamingTextRef.current.delete(msgId);
+      streamByRequest.current.delete(requestId);
+    }
+    updateDelivery(requestId,'completed','unavailable');
+    setMessages(previous=>previous);
+  },[]);
 
   const bindHttpReply = useCallback((response: { msg_id?: string; turn_id?: string }) => {
     const binding = bindHttpReplyIdentity(response, canonicalTurnsRef.current,
@@ -926,7 +954,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
   // HTTP send/upload/wake share one fallback adapter. Each local request keeps
   // its own slot; the owner cancels/replaces timers before render runs.
   const queueHttpReply = useCallback((
-    response: { reply: string; msg_id?: string; turn_id?: string; request_id?: string; artifacts?: ChatArtifactPayload[] },
+    response: { state?: string; reply: string; msg_id?: string; turn_id?: string; request_id?: string; artifacts?: ChatArtifactPayload[] },
     source: ReplySource,
     token?: ChatRequestToken,
   ) => {
@@ -935,6 +963,10 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
     }
     const { msgId, canonicalTurnId, fromHistory } = bindHttpReply(response);
     const requestId = token?.id ?? response.request_id;
+    if (response.state==='stopped' || response.state==='interrupted') {
+      if (requestId) retireStoppedRequest(requestId);
+      refreshHistory.current(); return;
+    }
     const markRendered = () => {
       if (requestId) updateDelivery(requestId, 'completed', 'rendered', response);
     };
@@ -1010,6 +1042,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       if (!isCurrent()) return true;
       if (!receipt) return false; // another WebView is reading this receipt
       const delivery = deliveryFromReceipt(id, receipt);
+      if (receipt.status==='stopped' || receipt.status==='deleted') {retireStoppedRequest(id);refreshHistory.current();}
       let recoveringBody = false;
       if (delivery === 'completed') {
         const { identity, result } = recoveredReply(id, receipt);
@@ -1128,6 +1161,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
       return;
     }
     initInFlightRef.current = true;
+    const rereadLoaded=controlRereadDates.current;controlRereadDates.current=false;
     const mounted = () => mountedRef.current;
     try {
       const datesResp = await loadChatLogDates();
@@ -1179,6 +1213,16 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
         msgs = entriesToMsgs(recentDate, day.entries, day.raw_fallback);
         loadedDatesRef.current = [recentDate];
         firstDate = recentDate;
+      }
+
+      // A visibility change must re-read older loaded pages too, not retain a
+      // deleted-page cache after another device restores a round there.
+      if (rereadLoaded) {
+        for (const date of previouslyLoaded.filter(date=>date<firstDate && dates.includes(date)).sort().reverse()) {
+          const day=await loadChatLogDay(date);if(!mounted())return;
+          msgs=[...entriesToMsgs(date,day.entries,day.raw_fallback),dividerMsg(firstDate),...msgs];
+          loadedDatesRef.current=[date,...loadedDatesRef.current];firstDate=date;
+        }
       }
 
       // A background refresh replaces the recent days while keeping earlier pages already on screen.
@@ -1698,6 +1742,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
     });
 
     const processRealityChannelMessage = (message: RealityChannelMessage) => {
+      if(message.request_id && settledStoppedRequests.current.has(message.request_id))return;
       if (!isSingleRealityMessage(message, getActiveCharacterInfo().id)) return;
       const { content, msg_id, source, sticker } = message;
       if (typeof content === 'string' && safeChatPrefix(content) !== content) return;
@@ -1864,6 +1909,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
     // ── 流式事件订阅 ─────────────────────────────────────────────────────────
 
     const unsubStreamStart = wsClient.on('message_stream_start', (message) => {
+      if(message.request_id && settledStoppedRequests.current.has(message.request_id))return;
       if (!isSingleRealityStream(message, getActiveCharacterInfo().id)) return;
       const { msg_id } = message;
       if (dreamActiveRef.current) return;
@@ -2031,7 +2077,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
     if (!retry) { setInput(''); setReplyTarget(null); }
     setMessages(m => retry
       ? m.map(item => item.id === retry.id ? { ...item, id: userId, delivery: 'sending', replyAvailability: undefined, replyIdentity: undefined } : item)
-      : [...m, { id: userId, role: 'user', text: t, time: Date.now(), delivery: 'sending',
+      : [...m, { id: userId, role: 'user', text: t, time: Date.now(), requestId: userId, delivery: 'sending',
           replyTo: quote ?? undefined, retryDraft: { text: t, attachments: [], quote: quote ?? undefined } }]);
     chatSessionMetrics.recordTurn();
     engine.setLocalFocus('想事情');
@@ -2425,7 +2471,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
           onMouseDown={e => e.stopPropagation()}
           style={{
             position: 'fixed',
-            top: Math.min(ctxMenu.y, window.innerHeight - 90),
+            top: Math.min(ctxMenu.y, window.innerHeight - 140),
             left: Math.min(ctxMenu.x, window.innerWidth - 140),
             zIndex: 50,
             background: 'var(--paper)', border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-md)',
@@ -2442,6 +2488,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
             onMouseLeave={e => (e.currentTarget as any).style.background = 'transparent'}>
             {t('chat.contextMenu.reply')}
           </button>
+          {ctxMenu.msg.turnId && !ctxMenu.msg.isStreaming && <button style={{display:'block',width:'100%',textAlign:'left',padding:'8px 10px',background:'transparent',border:0,color:'var(--ink)',font:'inherit',cursor:'pointer'}} onClick={()=>{setDeleteTurn(ctxMenu.msg.turnId);setCtxMenu(null);}}>{t('chat.control.delete')}</button>}
           <button onClick={() => onCopyMsg(ctxMenu.msg)} style={{
             display: 'block', width: '100%', textAlign: 'left',
             padding: '8px 10px', background: 'transparent', border: 'none', cursor: 'pointer',
@@ -2456,6 +2503,18 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
 
       {/* INPUT */}
       {designRegion('chat.composer', <div data-chat-region="composer" style={{ gridArea: 'composer', position: 'relative', minWidth: 0, padding: 18, borderTop: isSideComposer ? 'none' : '1px solid var(--paper-edge)', borderLeft: isSideComposer ? '1px solid var(--paper-edge)' : 'none', background: avatars.chatBackground?.dataUrl ? 'oklch(from var(--paper-2) l c h / 0.85)' : 'var(--paper-2)', ...(isSideComposer ? { overflowY: 'auto' } : {}), ...(isHud ? { borderRight: '1px solid var(--paper-edge)' } : {}) }}>
+        <ConversationControls pendingRequests={messages.filter(item=>item.delivery==='sending' || item.delivery==='processing').map(item=>item.id)}
+          deleteTurn={deleteTurn} clearDelete={()=>setDeleteTurn(undefined)} onRefresh={()=>{controlRereadDates.current=true;refreshHistory.current();}}
+          onStopped={requestId=>{retireStoppedRequest(requestId);refreshHistory.current();}}
+          onSnapshot={(snapshot: ConversationState)=>{
+            for(const request of snapshot.withdrawn_requests ?? []) {retireStoppedRequest(request);deletedLocalIds.current.add(request);}
+            for(const item of snapshot.recent_terminal ?? []) retireStoppedRequest(item.request_id);
+            hiddenTurns.current=new Set(snapshot.visibility.filter(item=>item.hidden).map(item=>item.turn_id));
+            rawSetMessages(previous=>{
+              for (const item of previous) if (item.turnId && hiddenTurns.current.has(item.turnId)) {deletedLocalIds.current.add(item.id);if(item.wsMsgId)deletedLocalIds.current.add(item.wsMsgId);}
+              return visibleConversationMessages(previous,hiddenTurns.current,deletedLocalIds.current);
+            });
+          }} />
         {(attachments.length > 0 || preparing || draftError) && <div className="chat-attachment-tray" aria-label={t('chat.attachments.pending')}>
           {attachments.map(item => <div key={item.id} className="chat-attachment-card">
             {item.preview ? <img src={item.preview} alt={item.filename} /> : <Icon name="attach" size={24} />}
