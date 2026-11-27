@@ -1,5 +1,12 @@
 ## T4 Reality Session 接入（2026-11-24，partial）
 
+T4.1（2026-11-27）：录音开始捕获现有 RealitySessions 的 grant/epoch；单次与连续录音
+均带冻结身份，缓存提交核验角色、连接、授权、Session 和请求先后。A→B→A、迟到/逆序返回
+不会写入当前语音回执。连续通话各分段携带本地 scope，发送前拒绝异 scope 的分段。
+配置保存通过原生事件通知所有 WebView，避免另一窗口保留连接变更前的工作。
+没有新增后端 HTTP 字段、设置或持久数据；三仓回执、request_id、共享 poll/ACK 保持原合同。
+旧实现三项失败已复现；测试和构建记录随交付保留，真实语音/UI 验收单列，不等于正式发布。
+
 共享 `invokeGated` 为 Reality 相关聊天、上传、转写、wake、历史、思考、产物和摄像头命令
 发现能力并绑定 grant；Rust IPC 接收 `sessionId` 与不透明 `connectionKey`，实际 HTTP
 携带 `X-Presence-Session`，连接变化时拒绝旧 grant。凭据不进入 grant 或前端连接标识。

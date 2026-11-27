@@ -1,5 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { transcribeAudio } from '../api/backend';
+import { transcribeAudio, invalidateVoiceInput } from '../api/backend';
+import { captureRealitySession, isRealitySessionCurrent } from '../api/authGate';
+import { SessionPreparationError, type RealitySessionSnapshot } from '../api/sessionScope';
+import { t } from '../i18n';
 
 export interface VoiceInputHandle {
   isRecording: boolean;
@@ -35,6 +38,9 @@ export function useVoiceInput(): VoiceInputHandle {
   const streamRef = useRef<MediaStream | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const animFrameRef = useRef<number>(0);
+  const scopeRef = useRef<RealitySessionSnapshot | null>(null);
+  const startingRef = useRef(false);
+  const operationRef = useRef(0);
 
   const stopVolumeLoop = useCallback(() => {
     if (animFrameRef.current) {
@@ -45,10 +51,19 @@ export function useVoiceInput(): VoiceInputHandle {
   }, []);
 
   const start = useCallback(async () => {
-    if (isRecordingRef.current) return;
+    if (isRecordingRef.current || startingRef.current) return;
+    startingRef.current = true;
+    const operation = ++operationRef.current;
+    invalidateVoiceInput();
     setError(null);
     try {
+      const scope = await captureRealitySession();
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (operation !== operationRef.current || !await isRealitySessionCurrent(scope)) {
+        stream.getTracks().forEach(track => track.stop());
+        throw new SessionPreparationError(t('chat.send.sessionUnavailable'));
+      }
+      scopeRef.current = scope;
       streamRef.current = stream;
 
       // Volume monitoring via AudioContext + AnalyserNode
@@ -77,9 +92,9 @@ export function useVoiceInput(): VoiceInputHandle {
 
       isRecordingRef.current = true;
       setIsRecording(true);
-    } catch {
-      setError('无法访问麦克风');
-    }
+    } catch (cause) {
+      setError(cause instanceof SessionPreparationError ? cause.message : '无法访问麦克风');
+    } finally { startingRef.current = false; }
   }, []);
 
   const stop = useCallback(async (): Promise<string | null> => {
@@ -89,7 +104,10 @@ export function useVoiceInput(): VoiceInputHandle {
     stopVolumeLoop();
 
     const mr = mediaRecorderRef.current;
-    if (!mr) return null;
+    const scope = scopeRef.current;
+    if (!mr || !scope) return null;
+    const operation = operationRef.current;
+    startingRef.current = true;
 
     const blob = await new Promise<Blob>(resolve => {
       mr.onstop = () => {
@@ -103,13 +121,15 @@ export function useVoiceInput(): VoiceInputHandle {
     streamRef.current = null;
     audioCtxRef.current = null;
     mediaRecorderRef.current = null;
+    startingRef.current = false;
 
     if (blob.size === 0) return null;
 
     setTranscribing(true);
     try {
       const b64 = await blobToBase64(blob);
-      const result = await transcribeAudio(b64);
+      if (operation !== operationRef.current) return null;
+      const result = await transcribeAudio(b64, scope);
       return result.text;
     } catch (cause) {
       const detail = cause instanceof Error ? cause.message : String(cause);
@@ -128,6 +148,9 @@ export function useVoiceInput(): VoiceInputHandle {
 
   useEffect(() => {
     return () => {
+      operationRef.current++;
+      scopeRef.current = null;
+      invalidateVoiceInput();
       stopVolumeLoop();
       if (isRecordingRef.current) {
         mediaRecorderRef.current?.stop();

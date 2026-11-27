@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Once;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 // load_client_config 会在几乎每个 tauri command 里被调用（本文件 + lib.rs 共 70+ 处），
 // 但「命中配置文件」「backendBase =」这两条诊断日志只在进程生命周期内需要看一次
@@ -528,6 +528,7 @@ pub fn save_client_config(
     let tmp_path = PathBuf::from(tmp_os);
     std::fs::write(&tmp_path, &serialized).map_err(|e| format!("写入失败: {e}"))?;
     std::fs::rename(&tmp_path, &path).map_err(|e| format!("写入失败: {e}"))?;
+    app.emit("client-config-changed", ()).map_err(|e| e.to_string())?;
     Ok(())
 }
 
