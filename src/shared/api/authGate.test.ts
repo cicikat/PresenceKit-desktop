@@ -2,7 +2,8 @@ import { beforeEach, expect, it, vi } from 'vitest';
 
 const state = vi.hoisted(() => ({ char: 'first', connection: 'connection', invoke: vi.fn() }));
 vi.mock('@tauri-apps/api/core', () => ({ invoke: state.invoke }));
-vi.mock('../activeCharacter', () => ({ getActiveCharacterInfo: () => ({ id: state.char }) }));
+vi.mock('@tauri-apps/api/event', () => ({ listen: async () => () => {} }));
+vi.mock('../activeCharacter', () => ({ getActiveCharacterInfo: () => ({ id: state.char }), subscribeActiveCharacter: () => () => {} }));
 vi.mock('../i18n', () => ({ t: () => 'Please reopen the chat window.' }));
 vi.mock('../runtimeDiagnostics', () => ({ runtimeDiagnostics: { measureCommand: (_cmd: string, call: () => unknown) => call() } }));
 

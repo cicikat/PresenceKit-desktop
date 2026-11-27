@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 
 // 仅 invoke('load_public_client_config') 完全失败时的最后兜底；
 // 正常 Tailnet/本机部署下 invoke 会成功，此处 127.0.0.1 不会被触发。
@@ -26,6 +27,11 @@ export interface ClientConfig {
 
 let configPromise: Promise<ClientConfig> | null = null;
 const configListeners = new Set<() => void>();
+
+// Native configuration is shared by WebViews. Its commit invalidates frozen
+// work in room/chat alike, including a connection A-B-A during one request.
+void listen('client-config-changed', () => invalidateClientConfig())
+  .catch(error => console.warn('[config] change subscription failed', error));
 
 export function onClientConfigChange(listener: () => void): () => void {
   configListeners.add(listener);

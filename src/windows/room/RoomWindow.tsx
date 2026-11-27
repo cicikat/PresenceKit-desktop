@@ -90,12 +90,12 @@ export function RoomWindow({ onClose }: { onClose: () => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const speechDraftRef = useRef('');
   // 本条消息累积的所有分段回执（工单 A3）；发送时一并交给后端取最差置信度。
-  const audioReceiptsRef = useRef<{ text: string; id: string }[]>([]);
+  const audioReceiptsRef = useRef<import('../../shared/api/backend').VoiceSource[]>([]);
   const [speechDraft, setSpeechDraft] = useState('');
   const [audioStatus, setAudioStatus] = useState<string | null>(null);
-  const onTranscript = useCallback((text: string, audioPerceptionId?: string) => {
+  const onTranscript = useCallback((text: string, audioPerceptionId: string | undefined, scope: import('../../shared/api/sessionScope').RealitySessionSnapshot) => {
     speechDraftRef.current = joinTranscript(speechDraftRef.current, text).slice(-12_000);
-    if (audioPerceptionId) audioReceiptsRef.current = [...audioReceiptsRef.current, { text, id: audioPerceptionId }].slice(-16);
+    if (audioPerceptionId) audioReceiptsRef.current = [...audioReceiptsRef.current, { text, id: audioPerceptionId, scope }].slice(-16);
     setSpeechDraft(speechDraftRef.current);
   }, []);
 

@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getChatRequest, uploadDocument, sendChat, transcribeAudio, deleteCharacterAvatar, getPromptAssets, invalidatePromptAssetsCache, patchPromptAssets, uploadCharacterAvatar, pollVideoCallCamera, submitVideoCallCameraFrame, closeVideoCallCamera } from './backend';
 
-const { invokeGated } = vi.hoisted(() => ({ invokeGated: vi.fn() }));
-vi.mock('./authGate', () => ({ invokeGated }));
+const { invokeGated, scope } = vi.hoisted(() => ({ invokeGated: vi.fn(), scope: { generation: 1,
+  grant: { session_id: 'fixture-session', char_id: 'fixture-character', owner_id: 'fixture-owner',
+    domain: 'reality', expires_at: Date.now() / 1000 + 3600, connection_key: 'fixture-connection' } } }));
+vi.mock('./authGate', () => ({ invokeGated, captureRealitySession: async () => scope, isRealitySessionCurrent: async () => true }));
 afterEach(() => vi.unstubAllGlobals());
 
 describe('receipt reads stay read-only and scoped', () => {
@@ -110,7 +112,7 @@ describe('chat transport compatibility', () => {
     await uploadDocument(attachments, 'together');
     expect(invokeGated).toHaveBeenLastCalledWith('upload_document', { attachments, message: 'together' });
     await sendChat('reply', { text: 'my own message', ts: 123 });
-    expect(invokeGated).toHaveBeenLastCalledWith('send_chat', { message: 'reply', replyTo: { text: 'my own message', ts: 123 } });
+    expect(invokeGated).toHaveBeenLastCalledWith('send_chat', { message: 'reply', replyTo: { text: 'my own message', ts: 123 } }, scope);
   });
 });
 
@@ -120,13 +122,13 @@ it('forwards a voice receipt once and drops it when transcript is edited', async
   invokeGated.mockResolvedValueOnce({ text: 'hello', audio_perception_id: 'fixture-receipt' });
   await transcribeAudio('fixture-audio');
   await sendChat('hello');
-  expect(invokeGated).toHaveBeenLastCalledWith('send_chat', { message: 'hello', audioPerceptionId: 'fixture-receipt' });
+  expect(invokeGated).toHaveBeenLastCalledWith('send_chat', { message: 'hello', audioPerceptionId: 'fixture-receipt' }, scope);
   await sendChat('hello');
-  expect(invokeGated).toHaveBeenLastCalledWith('send_chat', { message: 'hello' });
+  expect(invokeGated).toHaveBeenLastCalledWith('send_chat', { message: 'hello' }, scope);
   invokeGated.mockResolvedValueOnce({ text: 'hello', audio_perception_id: 'fixture-receipt' });
   await transcribeAudio('fixture-audio');
   await sendChat('edited');
-  expect(invokeGated).toHaveBeenLastCalledWith('send_chat', { message: 'edited' });
+  expect(invokeGated).toHaveBeenLastCalledWith('send_chat', { message: 'edited' }, scope);
 });
 
 it('keeps camera tool frame transport separate from chat and screen observation', async () => {

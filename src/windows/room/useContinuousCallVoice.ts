@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { transcribeAudio } from '../../shared/api/backend';
+import { transcribeAudio, invalidateVoiceInput } from '../../shared/api/backend';
+import { captureRealitySession, isRealitySessionCurrent } from '../../shared/api/authGate';
+import { SessionPreparationError, type RealitySessionSnapshot } from '../../shared/api/sessionScope';
 import { t } from '../../shared/i18n';
 import { shouldCutSegment, type CallVoiceActivity } from './callVoiceUtils';
 
@@ -17,7 +19,7 @@ async function toBase64(blob: Blob): Promise<string> {
   });
 }
 
-export function useContinuousCallVoice(onTranscript: (text: string, audioPerceptionId?: string) => void) {
+export function useContinuousCallVoice(onTranscript: (text: string, audioPerceptionId: string | undefined, scope: RealitySessionSnapshot) => void) {
   const callbackRef = useRef(onTranscript);
   callbackRef.current = onTranscript;
   const streamRef = useRef<MediaStream | null>(null);
@@ -25,7 +27,8 @@ export function useContinuousCallVoice(onTranscript: (text: string, audioPercept
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
-  const pendingRef = useRef<Blob[]>([]);
+  const pendingRef = useRef<{ blob: Blob; scope: RealitySessionSnapshot }[]>([]);
+  const scopeRef = useRef<RealitySessionSnapshot | null>(null);
   const processingRef = useRef(false);
   const generationRef = useRef(0);
   const lastVoiceAtRef = useRef(0);
@@ -43,15 +46,19 @@ export function useContinuousCallVoice(onTranscript: (text: string, audioPercept
     setTranscribing(true);
     try {
       while (pendingRef.current.length) {
-        const blob = pendingRef.current.shift()!;
+        const { blob, scope } = pendingRef.current.shift()!;
         if (!blob.size) continue;
         try {
-          const result = await transcribeAudio(await toBase64(blob));
-          if (!discardRef.current && result.text.trim()) {
+          if (scopeRef.current !== scope) continue;
+          const audio = await toBase64(blob);
+          if (scopeRef.current !== scope) continue;
+          const result = await transcribeAudio(audio, scope);
+          if (!discardRef.current && scopeRef.current === scope && result.text.trim()) {
             setError(null);
-            callbackRef.current(result.text.trim(), result.audio_perception_id);
+            callbackRef.current(result.text.trim(), result.audio_perception_id, scope);
           }
         } catch (cause) {
+          if (scopeRef.current !== scope) continue;
           if (String(cause).includes('NO_SPEECH')) continue;
           setError(`${t('room.call.voice.transcribeFailed')}: ${String(cause).slice(0, 160)}`);
           if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
@@ -66,6 +73,8 @@ export function useContinuousCallVoice(onTranscript: (text: string, audioPercept
 
   const recordSegment = useCallback((stream: MediaStream, generation: number) => {
     if (!stream.active || generation !== generationRef.current) return;
+    const scope = scopeRef.current;
+    if (!scope) return;
     const recorder = new MediaRecorder(stream);
     recorderRef.current = recorder;
     const chunks: BlobPart[] = [];
@@ -87,7 +96,7 @@ export function useContinuousCallVoice(onTranscript: (text: string, audioPercept
           console.warn('[call-voice] transcription queue full, dropping oldest segment');
           setError(t('room.call.voice.lagging'));
         }
-        pendingRef.current.push(blob);
+        pendingRef.current.push({ blob, scope });
         void processPending();
       }
       if (generation === generationRef.current && stream.active) recordSegment(stream, generation);
@@ -116,14 +125,18 @@ export function useContinuousCallVoice(onTranscript: (text: string, audioPercept
     discardRef.current = false;
     setError(null);
     const generation = ++generationRef.current;
+    invalidateVoiceInput();
+    pendingRef.current = [];
     try {
+      const scope = await captureRealitySession();
       const stream = await navigator.mediaDevices.getUserMedia({ audio: {
         echoCancellation: true, noiseSuppression: true, autoGainControl: true,
       } });
-      if (generation !== generationRef.current) {
+      if (generation !== generationRef.current || !await isRealitySessionCurrent(scope)) {
         stream.getTracks().forEach(track => track.stop());
-        return;
+        throw new SessionPreparationError(t('chat.send.sessionUnavailable'));
       }
+      scopeRef.current = scope;
       streamRef.current = stream;
       try {
         const context = new AudioContext();
@@ -144,6 +157,8 @@ export function useContinuousCallVoice(onTranscript: (text: string, audioPercept
 
   const stop = useCallback((discard = false) => {
     if (discard) {
+      scopeRef.current = null;
+      invalidateVoiceInput();
       discardRef.current = true;
       pendingRef.current = [];
     }

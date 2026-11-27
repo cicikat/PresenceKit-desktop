@@ -1,4 +1,5 @@
-import { invokeGated } from './authGate';
+import { invokeGated, captureRealitySession, isRealitySessionCurrent } from './authGate';
+import { SessionPreparationError, type RealitySessionSnapshot } from './sessionScope';
 import type { ChatResponse, DesktopWakeResponse, GardenState, CoplayState, DiaryListResponse, DiaryEntry, ChatLogDatesResponse, ChatLogDay, MoodState, ActivityState, SensorRealtimeResponse, UploadIngestResponse, UploadError, PromptAssetsResponse, PromptAssetsPatch, PromptAssetsPatchResponse, HiddenStateDebugResponse, PromptAssetCharacter, PromptAssetOption, ActivePromptAssets, GroupSummary, GroupDetail, GroupSendResponse, GroupSettings, ReplyToPayload } from './types';
 
 import { publishBehavior } from '../character/behaviorEvents';
@@ -13,14 +14,24 @@ const chatErrorKeys = new Map<string, MessageKey>([
   ['CHAT_RESPONSE_UNREADABLE', 'chat.send.responseUnreadable'],
 ]);
 
-let pendingVoice: { text: string; id: string; expires: number } | undefined;
+export interface VoiceSource { text: string; id: string; scope: RealitySessionSnapshot }
+let pendingVoice: (VoiceSource & { expires: number }) | undefined;
+let voiceRequest = 0;
+export function invalidateVoiceInput(): void { voiceRequest++; pendingVoice = undefined; }
+function sameVoiceScope(a: RealitySessionSnapshot, b: RealitySessionSnapshot): boolean {
+  return a.generation === b.generation && a.grant.session_id === b.grant.session_id &&
+    a.grant.connection_key === b.grant.connection_key && a.grant.owner_id === b.grant.owner_id &&
+    a.grant.char_id === b.grant.char_id && a.grant.domain === b.grant.domain;
+}
 
-export async function sendChat(message: string, replyTo?: ReplyToPayload, videoObservationId?: string, audioSource?: { text: string; id: string } | { text: string; id: string }[], requestId?: string): Promise<ChatResponse> {
+export async function sendChat(message: string, replyTo?: ReplyToPayload, videoObservationId?: string, audioSource?: VoiceSource | VoiceSource[], requestId?: string): Promise<ChatResponse> {
+  const scope = await captureRealitySession();
   const voice = pendingVoice;
-  pendingVoice = undefined;
   const audioSources = Array.isArray(audioSource) ? audioSource : audioSource ? [audioSource] : [];
+  if (audioSources.some(source => !sameVoiceScope(source.scope, scope))) throw new SessionPreparationError(t('chat.send.sessionUnavailable'));
+  pendingVoice = undefined;
   const lastSource = audioSources[audioSources.length - 1];
-  const audioPerceptionId = lastSource?.id || (voice && voice.expires > Date.now() && voice.text.trim() === message.trim() ? voice.id : undefined);
+  const audioPerceptionId = lastSource?.id || (voice && sameVoiceScope(voice.scope, scope) && voice.expires > Date.now() && voice.text.trim() === message.trim() ? voice.id : undefined);
   const behaviorId = crypto.randomUUID();
   const behaviorCharacter = getActiveCharacterInfo().id;
   const announce = publishBehavior({ kind: 'request-start', id: behaviorId, charId: behaviorCharacter, at: Date.now() });
@@ -32,7 +43,7 @@ export async function sendChat(message: string, replyTo?: ReplyToPayload, videoO
       ...(audioSources.length > 1 ? { voiceReceiptIds: audioSources.map(s => s.id), voiceReceiptTexts: audioSources.map(s => s.text) } : {}),
       ...(videoObservationId ? { videoObservationId } : {}),
       ...(requestId ? { requestId } : {}),
-    });
+    }, scope);
     const at = Date.now();
     void announce.then(() => publishBehavior({ kind: 'request-end', id: behaviorId, charId: behaviorCharacter, at,
       msgId: response.msg_id, text: response.reply, emotion: response.emotion }));
@@ -387,13 +398,18 @@ export async function patchGroupSettings(id: string, settings: Partial<GroupSett
   return invokeGated<GroupSettings>('group_settings_patch', { id, settings });
 }
 
-export async function transcribeAudio(audioB64: string): Promise<{ text: string; audio_perception_id?: string; asr_quality?: AsrQuality }> {
-  pendingVoice = undefined;
-  const result = await invokeGated<{ text: string; audio_perception_id?: string; asr_quality?: AsrQuality }>('transcribe_audio', { audioB64 });
+export async function transcribeAudio(audioB64: string, captured?: RealitySessionSnapshot): Promise<{ text: string; audio_perception_id?: string; asr_quality?: AsrQuality; scope: RealitySessionSnapshot }> {
+  const scope = captured ?? await captureRealitySession();
+  const startingRequest = voiceRequest;
+  if (!await isRealitySessionCurrent(scope) || startingRequest !== voiceRequest) throw new SessionPreparationError(t('chat.send.sessionUnavailable'));
+  invalidateVoiceInput();
+  const request = voiceRequest;
+  const result = await invokeGated<{ text: string; audio_perception_id?: string; asr_quality?: AsrQuality }>('transcribe_audio', { audioB64 }, scope);
+  if (request !== voiceRequest || !await isRealitySessionCurrent(scope) || request !== voiceRequest) throw new SessionPreparationError(t('chat.send.sessionUnavailable'));
   if (result.audio_perception_id) pendingVoice = {
-    text: result.text, id: result.audio_perception_id, expires: Date.now() + 300_000,
+    text: result.text, id: result.audio_perception_id, expires: Date.now() + 300_000, scope,
   };
-  return result;
+  return { ...result, scope };
 }
 
 export interface AsrQuality {
