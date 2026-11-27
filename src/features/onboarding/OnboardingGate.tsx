@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { getTokenStatus, type TokenStatus } from '../../shared/api/connectionSettings';
 import { onAuthInvalidChange, setAuthInvalid } from '../../shared/api/authGate';
 import { useI18n } from '../../shared/i18n';
+import { StartupSurface } from '../../shared/window/StartupSurface';
 import { TokenSetupForm } from './TokenSetupForm';
 import { checkTokenStatus, TokenCheckTimeoutError } from './tokenCheck';
 
@@ -61,16 +62,7 @@ export function OnboardingGate({ children }: { children: ReactNode }) {
     if (invalid) setState('blocked');
   }), []);
 
-  if (state === 'checking') {
-    return (
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        height: '100vh', color: 'var(--ink-3)', fontSize: 13,
-      }}>
-        {t('onboarding.checking')}
-      </div>
-    );
-  }
+  if (state === 'checking') return <StartupSurface />;
 
   if (state === 'error' || (state === 'blocked' && error)) {
     return (

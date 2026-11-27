@@ -1,12 +1,19 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { startupMessages } from "./src/shared/i18n/startupMessages";
 
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
-  plugins: [react()],
+  plugins: [react(), {
+    name: "startup-loading-copy",
+    // Keep the first HTML paint localized without loading React or the locale graph.
+    transformIndexHtml: html => html
+      .replaceAll('__STARTUP_OPENING_ZH__', startupMessages['zh-CN']['startup.opening'])
+      .replaceAll('__STARTUP_OPENING_EN__', startupMessages['en-US']['startup.opening']),
+  }],
 
   // Pre-bundle the postprocessing passes up front; otherwise the first video call discovers
   // them late and Vite re-optimizes deps mid-session, reloading the page (dev only).

@@ -1,7 +1,9 @@
+import { startupMessages } from '../startupMessages';
 import type { MessageKey } from './zh-CN';
 
 
 export const enUS: Record<MessageKey, string> = {
+  ...startupMessages['en-US'],
   'chat.send.sessionUnavailable': 'Could not connect to this character. Please reopen the chat window and try again.',
   'localFiles.title': "Local File Agent",
   'localFiles.unrestricted': "Unrestricted local file access",

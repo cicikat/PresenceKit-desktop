@@ -1,3 +1,9 @@
+## 分阶段启动与首次离线 Session（2026-11-27，current / observe / open）
+
+current：主窗口已移除绿栏空白底壳，HTML/React/本机配置检查使用同一加载页。生产隔离浏览器验证后端持续挂起或网络失败时窗口与设置仍可用，普通数据迟到不重建输入框、不丢草稿、不重复历史。
+
+open（既有相邻链路）：首次 open_reality_session 网络失败后失败绑定仍保留；后续 WS 重连不会静默创建替代 Session。需显式保存连接或重开窗口恢复；保存连接会按现有 scope 生命周期重建 ChatPanel，旧草稿不保留。本轮不放宽 T4 绑定规则。真实安装版冷启动和物理断网/恢复待验收，稳定 200ms 仍 partial。无跨端影响，详见 [工单](../cc-tasks/2026-11-27-staged-startup.md)。
+
 ## 启动白屏与 200ms 目标（2026-11-27，current / partial / open）
 
 current：生产页面在 React 挂载前因 activeCharacter/backend/authGate 循环导入而停在绿栏空底壳的问题已修复；偏好、代码和本机 token 预查并行，设置及裁剪链路移出首屏。生产隔离浏览器最终首次页面约 195ms，热重载约 60–69ms；多轮冷页面仍出现约 216ms，稳定 200ms 目标 partial。原生安装版进程/WebView2 冷启动、真实文件 IO、DPI/GPU 和杀毒环境计时 open。不能以最后一次浏览器达标代替安装版验收。无跨端影响；证据、回归与运行命令见 [工单](../cc-tasks/2026-11-27-startup-white-screen.md)。

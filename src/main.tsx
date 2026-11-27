@@ -7,6 +7,7 @@ import "./shared/theme/globals.css";
 import { initUIPrefs } from "./shared/uiPreferences";
 import { initI18n, t } from "./shared/i18n";
 import { LoadingSurface } from "./shared/window/LoadingSurface";
+import { StartupSurface } from "./shared/window/StartupSurface";
 
 const windowView = new URLSearchParams(window.location.search).get("window");
 const isSatelliteWindow = windowView === "design-satellite";
@@ -24,7 +25,7 @@ const { Component: OnboardingGate, preload: loadOnboarding } = deferredComponent
 }));
 
 function LoadingView() {
-  return <LoadingSurface />;
+  return isMainWindow ? <StartupSurface /> : <LoadingSurface />;
 }
 
 class RoleLoadBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
@@ -71,7 +72,8 @@ initI18n();
 // Render the window frame before disk IPC. Code can preload in parallel, but
 // preference-dependent components mount only after the authoritative file loads.
 const preferencesReady = isSatelliteWindow ? Promise.resolve() : initUIPrefs();
-// Load code in parallel with disk IPC; mount only after authoritative preferences.
+// Frontend readiness depends only on local code/preferences, never backend HTTP or WS.
+// Once mounted, ChatPanel starts connection/history concurrently and keeps settings usable.
 const roleReady = isMainWindow
   ? Promise.all([preferencesReady, loadApplication(), loadOnboarding()])
   : preferencesReady;
