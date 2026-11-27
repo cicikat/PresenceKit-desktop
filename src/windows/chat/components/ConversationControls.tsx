@@ -103,6 +103,7 @@ export function ConversationControls({pendingRequests, deleteTurn, clearDelete, 
         <button style={button} disabled={busy} onClick={()=>void run(async()=>{
           const result=await conversationRequest<{state:string}>('delete',deleteTurn,{operation_id:op('delete:'+deleteTurn)});
           if (result.state!=='completed') throw new Error('repair_pending');
+          operations.current.delete('delete:'+deleteTurn);
           clearDelete();
         })}>{t('chat.control.delete')}</button>
       </div>
