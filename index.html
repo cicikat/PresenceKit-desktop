@@ -8,10 +8,18 @@
       html, body { margin: 0; height: 100%; }
       html[data-window="chat"] { background: #f3ede3; }
       #root { height: 100%; }
-      .startup-shell { display: none; }
-      html[data-window="chat"] .startup-shell { display: flex; height: 100%; }
-      .startup-shell::before { content: ""; width: 52px; background: #254138; }
-      .startup-shell::after { content: ""; flex: 1; background: #f3ede3; }
+      .startup-surface { box-sizing: border-box; height: 100%; min-height: 120px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: var(--paper, #f3ede3); color: var(--ink-3, #77746b); font: 13px/1.6 var(--font-sans, system-ui, sans-serif); }
+      .startup-surface__ring { box-sizing: border-box; width: 28px; height: 28px; border: 2px solid var(--paper-edge, #d6ccbc); border-top-color: var(--forest, #254138); border-radius: 50%; animation: startup-turn 1s linear infinite; }
+      html:not([data-window="chat"]):has(#root > .startup-placeholder),
+      html:not([data-window="chat"]):has(#root > .startup-placeholder) body { background: transparent; }
+      html:not([data-window="chat"]):has(#root > .startup-placeholder) body::before { display: none; }
+      .startup-placeholder { display: none; padding-top: 32px; }
+      html[data-window="chat"] .startup-placeholder { display: flex; }
+      .startup-surface__label-en { display: none; }
+      html[data-startup-language="en-US"] .startup-surface__label-zh { display: none; }
+      html[data-startup-language="en-US"] .startup-surface__label-en { display: inline; }
+      @keyframes startup-turn { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) { .startup-surface__ring { animation: none; } }
     </style>
     <script src="/startup.js"></script>
     <!-- TODO: 迁移到 npm 本地字体包 -->
@@ -20,7 +28,15 @@
     <link id="optional-fonts" rel="stylesheet" media="print" href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Noto+Serif+SC:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
   </head>
   <body>
-    <div id="root"><div class="startup-shell" aria-hidden="true"></div></div>
+    <div id="root">
+      <main class="startup-surface startup-placeholder" role="status" aria-live="polite">
+        <span class="startup-surface__ring" aria-hidden="true"></span>
+        <span class="startup-surface__label" data-i18n-key="startup.opening">
+          <span class="startup-surface__label-zh" lang="zh-CN">__STARTUP_OPENING_ZH__</span>
+          <span class="startup-surface__label-en" lang="en-US">__STARTUP_OPENING_EN__</span>
+        </span>
+      </main>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

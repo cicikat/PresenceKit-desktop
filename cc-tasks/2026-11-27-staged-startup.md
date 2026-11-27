@@ -1,6 +1,6 @@
 # 分阶段启动：加载页 → 完整窗口 → 后端数据（2026-11-27）
 
-状态：planned，先写工单后施工；完成后 push 并合并 main。
+状态：current；已先提交工单再施工。构建、659 项单测与生产隔离浏览器回归通过；原生冷启动与稳定 200ms 目标 open / partial。完成后 push 并合并 main。
 
 ## 用户目标与顺序
 
@@ -27,4 +27,29 @@
 
 ## 结果
 
-待施工后填写。
+### 实现
+
+- index.html 的绿色窄栏空白底壳已移除，改为完整纸色背景、轻量转圈与“正在打开…”；不设置最低展示时长。
+- HTML 首次绘制、Bootstrap 等待代码/偏好、Onboarding 等待本机 token 检查，沿用同一 startup-surface 样式；React StartupSurface 复用语义 key startup.opening。
+- src/shared/i18n/startupMessages.ts 是加载页中英文文案来源，两个 locale 复用；Vite transformIndexHtml 同时为 dev 与 build 注入 HTML 文案，启动小脚本读取既有语言选择。不新增本机配置或存储键，不往 legacy.ts 加文案。
+- HTML 主窗加载页只显示在主窗口；辅助 WebView 在 React 接管前隐藏该页并暂时清除全局纸色背景，随后恢复各自原有样式。支持减少动态效果。
+- 代码、权威偏好和本机配置检查继续并行；get_token_status 的 Rust 实现只读取本机配置、不请求后端。前端就绪条件没有真实 HTTP/WS Promise；ChatPanel 挂载后 WS、历史和状态请求异步进行，窗口与设置不等待联网。
+- 本轮无需修改启动命令、原生窗口配置、后端请求/连接合同或业务模块；未为展示顺序额外等待网络。
+
+### 验证
+
+- npm.cmd run build：通过 TypeScript 与 Vite 生产构建；保留既有大模型链路 chunk 体积告警。
+- dev HTML 转换隔离检查通过，中英文占位符均被替换；此项仅验证 transformIndexHtml，关闭依赖自动发现运行，不等于完整 tauri dev 启动验收。首次快速关闭临时 dev server 曾中断尚在执行的依赖扫描，已改用此隔离检查。
+- npm.cmd test：120 文件、659 项通过。未修改 Rust，未重跑 cargo check。
+- node scripts/staged-startup-browser.mjs：生产 preview + headless Edge、1280×900、隔离 Tauri IPC；JS 主入口人为挂起时已有可见中文加载页；慢偏好/慢 token 检查期间没有半成品聊天布局，React 保留相同加载页。
+- 后端 Session/WS/历史等 Promise 人为挂起：主窗口可输入、打开设置；解除挂起后历史原位显示且唯一，原输入节点及草稿保留。
+- 后端请求直接网络失败：主窗口与设置可用，传输恢复本身不清草稿；用户显式保存连接后重新绑定并恢复历史。此显式更改连接会按现有 scope 规则重建 ChatPanel，不能承诺它保留旧草稿。
+- 未配置本机鉴权时保留引导，不创建业务 Session、不启动 WS 或读取聊天历史；英文 HTML/React 文案一致、减少动态效果和五类辅助窗口初始隔离通过。
+- node scripts/startup-performance-browser.mjs：此前的鉴权错误重试、慢字体、慢偏好、设置重开、导航、草稿和历史回归仍通过。首次输入框绘制机会约 214ms，5 次热重载约 71–98ms；首次浏览器 paint 约 104ms。首屏请求 JS 解码体积 854,762 字节。指标是浏览器绘制机会，不能作为原生进程冷启动或显示器呈现计时。
+- 截图及性能数据位于 ignored 的 .tmp/staged-startup-*.png 与 .tmp/startup-performance.json。
+
+### 已知限制与边界
+
+- 首次 open_reality_session 网络失败会保留失败绑定；即使 WS 后来连上，现有 T4 Session 规则也不会静默创建替代 Session。需要用户显式保存连接配置或重开窗口恢复。该约束未被本轮改动放宽，自动恢复 open；保存连接本身按现有设计清除 ChatPanel 草稿。不能把普通迟到数据保留草稿的验证扩写为所有重配连接均保留草稿。
+- 真实 Windows 安装包从命令行/进程初始化到 WebView2 可见、GPU/DPI、物理离线及恢复尚未验收；稳定 200ms 全冷启动仍 partial/open。未打包、安装、部署或正式发布。
+- 无跨端影响：本轮只改桌面启动反馈和加载页文案/样式，未改设置、落盘状态、IPC/REST/WS 契约或权限。管理面板和手机不需要增加控制项；后台请求、失败反馈、重试和连接设置继续走原调用链。
