@@ -1,3 +1,7 @@
+## 启动白屏与 200ms 目标（2026-11-27，current / partial / open）
+
+current：生产页面在 React 挂载前因 activeCharacter/backend/authGate 循环导入而停在绿栏空底壳的问题已修复；偏好、代码和本机 token 预查并行，设置及裁剪链路移出首屏。生产隔离浏览器最终首次页面约 195ms，热重载约 60–69ms；多轮冷页面仍出现约 216ms，稳定 200ms 目标 partial。原生安装版进程/WebView2 冷启动、真实文件 IO、DPI/GPU 和杀毒环境计时 open。不能以最后一次浏览器达标代替安装版验收。无跨端影响；证据、回归与运行命令见 [工单](../cc-tasks/2026-11-27-startup-white-screen.md)。
+
 ## T4 Session Scope UI 联验（2026-11-24，open）
 
 本地 Session 接入已提交检查点，隔离真实模型对话成功；最终版本的窗口重开历史、

@@ -3,13 +3,7 @@ import React, { Component, lazy, Suspense, type ErrorInfo, type ReactNode } from
 import ReactDOM from "react-dom/client";
 import { MainWindowFrame } from "./shared/window/MainWindowFrame";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { listen } from "@tauri-apps/api/event";
-import { wsClient } from "./shared/api/ws";
-import { getActiveCharacterInfo } from "./shared/activeCharacter";
-import { showIncomingVideoCall } from "./windows/room/incomingCall";
-import { hangupVideoCallInvite } from "./shared/api/backend";
 import "./shared/theme/globals.css";
-import { initTheme } from "./shared/theme/registry";
 import { initUIPrefs } from "./shared/uiPreferences";
 import { initI18n, t } from "./shared/i18n";
 import { LoadingSurface } from "./shared/window/LoadingSurface";
@@ -18,15 +12,16 @@ const windowView = new URLSearchParams(window.location.search).get("window");
 const isSatelliteWindow = windowView === "design-satellite";
 const isMainWindow = !isSatelliteWindow && windowView !== "pet" && windowView !== "presence-nag" && windowView !== "diary-detail" && windowView !== "video-call-invite";
 
-const { Component: ChatWindow, preload: loadChatWindow } = deferredComponent(() => import("./windows/chat/ChatWindow").then(module => ({ default: module.ChatWindow })));
-const ToyWindow = lazy(() => import("./windows/toy").then(module => ({ default: module.ToyWindow })));
-const RoomWindow = lazy(() => import("./windows/room").then(module => ({ default: module.RoomWindow })));
+const { Component: AppRoot, preload: loadApplication } = deferredComponent(() => import("./windows/chat/AppRoot").then(module => ({ default: module.AppRoot })));
 const PetWindow = lazy(() => import("./windows/pet/PetWindow").then(module => ({ default: module.PetWindow })));
 const PresenceNagWindow = lazy(() => import("./windows/presence-nag/PresenceNagWindow").then(module => ({ default: module.PresenceNagWindow })));
 const DiaryDetailWindow = lazy(() => import("./windows/diary-detail/DiaryDetailWindow").then(module => ({ default: module.DiaryDetailWindow })));
 const DesignSatelliteWindow = lazy(() => import("./windows/design-satellite/DesignSatelliteWindow").then(module => ({ default: module.DesignSatelliteWindow })));
 const IncomingCallWindow = lazy(() => import("./windows/room/IncomingCallWindow").then(module => ({ default: module.IncomingCallWindow })));
-const { Component: OnboardingGate, preload: loadOnboarding } = deferredComponent(() => import("./features/onboarding/OnboardingGate").then(module => ({ default: module.OnboardingGate })));
+const { Component: OnboardingGate, preload: loadOnboarding } = deferredComponent(() => import("./features/onboarding/OnboardingGate").then(module => {
+  module.prepareOnboarding();
+  return { default: module.OnboardingGate };
+}));
 
 function LoadingView() {
   return <LoadingSurface />;
@@ -59,47 +54,6 @@ class RoleLoadBoundary extends Component<{ children: ReactNode }, { error: Error
   }
 }
 
-function AppRoot() {
-  const [activeWindow, setActiveWindow] = React.useState<"chat" | "toy" | "room">("chat");
-  const [acceptedInviteId, setAcceptedInviteId] = React.useState<string | null>(null);
-  const closeRoom = () => {
-    const inviteId = acceptedInviteId;
-    setAcceptedInviteId(null);
-    setActiveWindow('chat');
-    if (inviteId) void hangupVideoCallInvite(inviteId).catch(error => console.warn('[video-call] hangup report failed', error));
-  };
-  React.useEffect(() => {
-    const stopInvite = wsClient.on('video_call_invite', call => {
-      if (call.char_id !== getActiveCharacterInfo().id) return;
-      void showIncomingVideoCall(call);
-    });
-    let stopAccepted: (() => void) | undefined;
-    void listen<{ invite_id: string; char_id: string }>('video-call-invite-accepted', event => {
-      if (event.payload.char_id !== getActiveCharacterInfo().id) return;
-      setAcceptedInviteId(event.payload.invite_id);
-      setActiveWindow('room');
-      void getCurrentWindow().setFocus();
-    }).then(stop => { stopAccepted = stop; });
-    return () => { stopInvite(); stopAccepted?.(); };
-  }, []);
-  return (
-    <>
-      <ChatWindow
-        onToyOpen={() => setActiveWindow("toy")}
-        onRoomOpen={() => { setAcceptedInviteId(null); setActiveWindow("room"); }}
-        isCovered={activeWindow !== "chat"}
-      />
-      {/* Keep first-load suspension inside the overlay. The auth gate and main
-          window must stay mounted while a new role's chunk is loading. */}
-      <Suspense fallback={<div style={{ position: 'fixed', inset: 0, zIndex: 110, background: 'var(--paper)' }}><LoadingView /></div>}>
-
-        {activeWindow === "toy" && <ToyWindow onClose={() => setActiveWindow("chat")} />}
-        {activeWindow === "room" && <RoomWindow key={acceptedInviteId ?? 'manual'} onClose={closeRoom} />}
-      </Suspense>
-    </>
-  );
-}
-
 function RoleRoot() {
   if (windowView === "pet") return <PetWindow />;
   if (windowView === "presence-nag") return <PresenceNagWindow />;
@@ -114,15 +68,17 @@ function RoleRoot() {
 }
 
 initI18n();
-// Render the window frame before disk IPC. Keep preference-dependent modules
-// behind this barrier so their initial state still reads the authoritative file.
+// Render the window frame before disk IPC. Code can preload in parallel, but
+// preference-dependent components mount only after the authoritative file loads.
 const preferencesReady = isSatelliteWindow ? Promise.resolve() : initUIPrefs();
+// Load code in parallel with disk IPC; mount only after authoritative preferences.
 const roleReady = isMainWindow
-  ? preferencesReady.then(() => Promise.all([loadChatWindow(), loadOnboarding()]))
+  ? Promise.all([preferencesReady, loadApplication(), loadOnboarding()])
   : preferencesReady;
 void preferencesReady.then(() => {
   if (!isSatelliteWindow) {
-    initTheme().catch(error => console.warn("[theme] 初始化失败:", error));
+    import("./shared/theme/registry").then(module => module.initTheme())
+      .catch(error => console.warn("[theme] 初始化失败:", error));
     import("./shared/voice/crossWindowPlayback")
       .then(module => module.initCrossWindowAudioPlayback())
       .catch(error => console.warn("[voice] 初始化失败:", error));

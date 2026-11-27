@@ -1,4 +1,3 @@
-import { getPromptAssets } from './api/backend';
 import { getUIPref, setUIPref, onUIPrefChange } from './uiPreferences';
 import type { PromptAssetsResponse } from './api/types';
 
@@ -67,6 +66,9 @@ export function updateActiveCharacterFromAssets(assets: PromptAssetsResponse): A
 
 /** Fetch prompt-assets fresh and refresh the cache. Call once from whichever window owns character settings. */
 export async function refreshActiveCharacterInfo(force = false): Promise<ActiveCharacterInfo> {
+  // Keep the cache independent of backend -> authGate -> activeCharacter.
+  // A static backend import reads this module before its keys are initialized.
+  const { getPromptAssets } = await import('./api/backend');
   const assets = await getPromptAssets({ force });
   return updateActiveCharacterFromAssets(assets);
 }
