@@ -1093,4 +1093,4 @@ PetTextPresentation 仅在 PetStage 子树提供当前段的文本租约；Chara
 
 ## 启动与交互延迟（2026-11-15）
 
-入口不再等偏好 IPC 才渲染标题栏；偏好相关模块仍等文件结果，Chat/Onboarding 并行加载且保留鉴权门禁。Dream、16 个偏好子页按需加载，Ribbon/分类入口的指针与焦点事件仅预载代码。deferredComponent 使用已就绪模块同步渲染，冷加载通过局部状态显示，避免 Suspense reveal 等待；页面 effect 仍只在实际打开时运行。CSS 消息与主题过渡上限 160ms，沿用原有减少动态效果设置。无跨端影响；浏览器数据和原生 open 见 [工单](../cc-tasks/2026-11-15-startup-performance.md)。
+2026-11-27 更新：入口先渲染标题栏；偏好 IPC、AppRoot/Onboarding 代码和本机 token 预查并行，偏好相关组件仍等文件结果及鉴权后挂载。AppRoot.tsx 持有主聊天、Room/Toy 覆盖页与来电事件。设置整体及裁剪代码首次打开时加载，首次打开后保留实例和分类；Ribbon 仍支持意图预载。角色缓存的后端刷新使用动态导入，打断 backend/authGate 循环初始化。最新生产页面数据与 200ms partial 边界见 [白屏修复工单](../cc-tasks/2026-11-27-startup-white-screen.md)。Dream、16 个偏好子页按需加载，Ribbon/分类入口的指针与焦点事件仅预载代码。deferredComponent 使用已就绪模块同步渲染，冷加载通过局部状态显示，避免 Suspense reveal 等待；页面 effect 仍只在实际打开时运行。CSS 消息与主题过渡上限 160ms，沿用原有减少动态效果设置。无跨端影响；浏览器数据和原生 open 见 [工单](../cc-tasks/2026-11-15-startup-performance.md)。

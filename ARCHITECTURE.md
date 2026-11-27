@@ -187,4 +187,4 @@ CU-05 的云端截图授权由主窗口设置页在开会话时传入 Rust，随
 
 ## 启动与交互延迟（2026-11-15）
 
-主窗口先渲染标题栏；偏好文件读取之后并行载入 Chat/Onboarding 代码，鉴权通过后才挂载业务。Dream 和偏好子页由 shared/ui/deferredComponent 按需载入，预载只解析代码，不挂载 effect。辅助透明窗口不使用 HTML 主窗底壳。无跨端影响；计时边界与原生 open 见 [工单](cc-tasks/2026-11-15-startup-performance.md)。
+主窗口先渲染标题栏；偏好读取、AppRoot/Onboarding 代码和本机 token 配置预查并行，偏好就绪且鉴权通过后才挂载业务。windows/chat/AppRoot.tsx 管理主聊天与 Room/Toy 覆盖页及来电事件。Dream、设置整体与偏好子页由 shared/ui/deferredComponent 按需载入；设置首次打开后保留实例。activeCharacter 仅在显式刷新时动态导入 backend，避免与 authGate 的启动导入环。辅助透明窗口不使用 HTML 主窗底壳。无跨端影响；最新计时与原生 open 见 [白屏修复工单](cc-tasks/2026-11-27-startup-white-screen.md)，此前数据见 [原工单](cc-tasks/2026-11-15-startup-performance.md)。

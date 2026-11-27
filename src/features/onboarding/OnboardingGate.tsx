@@ -1,11 +1,25 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { getTokenStatus } from '../../shared/api/connectionSettings';
+import { getTokenStatus, type TokenStatus } from '../../shared/api/connectionSettings';
 import { onAuthInvalidChange, setAuthInvalid } from '../../shared/api/authGate';
 import { useI18n } from '../../shared/i18n';
 import { TokenSetupForm } from './TokenSetupForm';
 import { checkTokenStatus, TokenCheckTimeoutError } from './tokenCheck';
 
 type GateState = 'checking' | 'blocked' | 'error' | 'ok';
+
+let startupCheck: Promise<TokenStatus> | undefined;
+let startupStatus: TokenStatus | undefined;
+
+/** Check local configuration while code and preferences load, without mounting chat. */
+export function prepareOnboarding(): void {
+  if (startupCheck) return;
+  startupCheck = checkTokenStatus(getTokenStatus).then(status => {
+    startupStatus = status;
+    return status;
+  });
+  // The mounted gate presents timeout/failure and its existing retry action.
+  void startupCheck.catch(() => {});
+}
 
 // 首启 token 引导门禁（cc-tasks/34 §1, 35 §1）：
 // - 启动检测：get_token_status 判空/占位符（Rust 侧已修正，见 client_config.rs）。
@@ -15,14 +29,15 @@ type GateState = 'checking' | 'blocked' | 'error' | 'ok';
 // 请求在后台继续发起。
 export function OnboardingGate({ children }: { children: ReactNode }) {
   const { t } = useI18n();
-  const [state, setState] = useState<GateState>('checking');
+  const [state, setState] = useState<GateState>(() => startupStatus ? (startupStatus.configured ? 'ok' : 'blocked') : 'checking');
   const [error, setError] = useState<string | null>(null);
 
-  const recheck = useCallback(async (signal?: AbortSignal) => {
-    setState('checking');
+  const recheck = useCallback(async (signal?: AbortSignal, initial = false) => {
+    if (!initial) setState('checking');
     setError(null);
     try {
-      const status = await checkTokenStatus(getTokenStatus, undefined, signal);
+      const status = await (initial && startupCheck ? startupCheck : checkTokenStatus(getTokenStatus, undefined, signal));
+      if (signal?.aborted) return;
       if (status.configured) {
         setAuthInvalid(false);
         setState('ok');
@@ -38,7 +53,7 @@ export function OnboardingGate({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const controller = new AbortController();
-    void recheck(controller.signal);
+    void recheck(controller.signal, true);
     return () => controller.abort();
   }, [recheck]);
 

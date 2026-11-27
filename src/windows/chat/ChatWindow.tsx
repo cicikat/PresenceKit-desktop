@@ -23,7 +23,6 @@ import { GroupListPanel } from './components/GroupListPanel';
 import { PaneHost } from './components/Panes';
 import { SpecPanel } from './components/SpecPanel';
 import { DreamAfterglowBanner } from '../dream/components/DreamAfterglowBanner';
-import { PreferencesPanel } from './components/preferences/PreferencesPanel';
 import { Divider, VideoBg } from './components/ChatShellAtoms';
 import { LayoutHost } from './components/LayoutHost';
 import { DesignModHost } from './components/DesignModHost';
@@ -39,6 +38,17 @@ import { preloadPreferenceTab } from './components/preferences/deferredPages';
 
 const { Component: ActivityWindow, preload: loadActivity } = deferredComponent(() => import('../activity/ActivityWindow').then(m => ({ default: m.ActivityWindow })));
 const { Component: DreamWindow, preload: loadDream } = deferredComponent(() => import('../dream/DreamWindow').then(m => ({ default: m.DreamWindow })), <div style={{ position: 'absolute', inset: 0, zIndex: 100 }}><LoadingSurface /></div>);
+const { Component: PreferencesPanel, preload: loadPreferences } = deferredComponent(() => import('./components/preferences/PreferencesPanel').then(m => ({ default: m.PreferencesPanel })), <div style={{ position: 'absolute', inset: 0, zIndex: 100 }}><LoadingSurface /></div>);
+// Retain settings state after first opening; do not load or mount it on startup.
+function RetainedPreferences(props: Record<string, unknown>) {
+  const opened = useRef(false);
+  if (props.open) opened.current = true;
+  return opened.current ? <PreferencesPanel {...props} /> : null;
+}
+const warmPreferences = () => {
+  void loadPreferences().catch(() => {});
+  preloadPreferenceTab('interface');
+};
 const warmActivity = () => { void loadActivity().catch(() => {}); };
 const warmDream = () => { void loadDream().catch(() => {}); };
 
@@ -223,7 +233,7 @@ export function ChatWindow({ onToyOpen, onRoomOpen, isCovered = false }: { onToy
               onPetRetry={petController.retryPet}
               onOpenSpec={() => navigation.setSpecOpen(true)}
               onOpenPrefs={() => navigation.setPrefsOpen(true)}
-              onPrefsIntent={() => preloadPreferenceTab('interface')}
+              onPrefsIntent={warmPreferences}
               onActivityIntent={warmActivity}
               onDreamIntent={warmDream}
               dreamWindowOpen={navigation.dreamWindowOpen}
@@ -304,7 +314,7 @@ export function ChatWindow({ onToyOpen, onRoomOpen, isCovered = false }: { onToy
       />
       <PaneHost />
       <SpecPanel open={navigation.specOpen} onClose={() => navigation.setSpecOpen(false)} />
-      <PreferencesPanel
+      <RetainedPreferences
         open={navigation.prefsOpen}
         onClose={() => navigation.setPrefsOpen(false)}
         themeMode={appearanceController.themeMode}
