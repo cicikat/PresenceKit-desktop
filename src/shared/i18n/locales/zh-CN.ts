@@ -4,6 +4,7 @@ export const zhCN = {
   'chat.control.stop': '停止生成',
   'chat.control.archive': '已删除的对话',
   'chat.control.delete': '删除本轮',
+  'chat.control.deleteUnavailable': '尚未取得本轮标识或回复仍在生成，暂不能删除。',
   'chat.control.deleteHint': '将删除这一轮的提问与回答，并同步到其他设备。之后可在电脑端恢复。',
   'chat.control.cancel': '取消',
   'chat.control.failed': '暂时没能完成，请稍后重试。若正在回复，请先停止。',

@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { conversationRequest, getConversationState, operationId, selectExecutionToStop, type ConversationState, type DeletedTurn, type DeletedDetail } from '../../../shared/api/conversation';
 import { wsClient } from '../../../shared/api/ws';
@@ -6,8 +7,8 @@ import { useI18n } from '../../../shared/i18n';
 
 const button = {border: '1px solid var(--paper-edge)', borderRadius: 8, background: 'var(--paper)', color: 'var(--ink)', padding: '6px 12px', cursor: 'pointer', font: 'inherit'};
 const overlay = {position: 'fixed' as const, inset: 0, zIndex: 100, background: '#0006', display: 'grid', placeItems: 'center', padding: 24};
-export function ConversationControls({pendingRequests, deleteTurn, clearDelete, onSnapshot, onRefresh, onStopped}: {
-  pendingRequests: string[]; deleteTurn?: string; clearDelete: () => void;
+export function ConversationControls({pendingRequests, archiveRequest = 0, deleteTurn, clearDelete, onSnapshot, onRefresh, onStopped}: {
+  archiveRequest?: number; pendingRequests: string[]; deleteTurn?: string; clearDelete: () => void;
   onSnapshot: (state: ConversationState) => void; onRefresh: () => void; onStopped: (requestId: string) => void;
 }) {
   const {t} = useI18n();
@@ -75,6 +76,12 @@ export function ConversationControls({pendingRequests, deleteTurn, clearDelete, 
     finally { if (mounted.current) setBusy(false); }
   };
   const load=async (more=false) => {const data=await conversationRequest<{deletions:DeletedTurn[];next_before:number|null}>('list','',more?{before:nextBefore}:{});setRows(previous=>more?[...previous,...data.deletions.filter(item=>!previous.some(old=>old.deletion_id===item.deletion_id))]:data.deletions);setNextBefore(data.next_before);};
+  const lastArchiveRequest=useRef(archiveRequest);
+  useEffect(()=>{
+    if (lastArchiveRequest.current===archiveRequest) return;
+    lastArchiveRequest.current=archiveRequest;
+    setRecovery(true);setError(false);void load().catch(()=>setError(true));
+  },[archiveRequest]);
   const active=state?.executions.filter(item => item.state!=='committing') ?? [];
   const stop=() => run(async () => {
     const target=selectExecutionToStop(state?.executions ?? []);
@@ -93,9 +100,8 @@ export function ConversationControls({pendingRequests, deleteTurn, clearDelete, 
   const dismiss=() => {setRecovery(false);setDetail(undefined);setError(false);};
   return <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:8,fontSize:12}}>
     {(active.length>0 || pendingRequests.length>0) && <button style={button} disabled={busy} onClick={()=>void stop()}>{t('chat.control.stop')}</button>}
-    <button style={{...button,marginLeft:'auto'}} onClick={()=>{setRecovery(true);setError(false);void load().catch(()=>setError(true));}}>{t('chat.control.archive')}</button>
     {error && !recovery && !deleteTurn && <span role="alert">{t('chat.control.failed')}</span>}
-    {deleteTurn && <div style={overlay}><section ref={modalRoot} role="alertdialog" aria-modal="true" aria-label={t('chat.control.delete')} style={{background:'var(--paper)',color:'var(--ink)',padding:24,borderRadius:16,width:'min(440px,100%)',boxSizing:'border-box'}}>
+    {deleteTurn && createPortal(<div style={overlay}><section ref={modalRoot} role="alertdialog" aria-modal="true" aria-label={t('chat.control.delete')} style={{background:'var(--paper)',color:'var(--ink)',padding:24,borderRadius:16,width:'min(440px,100%)',boxSizing:'border-box'}}>
       <h3>{t('chat.control.delete')}</h3><p>{t('chat.control.deleteHint')}</p>
       {error && <p role="alert">{t('chat.control.failed')}</p>}
       <div style={{display:'flex',justifyContent:'end',gap:8}}>
@@ -107,8 +113,8 @@ export function ConversationControls({pendingRequests, deleteTurn, clearDelete, 
           clearDelete();
         })}>{t('chat.control.delete')}</button>
       </div>
-    </section></div>}
-    {recovery && <div style={overlay}><section ref={modalRoot} role="dialog" aria-modal="true" aria-label={t('chat.control.archive')} style={{background:'var(--paper)',color:'var(--ink)',borderRadius:16,padding:24,width:'min(680px,100%)',boxSizing:'border-box',maxHeight:'80vh',overflow:'auto'}}>
+    </section></div>,document.body)}
+    {recovery && createPortal(<div style={overlay}><section ref={modalRoot} role="dialog" aria-modal="true" aria-label={t('chat.control.archive')} style={{background:'var(--paper)',color:'var(--ink)',borderRadius:16,padding:24,width:'min(680px,100%)',boxSizing:'border-box',maxHeight:'80vh',overflow:'auto'}}>
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}><h3>{t('chat.control.archive')}</h3><button style={button} onClick={dismiss}>{t('chat.control.close')}</button></div>
       <p>{t('chat.control.archiveHint')}</p>
       {error && <p role="alert">{t('chat.control.failed')}</p>}
@@ -126,6 +132,6 @@ export function ConversationControls({pendingRequests, deleteTurn, clearDelete, 
       {detail && <div style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere',marginTop:16,padding:16,background:'var(--paper-2)',borderRadius:8}}>
         {(detail.history.length ? detail.history.map(item=>typeof item.entry.content==='string'?item.entry.content:JSON.stringify(item.entry.content)) : detail.stopped.length ? detail.stopped.flatMap(item=>[item.user_text,item.assistant_text]) : detail.events.map(item=>item.visible_text)).map((text,i)=><p key={i}>{text}</p>)}
       </div>}
-    </section></div>}
+    </section></div>,document.body)}
   </div>;
 }

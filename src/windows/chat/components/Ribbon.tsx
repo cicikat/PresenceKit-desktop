@@ -81,7 +81,7 @@ export function Ribbon({
   onOpenSpec, onOpenPrefs,
   dreamWindowOpen, onDreamToggle,
   onActivityOpen, activityActive, groupActive,
-  onToyOpen,
+  onToyOpen, onOpenArchive,
   playModeEnabled,
   onGroupOpen,
   onPrefsIntent, onActivityIntent, onDreamIntent,
@@ -139,6 +139,8 @@ export function Ribbon({
         <RibBtn icon="mood"   label="状态"
           active={sidebarOpen && sidebarTab === 'status'}
           onClick={() => { if (sidebarOpen && sidebarTab === 'status') onCloseSidebar(); else onSidebarTab('status'); }} />
+        <RibBtn label={t('chat.control.archive')} onClick={onOpenArchive}
+          customIcon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="5" rx="1" /><path d="M5 8v12h14V8M10 12h4" /></svg>} />
         <RibBtn icon="flower" label="花园"
           active={sidebarOpen && sidebarTab === 'garden'}
           onClick={() => { if (sidebarOpen && sidebarTab === 'garden') onCloseSidebar(); else onSidebarTab('garden'); }} />

@@ -7,6 +7,7 @@ export const enUS: Record<MessageKey, string> = {
   'chat.control.stop': 'Stop generating',
   'chat.control.archive': 'Deleted conversations',
   'chat.control.delete': 'Delete this round',
+  'chat.control.deleteUnavailable': 'This reply is still generating or has no confirmed round ID yet.',
   'chat.control.deleteHint': 'Delete the question and answer on all devices. You can restore it here on desktop later.',
   'chat.control.cancel': 'Cancel',
   'chat.control.failed': 'Could not complete this. Try again shortly. Stop the current reply first if needed.',

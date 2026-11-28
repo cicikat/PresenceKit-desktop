@@ -65,6 +65,7 @@ export function ChatWindow({ onToyOpen, onRoomOpen, isCovered = false }: { onToy
   const [toolStatus, setToolStatus] = useState<ToolStatusOverlayState | null>(() => toolStatusController.get());
   const navigation = useChatWindowNavigation();
   const [activityOpen, setActivityOpen] = useState(false);
+  const [archiveRequest, setArchiveRequest] = useState(0);
   const [documentVisible, setDocumentVisible] = useState(() => !document.hidden);
   useEffect(() => {
     presenters.setToolStatus(toolStatus);
@@ -226,6 +227,7 @@ export function ChatWindow({ onToyOpen, onRoomOpen, isCovered = false }: { onToy
               sidebarTab={appearanceController.sidebarTab}
               onSidebarTab={appearanceController.onSidebarTab}
               onCloseSidebar={appearanceController.closeSidebar}
+              onOpenArchive={() => setArchiveRequest(value => value + 1)}
               petVisible={petController.petVisible}
               onPetToggle={petController.togglePet}
               petBusy={petController.petBusy}
@@ -272,7 +274,7 @@ export function ChatWindow({ onToyOpen, onRoomOpen, isCovered = false }: { onToy
           )}
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, minWidth: 0 }}>
               {!isCovered && !activityOpen && navigation.groupView === null && !navigation.dreamWindowOpen && <AgentSessionIndicator />}
-              <ChatPanel hidden={activityOpen || navigation.groupView !== null} key={charSwitchKey} engine={engine} chatRectRef={chatRectRef} headerVisible={appearanceController.chatHeaderVisible} chatFontSize={appearanceController.appearance.chatFontSize} chatOpacity={appearanceController.appearance.chatOpacity} showEmotionAccent={appearanceController.appearance.showEmotionAccent} showEmotionLabel={appearanceController.appearance.showEmotionLabel} dreamActive={navigation.dreamWindowOpen} characterAvatarDataUrl={characterAvatarDataUrl} mainLayout={appearanceController.activeLayout.manifest.mainLayout} onOpenRoom={onRoomOpen} onOpenPrefs={() => navigation.setPrefsOpen(true)} />
+              <ChatPanel archiveRequest={archiveRequest} hidden={activityOpen || navigation.groupView !== null} key={charSwitchKey} engine={engine} chatRectRef={chatRectRef} headerVisible={appearanceController.chatHeaderVisible} chatFontSize={appearanceController.appearance.chatFontSize} chatOpacity={appearanceController.appearance.chatOpacity} showEmotionAccent={appearanceController.appearance.showEmotionAccent} showEmotionLabel={appearanceController.appearance.showEmotionLabel} dreamActive={navigation.dreamWindowOpen} characterAvatarDataUrl={characterAvatarDataUrl} mainLayout={appearanceController.activeLayout.manifest.mainLayout} onOpenRoom={onRoomOpen} onOpenPrefs={() => navigation.setPrefsOpen(true)} />
             {activityOpen ? (
               <Suspense fallback={<LoadingSurface />}><ActivityWindow onClose={() => setActivityOpen(false)} /></Suspense>
             ) : navigation.groupView === null ? (

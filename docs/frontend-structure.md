@@ -1107,3 +1107,12 @@ Reality 聊天新增 Session-scoped `/conversation/state`、精确 turn delete �
 桌面 `shared/api/conversation.ts` → allowlisted Tauri `conversation_request`；右键确认删除，输入区停止与独立删除记录列表/详情/恢复/repair。`chat.recovery` 为 desktop profile 专用，手机 profile 不含。手机 `ConversationControl` → BackendClient，长按确认删除、输入区停止，仍 final-only WS，无恢复 API/UI。权限、归档、失败与 CAS 状态以后端为真；没有新增本地能力开关。
 
 观测：后端 executions/state/mutations 与 desktop archive。自动化覆盖 scoped 请求、真实取消、迟到/重连过滤、长按菜单；desktop 隔离组件浏览器验收不等于 native/双设备/真实模型验收。未安装新包、未生产部署。旧无可靠来源的 facts/identity 不做猜测批量删除，恢复向量待既有 missing-projection 修复，Dossier 源恢复后需重算。
+
+
+## 2026-11-28：右键菜单与删除归档入口修正
+
+气泡菜单通过 BubbleContextMenu portal 挂到 document.body，以 clientX/clientY 定位并按实测菜单尺寸夹在窗口内，避免聊天/Design layout 的 transform 坐标偏移。删除候选读取当前消息的 turnId 或已确认 receipt.replyIdentity.turn_id；streamingDone 的完成流可删除，仍在生成或缺少 canonical 身份时显示禁用项和原因，不按文本猜轮次。
+
+删除归档移到 Ribbon 的“状态”和“花园”之间，以归档盒 SVG + 本地化 tooltip/accessible label 表示。ChatWindow 的显式请求 prop 打开既有恢复对话框，输入区不再常驻归档按钮；删除确认/恢复框也 portal 到 body，防止被 composer transform/overflow 影响。后端合同、手机与权限不变。
+
+验证：122 files / 665 tests passed；production build passed（已有 chunk size 提醒）。隔离浏览器挂载实际 Ribbon、ConversationControls、BubbleContextMenu，在带 translate 的祖先内实点右键，菜单贴近目标且“删除本轮”能打开确认；状态→归档→花园顺序与归档点击可见。没有删除生产数据，未验证安装版原生窗口。

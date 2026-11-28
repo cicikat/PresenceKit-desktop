@@ -3,6 +3,7 @@
  * Phase 2c+: 按日文件懒加载历史，滚顶继续往前拉
  * ============================================================ */
 
+import { BubbleContextMenu, deletableBubbleTurn } from './BubbleContextMenu';
 import { ConversationControls } from './ConversationControls';
 import { visibleConversationMessages, type ConversationState } from '../../../shared/api/conversation';
 import { GeneratedImage } from './GeneratedImage';
@@ -615,7 +616,7 @@ const Bubble = memo(function Bubble({ msg, currentHue, herDataUrl, youDataUrl, y
 
 // ── 主组件 ──────────────────────────────────────────────────────────────────
 
-export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible = true, chatFontSize = 14, chatOpacity = 1, showEmotionAccent = true, showEmotionLabel = true, dreamActive = false, characterAvatarDataUrl = null, mainLayout = 'stack', onOpenRoom, onOpenPrefs }: any) {
+export function ChatPanel({ archiveRequest = 0, hidden = false, engine, chatRectRef, headerVisible = true, chatFontSize = 14, chatOpacity = 1, showEmotionAccent = true, showEmotionLabel = true, dreamActive = false, characterAvatarDataUrl = null, mainLayout = 'stack', onOpenRoom, onOpenPrefs }: any) {
   const { language, t } = useI18n();
   const [state, setState] = useState(engine.get());
   useEffect(() => engine.subscribe(setState), [engine]);
@@ -2467,18 +2468,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
 
       {/* 气泡右键菜单：cc-tasks/36，全局单例，onMouseDown stopPropagation 避免点击项时被外部关闭逻辑抢先卸载 */}
       {ctxMenu && (
-        <div
-          onMouseDown={e => e.stopPropagation()}
-          style={{
-            position: 'fixed',
-            top: Math.min(ctxMenu.y, window.innerHeight - 140),
-            left: Math.min(ctxMenu.x, window.innerWidth - 140),
-            zIndex: 50,
-            background: 'var(--paper)', border: '1px solid var(--paper-edge)', borderRadius: 'var(--radius-md)',
-            padding: 6, minWidth: 120,
-            boxShadow: '0 12px 32px oklch(0.30 0.04 60 / 0.20)',
-          }}
-        >
+        <BubbleContextMenu x={ctxMenu.x} y={ctxMenu.y}>
           <button onClick={() => onReplyToMsg(ctxMenu.msg)} style={{
             display: 'block', width: '100%', textAlign: 'left',
             padding: '8px 10px', background: 'transparent', border: 'none', cursor: 'pointer',
@@ -2488,7 +2478,7 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
             onMouseLeave={e => (e.currentTarget as any).style.background = 'transparent'}>
             {t('chat.contextMenu.reply')}
           </button>
-          {ctxMenu.msg.turnId && !ctxMenu.msg.isStreaming && <button style={{display:'block',width:'100%',textAlign:'left',padding:'8px 10px',background:'transparent',border:0,color:'var(--ink)',font:'inherit',cursor:'pointer'}} onClick={()=>{setDeleteTurn(ctxMenu.msg.turnId);setCtxMenu(null);}}>{t('chat.control.delete')}</button>}
+          <button disabled={!deletableBubbleTurn(messages.find(item=>item.id===ctxMenu.msg.id) ?? ctxMenu.msg)} title={deletableBubbleTurn(messages.find(item=>item.id===ctxMenu.msg.id) ?? ctxMenu.msg) ? undefined : t('chat.control.deleteUnavailable')} style={{display:'block',width:'100%',textAlign:'left',padding:'8px 10px',background:'transparent',border:0,color:'var(--ink)',font:'inherit',cursor:'pointer'}} onClick={()=>{setDeleteTurn(deletableBubbleTurn(messages.find(item=>item.id===ctxMenu.msg.id) ?? ctxMenu.msg));setCtxMenu(null);}}>{t('chat.control.delete')}</button>
           <button onClick={() => onCopyMsg(ctxMenu.msg)} style={{
             display: 'block', width: '100%', textAlign: 'left',
             padding: '8px 10px', background: 'transparent', border: 'none', cursor: 'pointer',
@@ -2498,12 +2488,12 @@ export function ChatPanel({ hidden = false, engine, chatRectRef, headerVisible =
             onMouseLeave={e => (e.currentTarget as any).style.background = 'transparent'}>
             {t('chat.contextMenu.copy')}
           </button>
-        </div>
+        </BubbleContextMenu>
       )}
 
       {/* INPUT */}
       {designRegion('chat.composer', <div data-chat-region="composer" style={{ gridArea: 'composer', position: 'relative', minWidth: 0, padding: 18, borderTop: isSideComposer ? 'none' : '1px solid var(--paper-edge)', borderLeft: isSideComposer ? '1px solid var(--paper-edge)' : 'none', background: avatars.chatBackground?.dataUrl ? 'oklch(from var(--paper-2) l c h / 0.85)' : 'var(--paper-2)', ...(isSideComposer ? { overflowY: 'auto' } : {}), ...(isHud ? { borderRight: '1px solid var(--paper-edge)' } : {}) }}>
-        <ConversationControls pendingRequests={messages.filter(item=>item.delivery==='sending' || item.delivery==='processing').map(item=>item.id)}
+        <ConversationControls archiveRequest={archiveRequest} pendingRequests={messages.filter(item=>item.delivery==='sending' || item.delivery==='processing').map(item=>item.id)}
           deleteTurn={deleteTurn} clearDelete={()=>setDeleteTurn(undefined)} onRefresh={()=>{controlRereadDates.current=true;refreshHistory.current();}}
           onStopped={requestId=>{retireStoppedRequest(requestId);refreshHistory.current();}}
           onSnapshot={(snapshot: ConversationState)=>{
