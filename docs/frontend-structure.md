@@ -1116,3 +1116,10 @@ Reality 聊天新增 Session-scoped `/conversation/state`、精确 turn delete �
 删除归档移到 Ribbon 的“状态”和“花园”之间，以归档盒 SVG + 本地化 tooltip/accessible label 表示。ChatWindow 的显式请求 prop 打开既有恢复对话框，输入区不再常驻归档按钮；删除确认/恢复框也 portal 到 body，防止被 composer transform/overflow 影响。后端合同、手机与权限不变。
 
 验证：122 files / 665 tests passed；production build passed（已有 chunk size 提醒）。隔离浏览器挂载实际 Ribbon、ConversationControls、BubbleContextMenu，在带 translate 的祖先内实点右键，菜单贴近目标且“删除本轮”能打开确认；状态→归档→花园顺序与归档点击可见。没有删除生产数据，未验证安装版原生窗口。
+
+
+## 2026-11-28：停止按钮并入发送行
+
+移除 composer 上方独立的“停止生成”行。现有控制组件把停止按钮 portal 到发送键左侧：28×28px、低对比描边、10px 方块图形，保留 title/aria-label；仅有可停止执行或本机待接纳请求时显示，操作中 disabled。空挂载点使用 display:contents，不留空白行或额外间距。复用现有 scoped 单轮停止逻辑，不改变发送/停止 API、权限与归档入口。
+
+验证：production build passed（已有 chunk size 提醒）；全套 122 files / 665 tests passed。本轮隔离浏览器连接连续超时，可见交互实测未完成，构建和测试不替代安装版窗口验收。

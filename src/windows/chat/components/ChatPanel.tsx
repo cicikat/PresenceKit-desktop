@@ -631,6 +631,7 @@ export function ChatPanel({ archiveRequest = 0, hidden = false, engine, chatRect
     rawSetMessages(previous => visibleConversationMessages(typeof update==='function'?update(previous):update,hiddenTurns.current,deletedLocalIds.current));
   },[]);
   const [deleteTurn, setDeleteTurn] = useState<string>();
+  const [stopButtonMount, setStopButtonMount] = useState<HTMLSpanElement | null>(null);
   const receiptScope = useRef<{ backend: string; journal: string; charId: string } | undefined>(undefined);
   const receiptPolling = useRef<ChatReceiptPolling | undefined>(undefined);
   const canonicalRequests = useRef(new Map<string, string>());
@@ -2493,7 +2494,7 @@ export function ChatPanel({ archiveRequest = 0, hidden = false, engine, chatRect
 
       {/* INPUT */}
       {designRegion('chat.composer', <div data-chat-region="composer" style={{ gridArea: 'composer', position: 'relative', minWidth: 0, padding: 18, borderTop: isSideComposer ? 'none' : '1px solid var(--paper-edge)', borderLeft: isSideComposer ? '1px solid var(--paper-edge)' : 'none', background: avatars.chatBackground?.dataUrl ? 'oklch(from var(--paper-2) l c h / 0.85)' : 'var(--paper-2)', ...(isSideComposer ? { overflowY: 'auto' } : {}), ...(isHud ? { borderRight: '1px solid var(--paper-edge)' } : {}) }}>
-        <ConversationControls archiveRequest={archiveRequest} pendingRequests={messages.filter(item=>item.delivery==='sending' || item.delivery==='processing').map(item=>item.id)}
+        <ConversationControls stopButtonMount={stopButtonMount} archiveRequest={archiveRequest} pendingRequests={messages.filter(item=>item.delivery==='sending' || item.delivery==='processing').map(item=>item.id)}
           deleteTurn={deleteTurn} clearDelete={()=>setDeleteTurn(undefined)} onRefresh={()=>{controlRereadDates.current=true;refreshHistory.current();}}
           onStopped={requestId=>{retireStoppedRequest(requestId);refreshHistory.current();}}
           onSnapshot={(snapshot: ConversationState)=>{
@@ -2614,6 +2615,7 @@ export function ChatPanel({ archiveRequest = 0, hidden = false, engine, chatRect
               outline: 'none', minHeight: 44, maxHeight: 120, lineHeight: 1.5,
             }}
           />
+          <span ref={setStopButtonMount} style={{display:'contents'}} />
           <button onClick={() => void send()} disabled={preparing || (!input.trim() && !attachments.length)} style={{
             height: 44, padding: '0 18px', borderRadius: 'var(--radius-md)',
             background: 'var(--accent)', color: 'var(--paper)',

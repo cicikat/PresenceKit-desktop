@@ -7,8 +7,8 @@ import { useI18n } from '../../../shared/i18n';
 
 const button = {border: '1px solid var(--paper-edge)', borderRadius: 8, background: 'var(--paper)', color: 'var(--ink)', padding: '6px 12px', cursor: 'pointer', font: 'inherit'};
 const overlay = {position: 'fixed' as const, inset: 0, zIndex: 100, background: '#0006', display: 'grid', placeItems: 'center', padding: 24};
-export function ConversationControls({pendingRequests, archiveRequest = 0, deleteTurn, clearDelete, onSnapshot, onRefresh, onStopped}: {
-  archiveRequest?: number; pendingRequests: string[]; deleteTurn?: string; clearDelete: () => void;
+export function ConversationControls({pendingRequests, stopButtonMount, archiveRequest = 0, deleteTurn, clearDelete, onSnapshot, onRefresh, onStopped}: {
+  stopButtonMount?: HTMLElement | null; archiveRequest?: number; pendingRequests: string[]; deleteTurn?: string; clearDelete: () => void;
   onSnapshot: (state: ConversationState) => void; onRefresh: () => void; onStopped: (requestId: string) => void;
 }) {
   const {t} = useI18n();
@@ -98,9 +98,13 @@ export function ConversationControls({pendingRequests, archiveRequest = 0, delet
     }
   });
   const dismiss=() => {setRecovery(false);setDetail(undefined);setError(false);};
-  return <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:8,fontSize:12}}>
-    {(active.length>0 || pendingRequests.length>0) && <button style={button} disabled={busy} onClick={()=>void stop()}>{t('chat.control.stop')}</button>}
-    {error && !recovery && !deleteTurn && <span role="alert">{t('chat.control.failed')}</span>}
+  return <>
+    {stopButtonMount && createPortal(<>
+      {(active.length>0 || pendingRequests.length>0) && <button type="button" aria-label={t('chat.control.stop')} title={t('chat.control.stop')} disabled={busy} onClick={()=>void stop()} style={{width:28,height:28,padding:6,flexShrink:0,alignSelf:'center',display:'inline-flex',alignItems:'center',justifyContent:'center',border:'1px solid var(--paper-edge)',borderRadius:8,background:'transparent',color:'var(--ink-3)',cursor:busy?'default':'pointer',opacity:busy?0.45:0.75}}>
+        <svg width="10" height="10" viewBox="0 0 12 12" aria-hidden="true"><rect x="2" y="2" width="8" height="8" rx="1.5" fill="currentColor" /></svg>
+      </button>}
+      {error && !recovery && !deleteTurn && <span role="alert" title={t('chat.control.failed')} aria-label={t('chat.control.failed')} style={{fontSize:12,color:'var(--ink-3)'}}>!</span>}
+    </>,stopButtonMount)}
     {deleteTurn && createPortal(<div style={overlay}><section ref={modalRoot} role="alertdialog" aria-modal="true" aria-label={t('chat.control.delete')} style={{background:'var(--paper)',color:'var(--ink)',padding:24,borderRadius:16,width:'min(440px,100%)',boxSizing:'border-box'}}>
       <h3>{t('chat.control.delete')}</h3><p>{t('chat.control.deleteHint')}</p>
       {error && <p role="alert">{t('chat.control.failed')}</p>}
@@ -133,5 +137,5 @@ export function ConversationControls({pendingRequests, archiveRequest = 0, delet
         {(detail.history.length ? detail.history.map(item=>typeof item.entry.content==='string'?item.entry.content:JSON.stringify(item.entry.content)) : detail.stopped.length ? detail.stopped.flatMap(item=>[item.user_text,item.assistant_text]) : detail.events.map(item=>item.visible_text)).map((text,i)=><p key={i}>{text}</p>)}
       </div>}
     </section></div>,document.body)}
-  </div>;
+  </>;
 }
